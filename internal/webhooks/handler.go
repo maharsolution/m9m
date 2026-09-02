@@ -311,7 +311,10 @@ func (h *Handler) sendResponse(w http.ResponseWriter, response *WebhookResponse)
 	// Set status code
 	w.WriteHeader(response.StatusCode)
 
-	// Write body
+	// Write body. json.Marshal is used instead of json.NewEncoder
+	// (and its mandatory trailing newline) so the wire shape matches
+	// n8n byte-for-byte for responseData: firstEntryJson and allEntries
+	// payloads.
 	if response.Body != nil {
 		switch body := response.Body.(type) {
 		case string:
@@ -319,7 +322,10 @@ func (h *Handler) sendResponse(w http.ResponseWriter, response *WebhookResponse)
 		case []byte:
 			_, _ = w.Write(body)
 		default:
-			_ = json.NewEncoder(w).Encode(body)
+			data, mErr := json.Marshal(body)
+			if mErr == nil {
+				_, _ = w.Write(data)
+			}
 		}
 	}
 }
