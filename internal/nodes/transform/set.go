@@ -156,31 +156,37 @@ func (s *SetNode) Execute(inputData []model.DataItem, nodeParams map[string]inte
 
 			// Check if the value is a string that might contain expressions
 			if valueStr, ok := value.(string); ok {
-				// Handle n8n-style expressions (starting with =)
-				if strings.HasPrefix(valueStr, "=") {
-					// Process n8n-style expression - remove the = and wrap in {{ }}
-					expressionToEvaluate := "{{ " + strings.TrimSpace(valueStr[1:]) + " }}"
-
-					// Evaluate the expression
-					evaluatedValue, err := s.evaluator.EvaluateExpression(expressionToEvaluate, context)
-					if err != nil {
-						return nil, s.CreateError(fmt.Sprintf("failed to evaluate expression '%s': %v", valueStr, err), nil)
-					}
-					newItem.JSON[name] = evaluatedValue
-				} else {
-					// Check if it's already a proper n8n expression {{ }}
-					if strings.HasPrefix(valueStr, "{{") && strings.HasSuffix(valueStr, "}}") {
-						// Evaluate the expression
-						evaluatedValue, err := s.evaluator.EvaluateExpression(valueStr, context)
-						if err != nil {
-							return nil, s.CreateError(fmt.Sprintf("failed to evaluate expression '%s': %v", valueStr, err), nil)
-						}
-						newItem.JSON[name] = evaluatedValue
-					} else {
-						// Use the literal value
-						newItem.JSON[name] = value
-					}
+				// Determine whether the value is an n8n expression and the
+				// form it is in. The expression evaluator (parser.go)
+				// natively understands three shapes:
+				//
+				//   1. leading `=`:   "={{ $json.x }}"   (n8n expression mode)
+				//   2. already wrapped: "{{ $json.x }}"  (template fragment)
+				//   3. bare:            "$json.x"         (treated as a value reference)
+				//
+				// Passing the value through as-is for the first two avoids
+				// double-wrapping `{{ {{ $json.x }} }}` which would otherwise
+				// produce a JS syntax error at evaluation time.
+				var toEvaluate string
+				switch {
+				case strings.HasPrefix(valueStr, "="):
+					// Strip the leading `=`; the parser's IsExpression flag
+					// then makes it evaluate as a pure expression.
+					toEvaluate = strings.TrimPrefix(valueStr, "=")
+				case strings.HasPrefix(valueStr, "{{") && strings.HasSuffix(valueStr, "}}"):
+					// Already wrapped — pass through unchanged.
+					toEvaluate = valueStr
+				default:
+					// Plain literal value, no expression evaluation needed.
+					newItem.JSON[name] = value
+					continue
 				}
+
+				evaluatedValue, err := s.evaluator.EvaluateExpression(toEvaluate, context)
+				if err != nil {
+					return nil, s.CreateError(fmt.Sprintf("failed to evaluate expression '%s': %v", valueStr, err), nil)
+				}
+				newItem.JSON[name] = evaluatedValue
 			} else {
 				// Use the literal value
 				newItem.JSON[name] = value

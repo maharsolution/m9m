@@ -326,3 +326,56 @@ func TestSetNodeExecuteNestedAssignments(t *testing.T) {
 		t.Errorf("Expected added='hello', got %v", result[0].JSON["added"])
 	}
 }
+
+// TestSetNodeExecuteN8nExpressionNoDoubleWrap guards against a regression
+// where the Set node would wrap an already-`{{ }}`-bracketed expression a
+// second time, producing "SyntaxError: Unexpected token {" at runtime.
+//
+// Both input shapes produced by the n8n UI must be accepted:
+//
+//	={{ $json.body.x }}     (n8n expression mode, leading =)
+//	{{ $json.body.x }}      (already wrapped, template form)
+func TestSetNodeExecuteN8nExpressionNoDoubleWrap(t *testing.T) {
+	node := NewSetNode()
+
+	inputData := []model.DataItem{
+		{
+			JSON: map[string]interface{}{
+				"body": map[string]interface{}{"x": 42},
+			},
+		},
+	}
+
+	cases := []struct {
+		name  string
+		value string
+	}{
+		{"leading equals", "={{ $json.body.x }}"},
+		{"already wrapped", "{{ $json.body.x }}"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			params := map[string]interface{}{
+				"assignments": []interface{}{
+					map[string]interface{}{
+						"name":  "result",
+						"value": tc.value,
+					},
+				},
+			}
+			out, err := node.Execute(inputData, params)
+			if err != nil {
+				t.Fatalf("Execute failed for %q: %v", tc.value, err)
+			}
+			if len(out) != 1 {
+				t.Fatalf("Expected 1 result, got %d", len(out))
+			}
+			if got, ok := out[0].JSON["result"]; !ok {
+				t.Errorf("Expected 'result' field, got %#v", out[0].JSON)
+			} else if v, isNum := got.(float64); !isNum || v != 42 {
+				t.Errorf("Expected result=42, got %#v", got)
+			}
+		})
+	}
+}
