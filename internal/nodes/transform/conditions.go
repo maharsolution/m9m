@@ -33,8 +33,22 @@ var ValidOperators = map[string]bool{
 }
 
 // ValidateConditions validates the conditions array and combiner.
+//
+// The IF node accepts two shapes for `conditions`:
+//
+//  1. A bare array — older n8n exports and the explicit form
+//     used in tests:
+//        [{"leftValue":..,"rightValue":..,"operator":..}, ...]
+//
+//  2. The wrapper object the current n8n UI writes, which nests
+//     the array under `conditions` and pairs it with `options`
+//     and `combinator`:
+//        {"options":{...}, "conditions":[{...}], "combinator":"and"}
+//
+// The second shape is the dominant form in real exports, so we
+// unwrap it here before validating.
 func ValidateConditions(conditions interface{}, combiner string) error {
-	conditionsArr, ok := conditions.([]interface{})
+	conditionsArr, ok := resolveConditionsArray(conditions)
 	if !ok {
 		return fmt.Errorf("conditions must be an array")
 	}
@@ -69,6 +83,26 @@ func ValidateConditions(conditions interface{}, combiner string) error {
 	}
 
 	return nil
+}
+
+// resolveConditionsArray accepts either of the two IF-node `conditions`
+// shapes (bare array or n8n's wrapper object) and returns the inner
+// conditions array. The boolean reports whether unwrapping succeeded.
+func resolveConditionsArray(conditions interface{}) ([]interface{}, bool) {
+	switch v := conditions.(type) {
+	case []interface{}:
+		return v, true
+	case map[string]interface{}:
+		// n8n UI wrapper: {"options":{...},"conditions":[...],"combinator":...}
+		inner, ok := v["conditions"]
+		if !ok {
+			return nil, false
+		}
+		arr, ok := inner.([]interface{})
+		return arr, ok
+	default:
+		return nil, false
+	}
 }
 
 // EvaluateConditions evaluates all conditions against a data item.

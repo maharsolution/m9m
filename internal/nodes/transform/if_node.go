@@ -36,7 +36,11 @@ func (n *IfNode) Execute(inputData []model.DataItem, nodeParams map[string]inter
 		return nil, n.CreateError("conditions parameter is required", nil)
 	}
 
-	conditionsArr, ok := conditions.([]interface{})
+	// Accept both the bare array form and the n8n UI wrapper
+	// object form ({"options":..., "conditions":[...], "combinator":...}).
+	// The wrapper is the dominant form in real n8n exports and matches
+	// what the Switch node accepts after the same unwrap.
+	conditionsArr, ok := resolveConditionsArray(conditions)
 	if !ok {
 		return nil, n.CreateError("conditions must be an array", nil)
 	}

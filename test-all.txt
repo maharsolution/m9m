@@ -1,0 +1,745 @@
+?   	github.com/neul-labs/m9m/cmd/benchmark	[no test files]
+?   	github.com/neul-labs/m9m/cmd/integration-test	[no test files]
+?   	github.com/neul-labs/m9m/cmd/m9m	[no test files]
+?   	github.com/neul-labs/m9m/cmd/m9m/commands	[no test files]
+?   	github.com/neul-labs/m9m/cmd/mcp-server	[no test files]
+?   	github.com/neul-labs/m9m/cmd/n8n-compat	[no test files]
+?   	github.com/neul-labs/m9m/cmd/smoke-test	[no test files]
+?   	github.com/neul-labs/m9m/cmd/template-cli	[no test files]
+ok  	github.com/neul-labs/m9m/internal/api	18.894s
+ok  	github.com/neul-labs/m9m/internal/audit	2.953s
+ok  	github.com/neul-labs/m9m/internal/auth	16.920s
+ok  	github.com/neul-labs/m9m/internal/compatibility	18.155s
+ok  	github.com/neul-labs/m9m/internal/connections	1.738s
+?   	github.com/neul-labs/m9m/internal/consensus	[no test files]
+ok  	github.com/neul-labs/m9m/internal/copilot	2.854s
+ok  	github.com/neul-labs/m9m/internal/credentials	1.903s
+ok  	github.com/neul-labs/m9m/internal/engine	5.012s
+ok  	github.com/neul-labs/m9m/internal/expressions	5.364s
+?   	github.com/neul-labs/m9m/internal/mcp	[no test files]
+?   	github.com/neul-labs/m9m/internal/mcp/tools	[no test files]
+?   	github.com/neul-labs/m9m/internal/mcp/transport	[no test files]
+?   	github.com/neul-labs/m9m/internal/messaging	[no test files]
+ok  	github.com/neul-labs/m9m/internal/model	1.870s
+--- FAIL: TestMetricsCollector_GetMetricsSummary (0.00s)
+    monitoring_test.go:138: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/monitoring/monitoring_test.go:138
+        	Error:      	Should be true
+        	Test:       	TestMetricsCollector_GetMetricsSummary
+[ALERT TRIGGERED] [high] Test Rule: Test alert message (Value: 600.00, Threshold: 500.00) at 2026-09-02T19:31:47+07:00
+[ALERT RESOLVED] [high] Test Rule: Test alert message (Value: 600.00, Threshold: 500.00) at 2026-09-02T19:31:47+07:00
+EMAIL ALERT to [admin@example.com]: Test email alert
+WEBHOOK ALERT to https://hooks.example.com/alert: Test webhook alert
+Monitoring manager started successfully
+Monitoring manager stopped
+Monitoring manager started successfully
+Monitoring manager stopped
+FAIL
+FAIL	github.com/neul-labs/m9m/internal/monitoring	9.032s
+ok  	github.com/neul-labs/m9m/internal/nodes/ai	9.841s
+ok  	github.com/neul-labs/m9m/internal/nodes/base	6.077s
+--- FAIL: TestExecuteNode_Execute_SimpleEcho (0.02s)
+    execute_test.go:127: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/nodes/cli/execute_test.go:127
+        	Error:      	Received unexpected error:
+        	            	execution failed: command execution failed: exec: "echo": executable file not found in %PATH%
+        	Test:       	TestExecuteNode_Execute_SimpleEcho
+--- FAIL: TestExecuteNode_Execute_JSONOutput (0.02s)
+    execute_test.go:150: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/nodes/cli/execute_test.go:150
+        	Error:      	Received unexpected error:
+        	            	execution failed: command execution failed: exec: "echo": executable file not found in %PATH%
+        	Test:       	TestExecuteNode_Execute_JSONOutput
+--- FAIL: TestExecuteNode_Execute_LinesOutput (0.02s)
+    execute_test.go:175: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/nodes/cli/execute_test.go:175
+        	Error:      	Received unexpected error:
+        	            	execution failed: command execution failed: exec: "sh": executable file not found in %PATH%
+        	Test:       	TestExecuteNode_Execute_LinesOutput
+--- FAIL: TestExecuteNode_Execute_NonZeroExitCode (0.02s)
+    execute_test.go:198: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/nodes/cli/execute_test.go:198
+        	Error:      	Received unexpected error:
+        	            	execution failed: command execution failed: exec: "sh": executable file not found in %PATH%
+        	Test:       	TestExecuteNode_Execute_NonZeroExitCode
+--- FAIL: TestExecuteNode_Execute_WithEnv (0.01s)
+    execute_test.go:221: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/nodes/cli/execute_test.go:221
+        	Error:      	Received unexpected error:
+        	            	execution failed: command execution failed: exec: "sh": executable file not found in %PATH%
+        	Test:       	TestExecuteNode_Execute_WithEnv
+--- FAIL: TestExecuteNode_Execute_ShellMode (0.00s)
+    execute_test.go:243: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/nodes/cli/execute_test.go:243
+        	Error:      	Received unexpected error:
+        	            	execution failed: command execution failed: exec: "/bin/sh": executable file not found in %PATH%
+        	Test:       	TestExecuteNode_Execute_ShellMode
+FAIL
+FAIL	github.com/neul-labs/m9m/internal/nodes/cli	7.216s
+ok  	github.com/neul-labs/m9m/internal/nodes/cloud/aws	25.965s
+ok  	github.com/neul-labs/m9m/internal/nodes/cloud/azure	21.541s
+ok  	github.com/neul-labs/m9m/internal/nodes/cloud/gcp	33.471s
+ok  	github.com/neul-labs/m9m/internal/nodes/code	88.517s
+ok  	github.com/neul-labs/m9m/internal/nodes/core	7.199s
+ok  	github.com/neul-labs/m9m/internal/nodes/database	11.066s
+ok  	github.com/neul-labs/m9m/internal/nodes/email	10.989s
+ok  	github.com/neul-labs/m9m/internal/nodes/file	6.852s
+ok  	github.com/neul-labs/m9m/internal/nodes/http	19.607s
+ok  	github.com/neul-labs/m9m/internal/nodes/messaging	19.879s
+ok  	github.com/neul-labs/m9m/internal/nodes/productivity	21.975s
+ok  	github.com/neul-labs/m9m/internal/nodes/timer	6.331s
+ok  	github.com/neul-labs/m9m/internal/nodes/transform	15.460s
+ok  	github.com/neul-labs/m9m/internal/nodes/trigger	19.517s
+ok  	github.com/neul-labs/m9m/internal/nodes/vcs	20.164s
+ok  	github.com/neul-labs/m9m/internal/plugins	22.983s
+--- FAIL: TestSQLiteQueue_EnqueueDequeue (0.00s)
+    queue_test.go:139: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/queue/queue_test.go:139
+        	Error:      	Received unexpected error:
+        	            	failed to initialize schema: Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work. This is a stub
+        	Test:       	TestSQLiteQueue_EnqueueDequeue
+--- FAIL: TestSQLiteQueue_Persistence (0.00s)
+    queue_test.go:163: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/queue/queue_test.go:163
+        	Error:      	Received unexpected error:
+        	            	failed to initialize schema: Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work. This is a stub
+        	Test:       	TestSQLiteQueue_Persistence
+--- FAIL: TestSQLiteQueue_AckNack (0.00s)
+    queue_test.go:190: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/queue/queue_test.go:190
+        	Error:      	Received unexpected error:
+        	            	failed to initialize schema: Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work. This is a stub
+        	Test:       	TestSQLiteQueue_AckNack
+--- FAIL: TestSQLiteQueue_ListJobs (0.00s)
+    queue_test.go:219: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/queue/queue_test.go:219
+        	Error:      	Received unexpected error:
+        	            	failed to initialize schema: Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work. This is a stub
+        	Test:       	TestSQLiteQueue_ListJobs
+--- FAIL: TestSQLiteQueue_RecoverRunningJobs (0.00s)
+    queue_test.go:240: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/queue/queue_test.go:240
+        	Error:      	Received unexpected error:
+        	            	failed to initialize schema: Binary was compiled with 'CGO_ENABLED=0', go-sqlite3 requires cgo to work. This is a stub
+        	Test:       	TestSQLiteQueue_RecoverRunningJobs
+FAIL
+FAIL	github.com/neul-labs/m9m/internal/queue	6.265s
+ok  	github.com/neul-labs/m9m/internal/reliability	3.639s
+ok  	github.com/neul-labs/m9m/internal/runtime	18.645s
+--- FAIL: TestNoSandbox_Execute (0.02s)
+    sandbox_test.go:146: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/sandbox/sandbox_test.go:146
+        	Error:      	Received unexpected error:
+        	            	command execution failed: exec: "echo": executable file not found in %PATH%
+        	Test:       	TestNoSandbox_Execute
+--- FAIL: TestNoSandbox_ExecuteWithTimeout (0.02s)
+    sandbox_test.go:161: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/sandbox/sandbox_test.go:161
+        	Error:      	Received unexpected error:
+        	            	command execution failed: exec: "sleep": executable file not found in %PATH%
+        	Test:       	TestNoSandbox_ExecuteWithTimeout
+--- FAIL: TestNoSandbox_ExecuteStreaming (0.02s)
+    sandbox_test.go:178: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/sandbox/sandbox_test.go:178
+        	Error:      	Received unexpected error:
+        	            	failed to start command: exec: "cat": executable file not found in %PATH%
+        	Test:       	TestNoSandbox_ExecuteStreaming
+FAIL
+FAIL	github.com/neul-labs/m9m/internal/sandbox	3.108s
+?   	github.com/neul-labs/m9m/internal/sandbox/bwrap	[no test files]
+ok  	github.com/neul-labs/m9m/internal/scheduler	22.658s
+ok  	github.com/neul-labs/m9m/internal/service	22.105s
+--- FAIL: TestBenchmark_Quick (1.46s)
+    showcase_test.go:45: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/showcase_test.go:45
+        	Error:      	Should be true
+        	Test:       	TestBenchmark_Quick
+        	Messages:   	result Simple Math value should be positive
+    showcase_test.go:45: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/showcase_test.go:45
+        	Error:      	Should be true
+        	Test:       	TestBenchmark_Quick
+        	Messages:   	result String Functions value should be positive
+    showcase_test.go:45: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/showcase_test.go:45
+        	Error:      	Should be true
+        	Test:       	TestBenchmark_Quick
+        	Messages:   	result Array Functions value should be positive
+    showcase_test.go:45: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/showcase_test.go:45
+        	Error:      	Should be true
+        	Test:       	TestBenchmark_Quick
+        	Messages:   	result Conditional Logic value should be positive
+    showcase_test.go:45: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/showcase_test.go:45
+        	Error:      	Should be true
+        	Test:       	TestBenchmark_Quick
+        	Messages:   	result Complex Nested value should be positive
+    showcase_test.go:45: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/showcase_test.go:45
+        	Error:      	Should be true
+        	Test:       	TestBenchmark_Quick
+        	Messages:   	result Hashing value should be positive
+    showcase_test.go:45: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/showcase_test.go:45
+        	Error:      	Should be true
+        	Test:       	TestBenchmark_Quick
+        	Messages:   	result Variable Access value should be positive
+    showcase_test.go:45: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/showcase_test.go:45
+        	Error:      	Should be true
+        	Test:       	TestBenchmark_Quick
+        	Messages:   	result Engine init value should be positive
+    showcase_test.go:45: 
+        	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/showcase_test.go:45
+        	Error:      	Should be true
+        	Test:       	TestBenchmark_Quick
+        	Messages:   	result First execution value should be positive
+runtime: goroutine stack exceeds 1000000000-byte limit
+runtime: sp=0x3973a2001380 stack=[0x3973a2000000, 0x3973c2000000]
+fatal error: stack overflow
+
+runtime stack:
+runtime.throw({0x7ff762e273dd?, 0x200000001?})
+	C:/Program Files/Go/src/runtime/panic.go:1229 +0x4d fp=0xceea9ff8a0 sp=0xceea9ff870 pc=0x7ff7627fa2ed
+runtime.newstack()
+	C:/Program Files/Go/src/runtime/stack.go:1178 +0x60c fp=0xceea9ff9d0 sp=0xceea9ff8a0 pc=0x7ff7627ddd2c
+runtime.morestack()
+	C:/Program Files/Go/src/runtime/asm_amd64.s:681 +0x7c fp=0xceea9ff9d8 sp=0xceea9ff9d0 pc=0x7ff7627ffd9c
+
+goroutine 458 gp=0x397380afb860 m=5 mp=0x397380b80008 [running]:
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x8000000000000000?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:29 +0x265 fp=0x3973a2001390 sp=0x3973a2001388 pc=0x7ff762ca8245
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2001450 sp=0x3973a2001390 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2001510 sp=0x3973a2001450 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a20015d0 sp=0x3973a2001510 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2001690 sp=0x3973a20015d0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2001750 sp=0x3973a2001690 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2001810 sp=0x3973a2001750 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a20018d0 sp=0x3973a2001810 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2001990 sp=0x3973a20018d0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2001a50 sp=0x3973a2001990 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2001b10 sp=0x3973a2001a50 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2001bd0 sp=0x3973a2001b10 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2001c90 sp=0x3973a2001bd0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2001d50 sp=0x3973a2001c90 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2001e10 sp=0x3973a2001d50 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2001ed0 sp=0x3973a2001e10 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2001f90 sp=0x3973a2001ed0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2002050 sp=0x3973a2001f90 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2002110 sp=0x3973a2002050 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a20021d0 sp=0x3973a2002110 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2002290 sp=0x3973a20021d0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2002350 sp=0x3973a2002290 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2002410 sp=0x3973a2002350 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a20024d0 sp=0x3973a2002410 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2002590 sp=0x3973a20024d0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2002650 sp=0x3973a2002590 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2002710 sp=0x3973a2002650 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a20027d0 sp=0x3973a2002710 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2002890 sp=0x3973a20027d0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2002950 sp=0x3973a2002890 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2002a10 sp=0x3973a2002950 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2002ad0 sp=0x3973a2002a10 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2002b90 sp=0x3973a2002ad0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2002c50 sp=0x3973a2002b90 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2002d10 sp=0x3973a2002c50 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2002dd0 sp=0x3973a2002d10 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2002e90 sp=0x3973a2002dd0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2002f50 sp=0x3973a2002e90 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2003010 sp=0x3973a2002f50 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a20030d0 sp=0x3973a2003010 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2003190 sp=0x3973a20030d0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2003250 sp=0x3973a2003190 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2003310 sp=0x3973a2003250 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a20033d0 sp=0x3973a2003310 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2003490 sp=0x3973a20033d0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2003550 sp=0x3973a2003490 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2003610 sp=0x3973a2003550 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a20036d0 sp=0x3973a2003610 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2003790 sp=0x3973a20036d0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973a2003850 sp=0x3973a2003790 pc=0x7ff762ca8076
+...2796078 frames elided...
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x2980cc6ae0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffdb90 sp=0x3973c1ffdad0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x7ff7629cad16?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffdc50 sp=0x3973c1ffdb90 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x30?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffdd10 sp=0x3973c1ffdc50 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x397380d4c701?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffddd0 sp=0x3973c1ffdd10 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x397380d4c780?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffde90 sp=0x3973c1ffddd0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x397381369fc8?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffdf50 sp=0x3973c1ffde90 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x7ff7627f7be5?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffe010 sp=0x3973c1ffdf50 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x39738136a118?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffe0d0 sp=0x3973c1ffe010 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x397381400401?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffe190 sp=0x3973c1ffe0d0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x8?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffe250 sp=0x3973c1ffe190 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x7ff7627f7bc5?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffe310 sp=0x3973c1ffe250 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x6?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffe3d0 sp=0x3973c1ffe310 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x397380caa000?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffe490 sp=0x3973c1ffe3d0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x600738136a538?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffe550 sp=0x3973c1ffe490 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x2?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffe610 sp=0x3973c1ffe550 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x7ff762e60ae0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffe6d0 sp=0x3973c1ffe610 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x397380caa000?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffe790 sp=0x3973c1ffe6d0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x7ff7629c64bc?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffe850 sp=0x3973c1ffe790 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x7ff7629ca511?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffe910 sp=0x3973c1ffe850 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x7ff7634d8480?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffe9d0 sp=0x3973c1ffe910 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x7ff762e60e70?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffea90 sp=0x3973c1ffe9d0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x30?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffeb50 sp=0x3973c1ffea90 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x4d?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffec10 sp=0x3973c1ffeb50 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x397380c9dce0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffecd0 sp=0x3973c1ffec10 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x254fb81cbb0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffed90 sp=0x3973c1ffecd0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x10?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffee50 sp=0x3973c1ffed90 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x7ff762d7ab40?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffef10 sp=0x3973c1ffee50 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x7ff7634d8480?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1ffefd0 sp=0x3973c1ffef10 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x39738136b0c0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1fff090 sp=0x3973c1ffefd0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x397380e9ed80?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1fff150 sp=0x3973c1fff090 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x7ff762778984?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1fff210 sp=0x3973c1fff150 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x1?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1fff2d0 sp=0x3973c1fff210 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1fff390 sp=0x3973c1fff2d0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0xe?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1fff450 sp=0x3973c1fff390 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x7ff7627ffcb7?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1fff510 sp=0x3973c1fff450 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x397380c6d1a0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1fff5d0 sp=0x3973c1fff510 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x39738136b718?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1fff690 sp=0x3973c1fff5d0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x39738136b7d8?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1fff750 sp=0x3973c1fff690 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x7ff7627ae2a0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1fff810 sp=0x3973c1fff750 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x39738136b928?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1fff8d0 sp=0x3973c1fff810 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x0?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1fff990 sp=0x3973c1fff8d0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x397380e22000?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1fffa50 sp=0x3973c1fff990 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x41?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1fffb10 sp=0x3973c1fffa50 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x3?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1fffbd0 sp=0x3973c1fffb10 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.FormatNumber(0x7ff762e1f3c7?)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/formatting.go:31 +0x96 fp=0x3973c1fffc90 sp=0x3973c1fffbd0 pc=0x7ff762ca8076
+github.com/neul-labs/m9m/internal/showcase.(*BenchmarkReport).PrintTable(0x397380dc8050, {0x7ff762e5b8e0, 0x397380cb01b0})
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/benchmark_results.go:109 +0x965 fp=0x3973c1fffef8 sp=0x3973c1fffc90 pc=0x7ff762c9f645
+github.com/neul-labs/m9m/internal/showcase.TestBenchmark_PrintTable(0x397380a6e200)
+	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/showcase/showcase_test.go:64 +0x5e fp=0x3973c1ffff70 sp=0x3973c1fffef8 pc=0x7ff762ca94fe
+testing.tRunner(0x397380a6e200, 0x7ff762e51f00)
+	C:/Program Files/Go/src/testing/testing.go:2036 +0xc3 fp=0x3973c1ffffc0 sp=0x3973c1ffff70 pc=0x7ff7628cd983
+testing.(*T).Run.gowrap1()
+	C:/Program Files/Go/src/testing/testing.go:2101 +0x1b fp=0x3973c1ffffe0 sp=0x3973c1ffffc0 pc=0x7ff7628ceabb
+runtime.goexit({})
+	C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x3973c1ffffe8 sp=0x3973c1ffffe0 pc=0x7ff762801901
+created by testing.(*T).Run in goroutine 1
+	C:/Program Files/Go/src/testing/testing.go:2101 +0x4a9
+
+goroutine 1 gp=0x397380afa000 m=nil [chan receive]:
+runtime.gopark(0x7ff76280155f?, 0x3007380f859e8?, 0x98?, 0xdf?, 0x254b6380108?)
+	C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x397380f859a0 sp=0x397380f85980 pc=0x7ff7627fa40e
+runtime.chanrecv(0x397380c8e000, 0x397380f85a87, 0x1)
+	C:/Program Files/Go/src/runtime/chan.go:667 +0x4ae fp=0x397380f85a18 sp=0x397380f859a0 pc=0x7ff76278a1ce
+runtime.chanrecv1(0x7ff7634d66e0?, 0x7ff762e79f40?)
+	C:/Program Files/Go/src/runtime/chan.go:509 +0x12 fp=0x397380f85a40 sp=0x397380f85a18 pc=0x7ff762789cf2
+testing.(*T).Run(0x397380a6e400, {0x7ff762e2ee18?, 0x7ff7628cd8ee?}, 0x7ff762e51f00)
+	C:/Program Files/Go/src/testing/testing.go:2109 +0x4c7 fp=0x397380f85b08 sp=0x397380f85a40 pc=0x7ff7628ce947
+testing.runTests.func1(0x397380a6e400)
+	C:/Program Files/Go/src/testing/testing.go:2585 +0x3e fp=0x397380f85b50 sp=0x397380f85b08 pc=0x7ff7628d0d5e
+testing.tRunner(0x397380a6e400, 0x397380c21c58)
+	C:/Program Files/Go/src/testing/testing.go:2036 +0xc3 fp=0x397380f85ba0 sp=0x397380f85b50 pc=0x7ff7628cd983
+testing.runTests({0x7ff762e2ee30, 0x18}, {0x7ff762e3c3c8, 0x2a}, 0x397380a76450, {0x7ff7634cd940, 0x10, 0x10}, {0xc29e2450f953dd18, 0x8bb31de70d, ...})
+	C:/Program Files/Go/src/testing/testing.go:2583 +0x4f0 fp=0x397380f85c88 sp=0x397380f85ba0 pc=0x7ff7628d0c10
+testing.(*M).Run(0x397380c086e0)
+	C:/Program Files/Go/src/testing/testing.go:2443 +0x6ac fp=0x397380f85ec8 sp=0x397380f85c88 pc=0x7ff7628cf5ac
+main.main()
+	_testmain.go:76 +0x9b fp=0x397380f85f48 sp=0x397380f85ec8 pc=0x7ff762cab35b
+runtime.main()
+	C:/Program Files/Go/src/runtime/proc.go:290 +0x2c7 fp=0x397380f85fe0 sp=0x397380f85f48 pc=0x7ff7627c4e67
+runtime.goexit({})
+	C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x397380f85fe8 sp=0x397380f85fe0 pc=0x7ff762801901
+
+goroutine 2 gp=0x397380afa780 m=nil [force gc (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x397380b01fa8 sp=0x397380b01f88 pc=0x7ff7627fa40e
+runtime.goparkunlock(...)
+	C:/Program Files/Go/src/runtime/proc.go:468
+runtime.forcegchelper()
+	C:/Program Files/Go/src/runtime/proc.go:375 +0xb8 fp=0x397380b01fe0 sp=0x397380b01fa8 pc=0x7ff7627c5158
+runtime.goexit({})
+	C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x397380b01fe8 sp=0x397380b01fe0 pc=0x7ff762801901
+created by runtime.init.7 in goroutine 1
+	C:/Program Files/Go/src/runtime/proc.go:363 +0x1a
+
+goroutine 3 gp=0x397380afab40 m=nil [GC sweep wait]:
+runtime.gopark(0x7ff7634d6401?, 0x0?, 0x0?, 0x0?, 0x0?)
+	C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x397380b03f88 sp=0x397380b03f68 pc=0x7ff7627fa40e
+runtime.goparkunlock(...)
+	C:/Program Files/Go/src/runtime/proc.go:468
+runtime.bgsweep(0x397380a9c100)
+	C:/Program Files/Go/src/runtime/mgcsweep.go:324 +0x151 fp=0x397380b03fc8 sp=0x397380b03f88 pc=0x7ff7627aab11
+runtime.gcenable.gowrap1()
+	C:/Program Files/Go/src/runtime/mgc.go:214 +0x17 fp=0x397380b03fe0 sp=0x397380b03fc8 pc=0x7ff76279be17
+runtime.goexit({})
+	C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x397380b03fe8 sp=0x397380b03fe0 pc=0x7ff762801901
+created by runtime.gcenable in goroutine 1
+	C:/Program Files/Go/src/runtime/mgc.go:214 +0x66
+
+goroutine 4 gp=0x397380afad20 m=nil [GC scavenge wait]:
+runtime.gopark(0x98a7074?, 0x191760c40?, 0x0?, 0x0?, 0x0?)
+	C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x397380b0ff78 sp=0x397380b0ff58 pc=0x7ff7627fa40e
+runtime.goparkunlock(...)
+	C:/Program Files/Go/src/runtime/proc.go:468
+runtime.(*scavengerState).park(0x7ff7634d7160)
+	C:/Program Files/Go/src/runtime/mgcscavenge.go:425 +0x49 fp=0x397380b0ffa8 sp=0x397380b0ff78 pc=0x7ff7627a8589
+runtime.bgscavenge(0x397380a9c100)
+	C:/Program Files/Go/src/runtime/mgcscavenge.go:658 +0x59 fp=0x397380b0ffc8 sp=0x397380b0ffa8 pc=0x7ff7627a8b19
+runtime.gcenable.gowrap2()
+	C:/Program Files/Go/src/runtime/mgc.go:215 +0x17 fp=0x397380b0ffe0 sp=0x397380b0ffc8 pc=0x7ff76279bdd7
+runtime.goexit({})
+	C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x397380b0ffe8 sp=0x397380b0ffe0 pc=0x7ff762801901
+created by runtime.gcenable in goroutine 1
+	C:/Program Files/Go/src/runtime/mgc.go:215 +0xa5
+
+goroutine 5 gp=0x397380afb0e0 m=nil [finalizer wait]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x397380b11e20 sp=0x397380b11e00 pc=0x7ff7627fa40e
+runtime.runFinalizers()
+	C:/Program Files/Go/src/runtime/mfinal.go:210 +0x107 fp=0x397380b11fe0 sp=0x397380b11e20 pc=0x7ff76279ada7
+runtime.goexit({})
+	C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x397380b11fe8 sp=0x397380b11fe0 pc=0x7ff762801901
+created by runtime.createfing in goroutine 1
+	C:/Program Files/Go/src/runtime/mfinal.go:172 +0x3d
+
+goroutine 6 gp=0x397380afb680 m=nil [cleanup wait]:
+runtime.gopark(0x101000000000000?, 0x72?, 0x3?, 0x0?, 0x7ff7633273e0?)
+	C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x397380b05f68 sp=0x397380b05f48 pc=0x7ff7627fa40e
+runtime.goparkunlock(...)
+	C:/Program Files/Go/src/runtime/proc.go:468
+runtime.(*cleanupQueue).dequeue(0x7ff7634d7380)
+	C:/Program Files/Go/src/runtime/mcleanup.go:522 +0xd4 fp=0x397380b05fa0 sp=0x397380b05f68 pc=0x7ff762797c34
+runtime.runCleanups()
+	C:/Program Files/Go/src/runtime/mcleanup.go:718 +0x45 fp=0x397380b05fe0 sp=0x397380b05fa0 pc=0x7ff7627982a5
+runtime.goexit({})
+	C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x397380b05fe8 sp=0x397380b05fe0 pc=0x7ff762801901
+created by runtime.(*cleanupQueue).createGs in goroutine 1
+	C:/Program Files/Go/src/runtime/mcleanup.go:672 +0xa5
+
+goroutine 12 gp=0x397380afba40 m=nil [GC worker (idle)]:
+runtime.gopark(0x397380b0bf58?, 0x397380b00100?, 0x0?, 0x0?, 0x100397380b0bf48?)
+	C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x397380b0bf40 sp=0x397380b0bf20 pc=0x7ff7627fa40e
+runtime.gcBgMarkWorker(0x397380aa0a80)
+	C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x397380b0bfc8 sp=0x397380b0bf40 pc=0x7ff76279e94b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x397380b0bfe0 sp=0x397380b0bfc8 pc=0x7ff76279e837
+runtime.goexit({})
+	C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x397380b0bfe8 sp=0x397380b0bfe0 pc=0x7ff762801901
+created by runtime.gcBgMarkStartWorkers in goroutine 7
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 13 gp=0x397380afbc20 m=nil [GC worker (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x397380b0df40 sp=0x397380b0df20 pc=0x7ff7627fa40e
+runtime.gcBgMarkWorker(0x397380aa0a80)
+	C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x397380b0dfc8 sp=0x397380b0df40 pc=0x7ff76279e94b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x397380b0dfe0 sp=0x397380b0dfc8 pc=0x7ff76279e837
+runtime.goexit({})
+	C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x397380b0dfe8 sp=0x397380b0dfe0 pc=0x7ff762801901
+created by runtime.gcBgMarkStartWorkers in goroutine 7
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 14 gp=0x397380edc000 m=nil [GC worker (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x397380ee3f40 sp=0x397380ee3f20 pc=0x7ff7627fa40e
+runtime.gcBgMarkWorker(0x397380aa0a80)
+	C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x397380ee3fc8 sp=0x397380ee3f40 pc=0x7ff76279e94b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x397380ee3fe0 sp=0x397380ee3fc8 pc=0x7ff76279e837
+runtime.goexit({})
+	C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x397380ee3fe8 sp=0x397380ee3fe0 pc=0x7ff762801901
+created by runtime.gcBgMarkStartWorkers in goroutine 7
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 15 gp=0x397380edc1e0 m=nil [GC worker (idle)]:
+runtime.gopark(0x1ae1ff3f8c628?, 0x0?, 0x0?, 0x0?, 0x0?)
+	C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x397380ee5f40 sp=0x397380ee5f20 pc=0x7ff7627fa40e
+runtime.gcBgMarkWorker(0x397380aa0a80)
+	C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x397380ee5fc8 sp=0x397380ee5f40 pc=0x7ff76279e94b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x397380ee5fe0 sp=0x397380ee5fc8 pc=0x7ff76279e837
+runtime.goexit({})
+	C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x397380ee5fe8 sp=0x397380ee5fe0 pc=0x7ff762801901
+created by runtime.gcBgMarkStartWorkers in goroutine 7
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 16 gp=0x397380edc3c0 m=nil [GC worker (idle)]:
+runtime.gopark(0x1ae202f924fd8?, 0x1?, 0x68?, 0x71?, 0x0?)
+	C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x397380edff40 sp=0x397380edff20 pc=0x7ff7627fa40e
+runtime.gcBgMarkWorker(0x397380aa0a80)
+	C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x397380edffc8 sp=0x397380edff40 pc=0x7ff76279e94b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x397380edffe0 sp=0x397380edffc8 pc=0x7ff76279e837
+runtime.goexit({})
+	C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x397380edffe8 sp=0x397380edffe0 pc=0x7ff762801901
+created by runtime.gcBgMarkStartWorkers in goroutine 7
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 18 gp=0x397380edc5a0 m=nil [GC worker (idle)]:
+runtime.gopark(0x7ff762e521d0?, 0x397380edaa00?, 0x1c?, 0xa?, 0x0?)
+	C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x397380ee1f40 sp=0x397380ee1f20 pc=0x7ff7627fa40e
+runtime.gcBgMarkWorker(0x397380aa0a80)
+	C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x397380ee1fc8 sp=0x397380ee1f40 pc=0x7ff76279e94b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x397380ee1fe0 sp=0x397380ee1fc8 pc=0x7ff76279e837
+runtime.goexit({})
+	C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x397380ee1fe8 sp=0x397380ee1fe0 pc=0x7ff762801901
+created by runtime.gcBgMarkStartWorkers in goroutine 7
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 19 gp=0x397380edc780 m=nil [GC worker (idle)]:
+runtime.gopark(0x1ae2029f3ad9c?, 0x1?, 0x5c?, 0xe9?, 0x0?)
+	C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x397380eebf40 sp=0x397380eebf20 pc=0x7ff7627fa40e
+runtime.gcBgMarkWorker(0x397380aa0a80)
+	C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x397380eebfc8 sp=0x397380eebf40 pc=0x7ff76279e94b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x397380eebfe0 sp=0x397380eebfc8 pc=0x7ff76279e837
+runtime.goexit({})
+	C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x397380eebfe8 sp=0x397380eebfe0 pc=0x7ff762801901
+created by runtime.gcBgMarkStartWorkers in goroutine 7
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 20 gp=0x397380edc960 m=nil [GC worker (idle)]:
+runtime.gopark(0x1ae2018c519ac?, 0x1?, 0xec?, 0x36?, 0x0?)
+	C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x397380eedf40 sp=0x397380eedf20 pc=0x7ff7627fa40e
+runtime.gcBgMarkWorker(0x397380aa0a80)
+	C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x397380eedfc8 sp=0x397380eedf40 pc=0x7ff76279e94b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x397380eedfe0 sp=0x397380eedfc8 pc=0x7ff76279e837
+runtime.goexit({})
+	C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x397380eedfe8 sp=0x397380eedfe0 pc=0x7ff762801901
+created by runtime.gcBgMarkStartWorkers in goroutine 7
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 21 gp=0x397380edcb40 m=nil [GC worker (idle)]:
+runtime.gopark(0x1ae202faaf024?, 0x1?, 0xa4?, 0x39?, 0x0?)
+	C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x397380ee7f40 sp=0x397380ee7f20 pc=0x7ff7627fa40e
+runtime.gcBgMarkWorker(0x397380aa0a80)
+	C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x397380ee7fc8 sp=0x397380ee7f40 pc=0x7ff76279e94b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x397380ee7fe0 sp=0x397380ee7fc8 pc=0x7ff76279e837
+runtime.goexit({})
+	C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x397380ee7fe8 sp=0x397380ee7fe0 pc=0x7ff762801901
+created by runtime.gcBgMarkStartWorkers in goroutine 7
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 22 gp=0x397380edcd20 m=nil [GC worker (idle)]:
+runtime.gopark(0x1ae2018c519ac?, 0x1?, 0x0?, 0x0?, 0x0?)
+	C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x397380ee9f40 sp=0x397380ee9f20 pc=0x7ff7627fa40e
+runtime.gcBgMarkWorker(0x397380aa0a80)
+	C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x397380ee9fc8 sp=0x397380ee9f40 pc=0x7ff76279e94b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x397380ee9fe0 sp=0x397380ee9fc8 pc=0x7ff76279e837
+runtime.goexit({})
+	C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x397380ee9fe8 sp=0x397380ee9fe0 pc=0x7ff762801901
+created by runtime.gcBgMarkStartWorkers in goroutine 7
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 23 gp=0x397380edcf00 m=nil [GC worker (idle)]:
+runtime.gopark(0x1ae2030af1504?, 0x1?, 0xa4?, 0xcb?, 0x0?)
+	C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x397380ef3f40 sp=0x397380ef3f20 pc=0x7ff7627fa40e
+runtime.gcBgMarkWorker(0x397380aa0a80)
+	C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x397380ef3fc8 sp=0x397380ef3f40 pc=0x7ff76279e94b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x397380ef3fe0 sp=0x397380ef3fc8 pc=0x7ff76279e837
+runtime.goexit({})
+	C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x397380ef3fe8 sp=0x397380ef3fe0 pc=0x7ff762801901
+created by runtime.gcBgMarkStartWorkers in goroutine 7
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 24 gp=0x397380edd0e0 m=nil [GC worker (idle)]:
+runtime.gopark(0x1ae1ff5289528?, 0x1?, 0xe4?, 0x51?, 0x0?)
+	C:/Program Files/Go/src/runtime/proc.go:462 +0xce fp=0x397380ef5f40 sp=0x397380ef5f20 pc=0x7ff7627fa40e
+runtime.gcBgMarkWorker(0x397380aa0a80)
+	C:/Program Files/Go/src/runtime/mgc.go:1791 +0xeb fp=0x397380ef5fc8 sp=0x397380ef5f40 pc=0x7ff76279e94b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x17 fp=0x397380ef5fe0 sp=0x397380ef5fc8 pc=0x7ff76279e837
+runtime.goexit({})
+	C:/Program Files/Go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x397380ef5fe8 sp=0x397380ef5fe0 pc=0x7ff762801901
+created by runtime.gcBgMarkStartWorkers in goroutine 7
+	C:/Program Files/Go/src/runtime/mgc.go:1695 +0x105
+FAIL	github.com/neul-labs/m9m/internal/showcase	20.429s
+ok  	github.com/neul-labs/m9m/internal/storage	17.474s
+ok  	github.com/neul-labs/m9m/internal/tags	17.516s
+ok  	github.com/neul-labs/m9m/internal/templates	21.467s
+ok  	github.com/neul-labs/m9m/internal/tenancy	2.458s
+2026/09/02 19:32:53 Γ£à Variable created: var_1788352373475278200 (key=API_URL, type=global, encrypted=false)
+2026/09/02 19:32:53 Γ£à Variable created: var_1788352373475913500 (key=BATCH_SIZE, type=workflow, encrypted=false)
+2026/09/02 19:32:53 Γ£à Variable created: var_1788352373475913500 (key=DUPLICATE_KEY, type=global, encrypted=false)
+2026/09/02 19:32:53 Γ£à Variable created: var_1788352373476524500 (key=SECRET_KEY, type=global, encrypted=true)
+2026/09/02 19:32:53 Γ£à Variable created: var_1788352373476524500 (key=GET_TEST, type=global, encrypted=false)
+2026/09/02 19:32:53 Γ£à Variable created: var_1788352373476524500 (key=BY_KEY, type=global, encrypted=false)
+2026/09/02 19:32:53 Γ£à Variable created: var_1788352373476524500 (key=GLOBAL_1, type=global, encrypted=false)
+2026/09/02 19:32:53 Γ£à Variable created: var_1788352373476524500 (key=GLOBAL_2, type=global, encrypted=false)
+2026/09/02 19:32:53 Γ£à Variable created: var_1788352373476524500 (key=WORKFLOW_1, type=workflow, encrypted=false)
+--- FAIL: TestVariableManager_ListVariables (0.00s)
+    --- FAIL: TestVariableManager_ListVariables/list_all (0.00s)
+        variable_manager_test.go:183: 
+            	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/variables/variable_manager_test.go:183
+            	Error:      	Not equal: 
+            	            	expected: 3
+            	            	actual  : 1
+            	Test:       	TestVariableManager_ListVariables/list_all
+        variable_manager_test.go:184: 
+            	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/variables/variable_manager_test.go:184
+            	Error:      	"[0x3fc2bbb588f0]" should have 3 item(s), but has 1
+            	Test:       	TestVariableManager_ListVariables/list_all
+    --- FAIL: TestVariableManager_ListVariables/filter_by_type (0.00s)
+        variable_manager_test.go:190: 
+            	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/variables/variable_manager_test.go:190
+            	Error:      	Not equal: 
+            	            	expected: 2
+            	            	actual  : 0
+            	Test:       	TestVariableManager_ListVariables/filter_by_type
+        variable_manager_test.go:191: 
+            	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/variables/variable_manager_test.go:191
+            	Error:      	"[]" should have 2 item(s), but has 0
+            	Test:       	TestVariableManager_ListVariables/filter_by_type
+    --- FAIL: TestVariableManager_ListVariables/pagination (0.00s)
+        variable_manager_test.go:204: 
+            	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/variables/variable_manager_test.go:204
+            	Error:      	Not equal: 
+            	            	expected: 3
+            	            	actual  : 1
+            	Test:       	TestVariableManager_ListVariables/pagination
+2026/09/02 19:32:53 Γ£à Variable created: var_1788352373476524500 (key=UPDATE_ME, type=global, encrypted=false)
+2026/09/02 19:32:53 Γ£à Variable updated: var_1788352373476524500 (key=UPDATE_ME)
+2026/09/02 19:32:53 Γ£à Variable updated: var_1788352373476524500 (key=UPDATE_ME)
+2026/09/02 19:32:53 Γ£à Variable updated: var_1788352373476524500 (key=UPDATE_ME)
+2026/09/02 19:32:53 Γ£à Variable created: var_1788352373477075600 (key=DELETE_ME, type=global, encrypted=false)
+2026/09/02 19:32:53 Γ£à Environment created: env_1788352373477075600 (key=dev, active=true)
+2026/09/02 19:32:53 Γ£à Environment created: env_1788352373477075600 (key=dev, active=false)
+2026/09/02 19:32:53 Γ£à Environment created: env_1788352373477075600 (key=staging, active=false)
+--- FAIL: TestVariableManager_Environment_GetAndList (0.00s)
+    --- FAIL: TestVariableManager_Environment_GetAndList/get_environment (0.00s)
+        variable_manager_test.go:318: 
+            	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/variables/variable_manager_test.go:318
+            	Error:      	Not equal: 
+            	            	expected: "Dev"
+            	            	actual  : "Staging"
+            	            	
+            	            	Diff:
+            	            	--- Expected
+            	            	+++ Actual
+            	            	@@ -1 +1 @@
+            	            	-Dev
+            	            	+Staging
+            	Test:       	TestVariableManager_Environment_GetAndList/get_environment
+    --- FAIL: TestVariableManager_Environment_GetAndList/list_environments (0.00s)
+        variable_manager_test.go:329: 
+            	Error Trace:	C:/Users/HYPE R Series/OneDrive/workspace/m9m/internal/variables/variable_manager_test.go:329
+            	Error:      	"[0x3fc2bbb687e0]" should have 2 item(s), but has 1
+            	Test:       	TestVariableManager_Environment_GetAndList/list_environments
+2026/09/02 19:32:53 Γ£à Environment created: env_1788352373477075600 (key=dev, active=false)
+2026/09/02 19:32:53 Γ£à Environment updated: env_1788352373477075600 (key=dev)
+2026/09/02 19:32:53 Γ£à Environment updated: env_1788352373477075600 (key=dev)
+2026/09/02 19:32:53 Γ£à Environment updated: env_1788352373477075600 (key=dev)
+2026/09/02 19:32:53 Γ£à Environment created: env_1788352373477627500 (key=del, active=false)
+2026/09/02 19:32:53 Γ£à Environment created: env_1788352373477627500 (key=active, active=true)
+2026/09/02 19:32:53 Γ£à Variable created: var_1788352373477627500 (key=SHARED_KEY, type=global, encrypted=false)
+2026/09/02 19:32:53 Γ£à Variable created: var_1788352373477627500 (key=GLOBAL_ONLY, type=global, encrypted=false)
+2026/09/02 19:32:53 Γ£à Environment created: env_1788352373477627500 (key=dev, active=true)
+2026/09/02 19:32:53 Γ£à Variable created: var_1788352373477627500 (key=ENC_VAR, type=global, encrypted=true)
+2026/09/02 19:32:53 Γ£à Variable updated: var_1788352373477627500 (key=ENC_VAR)
+FAIL
+FAIL	github.com/neul-labs/m9m/internal/variables	17.984s
+ok  	github.com/neul-labs/m9m/internal/versioning	10.736s
+?   	github.com/neul-labs/m9m/internal/versions	[no test files]
+?   	github.com/neul-labs/m9m/internal/web	[no test files]
+ok  	github.com/neul-labs/m9m/internal/webhooks	12.149s
+ok  	github.com/neul-labs/m9m/internal/worker	5.230s
+ok  	github.com/neul-labs/m9m/internal/workspace	3.216s
+ok  	github.com/neul-labs/m9m/pkg/billing	2.201s
+ok  	github.com/neul-labs/m9m/pkg/blob	2.345s
+ok  	github.com/neul-labs/m9m/pkg/m9m	8.242s
+?   	github.com/neul-labs/m9m/pkg/observability	[no test files]
+ok  	github.com/neul-labs/m9m/pkg/quota	2.247s
+ok  	github.com/neul-labs/m9m/pkg/snapshot	2.352s
+FAIL
