@@ -184,10 +184,23 @@ func (h *Handler) DeleteWebhook(w http.ResponseWriter, r *http.Request) {
 // Helper methods
 
 func (h *Handler) parseRequest(r *http.Request) (*WebhookRequest, error) {
+	// Copy the headers so we can inject the synthetic `Host` entry
+	// that n8n surfaces on its webhook trigger output. Go's
+	// http.Request separates `Host` out from `r.Header` (it lives on
+	// `r.Host`), so without this copy the host header would be missing
+	// from the trigger output — diverging from n8n's wire shape.
+	headers := make(http.Header, len(r.Header)+1)
+	for k, v := range r.Header {
+		headers[k] = append([]string(nil), v...)
+	}
+	if r.Host != "" {
+		headers.Set("Host", r.Host)
+	}
+
 	request := &WebhookRequest{
 		Method:  r.Method,
 		Path:    r.URL.Path,
-		Headers: r.Header,
+		Headers: headers,
 		Query:   r.URL.Query(),
 	}
 
