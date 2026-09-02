@@ -38,8 +38,8 @@ WORKDIR /app
 COPY --from=builder /build/m9m .
 
 # Copy example workflows and templates (optional)
-COPY --from=builder examples ./examples
-COPY --from=builder test-workflows ./test-workflows
+#COPY --from=builder examples ./examples
+#COPY --from=builder test-workflows ./test-workflows
 
 # Create directories for data persistence
 RUN mkdir -p /app/data /app/logs /app/config && \
