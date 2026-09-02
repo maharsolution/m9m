@@ -258,8 +258,10 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 			}, nil // Return as result.Error, not as function error
 		}
 
-		// Store output data for this node
-		nodeResults[nodeName] = outputData
+		// Store output data for this node. Strip internal routing
+		// metadata (e.g. IF's `_ifResult`) so it never leaks into
+		// downstream node inputs or webhook responses.
+		nodeResults[nodeName] = stripRoutingMetadata(outputData)
 
 		// Route data to connected nodes
 		routedData, err := e.connectionRouter.RouteData(nodeName, workflow, outputData)
@@ -429,4 +431,41 @@ func isDecorativeNodeType(nodeType string) bool {
 		return true
 	}
 	return false
+}
+
+// stripRoutingMetadata returns a copy of items with internal routing
+// metadata removed (currently the IF node's `_ifResult` tag). The
+// connection router consumes this metadata to partition items across
+// branches; once that has happened the tag must not leak into
+// downstream node inputs or webhook responses.
+//
+// Items are shallow-copied only when they actually contain a routing
+// field, so the no-op case (no IF involved) is allocation-free.
+func stripRoutingMetadata(items []model.DataItem) []model.DataItem {
+	clean := false
+	for i := range items {
+		if _, ok := items[i].JSON["_ifResult"]; ok {
+			clean = true
+			break
+		}
+	}
+	if !clean {
+		return items
+	}
+	out := make([]model.DataItem, len(items))
+	for i := range items {
+		out[i] = items[i]
+		if out[i].JSON != nil {
+			// Copy on first write to avoid mutating the source.
+			newJSON := make(map[string]interface{}, len(out[i].JSON))
+			for k, v := range out[i].JSON {
+				if k == "_ifResult" {
+					continue
+				}
+				newJSON[k] = v
+			}
+			out[i].JSON = newJSON
+		}
+	}
+	return out
 }

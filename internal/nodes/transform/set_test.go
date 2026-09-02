@@ -134,7 +134,7 @@ func TestSetNodeExecuteWithEmptyInput(t *testing.T) {
 
 func TestSetNodeExecuteWithValidAssignments(t *testing.T) {
 	node := NewSetNode()
-	
+
 	inputData := []model.DataItem{
 		{
 			JSON: map[string]interface{}{
@@ -142,8 +142,12 @@ func TestSetNodeExecuteWithValidAssignments(t *testing.T) {
 			},
 		},
 	}
-	
+
+	// n8n's default for typeVersion 3+ is "Keep Only Set" (replace), so
+	// the legacy flat-assignments test that relied on merge behaviour
+	// has to opt into merge explicitly here.
 	nodeParams := map[string]interface{}{
+		"options": map[string]interface{}{"keepOnlySet": false},
 		"assignments": []interface{}{
 			map[string]interface{}{
 				"name":  "newField",
@@ -155,28 +159,28 @@ func TestSetNodeExecuteWithValidAssignments(t *testing.T) {
 			},
 		},
 	}
-	
+
 	result, err := node.Execute(inputData, nodeParams)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	
+
 	if len(result) != 1 {
 		t.Fatalf("Expected 1 result item, got %d", len(result))
 	}
-	
+
 	item := result[0]
-	
-	// Check that existing field is preserved
+
+	// Check that existing field is preserved (with explicit merge opt-in).
 	if existing, ok := item.JSON["existing"].(string); !ok || existing != "value" {
-		t.Errorf("Expected existing field to be preserved, got %v", item.JSON["existing"])
+		t.Errorf("Expected existing field to be preserved (merge mode), got %v", item.JSON["existing"])
 	}
-	
+
 	// Check that new fields are added
 	if newValue, ok := item.JSON["newField"].(string); !ok || newValue != "newValue" {
 		t.Errorf("Expected newField to be 'newValue', got %v", item.JSON["newField"])
 	}
-	
+
 	if numberValue, ok := item.JSON["numberField"].(int); !ok || numberValue != 123 {
 		t.Errorf("Expected numberField to be 123, got %v", item.JSON["numberField"])
 	}
@@ -184,7 +188,7 @@ func TestSetNodeExecuteWithValidAssignments(t *testing.T) {
 
 func TestSetNodeExecuteWithMultipleItems(t *testing.T) {
 	node := NewSetNode()
-	
+
 	inputData := []model.DataItem{
 		{
 			JSON: map[string]interface{}{
@@ -197,8 +201,12 @@ func TestSetNodeExecuteWithMultipleItems(t *testing.T) {
 			},
 		},
 	}
-	
+
+	// Opt into the legacy merge behaviour: the new n8n-default replace
+	// mode would drop the upstream `id` field, which this test asserts
+	// is preserved.
 	nodeParams := map[string]interface{}{
+		"options": map[string]interface{}{"keepOnlySet": false},
 		"assignments": []interface{}{
 			map[string]interface{}{
 				"name":  "processed",
@@ -206,30 +214,30 @@ func TestSetNodeExecuteWithMultipleItems(t *testing.T) {
 			},
 		},
 	}
-	
+
 	result, err := node.Execute(inputData, nodeParams)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	
+
 	if len(result) != 2 {
 		t.Fatalf("Expected 2 result items, got %d", len(result))
 	}
-	
+
 	// Check first item
 	if id, ok := result[0].JSON["id"].(int); !ok || id != 1 {
 		t.Errorf("Expected first item id to be 1, got %v", result[0].JSON["id"])
 	}
-	
+
 	if processed, ok := result[0].JSON["processed"].(bool); !ok || !processed {
 		t.Errorf("Expected first item processed to be true, got %v", result[0].JSON["processed"])
 	}
-	
+
 	// Check second item
 	if id, ok := result[1].JSON["id"].(int); !ok || id != 2 {
 		t.Errorf("Expected second item id to be 2, got %v", result[1].JSON["id"])
 	}
-	
+
 	if processed, ok := result[1].JSON["processed"].(bool); !ok || !processed {
 		t.Errorf("Expected second item processed to be true, got %v", result[1].JSON["processed"])
 	}
@@ -302,7 +310,10 @@ func TestSetNodeExecuteNestedAssignments(t *testing.T) {
 		{JSON: map[string]interface{}{"existing": "value"}},
 	}
 
+	// Opt into merge mode explicitly: by default, n8n typeVersion 3+
+	// replaces the upstream JSON, which would drop `existing` here.
 	nestedParams := map[string]interface{}{
+		"options": map[string]interface{}{"keepOnlySet": false},
 		"assignments": map[string]interface{}{
 			"assignments": []interface{}{
 				map[string]interface{}{
@@ -321,7 +332,7 @@ func TestSetNodeExecuteNestedAssignments(t *testing.T) {
 		t.Fatalf("Expected 1 result, got %d", len(result))
 	}
 	if result[0].JSON["existing"] != "value" {
-		t.Errorf("Expected existing field preserved, got %v", result[0].JSON["existing"])
+		t.Errorf("Expected existing field preserved (merge opt-in), got %v", result[0].JSON["existing"])
 	}
 	if result[0].JSON["added"] != "hello" {
 		t.Errorf("Expected added='hello', got %v", result[0].JSON["added"])
@@ -417,8 +428,10 @@ func TestSetNodeValidateEmptyOptions(t *testing.T) {
 }
 
 // TestSetNodeExecuteEmptyOptions verifies the Execute path also tolerates
-// the empty-options case: it must run as a no-op and propagate input
-// data unchanged instead of returning an error.
+// the empty-options case: it runs as a no-op but, because n8n's Set
+// default is now "Keep Only Set" (replace), the empty `options:{}`
+// does NOT propagate the upstream JSON — the resulting item has no
+// keys. The Set node still must not error out.
 func TestSetNodeExecuteEmptyOptions(t *testing.T) {
 	node := NewSetNode()
 
@@ -435,8 +448,13 @@ func TestSetNodeExecuteEmptyOptions(t *testing.T) {
 	if len(out) != 1 {
 		t.Fatalf("Expected 1 result, got %d", len(out))
 	}
-	if got := out[0].JSON["hello"]; got != "world" {
-		t.Errorf("Expected input passthrough, got %#v", out[0].JSON)
+	// Replace mode + zero assignments = empty JSON. This is the
+	// production bocahtuanakal case: an `options:{}` Set with no fields
+	// is a pass-through in the *error* sense (no crash) but it does
+	// drop the upstream data. The legacy merge behaviour is opt-in
+	// via `keepOnlySet:false`.
+	if len(out[0].JSON) != 0 {
+		t.Errorf("Expected empty JSON in replace mode, got %#v", out[0].JSON)
 	}
 }
 
@@ -662,5 +680,188 @@ func TestSetNodeExecuteNoTypePreservesLegacyBehaviour(t *testing.T) {
 	}
 	if got != "u-42" {
 		t.Errorf("Expected userId='u-42', got %q", got)
+	}
+}
+
+// TestSetNodeExecuteReplaceModeByDefault reproduces the production
+// workflow `Webhook → Set (variableA, variableb) → Set (total = a+b)`
+// end-to-end and asserts the second Set's output is just `{"total": …}`
+// — i.e. upstream webhook context is REPLACED, not merged.
+//
+// This is the byte-equivalent regression test for the live n8n
+// bocahtuanakal webhook at `http://…/webhook/bocahtuanakal`, whose
+// response body is `[{"total":11115}]` (17 bytes) on n8n and was
+// `[{"body":…,"headers":…,"total":11115,…}]` (265 bytes) on the
+// pre-fix m9m. The fix: n8n's Set node defaults to `keepOnlySet=true`
+// for typeVersion 3+, so m9m's Set must replace the upstream JSON by
+// default when the workflow declares an empty `options: {}` map.
+func TestSetNodeExecuteReplaceModeByDefault(t *testing.T) {
+	node := NewSetNode()
+
+	// Simulated webhook payload — vars arrive as strings, exactly as
+	// the production case (HTTP body is always text on the wire).
+	inputData := []model.DataItem{
+		{
+			JSON: map[string]interface{}{
+				"headers": map[string][]string{
+					"Content-Type": {"application/json"},
+					"User-Agent":   {"curl/8.21.0"},
+				},
+				"params": map[string][]string{},
+				"query":  map[string][]string{},
+				"body": map[string]interface{}{
+					"varA": "5",
+					"varB": "11110",
+				},
+				"method": "POST",
+				"path":   "bocahtuanakal",
+			},
+		},
+	}
+
+	// First Set node: typeVersion 3.5 nested shape, `options: {}` —
+	// n8n defaults to replace.
+	firstParams := map[string]interface{}{
+		"options": map[string]interface{}{},
+		"assignments": map[string]interface{}{
+			"assignments": []interface{}{
+				map[string]interface{}{
+					"name":  "variableA",
+					"type":  "number",
+					"value": "={{ $json.body.varA }}",
+				},
+				map[string]interface{}{
+					"name":  "variableb",
+					"type":  "number",
+					"value": "={{ $json.body.varB }}",
+				},
+			},
+		},
+	}
+	afterFirst, err := node.Execute(inputData, firstParams)
+	if err != nil {
+		t.Fatalf("First Set node failed: %v", err)
+	}
+	if len(afterFirst) != 1 {
+		t.Fatalf("Expected 1 result after first Set, got %d", len(afterFirst))
+	}
+
+	// The first Set's output should be ONLY the two assigned keys —
+	// the upstream `body`, `headers`, `params`, `query`, `method`,
+	// `path` must all be gone. That's the whole point of the fix.
+	first := afterFirst[0].JSON
+	if v, ok := first["variableA"].(float64); !ok || v != 5 {
+		t.Errorf("Expected variableA=5 (float64), got %T (%#v)", first["variableA"], first["variableA"])
+	}
+	if v, ok := first["variableb"].(float64); !ok || v != 11110 {
+		t.Errorf("Expected variableb=11110 (float64), got %T (%#v)", first["variableb"], first["variableb"])
+	}
+	for _, leaked := range []string{"body", "headers", "params", "query", "method", "path"} {
+		if _, ok := first[leaked]; ok {
+			t.Errorf("Replace mode must drop upstream field %q, but found it: %#v", leaked, first[leaked])
+		}
+	}
+
+	// Second Set node: sum the now-numeric fields, also `options: {}`.
+	secondParams := map[string]interface{}{
+		"options": map[string]interface{}{},
+		"assignments": map[string]interface{}{
+			"assignments": []interface{}{
+				map[string]interface{}{
+					"name":  "total",
+					"type":  "number",
+					"value": "={{ $json.variableA + $json.variableb }}",
+				},
+			},
+		},
+	}
+	afterSecond, err := node.Execute(afterFirst, secondParams)
+	if err != nil {
+		t.Fatalf("Second Set node failed: %v", err)
+	}
+	if len(afterSecond) != 1 {
+		t.Fatalf("Expected 1 result after second Set, got %d", len(afterSecond))
+	}
+
+	// Final output must be exactly `{"total":11115}` — same shape
+	// n8n returns on the wire. Anything else is a regression.
+	final := afterSecond[0].JSON
+	if len(final) != 1 {
+		t.Fatalf("Expected exactly 1 key after second Set (replace mode), got %d: %#v", len(final), final)
+	}
+	got, ok := final["total"].(float64)
+	if !ok {
+		t.Fatalf("Expected total to be float64, got %T (%#v)", final["total"], final["total"])
+	}
+	if got != 11115 {
+		t.Errorf("Expected total=11115, got %v (this is the production bocahtuanakal regression)", got)
+	}
+}
+
+// TestSetNodeExecuteKeepOnlySetFalseHonoursMerge verifies that an n8n
+// workflow explicitly opting into `keepOnlySet: false` keeps the
+// pre-fix merge behaviour. Without this opt-in, legacy workflows that
+// relied on the merge would silently lose fields.
+func TestSetNodeExecuteKeepOnlySetFalseHonoursMerge(t *testing.T) {
+	node := NewSetNode()
+
+	inputData := []model.DataItem{
+		{
+			JSON: map[string]interface{}{
+				"existing": "value",
+				"body":     map[string]interface{}{"x": 1},
+			},
+		},
+	}
+	params := map[string]interface{}{
+		"options": map[string]interface{}{"keepOnlySet": false},
+		"assignments": []interface{}{
+			map[string]interface{}{
+				"name":  "added",
+				"value": "hello",
+			},
+		},
+	}
+	out, err := node.Execute(inputData, params)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if len(out) != 1 {
+		t.Fatalf("Expected 1 result, got %d", len(out))
+	}
+	item := out[0].JSON
+	if item["existing"] != "value" {
+		t.Errorf("Expected existing preserved with keepOnlySet=false, got %#v", item["existing"])
+	}
+	if item["added"] != "hello" {
+		t.Errorf("Expected added='hello', got %#v", item["added"])
+	}
+	if _, ok := item["body"]; !ok {
+		t.Errorf("Expected body preserved with keepOnlySet=false, got %#v", item)
+	}
+}
+
+// TestShouldReplaceJSON covers the decision matrix for the helper that
+// picks replace-vs-merge mode for the Set node.
+func TestShouldReplaceJSON(t *testing.T) {
+	cases := []struct {
+		name     string
+		params   map[string]interface{}
+		expected bool
+	}{
+		{"nil params → replace", nil, true},
+		{"no options key → replace", map[string]interface{}{}, true},
+		{"empty options → replace", map[string]interface{}{"options": map[string]interface{}{}}, true},
+		{"keepOnlySet=true → replace", map[string]interface{}{"options": map[string]interface{}{"keepOnlySet": true}}, true},
+		{"keepOnlySet=false → merge", map[string]interface{}{"options": map[string]interface{}{"keepOnlySet": false}}, false},
+		{"malformed options → replace (safer default)", map[string]interface{}{"options": "nope"}, true},
+		{"unrelated options keys → replace", map[string]interface{}{"options": map[string]interface{}{"dotValues": false}}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := shouldReplaceJSON(tc.params); got != tc.expected {
+				t.Errorf("shouldReplaceJSON(%#v) = %v, want %v", tc.params, got, tc.expected)
+			}
+		})
 	}
 }

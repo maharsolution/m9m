@@ -34,40 +34,114 @@ func NewConnectionRouter() ConnectionRouter {
 	return &connectionRouterImpl{}
 }
 
-// RouteData routes data from a source node to connected target nodes
+// RouteData routes data from a source node to connected target nodes.
+//
+// n8n's connection shape is `connections.Main = [[{node:T,...}], [{node:F,...}]]` —
+// each top-level slice is a branch (main[0] = first output / "true", main[1] =
+// "false", etc.). For nodes that emit per-item routing metadata (currently the IF
+// node, which tags every item with `_ifResult`), the router partitions items
+// across branches based on that metadata:
+//
+//	_main[0]_ → items whose `_ifResult` is true
+//	_main[1]_ → items whose `_ifResult` is false
+//	_main[k]_ (k>1) → no items (mirrors n8n: only main[0] and main[1] exist for IF)
+//
+// For nodes that do not emit routing metadata, the router falls back to the
+// historic behaviour: every item produced by the source node is forwarded to
+// every target connected at that branch index. This preserves correctness for
+// the common case (single-branch nodes) while enabling true IF routing.
 func (r *connectionRouterImpl) RouteData(sourceNode string, workflow *model.Workflow, data []model.DataItem) (map[string][]model.DataItem, error) {
 	if workflow == nil {
 		return nil, fmt.Errorf("workflow cannot be nil")
 	}
-	
+
 	// Get connections for the source node
 	connections := r.GetConnections(sourceNode, workflow)
 	if connections == nil {
 		// No connections, return empty map
 		return make(map[string][]model.DataItem), nil
 	}
-	
+
+	// Detect whether the source emitted per-item routing metadata. The IF
+	// node (and any future node that opts into routing) tags every item
+	// with `_ifResult` — we use that as the signal to partition data
+	// across main[0] (true) and main[1] (false).
+	branchable, trueItems, falseItems := partitionByRoutingMetadata(data)
+
 	// Create result map
 	routedData := make(map[string][]model.DataItem)
-	
-	// For each connection type (main, etc.)
-	for _, typeConnections := range connections.Main {
-		// For each connection in this type
+
+	// For each branch (top-level slice of connections.Main)
+	for branchIndex, typeConnections := range connections.Main {
+		// For each connection in this branch
 		for _, connection := range typeConnections {
-			// Route data to the target node
-			// In a real implementation, we might need to partition data based on index
-			// For now, we'll send all data to each connected node
+			var branchData []model.DataItem
+			switch {
+			case branchable && branchIndex == 0:
+				branchData = trueItems
+			case branchable && branchIndex == 1:
+				branchData = falseItems
+			case branchable:
+				// main[k] for k>1 is unused by IF; mirror n8n by
+				// forwarding nothing rather than every item.
+				branchData = nil
+			default:
+				// Non-routing node: forward all items to every target
+				// on every branch (legacy behaviour).
+				branchData = data
+			}
+
 			if routedData[connection.Node] == nil {
-				routedData[connection.Node] = make([]model.DataItem, len(data))
-				copy(routedData[connection.Node], data)
+				routedData[connection.Node] = make([]model.DataItem, len(branchData))
+				copy(routedData[connection.Node], branchData)
 			} else {
-				// Append data if node already has data routed to it
-				routedData[connection.Node] = append(routedData[connection.Node], data...)
+				routedData[connection.Node] = append(routedData[connection.Node], branchData...)
 			}
 		}
 	}
-	
+
+	// Strip the internal `_ifResult` metadata before items reach downstream
+	// nodes — n8n does not expose this field on user data.
+	if branchable {
+		for nodeName := range routedData {
+			for i := range routedData[nodeName] {
+				delete(routedData[nodeName][i].JSON, "_ifResult")
+			}
+		}
+	}
+
 	return routedData, nil
+}
+
+// partitionByRoutingMetadata inspects every item for the `_ifResult`
+// routing tag. If the tag is present on all items, it returns true and
+// splits items into the true/false slices. Otherwise it returns false
+// and nil slices, signalling to RouteData that the legacy broadcast
+// behaviour should be used.
+func partitionByRoutingMetadata(data []model.DataItem) (branchable bool, trueItems, falseItems []model.DataItem) {
+	if len(data) == 0 {
+		return false, nil, nil
+	}
+	for _, item := range data {
+		if _, ok := item.JSON["_ifResult"]; !ok {
+			return false, nil, nil
+		}
+	}
+	trueItems = make([]model.DataItem, 0)
+	falseItems = make([]model.DataItem, 0)
+	for _, item := range data {
+		switch item.JSON["_ifResult"] {
+		case true:
+			trueItems = append(trueItems, item)
+		case false:
+			falseItems = append(falseItems, item)
+		default:
+			// _ifResult exists but is neither true nor false; treat
+			// the whole batch as unbranched to be safe.
+			return false, nil, nil
+		}
+	}
+	return true, trueItems, falseItems
 }
 
 // GetConnections returns the connections for a specific node

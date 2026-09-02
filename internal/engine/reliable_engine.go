@@ -263,7 +263,12 @@ func (e *ReliableWorkflowEngine) ExecuteWorkflowWithContext(
 		e.executionMetrics.SuccessfulNodes++
 		e.executionMetrics.mu.Unlock()
 
-		nodeResults[nodeName] = outputData
+		// Strip the internal `_ifResult` routing metadata before
+		// stashing the result, so that downstream nodes (and the
+		// final webhook response) never see the IF's internal
+		// bookkeeping field. The router has already consumed the
+		// tag to partition items across main[0] vs main[1].
+		nodeResults[nodeName] = stripRoutingMetadata(outputData)
 
 		routedData, err := e.baseEngine.connectionRouter.RouteData(nodeName, workflow, outputData)
 		if err != nil {

@@ -209,13 +209,11 @@ func TestWebhookNode_Execute_BasicRequest(t *testing.T) {
 	inputData := []model.DataItem{
 		{
 			JSON: map[string]interface{}{
-				"headers": map[string]interface{}{
-					"content-type": "application/json",
+				"headers": map[string][]string{
+					"Content-Type": {"application/json"},
 				},
-				"params": map[string]interface{}{},
-				"query": map[string]interface{}{
-					"foo": "bar",
-				},
+				"params": map[string][]string{},
+				"query":  map[string][]string{"foo": {"bar"}},
 				"body": map[string]interface{}{
 					"message": "hello",
 				},
@@ -235,9 +233,13 @@ func TestWebhookNode_Execute_BasicRequest(t *testing.T) {
 	item := result[0].JSON
 	assert.Equal(t, "/hooks/test", item["path"])
 	assert.Equal(t, "POST", item["method"])
-	assert.Equal(t, map[string]interface{}{"content-type": "application/json"}, item["headers"])
+	// Headers must be normalised to lowercase keys + string values to
+	// match n8n's wire shape (gap #4).
+	assert.Equal(t, map[string]string{"content-type": "application/json"}, item["headers"])
 	assert.Equal(t, map[string]interface{}{"foo": "bar"}, item["query"])
 	assert.Equal(t, map[string]interface{}{"message": "hello"}, item["body"])
+	// Trigger enrichment (gap #5).
+	assert.NotEmpty(t, item["webhookUrl"], "trigger must populate webhookUrl")
 }
 
 // TestWebhookNode_Execute_DefaultMethod verifies that the method defaults to

@@ -877,3 +877,83 @@ func TestWebhookManager_prepareInputData(t *testing.T) {
 	// "params" is also set (same as query).
 	assert.NotNil(t, json["params"])
 }
+
+// TestWebhookManager_prepareInputData_TriggerEnrichment pins the gap #5
+// fix: prepareInputData must stamp `webhookUrl` (full public URL of the
+// inbound webhook) and `executionMode` (`"production"` / `"test"`) on
+// the engine input. n8n exposes both fields on the Webhook trigger
+// output and downstream Set / Function / Code nodes frequently echo
+// them back via `{{ $json.executionMode }}`.
+func TestWebhookManager_prepareInputData_TriggerEnrichment(t *testing.T) {
+	t.Setenv("M9M_WEBHOOK_URL", "http://187.77.113.218:8080")
+	t.Setenv("WEBHOOK_URL", "")
+	t.Setenv("M9M_HOST", "")
+	t.Setenv("M9M_PORT", "")
+
+	mgr, _, _ := newTestManager()
+
+	// Production webhook: served from /webhook/<path>.
+	prodReq := &WebhookRequest{
+		Method:  "POST",
+		Path:    "/webhook/bocahtuanakal",
+		Headers: map[string][]string{},
+		Query:   map[string][]string{},
+		Body:    map[string]interface{}{},
+	}
+	prodItems := mgr.prepareInputData(prodReq)
+	require.Len(t, prodItems, 1)
+	prodJSON := prodItems[0].JSON
+	assert.Equal(t, "http://187.77.113.218:8080/webhook/bocahtuanakal", prodJSON["webhookUrl"],
+		"webhookUrl must be the full public URL n8n would expose")
+	assert.Equal(t, "production", prodJSON["executionMode"],
+		"production webhook must stamp executionMode='production'")
+
+	// Test webhook: served from /webhook-test/<path>.
+	testReq := &WebhookRequest{
+		Method:  "POST",
+		Path:    "/webhook-test/bocahtuanakal",
+		Headers: map[string][]string{},
+		Query:   map[string][]string{},
+		Body:    map[string]interface{}{},
+	}
+	testItems := mgr.prepareInputData(testReq)
+	require.Len(t, testItems, 1)
+	testJSON := testItems[0].JSON
+	assert.Equal(t, "http://187.77.113.218:8080/webhook-test/bocahtuanakal", testJSON["webhookUrl"])
+	assert.Equal(t, "test", testJSON["executionMode"],
+		"test webhook must stamp executionMode='test'")
+}
+
+// TestWebhookManager_prepareInputData_PassesRawHeaderShape verifies
+// that prepareInputData does NOT pre-normalise the headers — the
+// canonical http.Header shape is preserved so the Webhook trigger
+// node can normalise it consistently with the n8n wire shape
+// (lowercase keys, scalar string values). If we flattened here, the
+// trigger would either double-normalise or break its `map[string][]string`
+// type assertion.
+func TestWebhookManager_prepareInputData_PassesRawHeaderShape(t *testing.T) {
+	mgr, _, _ := newTestManager()
+
+	req := &WebhookRequest{
+		Method: "POST",
+		Path:   "/test",
+		Headers: map[string][]string{
+			"Content-Type": {"application/json"},
+			"Accept":       {"*/*", "text/html"},
+		},
+		Query: map[string][]string{"q": {"1"}},
+	}
+
+	items := mgr.prepareInputData(req)
+	require.Len(t, items, 1)
+	json := items[0].JSON
+
+	headers, ok := json["headers"].(map[string][]string)
+	require.True(t, ok, "headers must remain canonical http.Header shape")
+	assert.Equal(t, []string{"application/json"}, headers["Content-Type"])
+	assert.Equal(t, []string{"*/*", "text/html"}, headers["Accept"])
+
+	query, ok := json["query"].(map[string][]string)
+	require.True(t, ok, "query must remain canonical url.Values shape")
+	assert.Equal(t, []string{"1"}, query["q"])
+}

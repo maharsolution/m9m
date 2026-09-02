@@ -351,7 +351,7 @@ func TestHasCyclesWithNilWorkflow(t *testing.T) {
 
 func TestHasCyclesWithAcyclicWorkflow(t *testing.T) {
 	router := NewConnectionRouter()
-	
+
 	workflow := &model.Workflow{
 		Nodes: []model.Node{
 			{Name: "node1", Type: "type1"},
@@ -371,13 +371,153 @@ func TestHasCyclesWithAcyclicWorkflow(t *testing.T) {
 			},
 		},
 	}
-	
+
 	hasCycles, err := router.HasCycles(workflow)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	
+
 	if hasCycles {
 		t.Error("Expected acyclic workflow, but cycles detected")
+	}
+}
+
+// TestRouteDataPartitionByIfResult verifies the fix for PARITY_REPORT
+// §6 Gap #1: when the source node tags items with `_ifResult` (the IF
+// node), the router must split items across connections.Main[0]
+// (true branch) and connections.Main[1] (false branch) and strip the
+// internal tag from the data that reaches downstream nodes.
+func TestRouteDataPartitionByIfResult(t *testing.T) {
+	router := NewConnectionRouter()
+
+	workflow := &model.Workflow{
+		Nodes: []model.Node{
+			{Name: "IF", Type: "n8n-nodes-base.if"},
+			{Name: "TrueBranch", Type: "n8n-nodes-base.set"},
+			{Name: "FalseBranch", Type: "n8n-nodes-base.set"},
+		},
+		Connections: map[string]model.Connections{
+			"IF": {
+				Main: [][]model.Connection{
+					{{Node: "TrueBranch", Type: "main", Index: 0}},
+					{{Node: "FalseBranch", Type: "main", Index: 0}},
+				},
+			},
+		},
+	}
+
+	data := []model.DataItem{
+		{JSON: map[string]interface{}{"name": "Alice", "_ifResult": true}},
+		{JSON: map[string]interface{}{"name": "Bob", "_ifResult": false}},
+		{JSON: map[string]interface{}{"name": "Charlie", "_ifResult": true}},
+	}
+
+	routed, err := router.RouteData("IF", workflow, data)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	trueBranch, ok := routed["TrueBranch"]
+	if !ok {
+		t.Fatal("Expected TrueBranch in routed data")
+	}
+	if len(trueBranch) != 2 {
+		t.Errorf("Expected 2 items on TrueBranch (Alice, Charlie), got %d", len(trueBranch))
+	}
+	for _, item := range trueBranch {
+		if _, leaked := item.JSON["_ifResult"]; leaked {
+			t.Errorf("TrueBranch items must NOT carry _ifResult metadata, got %v", item.JSON)
+		}
+	}
+
+	falseBranch, ok := routed["FalseBranch"]
+	if !ok {
+		t.Fatal("Expected FalseBranch in routed data")
+	}
+	if len(falseBranch) != 1 {
+		t.Errorf("Expected 1 item on FalseBranch (Bob), got %d", len(falseBranch))
+	}
+	if falseBranch[0].JSON["name"] != "Bob" {
+		t.Errorf("Expected Bob on FalseBranch, got %v", falseBranch[0].JSON)
+	}
+	for _, item := range falseBranch {
+		if _, leaked := item.JSON["_ifResult"]; leaked {
+			t.Errorf("FalseBranch items must NOT carry _ifResult metadata, got %v", item.JSON)
+		}
+	}
+}
+
+// TestRouteDataNoRoutingMetadataFallsBackToBroadcast covers the
+// backwards-compat case: a source node that does NOT tag items with
+// `_ifResult` must still have all of its data routed to every
+// connected target, preserving the legacy single-branch behaviour
+// for the (Set, Webhook, Function, …) majority of nodes.
+func TestRouteDataNoRoutingMetadataFallsBackToBroadcast(t *testing.T) {
+	router := NewConnectionRouter()
+
+	workflow := &model.Workflow{
+		Nodes: []model.Node{
+			{Name: "Set", Type: "n8n-nodes-base.set"},
+			{Name: "Down", Type: "n8n-nodes-base.set"},
+		},
+		Connections: map[string]model.Connections{
+			"Set": {
+				Main: [][]model.Connection{
+					{{Node: "Down", Type: "main", Index: 0}},
+				},
+			},
+		},
+	}
+
+	data := []model.DataItem{
+		{JSON: map[string]interface{}{"x": 1}},
+		{JSON: map[string]interface{}{"x": 2}},
+	}
+
+	routed, err := router.RouteData("Set", workflow, data)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	down, ok := routed["Down"]
+	if !ok || len(down) != 2 {
+		t.Fatalf("Expected 2 items routed to Down, got %v", routed)
+	}
+}
+
+// TestRouteDataMixedIfResultFallsBackToBroadcast guards against
+// accidental partial tagging: if even a single item is missing the
+// `_ifResult` tag the router must NOT silently drop branches — it
+// falls back to broadcast-to-all-targets to keep the workflow alive.
+func TestRouteDataMixedIfResultFallsBackToBroadcast(t *testing.T) {
+	router := NewConnectionRouter()
+
+	workflow := &model.Workflow{
+		Nodes: []model.Node{
+			{Name: "IF", Type: "n8n-nodes-base.if"},
+			{Name: "TrueBranch", Type: "n8n-nodes-base.set"},
+			{Name: "FalseBranch", Type: "n8n-nodes-base.set"},
+		},
+		Connections: map[string]model.Connections{
+			"IF": {
+				Main: [][]model.Connection{
+					{{Node: "TrueBranch", Type: "main", Index: 0}},
+					{{Node: "FalseBranch", Type: "main", Index: 0}},
+				},
+			},
+		},
+	}
+
+	data := []model.DataItem{
+		{JSON: map[string]interface{}{"a": "_ifResult"}},
+		{JSON: map[string]interface{}{"b": true}}, // missing _ifResult
+	}
+
+	routed, err := router.RouteData("IF", workflow, data)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if len(routed["TrueBranch"]) != 2 || len(routed["FalseBranch"]) != 2 {
+		t.Errorf("Mixed-tag input must fall back to broadcast, got True=%v False=%v",
+			len(routed["TrueBranch"]), len(routed["FalseBranch"]))
 	}
 }

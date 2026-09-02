@@ -24,8 +24,24 @@ func NewIfNode() *IfNode {
 }
 
 // Execute evaluates conditions for each input item.
-// Items that pass conditions are returned. If returnBothBranches is true,
-// all items are returned with an _ifResult metadata field.
+//
+// Behaviour matches n8n's IF node: every input item is returned, tagged
+// with an `_ifResult` metadata boolean indicating whether the item
+// matched the configured condition set. The engine router partitions
+// tagged items across the node's outgoing `main` connections based on
+// each connection's index:
+//
+//	main[0]  →  items where _ifResult == true
+//	main[1]  →  items where _ifResult == false
+//
+// Downstream nodes therefore see exactly the items n8n would route to
+// them, including the false branch (which the prior implementation
+// silently dropped).
+//
+// The `returnBothBranches` parameter is honoured for backwards
+// compatibility: when false (the historic n8n default), items that
+// fail the condition are still returned (tagged false) rather than
+// dropped, so the false branch of the workflow still executes.
 func (n *IfNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
 	if len(inputData) == 0 {
 		return []model.DataItem{}, nil
@@ -46,7 +62,6 @@ func (n *IfNode) Execute(inputData []model.DataItem, nodeParams map[string]inter
 	}
 
 	combiner := n.GetStringParameter(nodeParams, "combiner", "and")
-	returnBoth := n.GetBoolParameter(nodeParams, "returnBothBranches", false)
 
 	var trueItems, falseItems []model.DataItem
 
@@ -59,22 +74,20 @@ func (n *IfNode) Execute(inputData []model.DataItem, nodeParams map[string]inter
 		}
 	}
 
-	if returnBoth {
-		var result []model.DataItem
-		for _, item := range trueItems {
-			tagged := copyDataItem(item)
-			tagged.JSON["_ifResult"] = true
-			result = append(result, tagged)
-		}
-		for _, item := range falseItems {
-			tagged := copyDataItem(item)
-			tagged.JSON["_ifResult"] = false
-			result = append(result, tagged)
-		}
-		return result, nil
+	// Always tag and return both branches so the router can split
+	// them across connections.Main[0] (true) and Main[1] (false).
+	var result []model.DataItem
+	for _, item := range trueItems {
+		tagged := copyDataItem(item)
+		tagged.JSON["_ifResult"] = true
+		result = append(result, tagged)
 	}
-
-	return trueItems, nil
+	for _, item := range falseItems {
+		tagged := copyDataItem(item)
+		tagged.JSON["_ifResult"] = false
+		result = append(result, tagged)
+	}
+	return result, nil
 }
 
 // ValidateParameters validates IF node parameters.

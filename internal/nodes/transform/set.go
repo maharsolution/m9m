@@ -227,6 +227,45 @@ func (s *SetNode) ValidateParameters(params map[string]interface{}) error {
 	return nil
 }
 
+// shouldReplaceJSON reports whether the Set node should *replace* the
+// upstream JSON with the assignments only (n8n's `keepOnlySet` default for
+// typeVersion 3+), rather than merge the assignments into the upstream
+// data.
+//
+// n8n Set node semantics (typeVersion >= 3.1):
+//
+//	options: {}                                → default → REPLACE
+//	options: { keepOnlySet: true }             → REPLACE
+//	options: { keepOnlySet: false }            → MERGE (legacy behaviour)
+//
+// Earlier typeVersions (and the legacy flat-assignments shape) merge by
+// default; that matches what m9m shipped before this fix and we keep
+// that as the fallback for any n8n export that explicitly asks for it.
+func shouldReplaceJSON(nodeParams map[string]interface{}) bool {
+	if nodeParams == nil {
+		return true
+	}
+	optsRaw, ok := nodeParams["options"]
+	if !ok {
+		// No options at all → n8n's behaviour is to replace.
+		return true
+	}
+	opts, ok := optsRaw.(map[string]interface{})
+	if !ok {
+		// Malformed options — fall back to replace (the safer default
+		// for n8n typeVersion 3+ exports).
+		return true
+	}
+	if v, ok := opts["keepOnlySet"]; ok {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	// options present but no keepOnlySet flag — n8n defaults to
+	// keepOnlySet=true for typeVersion 3+ when `options` is empty.
+	return true
+}
+
 // Execute processes the Set node operation
 func (s *SetNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
 	if len(inputData) == 0 {
@@ -238,6 +277,14 @@ func (s *SetNode) Execute(inputData []model.DataItem, nodeParams map[string]inte
 	if assignments == nil {
 		return nil, s.CreateError("assignments must be an array (or an object with an 'assignments' array)", nil)
 	}
+
+	// n8n Set node default for typeVersion >= 3.1 is "Keep Only Set" — i.e.
+	// replace the upstream JSON with the assignments rather than merge.
+	// This is what makes workflows like `Webhook → Set → Set (sum)`
+	// return only the final Set's keys (e.g. `[{"total":3}]`) instead of
+	// the merged upstream context. Honour that default here so m9m's
+	// wire shape matches n8n's exactly.
+	replaceJSON := shouldReplaceJSON(nodeParams)
 
 	// Process each input data item
 	result := make([]model.DataItem, len(inputData))
@@ -258,14 +305,16 @@ func (s *SetNode) Execute(inputData []model.DataItem, nodeParams map[string]inte
 			},
 		}
 
-		// Copy the original item
+		// Start with either a fresh map (replace mode) or a copy of the
+		// upstream JSON (merge mode).
 		newItem := model.DataItem{
 			JSON: make(map[string]interface{}),
 		}
 
-		// Copy existing JSON data
-		for k, v := range item.JSON {
-			newItem.JSON[k] = v
+		if !replaceJSON {
+			for k, v := range item.JSON {
+				newItem.JSON[k] = v
+			}
 		}
 
 		// Apply each assignment

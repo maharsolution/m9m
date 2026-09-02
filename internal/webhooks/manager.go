@@ -3,6 +3,7 @@ package webhooks
 import (
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -304,14 +305,30 @@ func (m *WebhookManager) createWebhookFromNode(workflow *model.Workflow, node *m
 	}
 }
 
+// prepareInputData builds the engine's input data from the parsed
+// HTTP request. The `headers` and `query` / `params` maps are passed
+// through in their canonical Go shape (`map[string][]string`); the
+// Webhook trigger node normalises them to n8n's wire shape
+// (lowercased keys + scalar string values) downstream so that
+// expressions like `$json.headers["content-type"]` resolve the same
+// way they do on n8n.
+//
+// We also stamp `executionMode` ("production" / "test") and
+// `webhookUrl` here — at the manager level — so the values are
+// available to the engine even if a workflow has been simplified to
+// skip the trigger node (e.g. a workflow that wires straight into a
+// Set node still needs `$json.executionMode` populated, the same way
+// n8n populates it on the trigger output).
 func (m *WebhookManager) prepareInputData(request *WebhookRequest) []model.DataItem {
 	data := map[string]interface{}{
-		"headers": request.Headers,
-		"params":  request.Query,
-		"query":   request.Query,
-		"body":    request.Body,
-		"method":  request.Method,
-		"path":    request.Path,
+		"headers":       request.Headers,
+		"params":        request.Query,
+		"query":         request.Query,
+		"body":          request.Body,
+		"method":        request.Method,
+		"path":          request.Path,
+		"webhookUrl":    resolveRequestWebhookURL(request),
+		"executionMode": resolveExecutionMode(request),
 	}
 
 	return []model.DataItem{
@@ -319,6 +336,53 @@ func (m *WebhookManager) prepareInputData(request *WebhookRequest) []model.DataI
 			JSON: data,
 		},
 	}
+}
+
+// resolveExecutionMode returns the n8n-compatible executionMode label
+// for an inbound webhook request. Test webhooks are served from
+// `/webhook-test/<path>`; production webhooks are served from
+// `/webhook/<path>` — the path prefix is the only reliable signal in
+// the inbound request because n8n exposes the same literal strings
+// in its trigger output.
+func resolveExecutionMode(request *WebhookRequest) string {
+	if strings.HasPrefix(request.Path, "/webhook-test/") {
+		return "test"
+	}
+	return "production"
+}
+
+// resolveRequestWebhookURL returns the public URL clients should use
+// to hit this webhook. The lookup order matches the trigger-node
+// resolver so both layers agree:
+//   1. `M9M_WEBHOOK_URL` (preferred — lets operators point at a proxy).
+//   2. `WEBHOOK_URL` (n8n-compatible env var).
+//   3. `M9M_HOST` + `M9M_PORT`, defaulting to `http://localhost:8080`.
+//
+// The returned URL has the inbound path appended so callers can echo
+// it back via `{{ $json.webhookUrl }}` exactly like n8n does.
+func resolveRequestWebhookURL(request *WebhookRequest) string {
+	path := request.Path
+	if path == "" {
+		path = "/"
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	if u := strings.TrimRight(os.Getenv("M9M_WEBHOOK_URL"), "/"); u != "" {
+		return u + path
+	}
+	if u := strings.TrimRight(os.Getenv("WEBHOOK_URL"), "/"); u != "" {
+		return u + path
+	}
+	host := strings.TrimSpace(os.Getenv("M9M_HOST"))
+	if host == "" {
+		host = "localhost"
+	}
+	port := strings.TrimSpace(os.Getenv("M9M_PORT"))
+	if port == "" {
+		port = "8080"
+	}
+	return "http://" + host + ":" + port + path
 }
 
 func (m *WebhookManager) prepareResponse(webhook *Webhook, result *engine.ExecutionResult) *WebhookResponse {
