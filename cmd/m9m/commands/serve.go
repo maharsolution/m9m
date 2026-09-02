@@ -131,27 +131,6 @@ func runServe(cmd *cobra.Command, args []string) {
 	default:
 		logger.Fatalf("Unknown --db-type %q (supported: sqlite, memory, postgres, mysql)", dbType)
 	}
-		// Use SQLite
-		dbPath := serveDB
-		if dbPath == "" {
-			// Check workspace first
-			if workspaceFlag != "" {
-				mgr, _ := workspace.NewManager()
-				if mgr != nil {
-					dbPath, _ = mgr.GetStoragePath(workspaceFlag)
-				}
-			}
-			// Default to data directory
-			if dbPath == "" {
-				homeDir, _ := os.UserHomeDir()
-				dataDir := filepath.Join(homeDir, ".m9m", "data")
-				_ = os.MkdirAll(dataDir, 0755)
-				dbPath = filepath.Join(dataDir, "m9m.db")
-			}
-		}
-		logger.Printf("Using SQLite storage: %s", dbPath)
-		store, err = storage.NewSQLiteStorage(dbPath)
-	}
 
 	if err != nil {
 		logger.Fatalf("Failed to initialize storage: %v", err)
