@@ -21,6 +21,7 @@ import (
 	"github.com/neul-labs/m9m/internal/scheduler"
 	"github.com/neul-labs/m9m/internal/storage"
 	"github.com/neul-labs/m9m/internal/web"
+	"github.com/neul-labs/m9m/internal/webhooks"
 	"github.com/neul-labs/m9m/internal/workspace"
 )
 
@@ -177,6 +178,15 @@ func runServe(cmd *cobra.Command, args []string) {
 
 	// Register API routes
 	apiServer.RegisterRoutes(router)
+
+	// Initialize webhook manager + handler
+	webhookStore := webhooks.NewMemoryWebhookStorage()
+	webhookManager := webhooks.NewWebhookManager(webhookStore, store, eng)
+	if err := webhookManager.LoadActiveWebhooks(); err != nil {
+		logger.Printf("Warning: failed to load active webhooks: %v", err)
+	}
+	webhookHandler := webhooks.NewHandler(webhookManager)
+	webhookHandler.RegisterRoutes(router)
 
 	// Serve embedded web UI
 	// In dev mode, you can pass a path to serve from filesystem for hot-reload
