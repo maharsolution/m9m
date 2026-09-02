@@ -145,6 +145,13 @@ func (s *MySQLStorage) initSchema() error {
 
 	for _, stmt := range statements {
 		if _, err := s.db.Exec(stmt); err != nil {
+			// MySQL doesn't support CREATE INDEX IF NOT EXISTS in versions
+			// earlier than 8.0.29. Swallow the "Duplicate key name" error
+			// (Error 1061) so re-running the schema is idempotent on any
+			// supported version.
+			if strings.Contains(err.Error(), "1061") || strings.Contains(strings.ToLower(err.Error()), "duplicate key name") {
+				continue
+			}
 			return fmt.Errorf("failed to execute schema statement: %w\nstatement: %s", err, stmt)
 		}
 	}
