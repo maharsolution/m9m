@@ -69,12 +69,17 @@ func ValidateConditions(conditions interface{}, combiner string) error {
 			return fmt.Errorf("condition %d missing 'operator' field", i)
 		}
 
-		operator, ok := conditionMap["operator"].(string)
-		if !ok {
-			return fmt.Errorf("condition %d operator must be a string", i)
+		// n8n's IF v2 emits `operator` either as a bare string
+		// (legacy) or as a typed object `{type, operation, singleValue}`
+		// (current). We accept both shapes here and only validate
+		// the resolved operation name so downstream evaluation can
+		// reuse the same helper.
+		operation, err := extractOperatorOperation(conditionMap["operator"])
+		if err != nil {
+			return err
 		}
-		if !ValidOperators[operator] {
-			return fmt.Errorf("condition %d has invalid operator: %s", i, operator)
+		if !ValidOperators[operation] {
+			return fmt.Errorf("condition %d has invalid operator: %s", i, operation)
 		}
 	}
 
@@ -83,6 +88,24 @@ func ValidateConditions(conditions interface{}, combiner string) error {
 	}
 
 	return nil
+}
+
+// extractOperatorOperation accepts either a string operator (legacy /
+// explicit form) or an operator object with an `operation` field and
+// returns the canonical operation name. Errors are returned so callers
+// can surface a precise validation message.
+func extractOperatorOperation(op interface{}) (string, error) {
+	switch v := op.(type) {
+	case string:
+		return v, nil
+	case map[string]interface{}:
+		if name, ok := v["operation"].(string); ok && name != "" {
+			return name, nil
+		}
+		return "", fmt.Errorf("operator object missing 'operation' field")
+	default:
+		return "", fmt.Errorf("operator must be a string or object")
+	}
 }
 
 // resolveConditionsArray accepts either of the two IF-node `conditions`
@@ -136,7 +159,11 @@ func EvaluateConditions(item model.DataItem, conditions []interface{}, combiner 
 func evaluateCondition(item model.DataItem, condition map[string]interface{}) bool {
 	leftValue := condition["leftValue"]
 	rightValue := condition["rightValue"]
-	operator, _ := condition["operator"].(string)
+	// n8n's IF v2 emits the operator as either a bare string or a
+	// typed object `{type, operation, singleValue}`. Normalize both
+	// shapes to the operation name so the switch below can stay flat.
+	operatorRaw := condition["operator"]
+	operator, _ := extractOperatorOperation(operatorRaw)
 	if operator == "" {
 		operator = "equals"
 	}
