@@ -82,7 +82,29 @@ func (h *Handler) handleWebhookRequest(w http.ResponseWriter, r *http.Request, i
 		return
 	}
 
-	// Execute webhook
+	// Execute the workflow. n8n's default (and our implicit default for any
+	// legacy webhook that does not explicitly opt in to a blocking mode)
+	// is to acknowledge the caller immediately with
+	// `{"message":"Workflow was started"}` and run the workflow in the
+	// background — callers like Zapier, CI hooks, etc. expect this
+	// fire-and-forget contract. Only `responseMode: lastNode` and
+	// `responseMode: responseNode` block on the engine result so the
+	// caller can read the workflow output inline.
+	if IsAsyncResponseMode(webhook.ResponseMode) {
+		// Fire-and-forget: kick off the goroutine, ack the caller, done.
+		h.manager.ExecuteWebhookAsync(webhook, webhookRequest)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(DefaultAsyncAckBody))
+
+		log.Printf("✅ Webhook accepted (async): %s %s", r.Method, path)
+		return
+	}
+
+	// Blocking response modes (lastNode / responseNode): preserve the
+	// pre-existing behaviour so callers that read the workflow output
+	// inline do not regress.
 	response, err := h.manager.ExecuteWebhook(webhook, webhookRequest)
 	if err != nil {
 		log.Printf("⚠️  Webhook execution failed: %v", err)

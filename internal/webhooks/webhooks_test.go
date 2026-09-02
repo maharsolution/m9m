@@ -782,9 +782,13 @@ func TestWebhookManager_prepareResponse_FirstEntryJson(t *testing.T) {
 
 	resp := mgr.prepareResponse(wh, result)
 	assert.Equal(t, 200, resp.StatusCode)
-	body, ok := resp.Body.(map[string]interface{})
-	require.True(t, ok)
-	assert.Equal(t, true, body["first"])
+	// n8n's Webhook response shape is always a JSON array — firstEntryJson
+	// becomes `[{...}]`, mirroring that here keeps clients that JSON.parse
+	// the body as an array working unchanged.
+	body, ok := resp.Body.([]map[string]interface{})
+	require.True(t, ok, "firstEntryJson body should be a single-element JSON array")
+	require.Len(t, body, 1)
+	assert.Equal(t, true, body[0]["first"])
 }
 
 func TestWebhookManager_prepareResponse_FirstEntryJson_Empty(t *testing.T) {

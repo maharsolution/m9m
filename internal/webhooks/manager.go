@@ -5,6 +5,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/neul-labs/m9m/internal/engine"
@@ -205,6 +206,49 @@ func (m *WebhookManager) ExecuteWebhook(webhook *Webhook, request *WebhookReques
 	return response, nil
 }
 
+// DefaultAsyncAckBody is the wire body returned to clients when a webhook
+// is processed in fire-and-forget mode. n8n responds with this exact
+// payload + 200 OK so external callers (Zapier-style triggers, CI
+// hooks, etc.) can treat m9m as a drop-in.
+const DefaultAsyncAckBody = `{"message":"Workflow was started"}`
+
+// IsAsyncResponseMode reports whether the webhook should respond
+// immediately with an acknowledgment (true) or block on the engine
+// result (false). n8n's default — and the implicit default for any
+// legacy webhook that doesn't explicitly opt into
+// `responseMode: lastNode` / `responseNode` — is asynchronous.
+func IsAsyncResponseMode(responseMode string) bool {
+	switch responseMode {
+	case "lastNode", "responseNode":
+		return false
+	default:
+		// "" (legacy) and "onReceived" both mean "ack immediately".
+		return true
+	}
+}
+
+// ExecuteWebhookAsync runs ExecuteWebhook in a goroutine. It returns
+// immediately so the HTTP handler can ack the caller with 200 OK and
+// `{"message":"Workflow was started"}`. Errors during the background
+// run are logged but never propagated to the caller (caller is already
+// gone). The goroutine is wrapped in defer recover() so a panic inside
+// the engine or its nodes cannot crash the server.
+func (m *WebhookManager) ExecuteWebhookAsync(webhook *Webhook, request *WebhookRequest) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("🔥 panic in async webhook execution (webhook=%s, workflow=%s): %v",
+					webhook.ID, webhook.WorkflowID, r)
+			}
+		}()
+
+		if _, err := m.ExecuteWebhook(webhook, request); err != nil {
+			log.Printf("⚠️  Async webhook execution failed (webhook=%s, workflow=%s): %v",
+				webhook.ID, webhook.WorkflowID, err)
+		}
+	}()
+}
+
 // LoadActiveWebhooks loads all active webhooks into memory
 func (m *WebhookManager) LoadActiveWebhooks() error {
 	m.mu.Lock()
@@ -288,13 +332,22 @@ func (m *WebhookManager) prepareResponse(webhook *Webhook, result *engine.Execut
 	}
 	response.Headers["Content-Type"] = "application/json"
 
-	// Based on response mode
+	// Based on response mode. n8n always returns the last node's items as a
+	// JSON array on the HTTP response wire — `firstEntryJson` becomes
+	// `[{...}]` and `allEntries` becomes `[{...},{...}]`. We mirror that
+	// here so that downstream callers that `JSON.parse` the body as an
+	// array (the n8n contract) keep working unchanged. The firstEntryJson
+	// default is wrapped in a single-element array; per-item fields like
+	// `body`, `headers`, `params`, etc. that the Webhook trigger and Set
+	// nodes merge into the last item are intentionally NOT stripped —
+	// n8n returns them too, and downstream Set nodes rely on seeing
+	// them.
 	switch webhook.ResponseData {
 	case "firstEntryJson":
-		if len(result.Data) > 0 {
-			response.Body = result.Data[0].JSON
-		} else {
+		if len(result.Data) == 0 {
 			response.Body = map[string]interface{}{"message": "success"}
+		} else {
+			response.Body = []map[string]interface{}{result.Data[0].JSON}
 		}
 	case "allEntries":
 		entries := make([]map[string]interface{}, len(result.Data))
@@ -306,7 +359,7 @@ func (m *WebhookManager) prepareResponse(webhook *Webhook, result *engine.Execut
 		response.Body = map[string]interface{}{"message": "success"}
 	default:
 		if len(result.Data) > 0 {
-			response.Body = result.Data[0].JSON
+			response.Body = []map[string]interface{}{result.Data[0].JSON}
 		}
 	}
 
@@ -347,14 +400,24 @@ func getStringParam(params map[string]interface{}, key, defaultValue string) str
 	return defaultValue
 }
 
+// generateIDCounter is a process-wide counter that makes the generated
+// webhook / execution IDs unique even when `time.Now().UnixNano()`
+// returns the same value twice in a row (which happens more often than
+// intuition suggests on Windows, where the monotonic-clock resolution
+// is coarser than on Linux). Using a counter in addition to the
+// nanosecond timestamp avoids the silent map-key collisions that would
+// otherwise cause `SaveWebhook` to overwrite a just-saved sibling when
+// two nodes are registered back-to-back in a tight loop.
+var generateIDCounter atomic.Uint64
+
 func generateWebhookID() string {
-	return fmt.Sprintf("webhook_%d", time.Now().UnixNano())
+	return fmt.Sprintf("webhook_%d_%d", time.Now().UnixNano(), generateIDCounter.Add(1))
 }
 
 func generateExecutionID() string {
-	return fmt.Sprintf("exec_%d", time.Now().UnixNano())
+	return fmt.Sprintf("exec_%d_%d", time.Now().UnixNano(), generateIDCounter.Add(1))
 }
 
 func generateWebhookExecutionID() string {
-	return fmt.Sprintf("wh_exec_%d", time.Now().UnixNano())
+	return fmt.Sprintf("wh_exec_%d_%d", time.Now().UnixNano(), generateIDCounter.Add(1))
 }

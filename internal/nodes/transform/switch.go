@@ -31,15 +31,60 @@ func NewSwitchNode() *SwitchNode {
 	}
 }
 
+// ExtractSwitchRules pulls the Switch routing rules out of the parameter
+// map, accepting the two aliases n8n emits today:
+//
+//   - `rules`        — the legacy / docs-only key
+//   - `conditions`   — what the n8n UI writes today (the data flow editor
+//     saves a list of routing conditions under `conditions`, not `rules`)
+//
+// The slice elements can be either `[]interface{}` (from generic
+// JSON unmarshal) or `[]map[string]interface{}` (from typed unmarshal /
+// the workflow loader); both are normalised to `[]map[string]interface{}`
+// so the rest of the node can rely on a single shape.
+func ExtractSwitchRules(params map[string]interface{}) ([]map[string]interface{}, error) {
+	if len(params) == 0 {
+		return nil, fmt.Errorf("switch rules are required")
+	}
+
+	raw, ok := params["rules"]
+	if !ok || raw == nil {
+		raw = params["conditions"] // n8n UI compatibility
+	}
+	if raw == nil {
+		return nil, fmt.Errorf("switch rules are required")
+	}
+
+	switch v := raw.(type) {
+	case []interface{}:
+		out := make([]map[string]interface{}, 0, len(v))
+		for i, r := range v {
+			m, ok := r.(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf("switch rule %d is not an object", i)
+			}
+			out = append(out, m)
+		}
+		return out, nil
+	case []map[string]interface{}:
+		return v, nil
+	default:
+		return nil, fmt.Errorf("switch rules must be an array")
+	}
+}
+
 // Execute processes the Switch node operation
 func (s *SwitchNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
 	if len(inputData) == 0 {
 		return []model.DataItem{}, nil
 	}
 
-	// Get routing rules
-	rules, ok := nodeParams["rules"].([]interface{})
-	if !ok || len(rules) == 0 {
+	// Get routing rules (`rules` or `conditions` — both supported).
+	rules, err := ExtractSwitchRules(nodeParams)
+	if err != nil {
+		return nil, err
+	}
+	if len(rules) == 0 {
 		return nil, fmt.Errorf("switch rules are required")
 	}
 
@@ -62,12 +107,7 @@ func (s *SwitchNode) Execute(inputData []model.DataItem, nodeParams map[string]i
 
 		// Check each rule in order
 		matched := false
-		for ruleIndex, rule := range rules {
-			ruleMap, ok := rule.(map[string]interface{})
-			if !ok {
-				continue
-			}
-
+		for ruleIndex, ruleMap := range rules {
 			matches, err := s.evaluateRule(ruleMap, context)
 			if err != nil {
 				return nil, fmt.Errorf("error evaluating rule %d: %w", ruleIndex, err)
@@ -276,9 +316,13 @@ func (s *SwitchNode) toNumber(value interface{}) (float64, error) {
 
 // ValidateParameters validates Switch node parameters
 func (s *SwitchNode) ValidateParameters(params map[string]interface{}) error {
-	rules, ok := params["rules"].([]interface{})
-	if !ok {
-		return fmt.Errorf("rules parameter is required")
+	rules, err := ExtractSwitchRules(params)
+	if err != nil {
+		// Preserve the legacy error message ("rules parameter is required")
+		// so existing log scrapers and the failing workflow ID on the
+		// server can still grep for it; just append the support for the
+		// n8n-UI alias `conditions` to the message.
+		return fmt.Errorf("rules parameter is required (or `conditions` alias): %w", err)
 	}
 
 	if len(rules) == 0 {
@@ -286,11 +330,7 @@ func (s *SwitchNode) ValidateParameters(params map[string]interface{}) error {
 	}
 
 	// Validate each rule
-	for i, rule := range rules {
-		ruleMap, ok := rule.(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("rule %d must be an object", i)
-		}
+	for i, ruleMap := range rules {
 
 		field, ok := ruleMap["field"].(string)
 		if !ok || field == "" {
@@ -314,10 +354,7 @@ func (s *SwitchNode) ValidateParameters(params map[string]interface{}) error {
 		}
 
 		// Value is required for most operations
-		needsValue := map[string]bool{
-			"isEmpty": false, "isNotEmpty": false,
-		}
-		if !needsValue[operation] && operation != "isEmpty" && operation != "isNotEmpty" {
+		if operation != "isEmpty" && operation != "isNotEmpty" {
 			if _, ok := ruleMap["value"]; !ok {
 				return fmt.Errorf("rule %d: value is required for operation %s", i, operation)
 			}

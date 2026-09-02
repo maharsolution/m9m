@@ -88,3 +88,11 @@ packages/m9m-cli/nodejs/lib/*.so
 packages/m9m-cli/nodejs/lib/*.dylib
 packages/m9m-cli/nodejs/lib/*.dll
 packages/m9m-cli/nodejs/package-lock.json
+
+# Cursor / Claude agent local state — per-user IDE/tooling only.
+# Skills, docs, and parity reports under .claude/ may be intentionally
+# committed on a case-by-case basis; memories/ is always local.
+.cursor/
+.claude/memories/
+.claude/settings.local.json
+.claude/.mcp.json
