@@ -4,22 +4,17 @@ services:
   # go-sql-driver/mysql format: user:pass@tcp(host:port)/db?parseTime=true&charset=utf8mb4
   # parseTime=true is required so TIMESTAMP columns scan into time.Time.
   # charset=utf8mb4 is required for full unicode + emoji support.
-  # The DSN is passed via env (M9M_MYSQL_DSN) and consumed by the entrypoint
-  # script /app/docker-entrypoint.sh, which assembles the final command.
+  # Both the m9m backend and the n8n<->m9m sync bridge run inside this
+  # single container, managed by supervisord (see the root Dockerfile /
+  # supervisord.conf). The sync bridge's HTTP API is published on 8001.
   m9m-backend:
     image: m9m
     container_name: m9m-backend
     restart: always
-    command:
-      - serve
-      - --dev
-      - --workers
-      - "4"
-      - --mysql
-      - m9m_admin:Secure_Db_Pass_2026@tcp(mysql-db:3306)/m9m_prod?parseTime=true&charset=utf8mb4&loc=UTC
     ports:
       - "8080:8080"
       - "9090:9090"
+      - "8001:8001"
     depends_on:
       mysql-db:
         condition: service_healthy
@@ -30,26 +25,16 @@ services:
       - M9M_MYSQL_DSN=m9m_admin:Secure_Db_Pass_2026@tcp(mysql-db:3306)/m9m_prod?parseTime=true&charset=utf8mb4&loc=UTC
       # Secret used by webhook-processing.json's headerAuth validation
       - WEBHOOK_SECRET=${WEBHOOK_SECRET:-change-me-in-production}
-    volumes:
-      - m9m_backend_storage:/app/data
-
-  # --- SYNC BRIDGE (n8n has no pluggable backend, so this polls n8n's
-  #     API and pushes each active workflow into m9m over its REST API —
-  #     confirmed to be the only path that reaches the live `serve` process;
-  #     the CLI's `m9m create` writes to a separate workspace store instead) ---
-  sync-service:
-    build: ./sync-service
-    container_name: n8n-m9m-sync
-    restart: always
-    environment:
+      # Sync bridge config (read by sync.py via os.environ).
+      # sync talks to m9m on localhost because they share a container.
       - N8N_BASE_URL=http://n8n-designer-frontend:5678
       - N8N_API_KEY=${N8N_API_KEY:?set N8N_API_KEY in .env after creating it in the n8n UI}
-      - M9M_BASE_URL=http://m9m-backend:8080
+      - M9M_BASE_URL=http://localhost:8080
       - POLL_INTERVAL_SECONDS=30
       - SYNC_ONLY_ACTIVE=true
-    depends_on:
-      - n8n-designer-frontend
-      - m9m-backend
+      - SYNC_PORT=8001
+    volumes:
+      - m9m_backend_storage:/app/data
 
   # --- FRONTEND / ORCHESTRATION LAYER ---
   n8n-designer-frontend:

@@ -5,6 +5,7 @@ package transform
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/neul-labs/m9m/internal/expressions"
@@ -47,8 +48,17 @@ func (s *SetNode) Description() base.NodeDescription {
 // "no assignments found" — callers should decide whether that is an error
 // (ValidateParameters) or a no-op (Execute with empty list).
 func extractAssignments(params map[string]interface{}) []interface{} {
+	if params == nil {
+		return []interface{}{}
+	}
 	raw, ok := params["assignments"]
 	if !ok {
+		// Some n8n exports store only an `options` map (no `assignments`
+		// key at all). Treat that as pass-through so workflows that
+		// legitimately have an empty Set still execute.
+		if _, hasOptions := params["options"]; hasOptions {
+			return []interface{}{}
+		}
 		return nil
 	}
 	switch v := raw.(type) {
@@ -62,9 +72,127 @@ func extractAssignments(params map[string]interface{}) []interface{} {
 				return arr
 			}
 		}
-		return nil
+		// Empty options map from n8n export (e.g. {"options": {}}) — treat
+		// as pass-through rather than an error so workflows without set
+		// fields execute instead of failing validation.
+		return []interface{}{}
 	default:
 		return nil
+	}
+}
+
+// coerceAssignmentValue converts a value produced by an assignment (after any
+// expression evaluation) to the type declared in the assignment's `type`
+// field. This matches n8n's behaviour where `type: "number"` coerces string
+// inputs to numeric values, so expressions like `{{ $json.a + $json.b }}`
+// perform arithmetic on string-encoded numbers rather than concatenation.
+//
+// Supported `type` values (case-insensitive):
+//
+//	"string"   — fmt.Stringer-style conversion; nil becomes "".
+//	"number"   — float64; strings are parsed (errors propagate), bool→0/1,
+//	             nil→0, all numeric kinds pass through widened to float64.
+//	"boolean"  — bool; "true"/"false" (any case) parse, truthy numerics→true,
+//	             nil→false.
+//	"object"   — returned unchanged.
+//	"array"    — returned unchanged.
+//
+// An empty or unknown `type` returns the value unchanged so workflows that
+// pre-date the typed-assignment model (e.g. webhook-processing.json) keep
+// their existing behaviour byte-for-byte.
+func coerceAssignmentValue(value interface{}, typeName string) (interface{}, error) {
+	if typeName == "" {
+		return value, nil
+	}
+	switch strings.ToLower(typeName) {
+	case "string":
+		if value == nil {
+			return "", nil
+		}
+		switch v := value.(type) {
+		case string:
+			return v, nil
+		case bool:
+			return strconv.FormatBool(v), nil
+		case float64:
+			return strconv.FormatFloat(v, 'f', -1, 64), nil
+		case float32:
+			return strconv.FormatFloat(float64(v), 'f', -1, 32), nil
+		case int:
+			return strconv.Itoa(v), nil
+		case int32:
+			return strconv.FormatInt(int64(v), 10), nil
+		case int64:
+			return strconv.FormatInt(v, 10), nil
+		default:
+			return fmt.Sprintf("%v", value), nil
+		}
+	case "number":
+		switch v := value.(type) {
+		case nil:
+			return float64(0), nil
+		case bool:
+			if v {
+				return float64(1), nil
+			}
+			return float64(0), nil
+		case float64:
+			return v, nil
+		case float32:
+			return float64(v), nil
+		case int:
+			return float64(v), nil
+		case int32:
+			return float64(v), nil
+		case int64:
+			return float64(v), nil
+		case string:
+			// Use ParseFloat so we accept both "5" and "5.0" and reject
+			// empty strings. Whitespace is intentionally not trimmed —
+			// that matches n8n's strict behaviour and surfaces
+			// misconfigured assignments loudly.
+			f, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				return nil, fmt.Errorf("cannot coerce %q to number: %w", v, err)
+			}
+			return f, nil
+		default:
+			return nil, fmt.Errorf("cannot coerce %T to number", value)
+		}
+	case "boolean":
+		switch v := value.(type) {
+		case nil:
+			return false, nil
+		case bool:
+			return v, nil
+		case string:
+			// Match n8n's leniency: only the literal string "true" (any
+			// case) parses as true; everything else is false rather than
+			// an error, so noisy data doesn't break the workflow.
+			b, err := strconv.ParseBool(v)
+			if err != nil {
+				return false, nil
+			}
+			return b, nil
+		case float64:
+			return v != 0, nil
+		case float32:
+			return v != 0, nil
+		case int:
+			return v != 0, nil
+		case int32:
+			return v != 0, nil
+		case int64:
+			return v != 0, nil
+		default:
+			return false, nil
+		}
+	case "object", "array":
+		return value, nil
+	default:
+		// Unknown type — keep value unchanged so we don't surprise
+		// workflows that use vendor-specific type names.
+		return value, nil
 	}
 }
 
@@ -154,7 +282,16 @@ func (s *SetNode) Execute(inputData []model.DataItem, nodeParams map[string]inte
 				continue
 			}
 
+			// `type` is optional. When present, coerce the (possibly
+			// evaluated) value to that type before writing. n8n Set nodes
+			// ignore `type` at runtime for the legacy flat shape but rely
+			// on it for the typeVersion>=3 nested shape — so honouring
+			// it here is what makes `{{ $json.a + $json.b }}` sum rather
+			// than concatenate when both operands are stringified.
+			assignmentType, _ := assignmentMap["type"].(string)
+
 			// Check if the value is a string that might contain expressions
+			var resolvedValue interface{}
 			if valueStr, ok := value.(string); ok {
 				// Determine whether the value is an n8n expression and the
 				// form it is in. The expression evaluator (parser.go)
@@ -178,19 +315,25 @@ func (s *SetNode) Execute(inputData []model.DataItem, nodeParams map[string]inte
 					toEvaluate = valueStr
 				default:
 					// Plain literal value, no expression evaluation needed.
-					newItem.JSON[name] = value
-					continue
+					resolvedValue = value
 				}
-
-				evaluatedValue, err := s.evaluator.EvaluateExpression(toEvaluate, context)
-				if err != nil {
-					return nil, s.CreateError(fmt.Sprintf("failed to evaluate expression '%s': %v", valueStr, err), nil)
+				if toEvaluate != "" {
+					evaluatedValue, err := s.evaluator.EvaluateExpression(toEvaluate, context)
+					if err != nil {
+						return nil, s.CreateError(fmt.Sprintf("failed to evaluate expression '%s': %v", valueStr, err), nil)
+					}
+					resolvedValue = evaluatedValue
 				}
-				newItem.JSON[name] = evaluatedValue
 			} else {
-				// Use the literal value
-				newItem.JSON[name] = value
+				// Non-string literal value (number, bool, object, …).
+				resolvedValue = value
 			}
+
+			coerced, err := coerceAssignmentValue(resolvedValue, assignmentType)
+			if err != nil {
+				return nil, s.CreateError(fmt.Sprintf("failed to coerce assignment %q to type %q: %v", name, assignmentType, err), nil)
+			}
+			newItem.JSON[name] = coerced
 		}
 
 		// Copy binary data if present

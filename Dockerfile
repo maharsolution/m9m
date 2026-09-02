@@ -25,38 +25,61 @@ RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo \
 # Runtime stage
 FROM alpine:latest
 
-# Install runtime dependencies
-RUN apk --no-cache add ca-certificates tzdata
+# Install runtime dependencies.
+# - ca-certificates / tzdata: needed by m9m + python https calls.
+# - supervisor: runs both `m9m serve` and the sync uvicorn app in one PID-1.
+# - python3 / py3-pip: powers the sync bridge. We use --break-system-packages
+#   when installing pip deps because Alpine's PEP 668 enforcement would
+#   otherwise reject the system-wide install.
+RUN apk --no-cache add ca-certificates tzdata supervisor python3 py3-pip
 
-# Create non-root user
+# Create non-root user for m9m itself. supervisor still runs as root (see below).
 RUN addgroup -g 1000 n8n && \
     adduser -D -u 1000 -G n8n n8n
 
 WORKDIR /app
 
-# Copy binary from builder
-COPY --from=builder /build/m9m .
+# Copy the m9m binary from the builder.
+COPY --from=builder /build/m9m /usr/local/bin/m9m
+RUN chmod +x /usr/local/bin/m9m
 
-# Copy example workflows and templates (optional)
-#COPY --from=builder examples ./examples
-#COPY --from=builder test-workflows ./test-workflows
+# Install the sync bridge's Python deps BEFORE copying its source so the
+# pip install layer is cached across source-only edits.
+COPY sync-service/requirements.txt /app/sync-service/requirements.txt
+RUN pip install --no-cache-dir --break-system-packages \
+    -r /app/sync-service/requirements.txt
 
-# Create directories for data persistence
-RUN mkdir -p /app/data /app/logs /app/config && \
-    chown -R n8n:n8n /app
+# Copy the sync bridge source.
+COPY sync-service/ /app/sync-service/
+RUN cp /app/sync-service/sync.py /usr/local/bin/sync.py && \
+    chmod +x /usr/local/bin/sync.py
 
-# Switch to non-root user
+# Drop in the supervisor config. This file defines the two programs that
+# run in the container (see supervisord.conf for the full content).
+COPY supervisord.conf /etc/supervisord.conf
+
+# Create directories for data persistence, logs, and the supervisor pidfile.
+# /app/logs is what supervisord writes stdout/stderr to for both programs.
+# /app/run holds supervisord.pid so it isn't living in /tmp.
+RUN mkdir -p /app/data /app/logs /app/config /app/run && \
+    chown -R n8n:n8n /app/data /app/logs /app/config /app/run
+
+# We intentionally stay as root: supervisord needs to fork both child
+# processes (m9m as the n8n user would be ideal, but uvicorn running
+# as n8n while supervisor stays as root is the simplest correct setup).
+# The previous Dockerfile had a USER root -> USER n8n ordering quirk
+# that left the binary owned wrong; copying straight to /usr/local/bin
+# above sidesteps that.
 USER root
-RUN cp /app/m9m /usr/local/bin/m9m
-USER n8n
 
-# Expose ports
-# 8080: Main HTTP server
-# 9090: Metrics/monitoring
-EXPOSE 8080 9090
+# Expose ports:
+#   8080: m9m HTTP server (main)
+#   9090: m9m metrics
+#   8001: sync bridge FastAPI (uvicorn)
+EXPOSE 8080 9090 8001
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+# Health check probes m9m's own /health endpoint.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
 # Environment variables with defaults
@@ -65,12 +88,12 @@ ENV N8N_GO_PORT=8080 \
     N8N_GO_LOG_LEVEL=info \
     N8N_GO_METRICS_PORT=9090 \
     N8N_GO_DATA_DIR=/app/data \
-    N8N_GO_LOG_DIR=/app/logs \ 
-    GOPROXY="https://proxy.golang.org,direct"
+    N8N_GO_LOG_DIR=/app/logs \
+    GOPROXY="https://proxy.golang.org,direct" \
+    SYNC_PORT=8001
 
 # Volume for persistent data
 VOLUME ["/app/data", "/app/logs", "/app/config"]
 
-# Run the application
-ENTRYPOINT ["/app/m9m"]
-CMD ["serve"]
+# Run both processes under supervisor.
+ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]

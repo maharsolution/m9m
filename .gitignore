@@ -6,6 +6,12 @@ n8n-go
 *.exe
 *.exe~
 
+# Python (repo-root) — bindings/* and packages/* already override these per-subdir
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
 # Build artifacts
 *.o
 *.a
