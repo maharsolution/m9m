@@ -782,13 +782,18 @@ func TestWebhookManager_prepareResponse_FirstEntryJson(t *testing.T) {
 
 	resp := mgr.prepareResponse(wh, result)
 	assert.Equal(t, 200, resp.StatusCode)
-	// n8n's Webhook response shape is always a JSON array — firstEntryJson
-	// becomes `[{...}]`, mirroring that here keeps clients that JSON.parse
-	// the body as an array working unchanged.
-	body, ok := resp.Body.([]map[string]interface{})
-	require.True(t, ok, "firstEntryJson body should be a single-element JSON array")
-	require.Len(t, body, 1)
-	assert.Equal(t, true, body[0]["first"])
+	// n8n's firstEntryJson emits the first item's JSON as a bare
+	// object — verified live against http://187.77.113.218:5678/webhook/simple_webhook
+	// (a workflow with only a Webhook trigger and no downstream Set
+	// node). The body is the first item's JSON verbatim, NOT wrapped
+	// in a single-element array.
+	body, ok := resp.Body.(map[string]interface{})
+	require.True(t, ok, "firstEntryJson body should be a bare JSON object")
+	assert.Equal(t, true, body["first"])
+	// The second item must be dropped — firstEntryJson takes only
+	// the first entry from the workflow's output.
+	_, hasSecond := body["second"]
+	assert.False(t, hasSecond, "firstEntryJson must drop everything after the first item")
 }
 
 func TestWebhookManager_prepareResponse_FirstEntryJson_Empty(t *testing.T) {

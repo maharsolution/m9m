@@ -396,22 +396,37 @@ func (m *WebhookManager) prepareResponse(webhook *Webhook, result *engine.Execut
 	}
 	response.Headers["Content-Type"] = "application/json"
 
-	// Based on response mode. n8n always returns the last node's items as a
-	// JSON array on the HTTP response wire — `firstEntryJson` becomes
-	// `[{...}]` and `allEntries` becomes `[{...},{...}]`. We mirror that
-	// here so that downstream callers that `JSON.parse` the body as an
-	// array (the n8n contract) keep working unchanged. The firstEntryJson
-	// default is wrapped in a single-element array; per-item fields like
-	// `body`, `headers`, `params`, etc. that the Webhook trigger and Set
-	// nodes merge into the last item are intentionally NOT stripped —
-	// n8n returns them too, and downstream Set nodes rely on seeing
-	// them.
+	// Based on response mode. n8n's wire shape for the Webhook response
+	// is *workflow-shape dependent*, not uniform across responseData
+	// values:
+	//
+	//   - `firstEntryJson` (n8n's default when responseData is unset):
+	//     emit the first item's JSON as a bare object
+	//     (`{"total":15}`). Verified live against
+	//     http://187.77.113.218:5678/webhook/simple_webhook (no Set
+	//     node downstream) — n8n returns a bare object, not an array.
+	//
+	//   - `allEntries`: emit every item's JSON as a JSON array
+	//     (`[{...},{...},...]`). Verified live against
+	//     http://187.77.113.218:5678/webhook/bocahtuanakal
+	//     (responseData=allEntries) — n8n returns an array.
+	//
+	//   - `noData`: emit a 200 with an empty body. n8n's `noData`
+	//     mode literally responds with an empty body; we mirror that
+	//     by emitting `{"message":"success"}` so clients still see a
+	//     valid JSON body (this matches m9m's historical behaviour
+	//     and the existing test suite).
+	//
+	// The Set node downstream may have merged upstream webhook fields
+	// (body, headers, params, etc.) into its output — that is fine;
+	// n8n returns those fields too, and downstream callers rely on
+	// seeing them.
 	switch webhook.ResponseData {
 	case "firstEntryJson":
 		if len(result.Data) == 0 {
 			response.Body = map[string]interface{}{"message": "success"}
 		} else {
-			response.Body = []map[string]interface{}{result.Data[0].JSON}
+			response.Body = result.Data[0].JSON
 		}
 	case "allEntries":
 		entries := make([]map[string]interface{}, len(result.Data))
@@ -422,8 +437,13 @@ func (m *WebhookManager) prepareResponse(webhook *Webhook, result *engine.Execut
 	case "noData":
 		response.Body = map[string]interface{}{"message": "success"}
 	default:
-		if len(result.Data) > 0 {
-			response.Body = []map[string]interface{}{result.Data[0].JSON}
+		// Unknown / empty responseData: fall through to firstEntryJson
+		// (bare object) — this matches n8n's default for the field when
+		// it is unset.
+		if len(result.Data) == 0 {
+			response.Body = map[string]interface{}{"message": "success"}
+		} else {
+			response.Body = result.Data[0].JSON
 		}
 	}
 

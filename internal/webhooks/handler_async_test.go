@@ -250,15 +250,14 @@ func TestHandleWebhook_BlockingResponseMode_StillWaitsForEngine(t *testing.T) {
 		"blocking responseMode must not return the async ack")
 
 	// An empty-workflow engine passes its input through, so with
-	// firstEntryJson the body is a single-element JSON array
-	// `[{...}]` containing the request data we just sent (a JSON
-	// `{}`). The shape check pins BOTH the array wrapper and the
-	// presence of upstream fields, mirroring the existing
-	// TestHandler_ResponseShape_FirstEntryJson_WrapsAsArray contract.
-	var arr []map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(body), &arr),
-		"blocking path must serialise the workflow output as a JSON array (n8n contract)")
-	require.Len(t, arr, 1, "empty workflow with one input item yields one output item")
+	// firstEntryJson the body is the first item's JSON emitted as a
+	// bare object — mirroring n8n's wire shape for the default
+	// responseData. The shape check pins the bare-object (NOT array)
+	// representation.
+	var obj map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(body), &obj),
+		"blocking path must serialise the workflow output as a bare JSON object (n8n firstEntryJson contract)")
+	require.NotEmpty(t, obj, "empty workflow with one input item yields one output item with the upstream fields")
 }
 
 // TestIsAsyncResponseMode locks down the rules engine that decides which

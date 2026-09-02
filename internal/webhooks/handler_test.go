@@ -13,17 +13,24 @@ import (
 )
 
 // These tests pin down the wire shape of the HTTP response body the
-// Webhook handler writes for the three cardinal cases n8n users hit:
-//   - 1 item  → `[{...}]`
-//   - N items → `[{...},{...},...]`
-//   - 0 items → `[]` (an empty array)
+// Webhook handler writes for the cardinal cases n8n users hit:
+//   - firstEntryJson → bare object (`{...}`)
+//   - allEntries     → array (`[{...},{...},...]`)
+//   - 0 items        → `{"message":"success"}` (success object)
+//   - noData         → `{"message":"success"}` (success object)
 //
-// n8n's Webhook response contract always serialises the last node's
-// output as a JSON array — even with `responseData: firstEntryJson` the
-// body is a single-element array. Earlier m9m shipped the body as a
-// bare object (e.g. `{"body":...,"headers":...,"total":15}`) which
-// breaks every n8n client that does `JSON.parse(...) as Array`. The
-// helper below exercises the same code path as
+// n8n's Webhook response contract is workflow-shape dependent:
+//   - With responseData unset (defaults to firstEntryJson) n8n emits
+//     the first item's JSON as a bare object — verified live against
+//     http://187.77.113.218:5678/webhook/simple_webhook.
+//   - With responseData="allEntries" n8n emits every item as a JSON
+//     array — verified live against
+//     http://187.77.113.218:5678/webhook/bocahtuanakal.
+//   - With responseData="noData" n8n emits an empty 200 body.
+//
+// Earlier m9m always wrapped in a single-element array `[{...}]`,
+// which mismatched n8n for workflows without downstream Set nodes.
+// The helper below exercises the same code path as
 // `handler.handleWebhookRequest` for the response-writing half, so a
 // regression in either `prepareResponse` or `sendResponse` shows up
 // here.
@@ -50,19 +57,20 @@ func runHandlerForResult(t *testing.T, wh *Webhook, result *engine.ExecutionResu
 	return rec, body
 }
 
-func TestHandler_ResponseShape_FirstEntryJson_WrapsAsArray(t *testing.T) {
-	// Simulate the "My workflow" Set-after-Webhook case from the bug
-	// report. The Set node at the end of the workflow accumulates all
-	// upstream Webhook trigger fields (body/headers/params/...) plus its
-	// own assignment (total). The handler must wrap this object in a
-	// single-element array so the wire shape matches n8n's `[{...}]`.
+func TestHandler_ResponseShape_FirstEntryJson_EmitsBareObject(t *testing.T) {
+	// Simulate the "My workflow" Set-after-Webhook case. The Set node
+	// at the end of the workflow accumulates all upstream Webhook
+	// trigger fields (body/headers/params/...) plus its own
+	// assignment (total). With `responseData: firstEntryJson` the
+	// handler must emit the first item's JSON as a bare object —
+	// matching n8n's wire shape for the default responseData.
 	wh := &Webhook{ResponseData: "firstEntryJson"}
 	result := &engine.ExecutionResult{
 		Data: []model.DataItem{
 			{
 				JSON: map[string]interface{}{
 					"body":    map[string]interface{}{"varA": "5", "varB": "10"},
-					"headers": map[string]interface{}{"Content-Type": "application/json"},
+					"headers": map[string]interface{}{"content-type": "application/json"},
 					"params":  map[string]interface{}{},
 					"query":   map[string]interface{}{},
 					"method":  "POST",
@@ -78,17 +86,18 @@ func TestHandler_ResponseShape_FirstEntryJson_WrapsAsArray(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
 
-	// Body must parse as a JSON array of length 1.
-	var arr []map[string]interface{}
-	require.NoError(t, json.Unmarshal(body, &arr), "response body must be valid JSON")
-	require.Len(t, arr, 1, "firstEntryJson must wrap output in a single-element JSON array")
+	// Body must parse as a bare JSON object (NOT a single-element
+	// array). firstEntryJson's contract is to emit the first item's
+	// JSON verbatim.
+	var obj map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &obj), "response body must be valid JSON")
+	require.Empty(t, obj[""], "firstEntryJson must NOT wrap the item in an array")
 
 	// The merged upstream fields MUST be preserved (n8n keeps them too)
 	// and the final node's assignment (`total`) must be present.
-	item := arr[0]
-	assert.Equal(t, 15.0, item["total"], "final Set node's `total` field must be preserved")
-	assert.NotNil(t, item["body"], "webhook-internal `body` field must not be stripped")
-	assert.NotNil(t, item["headers"], "webhook-internal `headers` field must not be stripped")
+	assert.Equal(t, 15.0, obj["total"], "final Set node's `total` field must be preserved")
+	assert.NotNil(t, obj["body"], "webhook-internal `body` field must not be stripped")
+	assert.NotNil(t, obj["headers"], "webhook-internal `headers` field must not be stripped")
 }
 
 func TestHandler_ResponseShape_AllEntries_WrapsAsArray(t *testing.T) {
@@ -137,8 +146,8 @@ func TestHandler_ResponseShape_Empty_FirstEntryJson_ReturnsSuccessObject(t *test
 
 func TestHandler_ResponseShape_PreservesCustomHeaders(t *testing.T) {
 	// The handler must still forward any custom response headers that the
-	// Webhook node configured — wrapping the body in an array is a body
-	// change, not a headers change.
+	// Webhook node configured — switching the body shape (bare object vs
+	// array) is a body change, not a headers change.
 	wh := &Webhook{
 		ResponseData:    "firstEntryJson",
 		ResponseHeaders: map[string]string{"X-Custom": "abc", "X-Trace": "xyz"},
@@ -156,17 +165,16 @@ func TestHandler_ResponseShape_PreservesCustomHeaders(t *testing.T) {
 	assert.Equal(t, "abc", rec.Header().Get("X-Custom"))
 	assert.Equal(t, "xyz", rec.Header().Get("X-Trace"))
 
-	// Body must still be a JSON array despite the custom headers.
-	var arr []map[string]interface{}
-	require.NoError(t, json.Unmarshal(body, &arr))
-	require.Len(t, arr, 1)
-	assert.Equal(t, 3.0, arr[0]["total"])
+	// Body must be a bare JSON object despite the custom headers.
+	var obj map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &obj))
+	assert.Equal(t, 3.0, obj["total"])
 }
 
-func TestHandler_ResponseShape_DefaultUnknownResponseData_WrapsAsArray(t *testing.T) {
+func TestHandler_ResponseShape_DefaultUnknownResponseData_EmitsBareObject(t *testing.T) {
 	// When the ResponseData field holds an unrecognised value, we fall
-	// through to the default branch — and that default must also wrap in
-	// an array to stay consistent with n8n's contract.
+	// through to the default branch — and that default must emit a bare
+	// object to match n8n's firstEntryJson default.
 	wh := &Webhook{ResponseData: "someUnknownMode"}
 	result := &engine.ExecutionResult{
 		Data: []model.DataItem{
@@ -178,8 +186,7 @@ func TestHandler_ResponseShape_DefaultUnknownResponseData_WrapsAsArray(t *testin
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var arr []map[string]interface{}
-	require.NoError(t, json.Unmarshal(body, &arr), "default branch must still produce a JSON array")
-	require.Len(t, arr, 1)
-	assert.Equal(t, true, arr[0]["ok"])
+	var obj map[string]interface{}
+	require.NoError(t, json.Unmarshal(body, &obj), "default branch must produce a bare JSON object")
+	assert.Equal(t, true, obj["ok"])
 }

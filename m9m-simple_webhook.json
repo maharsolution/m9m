@@ -1,0 +1,1 @@
+[{"body":{"variable":"1"},"headers":{"accept":"*/*","content-length":"16","content-type":"application/json","user-agent":"curl/8.21.0"},"method":"POST","params":{},"path":"simple_webhook","query":{},"webhookUrl":"http://0.0.0.0:8080/simple_webhook"}]
