@@ -12,7 +12,7 @@ n8n-go
 *.so
 *.dylib
 *.dll
-
+grapify-out/*
 # IDE files
 *.swp
 *.swo
