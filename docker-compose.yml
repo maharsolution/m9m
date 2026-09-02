@@ -28,6 +28,8 @@ services:
       # Same DSN available via env so `m9m config validate` can check it
       - M9M_DB_TYPE=mysql
       - M9M_MYSQL_DSN=m9m_admin:Secure_Db_Pass_2026@tcp(mysql-db:3306)/m9m_prod?parseTime=true&charset=utf8mb4&loc=UTC
+      # Secret used by webhook-processing.json's headerAuth validation
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-change-me-in-production}
     volumes:
       - m9m_backend_storage:/app/data
 
