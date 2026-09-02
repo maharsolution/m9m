@@ -225,3 +225,100 @@ func TestIfNode_ExecuteReturnsBothBranchesTagged(t *testing.T) {
 	assert.Equal(t, 2, trueCount, "Alice and Charlie should pass the age>=18 check")
 	assert.Equal(t, 1, falseCount, "Bob (age 17) should be in the false branch")
 }
+
+// TestIfNode_LeftValueIsExpression_N8nWireFormat is a regression test
+// for the `simple_webhook_3` workflow parity bug.
+//
+// n8n's IF v2 emits each condition's leftValue as an n8n expression
+// (`={{ $json.<path> }}`), not as a bare `$json.<path>` reference.
+// m9m's IF node previously only understood the bare-reference form
+// and compared the raw expression text against the rightValue, which
+// meant every condition silently resolved to false.
+//
+// The exact workflow shape reproduced here:
+//
+//	Webhook  →  Parameter (Set: inputan = $json.body.variable)
+//	           →  validation (IF: $json.inputan == "1")
+//	              ↙            ↘
+//	          Valid          Failed
+//	         {response:OK}   {Response:Failed}
+//
+// Both payloads must end up on the correct branch, matching n8n's
+// response byte-for-byte:
+//
+//	{"variable":"1"}  →  main[0]  →  Valid   →  {"response":"OK"}
+//	{"variable":"2"}  →  main[1]  →  Failed  →  {"Response":"Failed"}
+func TestIfNode_LeftValueIsExpression_N8nWireFormat(t *testing.T) {
+	ifNode := NewIfNode()
+
+	// IF node parameters verbatim from the n8n export.
+	ifParams := map[string]interface{}{
+		"conditions": map[string]interface{}{
+			"options": map[string]interface{}{
+				"caseSensitive":  true,
+				"leftValue":      "",
+				"typeValidation": "strict",
+				"version":        3,
+			},
+			"conditions": []interface{}{
+				map[string]interface{}{
+					"id":         "ac12627b-d781-43c4-b700-e4676ce82f07",
+					"leftValue":  "={{ $json.inputan }}",
+					"rightValue": "1",
+					"operator": map[string]interface{}{
+						"type":      "string",
+						"operation": "equals",
+					},
+				},
+			},
+			"combinator": "and",
+		},
+		"options": map[string]interface{}{},
+	}
+
+	run := func(variable string) bool {
+		// Simulate the Parameter Set node: it assigns `inputan` from
+		// the upstream webhook body's `variable` field. Set defaults
+		// to keepOnlySet=true for typeVersion 3+, so the input to the
+		// IF node is just `{inputan: "..."}`.
+		setNode := NewSetNode()
+		setParams := map[string]interface{}{
+			"assignments": map[string]interface{}{
+				"assignments": []interface{}{
+					map[string]interface{}{
+						"id":    "d8c41b2e-fc6f-4a79-acbb-6c0c52c0acaa",
+						"name":  "inputan",
+						"value": "={{ $json.body.variable }}",
+						"type":  "string",
+					},
+				},
+			},
+			"options": map[string]interface{}{},
+		}
+		webhook := model.DataItem{
+			JSON: map[string]interface{}{
+				"body": map[string]interface{}{"variable": variable},
+			},
+		}
+		setOut, err := setNode.Execute([]model.DataItem{webhook}, setParams)
+		require.NoError(t, err)
+		require.Equal(t, variable, setOut[0].JSON["inputan"],
+			"Set node should have written inputan=%q", variable)
+
+		ifOut, err := ifNode.Execute(setOut, ifParams)
+		require.NoError(t, err)
+		require.Len(t, ifOut, 1, "IF must emit one tagged item per input")
+		tag, ok := ifOut[0].JSON["_ifResult"].(bool)
+		require.True(t, ok, "IF output must carry a bool _ifResult tag")
+		return tag
+	}
+
+	assert.True(t, run("1"),
+		"variable=\"1\" must route to main[0] (Valid → {response:OK}), got _ifResult=false — IF leftValue expression is not being evaluated")
+	assert.False(t, run("2"),
+		"variable=\"2\" must route to main[1] (Failed → {Response:Failed}), got _ifResult=true — IF leftValue expression is being evaluated incorrectly")
+	assert.False(t, run(""),
+		"variable=\"\" must route to main[1] (Failed), got _ifResult=true — empty inputan should not equal \"1\"")
+	assert.False(t, run("11"),
+		"variable=\"11\" must route to main[1] (Failed) — strict string equality, no numeric coercion")
+}

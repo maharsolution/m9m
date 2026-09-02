@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
 )
 
@@ -129,7 +130,21 @@ func resolveConditionsArray(conditions interface{}) ([]interface{}, bool) {
 }
 
 // EvaluateConditions evaluates all conditions against a data item.
-func EvaluateConditions(item model.DataItem, conditions []interface{}, combiner string) bool {
+//
+// When `eval` is non-nil, any condition operand that looks like an n8n
+// expression (`={{ ... }}`, `{{ ... }}`, or a bare `$json.*` path that
+// isn't a direct map lookup) is evaluated with that evaluator against
+// the supplied item's context. This is what n8n's IF node does: its
+// `leftValue` field is an n8n expression that resolves to the value
+// being compared. Without that step, an expression like
+// `{{ $json.inputan }}` was passed verbatim to the comparator and
+// silently produced a no-match for every input.
+//
+// Passing `nil` for `eval` preserves the historic behaviour: bare
+// `$json.*` paths are still resolved via the local map, and everything
+// else is compared as a literal. This keeps the Filter node (and any
+// other caller that hasn't been wired up to an evaluator) working.
+func EvaluateConditions(item model.DataItem, conditions []interface{}, combiner string, eval ExpressionEvaluator) bool {
 	if len(conditions) == 0 {
 		return true
 	}
@@ -143,7 +158,7 @@ func EvaluateConditions(item model.DataItem, conditions []interface{}, combiner 
 			continue
 		}
 
-		result := evaluateCondition(item, conditionMap)
+		result := evaluateCondition(item, conditionMap, eval)
 
 		if combiner == "and" && !result {
 			return false
@@ -156,7 +171,16 @@ func EvaluateConditions(item model.DataItem, conditions []interface{}, combiner 
 	return combiner == "and"
 }
 
-func evaluateCondition(item model.DataItem, condition map[string]interface{}) bool {
+// ExpressionEvaluator is the minimal surface EvaluateConditions needs
+// from the project's expression runtime. Defined as an interface here
+// so the conditions package does not import the expressions package
+// directly (avoiding an import cycle with the tests, which exercise
+// the condition helpers without a full runtime).
+type ExpressionEvaluator interface {
+	EvaluateExpression(expression string, context *expressions.ExpressionContext) (interface{}, error)
+}
+
+func evaluateCondition(item model.DataItem, condition map[string]interface{}, eval ExpressionEvaluator) bool {
 	leftValue := condition["leftValue"]
 	rightValue := condition["rightValue"]
 	// n8n's IF v2 emits the operator as either a bare string or a
@@ -168,8 +192,8 @@ func evaluateCondition(item model.DataItem, condition map[string]interface{}) bo
 		operator = "equals"
 	}
 
-	leftResolved := resolveValue(item.JSON, leftValue)
-	rightResolved := rightValue
+	leftResolved := resolveValue(item.JSON, leftValue, eval)
+	rightResolved := resolveValue(item.JSON, rightValue, eval)
 
 	switch operator {
 	case "exists":
@@ -217,13 +241,76 @@ func evaluateCondition(item model.DataItem, condition map[string]interface{}) bo
 	}
 }
 
-func resolveValue(data map[string]interface{}, value interface{}) interface{} {
+// resolveValue interprets a single IF-node operand. The operand may be:
+//
+//   - a literal value (number, bool, string with no expression markers),
+//   - a bare `$json.<path>` reference (handled locally via getValueAtPath),
+//   - an n8n expression (`={{ ... }}` or `{{ ... }}`) which needs the
+//     supplied evaluator to run.
+//
+// The evaluator is consulted only for the third case, so the historic
+// `$json.foo` short-circuit keeps working for callers that pass a nil
+// evaluator (Filter node, tests, etc.).
+func resolveValue(data map[string]interface{}, value interface{}, eval ExpressionEvaluator) interface{} {
 	strValue, ok := value.(string)
-	if !ok || !strings.HasPrefix(strValue, "$json.") {
+	if !ok {
 		return value
 	}
-	path := strings.TrimPrefix(strValue, "$json.")
-	return getValueAtPath(data, path)
+
+	// 1. Bare `$json.*` reference — local lookup against the data map.
+	//    We only consume the `$json.` prefix; anything more elaborate
+	//    (e.g. `$json['foo'].bar`) is treated as an expression.
+	if strings.HasPrefix(strValue, "$json.") && !strings.ContainsAny(strValue, " '\"[]()") {
+		path := strings.TrimPrefix(strValue, "$json.")
+		return getValueAtPath(data, path)
+	}
+
+	// 2. n8n expression — needs the runtime evaluator. We accept both
+	//    `={{ expr }}` (n8n expression-mode marker) and `{{ expr }}`
+	//    (template-fragment marker); the expression evaluator handles
+	//    each shape the same way the Set node does.
+	if eval == nil {
+		return value
+	}
+	if !looksLikeExpression(strValue) {
+		return value
+	}
+
+	expr := strValue
+	switch {
+	case strings.HasPrefix(expr, "="):
+		expr = strings.TrimPrefix(expr, "=")
+	case strings.HasPrefix(expr, "{{") && strings.HasSuffix(expr, "}}"):
+		// Already in `{{ expr }}` form — pass through unchanged so the
+		// parser/evaluator doesn't try to double-wrap it.
+	}
+
+	ctx := &expressions.ExpressionContext{
+		ActiveNodeName:      "IF",
+		RunIndex:            0,
+		ItemIndex:           0,
+		Mode:                expressions.ModeManual,
+		ConnectionInputData: []model.DataItem{{JSON: data}},
+	}
+	resolved, err := eval.EvaluateExpression(expr, ctx)
+	if err != nil {
+		// Preserve prior observable behaviour for broken expressions:
+		// fall back to the literal string so downstream comparison
+		// proceeds against the unevaluated text rather than panicking.
+		return value
+	}
+	return resolved
+}
+
+// looksLikeExpression reports whether `s` carries one of the markers
+// that signal an n8n expression (`=`-prefixed expression mode, or a
+// `{{ ... }}` template fragment). Anything else is treated as a
+// literal value.
+func looksLikeExpression(s string) bool {
+	if strings.HasPrefix(s, "=") {
+		return true
+	}
+	return strings.HasPrefix(s, "{{") && strings.HasSuffix(s, "}}")
 }
 
 func getValueAtPath(data map[string]interface{}, path string) interface{} {

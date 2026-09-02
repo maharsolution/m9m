@@ -3,6 +3,7 @@ package transform
 import (
 	"fmt"
 
+	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
 )
@@ -10,6 +11,7 @@ import (
 // IfNode routes items based on conditions, tagging each with the evaluation result.
 type IfNode struct {
 	*base.BaseNode
+	evaluator *expressions.GojaExpressionEvaluator
 }
 
 // NewIfNode creates a new IF node.
@@ -20,6 +22,7 @@ func NewIfNode() *IfNode {
 			Description: "Routes items based on conditions",
 			Category:    "Data Transformation",
 		}),
+		evaluator: expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 	}
 }
 
@@ -66,7 +69,7 @@ func (n *IfNode) Execute(inputData []model.DataItem, nodeParams map[string]inter
 	var trueItems, falseItems []model.DataItem
 
 	for _, item := range inputData {
-		passes := EvaluateConditions(item, conditionsArr, combiner)
+		passes := EvaluateConditions(item, conditionsArr, combiner, n.evaluator)
 		if passes {
 			trueItems = append(trueItems, item)
 		} else {
