@@ -178,12 +178,14 @@ func TestWebhookNodeExecute_NormalizesHeadersAndAddsWebhookUrl(t *testing.T) {
 		t.Errorf("Expected webhookUrl='http://187.77.113.218:8080/bocahtuanakal', got %v", item["webhookUrl"])
 	}
 
-	// method + path echo.
-	if item["method"] != "POST" {
-		t.Errorf("Expected method=POST, got %v", item["method"])
+	// n8n parity: `method` and `path` are NOT exposed on the Webhook
+	// trigger output (they are surfaced via `$env` instead). Verify
+	// the trigger omits them.
+	if _, hasMethod := item["method"]; hasMethod {
+		t.Errorf("trigger output must not expose `method` (n8n parity), got %v", item["method"])
 	}
-	if item["path"] != "bocahtuanakal" {
-		t.Errorf("Expected path='bocahtuanakal', got %v", item["path"])
+	if _, hasPath := item["path"]; hasPath {
+		t.Errorf("trigger output must not expose `path` (n8n parity), got %v", item["path"])
 	}
 }
 

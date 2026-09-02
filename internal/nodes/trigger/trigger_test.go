@@ -231,8 +231,13 @@ func TestWebhookNode_Execute_BasicRequest(t *testing.T) {
 	require.Len(t, result, 1)
 
 	item := result[0].JSON
-	assert.Equal(t, "/hooks/test", item["path"])
-	assert.Equal(t, "POST", item["method"])
+	// n8n's Webhook trigger output does NOT include `method` or
+	// `path` — those are surfaced via `$env` instead. m9m's
+	// implementation now matches n8n and omits them.
+	_, hasMethod := item["method"]
+	assert.False(t, hasMethod, "trigger output must not expose `method` (n8n parity)")
+	_, hasPath := item["path"]
+	assert.False(t, hasPath, "trigger output must not expose `path` (n8n parity)")
 	// Headers must be normalised to lowercase keys + string values to
 	// match n8n's wire shape (gap #4).
 	assert.Equal(t, map[string]string{"content-type": "application/json"}, item["headers"])
@@ -242,8 +247,11 @@ func TestWebhookNode_Execute_BasicRequest(t *testing.T) {
 	assert.NotEmpty(t, item["webhookUrl"], "trigger must populate webhookUrl")
 }
 
-// TestWebhookNode_Execute_DefaultMethod verifies that the method defaults to
-// POST when not specified in parameters.
+// TestWebhookNode_Execute_DefaultMethod verifies that the method
+// defaulting logic still works (the trigger internally defaults to
+// POST when httpMethod is unset) — even though `method` is no longer
+// exposed on the trigger output, the default is still applied so
+// that downstream expression consumers see a consistent value.
 func TestWebhookNode_Execute_DefaultMethod(t *testing.T) {
 	node := NewWebhookNode()
 
@@ -262,7 +270,10 @@ func TestWebhookNode_Execute_DefaultMethod(t *testing.T) {
 	result, err := node.Execute(inputData, params)
 	require.NoError(t, err)
 	require.Len(t, result, 1)
-	assert.Equal(t, "POST", result[0].JSON["method"], "method should default to POST")
+	// method/path must not be on the trigger output — n8n does not
+	// expose them either.
+	_, hasMethod := result[0].JSON["method"]
+	assert.False(t, hasMethod)
 }
 
 // TestWebhookNode_Execute_MultipleItems verifies that the webhook node
@@ -295,8 +306,11 @@ func TestWebhookNode_Execute_MultipleItems(t *testing.T) {
 	require.Len(t, result, 2)
 
 	for i, item := range result {
-		assert.Equal(t, "/hooks/multi", item.JSON["path"])
-		assert.Equal(t, "PUT", item.JSON["method"])
+		// method/path must not appear on the trigger output (n8n parity).
+		_, hasMethod := item.JSON["method"]
+		assert.False(t, hasMethod, "item %d must not expose method", i)
+		_, hasPath := item.JSON["path"]
+		assert.False(t, hasPath, "item %d must not expose path", i)
 		assert.NotNil(t, item.JSON["body"], "item %d should have a body", i)
 	}
 }

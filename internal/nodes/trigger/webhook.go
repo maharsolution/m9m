@@ -96,14 +96,13 @@ func resolveWebhookURL(path string) string {
 // Execute processes the Webhook node
 func (w *WebhookNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
 	// Webhook nodes are typically triggered externally
-	// This method handles the webhook data processing
+	// This method handles the webhook data processing.
 
-	// Extract webhook configuration
+	// Extract webhook configuration. We still need `path` for the
+	// webhookUrl field; `method` was removed from the trigger output
+	// to match n8n's wire shape (n8n does not expose `method` on the
+	// Webhook trigger — it's available via `$env` instead).
 	path, _ := nodeParams["path"].(string)
-	method, _ := nodeParams["httpMethod"].(string)
-	if method == "" {
-		method = "POST"
-	}
 
 	// For execution context, we assume webhook data is already provided in inputData
 	if len(inputData) == 0 {
@@ -141,9 +140,9 @@ func (w *WebhookNode) Execute(inputData []model.DataItem, nodeParams map[string]
 		//
 		// Note: n8n's `params` is a synonym for `query` (both hold the
 		// URL query parameters) and `executionMode` is the literal
-		// string `"production"` for production webhooks. We pass through
-		// whatever the manager populated upstream; this node is only
-		// responsible for normalising headers and adding webhookUrl.
+		// string `"production"` for production webhooks. n8n does NOT
+		// expose `method` or `path` on the trigger output — those are
+		// surfaced via `$env` instead — so we omit them here.
 		rawParams, _ := item.JSON["params"].(map[string][]string)
 		normalizedParams := normalizeHeaderLikeMap(rawParams)
 
@@ -155,14 +154,20 @@ func (w *WebhookNode) Execute(inputData []model.DataItem, nodeParams map[string]
 			"params":  normalizedParams,
 			"query":   normalizedQuery,
 			"body":    item.JSON["body"],
-			"method":  method,
-			"path":    path,
 		}
 
 		// webhookUrl is added last so callers can echo it back via
 		// `={{ $json.webhookUrl }}` expressions. It is the full public
 		// URL n8n would expose for the same workflow.
 		webhookData["webhookUrl"] = resolveWebhookURL(path)
+
+		// executionMode is stamped upstream by the manager
+		// (resolveExecutionMode). Pass it through if present so the
+		// trigger output matches n8n's wire shape — n8n surfaces the
+		// literal "production" or "test" string on the Webhook trigger.
+		if em, ok := item.JSON["executionMode"]; ok {
+			webhookData["executionMode"] = em
+		}
 
 		outputItem := model.DataItem{
 			JSON: webhookData,
