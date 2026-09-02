@@ -3,7 +3,9 @@ package commands
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -161,4 +163,25 @@ func runConfigValidate(cmd *cobra.Command, args []string) {
 	} else {
 		fmt.Println("Configuration is valid.")
 	}
+}
+
+// redactDSN masks the password component of a database DSN so it is safe to
+// print in configuration validation output. Handles both MySQL DSN
+// (user:pass@tcp(...)) and Postgres URL (postgres://user:pass@host) shapes.
+func redactDSN(dsn string) string {
+	if dsn == "" {
+		return ""
+	}
+	// user:pass@tcp(host)/db — MySQL go-sql-driver format
+	mysqlPattern := regexp.MustCompile(`(://|:)([^:@/]+):([^@]+)@`)
+	if mysqlPattern.MatchString(dsn) {
+		return mysqlPattern.ReplaceAllString(dsn, `$1$2:***@`)
+	}
+	// Generic "user:pass@" without scheme (raw DSN) — be conservative and
+	// mask anything that looks like user:pass@.
+	genericPattern := regexp.MustCompile(`([^:@/]+):([^@]+)@`)
+	if genericPattern.MatchString(dsn) {
+		return genericPattern.ReplaceAllString(dsn, `$1:***@`)
+	}
+	return strings.SplitN(dsn, "?", 2)[0]
 }
