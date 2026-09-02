@@ -1,1 +1,0 @@
-{"headers":{"host":"187.77.113.218:5678","user-agent":"curl/8.21.0","accept":"*/*","content-type":"application/json","content-length":"16"},"params":{},"query":{},"body":{"variable":"1"},"webhookUrl":"http://0.0.0.0:5678/webhook/simple_webhook","executionMode":"production"}
