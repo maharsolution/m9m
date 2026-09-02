@@ -179,8 +179,8 @@ func runServe(cmd *cobra.Command, args []string) {
 	// Register API routes
 	apiServer.RegisterRoutes(router)
 
-	// Initialize webhook manager + handler
-	webhookStore := webhooks.NewMemoryWebhookStorage()
+	// Initialize webhook manager + handler (persistent so webhooks survive restarts)
+	webhookStore := webhooks.NewPersistentWebhookStorage(store)
 	webhookManager := webhooks.NewWebhookManager(webhookStore, store, eng)
 	if err := webhookManager.LoadActiveWebhooks(); err != nil {
 		logger.Printf("Warning: failed to load active webhooks: %v", err)
