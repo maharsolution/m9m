@@ -33,6 +33,13 @@ FROM alpine:latest
 #   otherwise reject the system-wide install.
 RUN apk --no-cache add ca-certificates tzdata supervisor python3 py3-pip
 
+# Defensive symlinks: Alpine installs python3 at /usr/bin/python3, but older
+# supervisord configs (or scripts that hardcode /usr/local/bin/python3)
+# expect the binary there too. Symlink rather than copy so the two stay in
+# lock-step across apk version bumps.
+RUN ln -sf /usr/bin/python3 /usr/local/bin/python3 && \
+    ln -sf /usr/bin/pip3 /usr/local/bin/pip3 2>/dev/null || true
+
 # Create non-root user for m9m itself. supervisor still runs as root (see below).
 RUN addgroup -g 1000 n8n && \
     adduser -D -u 1000 -G n8n n8n
