@@ -286,11 +286,16 @@ func (m *WebhookManager) validateWebhook(webhook *Webhook) error {
 }
 
 func (m *WebhookManager) createWebhookFromNode(workflow *model.Workflow, node *model.Node, isTest bool) *Webhook {
-	// Extract webhook configuration from node parameters
+	// Extract webhook configuration from node parameters. n8n's Webhook
+	// node exposes responseData as a top-level parameter; without
+	// honouring it the wire shape diverges from n8n whenever the user
+	// has explicitly chosen `allEntries` (which expects a JSON array
+	// response) vs `firstEntryJson` (which expects a bare object).
 	path := getStringParam(node.Parameters, "path", "")
 	method := strings.ToUpper(getStringParam(node.Parameters, "httpMethod", "POST"))
 	authType := getStringParam(node.Parameters, "authentication", "none")
 	responseMode := getStringParam(node.Parameters, "responseMode", "onReceived")
+	responseData := getStringParam(node.Parameters, "responseData", "firstEntryJson")
 
 	return &Webhook{
 		WorkflowID:   workflow.ID,
@@ -301,7 +306,7 @@ func (m *WebhookManager) createWebhookFromNode(workflow *model.Workflow, node *m
 		Active:       workflow.Active && !isTest,
 		AuthType:     authType,
 		ResponseMode: responseMode,
-		ResponseData: "firstEntryJson",
+		ResponseData: responseData,
 	}
 }
 

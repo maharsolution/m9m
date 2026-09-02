@@ -695,6 +695,57 @@ func TestWebhookManager_RegisterWorkflowWebhooks(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestWebhookManager_RegisterWorkflowWebhooks_RespectsResponseData
+// pins gap #2: the Webhook node's `responseData` parameter must be
+// honoured at registration time. Without it, bocahtuanakal-style
+// workflows (which set `responseData: allEntries`) would be
+// registered with the default `firstEntryJson` and respond with a
+// bare object instead of a JSON array — diverging from n8n's wire
+// shape.
+func TestWebhookManager_RegisterWorkflowWebhooks_RespectsResponseData(t *testing.T) {
+	mgr, _, _ := newTestManager()
+
+	wf := &model.Workflow{
+		ID:     "wf-respdata",
+		Name:   "respdata",
+		Active: true,
+		Nodes: []model.Node{
+			{
+				Name: "WebhookAllEntries",
+				Type: "n8n-nodes-base.webhook",
+				Parameters: map[string]interface{}{
+					"path":         "all-entries",
+					"httpMethod":   "POST",
+					"responseData": "allEntries",
+				},
+			},
+			{
+				Name: "WebhookFirst",
+				Type: "n8n-nodes-base.webhook",
+				Parameters: map[string]interface{}{
+					"path":       "first",
+					"httpMethod": "POST",
+				},
+			},
+		},
+	}
+
+	require.NoError(t, mgr.RegisterWorkflowWebhooks(wf, false))
+	hooks, err := mgr.ListWebhooks("wf-respdata")
+	require.NoError(t, err)
+	require.Len(t, hooks, 2)
+
+	byPath := map[string]*Webhook{}
+	for _, h := range hooks {
+		byPath[h.Path] = h
+	}
+
+	assert.Equal(t, "allEntries", byPath["/all-entries"].ResponseData,
+		"explicit responseData='allEntries' must be preserved at registration")
+	assert.Equal(t, "firstEntryJson", byPath["/first"].ResponseData,
+		"absent responseData must default to firstEntryJson")
+}
+
 func TestWebhookManager_RegisterWorkflowWebhooks_TestMode(t *testing.T) {
 	mgr, _, _ := newTestManager()
 
