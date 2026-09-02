@@ -208,9 +208,19 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 			return nil, fmt.Errorf("node %s not found in workflow", nodeName)
 		}
 
-		// Get the executor for this node type
+			// Get the executor for this node type
 		executor, err := e.GetNodeExecutor(node.Type)
 		if err != nil {
+			// n8n exports frequently include decorative nodes (Sticky
+			// Notes, Canvas Notes, etc.) that are not part of the
+			// execution graph. They are canvas annotations that show
+			// up in the editor but never run. Treat them as no-ops
+			// during execution so a single decorative node does not
+			// poison an otherwise-executable workflow.
+			if isDecorativeNodeType(node.Type) {
+				nodeResults[nodeName] = []model.DataItem{}
+				continue
+			}
 			return nil, fmt.Errorf("failed to get executor for node %s: %w", node.Name, err)
 		}
 
@@ -403,4 +413,20 @@ func (e *workflowEngineImpl) findStartingNodes(workflow *model.Workflow) []strin
 	}
 
 	return startingNodes
+}
+
+// isDecorativeNodeType reports whether a node type is decorative only
+// and never participates in execution. n8n's UI exports include these
+// nodes alongside real workflow nodes so the editor can render canvas
+// annotations (sticky notes, comments, etc.) but they have no executor
+// and no connections. They should be skipped during execution rather
+// than aborting the whole workflow.
+func isDecorativeNodeType(nodeType string) bool {
+	switch nodeType {
+	case "n8n-nodes-base.stickyNote",
+		"n8n-nodes-base.note",
+		"@n8n/n8n-nodes-langchain.note":
+		return true
+	}
+	return false
 }
