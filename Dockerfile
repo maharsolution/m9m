@@ -46,6 +46,8 @@ RUN mkdir -p /app/data /app/logs /app/config && \
     chown -R n8n:n8n /app
 
 # Switch to non-root user
+USER root
+RUN cp /app/m9m /usr/local/bin/m9m
 USER n8n
 
 # Expose ports
@@ -63,7 +65,8 @@ ENV N8N_GO_PORT=8080 \
     N8N_GO_LOG_LEVEL=info \
     N8N_GO_METRICS_PORT=9090 \
     N8N_GO_DATA_DIR=/app/data \
-    N8N_GO_LOG_DIR=/app/logs
+    N8N_GO_LOG_DIR=/app/logs \ 
+    GOPROXY="https://proxy.golang.org,direct"
 
 # Volume for persistent data
 VOLUME ["/app/data", "/app/logs", "/app/config"]
