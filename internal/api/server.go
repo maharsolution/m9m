@@ -12,6 +12,7 @@ import (
 	"github.com/neul-labs/m9m/internal/queue"
 	"github.com/neul-labs/m9m/internal/scheduler"
 	"github.com/neul-labs/m9m/internal/storage"
+	"github.com/neul-labs/m9m/internal/webhooks"
 )
 
 // APIServerConfig configures the API server
@@ -45,13 +46,14 @@ func DefaultAPIServerConfig() *APIServerConfig {
 
 // APIServer provides REST API with workflow compatibility
 type APIServer struct {
-	engine    engine.WorkflowEngine
-	scheduler *scheduler.WorkflowScheduler
-	storage   storage.WorkflowStorage
-	jobQueue  queue.JobQueue
-	upgrader  websocket.Upgrader
-	wsClients map[string]*websocket.Conn
-	config    *APIServerConfig
+	engine         engine.WorkflowEngine
+	scheduler      *scheduler.WorkflowScheduler
+	storage        storage.WorkflowStorage
+	jobQueue       queue.JobQueue
+	upgrader       websocket.Upgrader
+	wsClients      map[string]*websocket.Conn
+	config         *APIServerConfig
+	webhookManager *webhooks.WebhookManager
 
 	executionMu      sync.RWMutex
 	executionCancels map[string]context.CancelFunc
@@ -107,4 +109,11 @@ func NewAPIServerWithConfig(eng engine.WorkflowEngine, scheduler *scheduler.Work
 // SetJobQueue sets the job queue for async execution
 func (s *APIServer) SetJobQueue(jq queue.JobQueue) {
 	s.jobQueue = jq
+}
+
+// SetWebhookManager wires the webhook manager so workflow activation/deactivation
+// keeps the activeHooks cache in sync. Without this, /webhook/{path} requests
+// return "Webhook not found" even after the workflow is activated.
+func (s *APIServer) SetWebhookManager(wm *webhooks.WebhookManager) {
+	s.webhookManager = wm
 }

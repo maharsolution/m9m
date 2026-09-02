@@ -90,6 +90,44 @@ func runConfigValidate(cmd *cobra.Command, args []string) {
 		}
 	}
 
+	// Storage backend
+	dbType := os.Getenv("M9M_DB_TYPE")
+	if dbType == "" {
+		dbType = "sqlite"
+	}
+	validDBTypes := map[string]bool{"sqlite": true, "memory": true, "postgres": true, "postgresql": true, "mysql": true}
+	if validDBTypes[dbType] {
+		checks = append(checks, configCheck{"M9M_DB_TYPE", "OK", dbType})
+	} else {
+		checks = append(checks, configCheck{"M9M_DB_TYPE", "FAIL", fmt.Sprintf("invalid db type: %s (supported: sqlite, memory, postgres, mysql)", dbType)})
+	}
+
+	switch dbType {
+	case "mysql":
+		dsn := os.Getenv("M9M_MYSQL_DSN")
+		if dsn == "" {
+			checks = append(checks, configCheck{"M9M_MYSQL_DSN", "FAIL", "not set (required when M9M_DB_TYPE=mysql)"})
+		} else {
+			checks = append(checks, configCheck{"M9M_MYSQL_DSN", "OK", redactDSN(dsn)})
+			if !strings.Contains(dsn, "parseTime=true") {
+				checks = append(checks, configCheck{"M9M_MYSQL_DSN.parseTime", "WARN", "parseTime=true is recommended to scan TIMESTAMP into time.Time"})
+			}
+			if !strings.Contains(dsn, "charset=") {
+				checks = append(checks, configCheck{"M9M_MYSQL_DSN.charset", "WARN", "charset=utf8mb4 is recommended for full unicode support"})
+			}
+		}
+	case "postgres", "postgresql":
+		pgURL := os.Getenv("M9M_POSTGRES_URL")
+		if pgURL == "" {
+			pgURL = os.Getenv("M9M_POSTGRES_DSN")
+		}
+		if pgURL == "" {
+			checks = append(checks, configCheck{"M9M_POSTGRES_URL", "FAIL", "not set (required when M9M_DB_TYPE=postgres)"})
+		} else {
+			checks = append(checks, configCheck{"M9M_POSTGRES_URL", "OK", redactDSN(pgURL)})
+		}
+	}
+
 	// Metrics port
 	metricsPort := os.Getenv("M9M_METRICS_PORT")
 	if metricsPort != "" {

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,6 +33,9 @@ var (
 	serveDevMode     bool
 	serveDB          string
 	servePostgres    string
+	serveMySQL       string
+	serveDBType      string
+	serveMemory      bool
 	serveQueueType   string
 	serveQueueDB     string
 	serveWorkers     int
@@ -63,6 +67,9 @@ func init() {
 	serveCmd.Flags().BoolVar(&serveDevMode, "dev", false, "Enable development mode (permissive CORS)")
 	serveCmd.Flags().StringVar(&serveDB, "db", "", "SQLite database path")
 	serveCmd.Flags().StringVar(&servePostgres, "postgres", "", "PostgreSQL connection URL")
+	serveCmd.Flags().StringVar(&serveMySQL, "mysql", "", "MySQL connection DSN (e.g. user:pass@tcp(127.0.0.1:3306)/m9m?parseTime=true&charset=utf8mb4)")
+	serveCmd.Flags().StringVar(&serveDBType, "db-type", "", "Force storage backend: sqlite|memory|postgres|mysql (overrides other flags and M9M_DB_TYPE)")
+	serveCmd.Flags().BoolVar(&serveMemory, "memory", false, "Use in-memory storage (no CGO required, data lost on restart)")
 	serveCmd.Flags().StringVar(&serveQueueType, "queue", "sqlite", "Queue type: memory, sqlite")
 	serveCmd.Flags().StringVar(&serveQueueDB, "queue-db", "", "Queue SQLite database path (for sqlite queue)")
 	serveCmd.Flags().IntVar(&serveWorkers, "workers", 4, "Number of worker threads for job processing")
@@ -73,14 +80,57 @@ func runServe(cmd *cobra.Command, args []string) {
 
 	logger.Printf("Starting m9m server v%s", version)
 
-	// Initialize storage
+	// Initialize storage. Resolution order:
+	//   1. Explicit --db-type flag (forces a backend; required DSN via other flags)
+	//   2. M9M_DB_TYPE env var (same semantics as --db-type)
+	//   3. Heuristic: --mysql / M9M_MYSQL_DSN → --postgres / M9M_POSTGRES_URL → --memory → SQLite (default)
+	dbType := strings.ToLower(strings.TrimSpace(firstNonEmpty(serveDBType, os.Getenv("M9M_DB_TYPE"))))
+	mysqlDSN := firstNonEmpty(serveMySQL, os.Getenv("M9M_MYSQL_DSN"))
+	postgresURL := firstNonEmpty(servePostgres, os.Getenv("M9M_POSTGRES_URL"), os.Getenv("M9M_POSTGRES_DSN"))
+
 	var store storage.WorkflowStorage
 	var err error
 
-	if servePostgres != "" {
+	switch {
+	case dbType == "mysql" || (dbType == "" && mysqlDSN != ""):
+		if mysqlDSN == "" {
+			logger.Fatalf("MySQL storage requested but no DSN provided. Set --mysql or M9M_MYSQL_DSN.")
+		}
+		logger.Printf("Using MySQL storage")
+		store, err = storage.NewMySQLStorage(mysqlDSN)
+	case dbType == "postgres" || dbType == "postgresql" || (dbType == "" && postgresURL != ""):
+		if postgresURL == "" {
+			logger.Fatalf("PostgreSQL storage requested but no URL provided. Set --postgres, M9M_POSTGRES_URL, or M9M_POSTGRES_DSN.")
+		}
 		logger.Printf("Using PostgreSQL storage")
-		store, err = storage.NewPostgresStorage(servePostgres)
-	} else {
+		store, err = storage.NewPostgresStorage(postgresURL)
+	case dbType == "memory" || serveMemory:
+		logger.Printf("Using in-memory storage (data will be lost on restart)")
+		store = storage.NewMemoryStorage()
+	case dbType == "" || dbType == "sqlite":
+		// Use SQLite
+		dbPath := serveDB
+		if dbPath == "" {
+			// Check workspace first
+			if workspaceFlag != "" {
+				mgr, _ := workspace.NewManager()
+				if mgr != nil {
+					dbPath, _ = mgr.GetStoragePath(workspaceFlag)
+				}
+			}
+			// Default to data directory
+			if dbPath == "" {
+				homeDir, _ := os.UserHomeDir()
+				dataDir := filepath.Join(homeDir, ".m9m", "data")
+				_ = os.MkdirAll(dataDir, 0755)
+				dbPath = filepath.Join(dataDir, "m9m.db")
+			}
+		}
+		logger.Printf("Using SQLite storage: %s", dbPath)
+		store, err = storage.NewSQLiteStorage(dbPath)
+	default:
+		logger.Fatalf("Unknown --db-type %q (supported: sqlite, memory, postgres, mysql)", dbType)
+	}
 		// Use SQLite
 		dbPath := serveDB
 		if dbPath == "" {
@@ -185,6 +235,10 @@ func runServe(cmd *cobra.Command, args []string) {
 	if err := webhookManager.LoadActiveWebhooks(); err != nil {
 		logger.Printf("Warning: failed to load active webhooks: %v", err)
 	}
+	// Wire webhook manager into API server so activate/deactivate keeps
+	// the activeHooks cache in sync. Without this, POST /webhook/{path}
+	// returns "Webhook not found" until server restart.
+	apiServer.SetWebhookManager(webhookManager)
 	webhookHandler := webhooks.NewHandler(webhookManager)
 	webhookHandler.RegisterRoutes(router)
 
@@ -252,6 +306,17 @@ func runServe(cmd *cobra.Command, args []string) {
 	}
 
 	logger.Println("Server stopped")
+}
+
+// firstNonEmpty returns the first non-empty value among the inputs. Used to
+// resolve CLI flag > env var precedence when wiring storage backends.
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func startMetricsServer(port int, logger *log.Logger) {

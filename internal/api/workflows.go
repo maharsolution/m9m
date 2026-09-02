@@ -63,6 +63,14 @@ func (s *APIServer) CreateWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If the workflow was created already active, register its webhooks so
+	// /webhook/{path} works without a separate activate step.
+	if s.webhookManager != nil && workflow.Active {
+		if regErr := s.webhookManager.RegisterWorkflowWebhooks(&workflow, false); regErr != nil {
+			fmt.Printf("[m9m] warning: failed to register webhooks for new workflow %s: %v\n", workflow.ID, regErr)
+		}
+	}
+
 	s.sendJSON(w, http.StatusCreated, workflow)
 }
 
@@ -115,6 +123,18 @@ func (s *APIServer) UpdateWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reconcile webhooks: drop any old ones for this workflow, then re-register
+	// only if the workflow is currently active. This keeps the cache consistent
+	// across path/method/auth edits.
+	if s.webhookManager != nil {
+		_ = s.webhookManager.UnregisterWorkflowWebhooks(id)
+		if workflow.Active {
+			if regErr := s.webhookManager.RegisterWorkflowWebhooks(&workflow, false); regErr != nil {
+				fmt.Printf("[m9m] warning: failed to register webhooks for updated workflow %s: %v\n", id, regErr)
+			}
+		}
+	}
+
 	s.sendJSON(w, http.StatusOK, workflow)
 }
 
@@ -137,6 +157,18 @@ func (s *APIServer) ActivateWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Keep the webhook manager's activeHooks cache in sync so incoming
+	// /webhook/{path} requests can be routed immediately after activation.
+	if s.webhookManager != nil {
+		if wf, getErr := s.storage.GetWorkflow(id); getErr == nil {
+			if regErr := s.webhookManager.RegisterWorkflowWebhooks(wf, false); regErr != nil {
+				// Log but don't fail the request — the workflow is activated
+				// in storage; webhook cache will reconcile on next restart.
+				fmt.Printf("[m9m] warning: failed to register webhooks for workflow %s: %v\n", id, regErr)
+			}
+		}
+	}
+
 	s.sendJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "Workflow activated",
 		"active":  true,
@@ -149,6 +181,13 @@ func (s *APIServer) DeactivateWorkflow(w http.ResponseWriter, r *http.Request) {
 	if err := s.storage.DeactivateWorkflow(id); err != nil {
 		s.sendError(w, http.StatusNotFound, "Workflow not found", err)
 		return
+	}
+
+	// Remove any webhooks for this workflow from the activeHooks cache.
+	if s.webhookManager != nil {
+		if err := s.webhookManager.UnregisterWorkflowWebhooks(id); err != nil {
+			fmt.Printf("[m9m] warning: failed to unregister webhooks for workflow %s: %v\n", id, err)
+		}
 	}
 
 	s.sendJSON(w, http.StatusOK, map[string]interface{}{
