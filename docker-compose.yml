@@ -1,0 +1,138 @@
+services:
+  # --- EXECUTION ENGINE (runs the workflows n8n designs) ---
+  # Uses the MySQL storage backend (--mysql). The DSN follows
+  # go-sql-driver/mysql format: user:pass@tcp(host:port)/db?parseTime=true&charset=utf8mb4
+  # parseTime=true is required so TIMESTAMP columns scan into time.Time.
+  # charset=utf8mb4 is required for full unicode + emoji support.
+  # The DSN is passed via env (M9M_MYSQL_DSN) and consumed by the entrypoint
+  # script /app/docker-entrypoint.sh, which assembles the final command.
+  m9m-backend:
+    image: m9m
+    container_name: m9m-backend
+    restart: always
+    command:
+      - serve
+      - --dev
+      - --workers
+      - "4"
+      - --mysql
+      - m9m_admin:Secure_Db_Pass_2026@tcp(mysql-db:3306)/m9m_prod?parseTime=true&charset=utf8mb4&loc=UTC
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    depends_on:
+      mysql-db:
+        condition: service_healthy
+    environment:
+      - WEBHOOK_URL=http://0.0.0.0:8080
+      # Same DSN available via env so `m9m config validate` can check it
+      - M9M_DB_TYPE=mysql
+      - M9M_MYSQL_DSN=m9m_admin:Secure_Db_Pass_2026@tcp(mysql-db:3306)/m9m_prod?parseTime=true&charset=utf8mb4&loc=UTC
+    volumes:
+      - m9m_backend_storage:/app/data
+
+  # --- SYNC BRIDGE (n8n has no pluggable backend, so this polls n8n's
+  #     API and pushes each active workflow into m9m over its REST API —
+  #     confirmed to be the only path that reaches the live `serve` process;
+  #     the CLI's `m9m create` writes to a separate workspace store instead) ---
+  sync-service:
+    build: ./sync-service
+    container_name: n8n-m9m-sync
+    restart: always
+    environment:
+      - N8N_BASE_URL=http://n8n-designer-frontend:5678
+      - N8N_API_KEY=${N8N_API_KEY:?set N8N_API_KEY in .env after creating it in the n8n UI}
+      - M9M_BASE_URL=http://m9m-backend:8080
+      - POLL_INTERVAL_SECONDS=30
+      - SYNC_ONLY_ACTIVE=true
+    depends_on:
+      - n8n-designer-frontend
+      - m9m-backend
+
+  # --- FRONTEND / ORCHESTRATION LAYER ---
+  n8n-designer-frontend:
+    image: n8nio/n8n:latest
+    container_name: n8n-designer-ui
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - NODE_ENV=production
+      # UI Adjustments suited for Designers & Builders
+      - N8N_COMMUNITY_PACKAGES_ENABLED=true # Allows installing visual node packs directly from the UI
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+      # Core Database Configurations
+      - N8N_SECURE_COOKIE=false
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres-db
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${DB_POSTGRESDB_DATABASE:-n8n_prod}
+      - DB_POSTGRESDB_USER=${DB_POSTGRESDB_USER:-database_admin}
+      - DB_POSTGRESDB_PASSWORD=${DB_POSTGRESDB_PASSWORD:-Secure_Db_Pass_2026}
+      - N8N_ENCRYPTION_KEY=${GEN_ENCRYPTION_KEY:-Default_Secure_Key_Change_Me_!!!}
+      # Lets n8n's HTTP Request / Webhook nodes reach the m9m backend by service name
+      - M9M_BACKEND_URL=http://172.17.0.1:8080
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    volumes:
+      - n8n_designer_data:/home/node/.n8n
+
+  # --- SHARED DATA LAYER (MySQL for m9m) ---
+  # Two databases are created on first init via ./init-mysql-db.sh:
+  #   - m9m_prod: used by m9m-backend
+  #   - (n8n does NOT use this MySQL — n8n is pinned to Postgres)
+  mysql-db:
+    image: mysql:8.0
+    container_name: m9m-mysql
+    restart: always
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_MYSQL_ROOT_PASSWORD:-Secure_Root_Pass_2026}
+      - MYSQL_DATABASE=${M9M_DB_NAME:-m9m_prod}
+      - MYSQL_USER=${DB_MYSQL_USER:-m9m_admin}
+      - MYSQL_PASSWORD=${DB_MYSQL_PASSWORD:-Secure_Db_Pass_2026}
+    volumes:
+      - mysql_data_engine:/var/lib/mysql
+      # Runs once on first container init: creates m9m_prod and grants
+      # access to MYSQL_USER. Safe to re-run; CREATE IF NOT EXISTS.
+      - ./init-mysql-db.sh:/docker-entrypoint-initdb.d/init-mysql-db.sh
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${DB_MYSQL_ROOT_PASSWORD:-Secure_Root_Pass_2026}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- n8n DATABASE (Postgres, kept for n8n) ---
+  # n8n's official Docker image only supports Postgres. Keeping a dedicated
+  # Postgres instance here is cheaper than switching n8n to MySQL (which
+  # is not supported by n8n's bundled TypeORM migrations).
+  postgres-db:
+    image: postgres:16-alpine
+    container_name: shared-postgres-engine
+    restart: always
+    environment:
+      - POSTGRES_USER=${DB_POSTGRESDB_USER:-database_admin}
+      - POSTGRES_PASSWORD=${DB_POSTGRESDB_PASSWORD:-Secure_Db_Pass_2026}
+      - POSTGRES_DB=${DB_POSTGRESDB_DATABASE:-n8n_prod}
+    volumes:
+      - postgres_data_engine:/var/lib/postgresql/data
+      # Creates the default database only; m9m does NOT use this Postgres.
+      - ./init-pg-db.sh:/docker-entrypoint-initdb.d/init-pg-db.sh
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_POSTGRESDB_USER:-database_admin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  n8n_designer_data:
+  m9m_backend_storage:
+  mysql_data_engine:
+  postgres_data_engine:

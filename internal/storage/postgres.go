@@ -107,6 +107,16 @@ func (s *PostgresStorage) initSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_executions_workflow_id ON executions(workflow_id);
 		CREATE INDEX IF NOT EXISTS idx_executions_status ON executions(status);
 		CREATE INDEX IF NOT EXISTS idx_executions_workspace ON executions(workspace_id);
+
+		-- raw_data: key-value store used by PersistentWebhookStorage and other
+		-- generic blob storage. Created in 1.x.x after raw_data access was
+		-- added without a corresponding CREATE TABLE.
+		CREATE TABLE IF NOT EXISTS raw_data (
+			key TEXT PRIMARY KEY,
+			value BYTEA NOT NULL,
+			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+		);
 	`
 
 	if _, err := s.db.Exec(schema); err != nil {

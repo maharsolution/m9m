@@ -19,7 +19,7 @@ func ensureColumn(db *sql.DB, table, column, columnDef string) error {
 		return nil
 	}
 	msg := strings.ToLower(err.Error())
-	if strings.Contains(msg, "duplicate column") || // SQLite
+	if strings.Contains(msg, "duplicate column") || // SQLite / MySQL
 		strings.Contains(msg, "already exists") || // Postgres
 		strings.Contains(msg, "duplicate key") {
 		return nil

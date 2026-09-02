@@ -67,11 +67,15 @@ func NewMySQLStorage(dsn string) (*MySQLStorage, error) {
 //   - VARCHAR(N) instead of TEXT for short columns
 //   - JSON instead of JSONB (MySQL 5.7+/8.0 JSON type)
 //   - TINYINT(1) for active flag (idiomatic in MySQL)
-//   - backtick-quoted identifiers
+//   - backtick-quoted identifiers (only `key` is a reserved word in MySQL)
 //   - TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+//   - Schema is split into individual statements because MySQL's
+//     go-sql-driver executes Exec one statement at a time when multiStatements
+//     is off (the default). Splitting also makes debugging easier when
+//     a single CREATE TABLE fails.
 func (s *MySQLStorage) initSchema() error {
-	schema := `
-		CREATE TABLE IF NOT EXISTS workflows (
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS workflows (
 			id VARCHAR(255) PRIMARY KEY,
 			workspace_id VARCHAR(255) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
 			name VARCHAR(255) NOT NULL,
@@ -84,9 +88,9 @@ func (s *MySQLStorage) initSchema() error {
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			created_by VARCHAR(255)
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
-		CREATE TABLE IF NOT EXISTS executions (
+		`CREATE TABLE IF NOT EXISTS executions (
 			id VARCHAR(255) PRIMARY KEY,
 			workflow_id VARCHAR(255) NOT NULL,
 			workspace_id VARCHAR(255) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
@@ -97,50 +101,52 @@ func (s *MySQLStorage) initSchema() error {
 			data JSON,
 			error TEXT,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
-		CREATE TABLE IF NOT EXISTS credentials (
+		`CREATE TABLE IF NOT EXISTS credentials (
 			id VARCHAR(255) PRIMARY KEY,
 			name VARCHAR(255) NOT NULL,
 			type VARCHAR(255) NOT NULL,
 			data JSON NOT NULL,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
-		CREATE TABLE IF NOT EXISTS tags (
+		`CREATE TABLE IF NOT EXISTS tags (
 			id VARCHAR(255) PRIMARY KEY,
 			name VARCHAR(255) NOT NULL UNIQUE,
 			color VARCHAR(50),
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
-		CREATE TABLE IF NOT EXISTS workspaces (
+		`CREATE TABLE IF NOT EXISTS workspaces (
 			id VARCHAR(255) PRIMARY KEY,
 			name VARCHAR(255) NOT NULL,
 			organization_id VARCHAR(255),
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
-		CREATE TABLE IF NOT EXISTS raw_data (
+		`CREATE TABLE IF NOT EXISTS raw_data (
 			` + "`key`" + ` VARCHAR(255) PRIMARY KEY,
 			value LONGBLOB NOT NULL,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
-		CREATE INDEX idx_workflows_active ON workflows(active);
-		CREATE INDEX idx_workflows_name ON workflows(name);
-		CREATE INDEX idx_workflows_workspace ON workflows(workspace_id);
-		CREATE INDEX idx_executions_workflow_id ON executions(workflow_id);
-		CREATE INDEX idx_executions_status ON executions(status);
-		CREATE INDEX idx_executions_workspace ON executions(workspace_id);
-	`
+		`CREATE INDEX idx_workflows_active ON workflows(active)`,
+		`CREATE INDEX idx_workflows_name ON workflows(name)`,
+		`CREATE INDEX idx_workflows_workspace ON workflows(workspace_id)`,
+		`CREATE INDEX idx_executions_workflow_id ON executions(workflow_id)`,
+		`CREATE INDEX idx_executions_status ON executions(status)`,
+		`CREATE INDEX idx_executions_workspace ON executions(workspace_id)`,
+	}
 
-	if _, err := s.db.Exec(schema); err != nil {
-		return err
+	for _, stmt := range statements {
+		if _, err := s.db.Exec(stmt); err != nil {
+			return fmt.Errorf("failed to execute schema statement: %w\nstatement: %s", err, stmt)
+		}
 	}
 
 	if err := ensureColumn(s.db, "workflows", "workspace_id",
