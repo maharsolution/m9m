@@ -280,11 +280,21 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		}
 	}
 
-	// Return the result from the last node in execution order
+	// Return the result from the last node in execution order that
+	// actually produced data. For workflows with branching (e.g. IF
+	// nodes), the last node in topological order may not have received
+	// any items if all items routed to a sibling branch; in that case
+	// fall back to the previous node in execution order that did
+	// produce output. This mirrors n8n's `responseMode: lastNode`
+	// semantics, which key off the last executed node, not the last
+	// node in the topological sort.
 	var finalResult []model.DataItem
-	if len(executionOrder) > 0 {
-		lastNodeName := executionOrder[len(executionOrder)-1]
-		finalResult = nodeResults[lastNodeName]
+	for i := len(executionOrder) - 1; i >= 0; i-- {
+		nodeName := executionOrder[i]
+		if data, ok := nodeResults[nodeName]; ok && len(data) > 0 {
+			finalResult = data
+			break
+		}
 	}
 
 	return &ExecutionResult{
