@@ -6,7 +6,7 @@ package transform
 import (
 	"fmt"
 	"strings"
-	
+
 	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
@@ -25,7 +25,7 @@ func NewSetNode() *SetNode {
 		Description: "Sets values on items",
 		Category:    "Data Transformation",
 	}
-	
+
 	return &SetNode{
 		BaseNode:  base.NewBaseNode(description),
 		evaluator: expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
@@ -37,41 +37,65 @@ func (s *SetNode) Description() base.NodeDescription {
 	return s.BaseNode.Description()
 }
 
+// extractAssignments accepts both the legacy flat shape and the newer
+// n8n typeVersion>=3 nested shape:
+//
+//	flat:    parameters.assignments = [{name, value, ...}, ...]
+//	nested:  parameters.assignments = { assignments: [{name, value, ...}, ...] }
+//
+// It returns the raw []interface{} of assignment maps. A nil result means
+// "no assignments found" — callers should decide whether that is an error
+// (ValidateParameters) or a no-op (Execute with empty list).
+func extractAssignments(params map[string]interface{}) []interface{} {
+	raw, ok := params["assignments"]
+	if !ok {
+		return nil
+	}
+	switch v := raw.(type) {
+	case []interface{}:
+		return v
+	case map[string]interface{}:
+		// Newer n8n (typeVersion 3+) wraps assignments under another
+		// `assignments` key inside the parameters object.
+		if nested, ok := v["assignments"]; ok {
+			if arr, ok := nested.([]interface{}); ok {
+				return arr
+			}
+		}
+		return nil
+	default:
+		return nil
+	}
+}
+
 // ValidateParameters validates Set node parameters
 func (s *SetNode) ValidateParameters(params map[string]interface{}) error {
 	if params == nil {
 		return s.CreateError("parameters cannot be nil", nil)
 	}
-	
-	// Check if assignments exist
-	assignments, ok := params["assignments"]
-	if !ok {
-		return s.CreateError("assignments parameter is required", nil)
+
+	assignmentsArr := extractAssignments(params)
+	if assignmentsArr == nil {
+		return s.CreateError("assignments must be an array (or an object with an 'assignments' array)", nil)
 	}
-	
-	// Check if assignments is an array
-	assignmentsArr, ok := assignments.([]interface{})
-	if !ok {
-		return s.CreateError("assignments must be an array", nil)
-	}
-	
+
 	// Validate each assignment
 	for i, assignment := range assignmentsArr {
 		assignmentMap, ok := assignment.(map[string]interface{})
 		if !ok {
 			return s.CreateError(fmt.Sprintf("assignment %d must be an object", i), nil)
 		}
-		
+
 		// Check required fields
 		if _, ok := assignmentMap["name"]; !ok {
 			return s.CreateError(fmt.Sprintf("assignment %d missing 'name' field", i), nil)
 		}
-		
+
 		if _, ok := assignmentMap["value"]; !ok {
 			return s.CreateError(fmt.Sprintf("assignment %d missing 'value' field", i), nil)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -81,10 +105,10 @@ func (s *SetNode) Execute(inputData []model.DataItem, nodeParams map[string]inte
 		return []model.DataItem{}, nil
 	}
 
-	// Get assignments
-	assignments, ok := nodeParams["assignments"].([]interface{})
-	if !ok {
-		return nil, s.CreateError("assignments parameter is required", nil)
+	// Get assignments — accept both flat and nested shapes.
+	assignments := extractAssignments(nodeParams)
+	if assignments == nil {
+		return nil, s.CreateError("assignments must be an array (or an object with an 'assignments' array)", nil)
 	}
 
 	// Process each input data item
@@ -94,9 +118,9 @@ func (s *SetNode) Execute(inputData []model.DataItem, nodeParams map[string]inte
 		// Create expression context for current item
 		context := &expressions.ExpressionContext{
 			ActiveNodeName:      "Set",
-			RunIndex:           0,
-			ItemIndex:          0,
-			Mode:               expressions.ModeManual,
+			RunIndex:            0,
+			ItemIndex:           0,
+			Mode:                expressions.ModeManual,
 			ConnectionInputData: []model.DataItem{item},
 			Workflow: &model.Workflow{
 				Name: "Set Processing",
@@ -115,7 +139,7 @@ func (s *SetNode) Execute(inputData []model.DataItem, nodeParams map[string]inte
 		for k, v := range item.JSON {
 			newItem.JSON[k] = v
 		}
-		
+
 		// Apply each assignment
 		for _, assignment := range assignments {
 			assignmentMap, ok := assignment.(map[string]interface{})
@@ -162,7 +186,7 @@ func (s *SetNode) Execute(inputData []model.DataItem, nodeParams map[string]inte
 				newItem.JSON[name] = value
 			}
 		}
-		
+
 		// Copy binary data if present
 		if item.Binary != nil {
 			newItem.Binary = make(map[string]model.BinaryData)
@@ -170,14 +194,14 @@ func (s *SetNode) Execute(inputData []model.DataItem, nodeParams map[string]inte
 				newItem.Binary[k] = v
 			}
 		}
-		
+
 		// Copy paired item data if present
 		if item.PairedItem != nil {
 			newItem.PairedItem = item.PairedItem
 		}
-		
+
 		result[i] = newItem
 	}
-	
+
 	return result, nil
 }

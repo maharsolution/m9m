@@ -238,3 +238,91 @@ func TestSetNodeExecuteWithMultipleItems(t *testing.T) {
 func TestSetNodeImplementsNodeExecutor(t *testing.T) {
 	var _ base.NodeExecutor = (*SetNode)(nil)
 }
+
+// TestSetNodeValidateNestedAssignments covers the newer n8n typeVersion>=3
+// parameter shape where `assignments` is wrapped under another `assignments`
+// key (i.e. parameters.assignments.assignments[]). The Set node must accept
+// this in addition to the legacy flat shape.
+func TestSetNodeValidateNestedAssignments(t *testing.T) {
+	node := NewSetNode()
+
+	// Nested shape: parameters.assignments = { assignments: [...] }
+	nestedParams := map[string]interface{}{
+		"assignments": map[string]interface{}{
+			"assignments": []interface{}{
+				map[string]interface{}{
+					"id":    "abc-123",
+					"name":  "variableA",
+					"type":  "number",
+					"value": "={{ $json.body.varA }}",
+				},
+				map[string]interface{}{
+					"id":    "def-456",
+					"name":  "variableB",
+					"type":  "number",
+					"value": "={{ $json.body.varB }}",
+				},
+			},
+		},
+	}
+	if err := node.ValidateParameters(nestedParams); err != nil {
+		t.Errorf("Expected no error with nested assignments, got %v", err)
+	}
+
+	// Nested shape with empty inner array is valid (no-op at runtime).
+	emptyNested := map[string]interface{}{
+		"assignments": map[string]interface{}{
+			"assignments": []interface{}{},
+		},
+	}
+	if err := node.ValidateParameters(emptyNested); err != nil {
+		t.Errorf("Expected no error with empty nested assignments, got %v", err)
+	}
+
+	// Nested shape where the inner `assignments` key is missing/wrong type
+	// should be reported as an error.
+	badNested := map[string]interface{}{
+		"assignments": map[string]interface{}{
+			"not_assignments": []interface{}{},
+		},
+	}
+	if err := node.ValidateParameters(badNested); err == nil {
+		t.Error("Expected error for nested object without 'assignments' key")
+	}
+}
+
+// TestSetNodeExecuteNestedAssignments verifies the Execute path also
+// unwraps the nested shape correctly so workflows imported from newer
+// n8n (typeVersion 3+) run end-to-end.
+func TestSetNodeExecuteNestedAssignments(t *testing.T) {
+	node := NewSetNode()
+
+	inputData := []model.DataItem{
+		{JSON: map[string]interface{}{"existing": "value"}},
+	}
+
+	nestedParams := map[string]interface{}{
+		"assignments": map[string]interface{}{
+			"assignments": []interface{}{
+				map[string]interface{}{
+					"name":  "added",
+					"value": "hello",
+				},
+			},
+		},
+	}
+
+	result, err := node.Execute(inputData, nestedParams)
+	if err != nil {
+		t.Fatalf("Unexpected error with nested assignments: %v", err)
+	}
+	if len(result) != 1 {
+		t.Fatalf("Expected 1 result, got %d", len(result))
+	}
+	if result[0].JSON["existing"] != "value" {
+		t.Errorf("Expected existing field preserved, got %v", result[0].JSON["existing"])
+	}
+	if result[0].JSON["added"] != "hello" {
+		t.Errorf("Expected added='hello', got %v", result[0].JSON["added"])
+	}
+}

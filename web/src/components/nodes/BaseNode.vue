@@ -77,7 +77,9 @@ const nodeTypeName = computed(() => {
       id="input-0"
       type="target"
       :position="Position.Left"
-      class="connection-handle !-left-1.5"
+      :connectable="true"
+      :is-connectable="true"
+      class="connection-handle connection-handle--input"
     />
 
     <!-- Node Content -->
@@ -117,7 +119,9 @@ const nodeTypeName = computed(() => {
       id="output-0"
       type="source"
       :position="Position.Right"
-      class="connection-handle !-right-1.5"
+      :connectable="true"
+      :is-connectable="true"
+      class="connection-handle connection-handle--output"
     />
   </div>
 </template>
@@ -128,6 +132,8 @@ const nodeTypeName = computed(() => {
   @apply border-2 border-slate-200 dark:border-slate-600;
   @apply shadow-md;
   @apply transition-all duration-150;
+  /* Make sure handle hit areas are not clipped by rounded corners. */
+  overflow: visible;
 }
 
 .workflow-node:hover {
@@ -139,14 +145,58 @@ const nodeTypeName = computed(() => {
   @apply border-primary-500 dark:border-primary-400;
 }
 
+/*
+ * Connection handles sit on the left/right edges of the node. The default
+ * 12x12 visual is enlarged to a 14x14 dot with a 28x28 transparent hit
+ * area (via ::before) so users can grab the handle without pixel-perfect
+ * aim. The hit area does not shift the visual dot.
+ */
 .connection-handle {
-  @apply w-3 h-3 rounded-full;
+  @apply !w-3.5 !h-3.5 rounded-full;
   @apply !bg-slate-400 dark:!bg-slate-500;
   @apply !border-2 !border-white dark:!border-slate-800;
   @apply transition-all duration-150;
+  z-index: 2;
+  position: absolute;
+}
+
+.connection-handle::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  background: transparent;
+  z-index: 1;
+  /*
+   * CRITICAL: without `pointer-events: none`, this enlarged hit target
+   * swallows the pointerdown event before it reaches the Vue Flow Handle,
+   * so drag-to-connect never starts. The pseudo-element must remain
+   * visually present for the larger hit area but transparent to pointer
+   * events — the parent Handle (which is 14x14) receives them instead.
+   */
+  pointer-events: none;
+}
+
+.connection-handle--input {
+  left: -7px !important;
+}
+
+.connection-handle--output {
+  right: -7px !important;
 }
 
 .connection-handle:hover {
   @apply !bg-primary-500 scale-125;
+  z-index: 3;
+}
+
+.vue-flow__handle-connecting .connection-handle,
+.connection-handle.vue-flow__handle-hot {
+  @apply !bg-primary-500;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25);
 }
 </style>

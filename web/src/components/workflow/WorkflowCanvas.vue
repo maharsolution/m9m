@@ -134,6 +134,8 @@ const getMinimapNodeColor = (node: Node) => {
       :max-zoom="2"
       :snap-to-grid="true"
       :snap-grid="[20, 20]"
+      :connection-radius="30"
+      :elevate-edges-on-select="true"
       fit-view-on-init
       class="bg-slate-50 dark:bg-slate-900"
     >
