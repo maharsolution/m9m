@@ -51,6 +51,48 @@ func (h *Handler) HandleTestWebhook(w http.ResponseWriter, r *http.Request) {
 	h.handleWebhookRequest(w, r, true)
 }
 
+// Webhook error response wire shape — mirrors n8n's webhook surface so
+// callers can parse m9m errors with the same code they already use for
+// n8n. n8n emits three keys for its webhook 404:
+//
+//	{"code":404,"message":"...","hint":"..."}
+//
+// Verified live against http://187.77.113.218:5678/webhook/<missing>
+// 2026-09-03. We use the same keys (and key order) for 401/400 so
+// callers that only special-case the `code` field keep working, and the
+// `hint` field can carry actionable remediation text without forcing a
+// new schema on the wire.
+type webhookErrorBody struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Hint    string `json:"hint"`
+}
+
+// writeJSONError serialises a {code,message,hint} error body and writes
+// it with the requested HTTP status. It deliberately does NOT call
+// http.Error (which writes text/plain) so callers always receive a
+// JSON-parseable error body — matching n8n's webhook surface.
+//
+// The body is written with json.Marshal (not json.Encoder.Encode) so
+// the trailing newline that Encoder appends does not break byte-equal
+// diffing with n8n's wire output.
+func writeJSONError(w http.ResponseWriter, status int, body webhookErrorBody) {
+	data, err := json.Marshal(body)
+	if err != nil {
+		// Fall back to a minimal valid JSON body so the caller always
+		// gets parseable output even if marshalling fails (it should
+		// never fail for this struct shape, but defensive fallback is
+		// cheap).
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(`{"code":500,"message":"Internal error"}`))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, _ = w.Write(data)
+}
+
 // handleWebhookRequest processes a webhook request (test or production)
 func (h *Handler) handleWebhookRequest(w http.ResponseWriter, r *http.Request, isTest bool) {
 	// Extract path from URL
@@ -63,14 +105,27 @@ func (h *Handler) handleWebhookRequest(w http.ResponseWriter, r *http.Request, i
 	webhook, err := h.manager.GetWebhookByPath(path, r.Method, isTest)
 	if err != nil {
 		log.Printf("⚠️  Webhook not found: %s %s (test=%v)", r.Method, path, isTest)
-		http.Error(w, fmt.Sprintf("Webhook not found: %s", path), http.StatusNotFound)
+		writeJSONError(w, http.StatusNotFound, webhookErrorBody{
+			Code: http.StatusNotFound,
+			Message: fmt.Sprintf("The requested webhook \"%s %s\" is not registered.",
+				r.Method, strings.TrimPrefix(path, "/")),
+			Hint: "The workflow must be active for a production URL to run successfully. " +
+				"You can activate the workflow using the toggle in the top-right of the editor. " +
+				"Note that unlike test URL calls, production URL calls aren't shown on the canvas " +
+				"(only in the executions list)",
+		})
 		return
 	}
 
 	// Authenticate request
 	if err := h.authenticateRequest(r, webhook); err != nil {
 		log.Printf("⚠️  Authentication failed for webhook %s: %v", webhook.ID, err)
-		http.Error(w, "Authentication failed", http.StatusUnauthorized)
+		writeJSONError(w, http.StatusUnauthorized, webhookErrorBody{
+			Code:    http.StatusUnauthorized,
+			Message: "Authentication failed",
+			Hint:    "Verify the credentials configured on the Webhook node match what this " +
+				"request is sending (Basic auth header, X-API-Key header, or custom header auth).",
+		})
 		return
 	}
 
@@ -78,7 +133,13 @@ func (h *Handler) handleWebhookRequest(w http.ResponseWriter, r *http.Request, i
 	webhookRequest, err := h.parseRequest(r)
 	if err != nil {
 		log.Printf("⚠️  Failed to parse webhook request: %v", err)
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, webhookErrorBody{
+			Code:    http.StatusBadRequest,
+			Message: "Invalid request",
+			Hint:    "Check that the request body matches the expected Content-Type and is " +
+				"well-formed (valid JSON for application/json, valid URL-encoded form for " +
+				"application/x-www-form-urlencoded).",
+		})
 		return
 	}
 
