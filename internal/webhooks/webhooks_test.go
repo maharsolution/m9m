@@ -907,6 +907,186 @@ func TestWebhookManager_prepareResponse_CustomHeaders(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// responseMode: responseNode (parity gap #B)
+// ---------------------------------------------------------------------------
+
+// makeResponseNodeWorkflow builds a minimal workflow with a Webhook
+// trigger → Set → RespondToWebhook chain. The trigger's connection
+// graph is what `findRespondToWebhookNode` walks; the RespondToWebhook
+// node name is what the engine's NodeOutputs map is keyed under.
+func makeResponseNodeWorkflow() *model.Workflow {
+	return &model.Workflow{
+		ID:     "wf-response-node",
+		Name:   "response-node-test",
+		Active: true,
+		Nodes: []model.Node{
+			{
+				Name: "Webhook",
+				Type: "n8n-nodes-base.webhook",
+				Parameters: map[string]interface{}{
+					"path":         "response-node",
+					"httpMethod":   "POST",
+					"responseMode": "responseNode",
+				},
+			},
+			{
+				Name:       "Set",
+				Type:       "n8n-nodes-base.set",
+				Parameters: map[string]interface{}{},
+			},
+			{
+				Name:       "RespondToWebhook",
+				Type:       "n8n-nodes-base.respondToWebhook",
+				Parameters: map[string]interface{}{"respondWith": "firstIncomingItem"},
+			},
+		},
+		Connections: map[string]model.Connections{
+			"Webhook": {
+				Main: [][]model.Connection{
+					{{Node: "Set", Type: "main", Index: 0}},
+				},
+			},
+			"Set": {
+				Main: [][]model.Connection{
+					{{Node: "RespondToWebhook", Type: "main", Index: 0}},
+				},
+			},
+		},
+	}
+}
+
+func TestWebhookManager_prepareResponse_ResponseNode_FromNodeOutputs(t *testing.T) {
+	mgr, _, _ := newTestManager()
+
+	wh := &Webhook{
+		ResponseMode: "responseNode",
+		ResponseData: "firstEntryJson",
+	}
+
+	// Pretend the engine ran the workflow and the Respond-to-Webhook
+	// node produced `{ "myNewField": 1, "headers": {...} }`. The
+	// manager must return that exact body — NOT the last-node output.
+	result := &engine.ExecutionResult{
+		Data: []model.DataItem{
+			{JSON: map[string]interface{}{"wrong": "lastNode-output"}},
+		},
+		NodeOutputs: map[string][]model.DataItem{
+			"Set": {
+				{JSON: map[string]interface{}{"set": "ran"}},
+			},
+			"RespondToWebhook": {
+				{JSON: map[string]interface{}{
+					"myNewField": float64(1),
+					"headers":    map[string]interface{}{"x-test": "ok"},
+				}},
+			},
+		},
+	}
+
+	wf := makeResponseNodeWorkflow()
+	resp := mgr.prepareResponseWithContext(wh, result, wf, "Webhook")
+
+	body, ok := resp.Body.(map[string]interface{})
+	require.True(t, ok, "responseNode body should be a bare JSON object")
+	assert.Equal(t, float64(1), body["myNewField"],
+		"responseNode must surface the Respond-to-Webhook node output, "+
+			"NOT the last-node output")
+	headers, ok := body["headers"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "ok", headers["x-test"])
+	_, hasWrong := body["wrong"]
+	assert.False(t, hasWrong, "responseNode must NOT include the last-node body")
+}
+
+func TestWebhookManager_prepareResponse_ResponseNode_AllEntries(t *testing.T) {
+	mgr, _, _ := newTestManager()
+
+	wh := &Webhook{
+		ResponseMode: "responseNode",
+		ResponseData: "allEntries",
+	}
+
+	result := &engine.ExecutionResult{
+		NodeOutputs: map[string][]model.DataItem{
+			"RespondToWebhook": {
+				{JSON: map[string]interface{}{"a": 1.0}},
+				{JSON: map[string]interface{}{"b": 2.0}},
+			},
+		},
+	}
+
+	resp := mgr.prepareResponseWithContext(wh, result, makeResponseNodeWorkflow(), "Webhook")
+	body, ok := resp.Body.([]map[string]interface{})
+	require.True(t, ok, "responseNode+allEntries body should be a JSON array")
+	assert.Len(t, body, 2)
+}
+
+func TestWebhookManager_prepareResponse_ResponseNode_FallsBackWithoutNode(t *testing.T) {
+	mgr, _, _ := newTestManager()
+
+	// responseMode=responseNode but the workflow has NO Respond-to-
+	// Webhook node and NO per-node tracking. Manager must fall back
+	// to the last-node output (`Data[0]`) so callers don't see a
+	// 500 — the alternative (empty body) would be a wire-shape
+	// regression vs n8n.
+	wh := &Webhook{ResponseMode: "responseNode", ResponseData: "firstEntryJson"}
+	result := &engine.ExecutionResult{
+		Data: []model.DataItem{{JSON: map[string]interface{}{"fallback": true}}},
+	}
+
+	resp := mgr.prepareResponseWithContext(wh, result, &model.Workflow{
+		Nodes: []model.Node{
+			{Name: "Webhook", Type: "n8n-nodes-base.webhook"},
+			{Name: "Set", Type: "n8n-nodes-base.set"},
+		},
+		Connections: map[string]model.Connections{
+			"Webhook": {Main: [][]model.Connection{{{Node: "Set", Type: "main", Index: 0}}}},
+		},
+	}, "Webhook")
+
+	body, ok := resp.Body.(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, true, body["fallback"])
+}
+
+func TestWebhookManager_prepareResponse_ResponseNode_NoData(t *testing.T) {
+	mgr, _, _ := newTestManager()
+
+	wh := &Webhook{ResponseMode: "responseNode", ResponseData: "noData"}
+	result := &engine.ExecutionResult{
+		Data: []model.DataItem{{JSON: map[string]interface{}{"ignored": true}}},
+		NodeOutputs: map[string][]model.DataItem{
+			"RespondToWebhook": {{JSON: map[string]interface{}{"would-be": "echoed"}}},
+		},
+	}
+
+	resp := mgr.prepareResponseWithContext(wh, result, makeResponseNodeWorkflow(), "Webhook")
+	body, ok := resp.Body.(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "success", body["message"])
+}
+
+func TestWebhookManager_findRespondToWebhookNode_TriggerRenamed(t *testing.T) {
+	// Trigger was renamed and the workflow's connection map dropped
+	// the entry for it (a real-world edge case observed in some
+	// exports). The flat-node scan fallback must still find the
+	// Respond-to-Webhook node.
+	wf := &model.Workflow{
+		Nodes: []model.Node{
+			{Name: "Renamed Trigger", Type: "n8n-nodes-base.webhook"},
+			{Name: "Responder", Type: "n8n-nodes-base.respondToWebhook"},
+		},
+		Connections: map[string]model.Connections{},
+	}
+
+	got := findRespondToWebhookNode(wf, "Renamed Trigger")
+	assert.Equal(t, "", got, "BFS should find nothing when connections map is empty")
+
+	gotByType := findRespondToWebhookNodeByType(wf)
+	assert.Equal(t, "Responder", gotByType, "flat scan must pick up Respond-to-Webhook by node type")
+}
+
+// ---------------------------------------------------------------------------
 // prepareInputData
 // ---------------------------------------------------------------------------
 

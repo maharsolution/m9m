@@ -20,6 +20,27 @@ import (
 type ExecutionResult struct {
 	Data  []model.DataItem `json:"data"`
 	Error error            `json:"error,omitempty"`
+
+	// NodeOutputs carries the per-node output produced during this
+	// execution. The map is keyed by node name (the same string used
+	// in `workflow.Connections`) and the value is the exact slice of
+	// DataItems that node emitted at the end of its run (i.e. after
+	// routing-metadata stripping).
+	//
+	// This is what powers `responseMode: responseNode` on the Webhook
+	// trigger — when a workflow ships a "Respond to Webhook" node,
+	// the webhook manager reads the respond-to-webhook node's output
+	// out of this map and returns it verbatim instead of returning
+	// the last-node output. Without this map the manager would have
+	// to re-traverse `workflow.Connections` and re-execute the
+	// respond-to-webhook lookup, which would diverge from n8n's
+	// wire shape.
+	//
+	// For workflows where per-node tracking wasn't populated (older
+	// engine paths, the streaming/parallel engines, or `Reliable`
+	// engine) the map is nil and consumers must fall back to the
+	// legacy `Data` field (the last-node output).
+	NodeOutputs map[string][]model.DataItem `json:"nodeOutputs,omitempty"`
 }
 
 // NodeRegistry maps node types to their executors
@@ -299,6 +320,14 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 
 	return &ExecutionResult{
 		Data: finalResult,
+		// Publish the per-node output map so external callers (the
+		// webhook manager in particular) can implement
+		// `responseMode: responseNode` by reading the Respond-to-
+		// Webhook node's output directly. Without this the manager
+		// would only have access to `finalResult`, which is the
+		// last-node output and is the wrong shape for responseNode
+		// workflows.
+		NodeOutputs: nodeResults,
 	}, nil
 }
 

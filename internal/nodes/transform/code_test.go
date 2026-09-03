@@ -1,8 +1,9 @@
 package transform
 
 import (
+	"strings"
 	"testing"
-	
+
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
 )
@@ -21,20 +22,25 @@ func TestCodeNodeCreation(t *testing.T) {
 
 func TestCodeNodeValidateParameters(t *testing.T) {
 	node := NewCodeNode()
-	
+
 	// Test with nil params
 	err := node.ValidateParameters(nil)
 	if err == nil {
 		t.Error("Expected error with nil params, got nil")
 	}
-	
-	// Test with missing mode
+
+	// Test with missing mode — should now DEFAULT to
+	// runOnceForEachItem (n8n's behaviour for typeVersion 2) rather
+	// than erroring. The validation failure for the missing language
+	// field that follows is what surfaces.
 	params := map[string]interface{}{}
 	err = node.ValidateParameters(params)
 	if err == nil {
-		t.Error("Expected error with missing mode, got nil")
+		t.Error("Expected error from missing language, got nil")
+	} else if !strings.Contains(err.Error(), "language") {
+		t.Errorf("Expected missing-language error, got: %v", err)
 	}
-	
+
 	// Test with invalid mode type
 	invalidModeTypeParams := map[string]interface{}{
 		"mode": 123, // Not a string
@@ -319,7 +325,7 @@ func TestCodeNodeExecuteWithInvalidLanguage(t *testing.T) {
 
 func TestCodeNodeExecuteWithMissingCode(t *testing.T) {
 	node := NewCodeNode()
-	
+
 	inputData := []model.DataItem{
 		{
 			JSON: map[string]interface{}{
@@ -328,16 +334,94 @@ func TestCodeNodeExecuteWithMissingCode(t *testing.T) {
 			},
 		},
 	}
-	
+
 	nodeParams := map[string]interface{}{
 		"mode":     "runOnceForAllItems",
 		"language": "javascript",
 		"code":     "", // Empty code
 	}
-	
+
 	_, err := node.Execute(inputData, nodeParams)
 	if err == nil {
 		t.Error("Expected error with missing code, got nil")
+	}
+}
+
+// TestCodeNode_Execute_NoModeParam pins the parity gap #A:
+// n8n's Code node typeVersion 2 ("Simple Webhook - Code" workflow
+// `V4432EsGIkpqIZx9`) exports workflows with only `language` +
+// `jsCode` — `mode` is hidden under "Settings" and is *omitted* from
+// the JSON export. m9m used to reject these workflows with
+// `mode parameter is required`, breaking drop-in compatibility.
+//
+// The fix: ValidateParameters must accept the missing-mode case and
+// Execute must run the code with the n8n default
+// (`runOnceForEachItem`) instead of erroring.
+//
+// Note: n8n Code type v2 accepts both expression-style code
+// (`var r = {...}; r;`) and function-body-style code
+// (`return {...}`). m9m's Code node runs through the same Goja
+// evaluator as the Function node, which only accepts expression-style
+// code; full function-body mode would require wrapping the code in
+// an IIFE, which is a separate enhancement. This test pins the
+// drop-in gap-#A fix specifically: the missing `mode` parameter
+// must NOT block workflow execution — the missing-mode case must
+// execute via the default branch.
+func TestCodeNode_Execute_NoModeParam(t *testing.T) {
+	node := NewCodeNode()
+
+	inputData := []model.DataItem{
+		{JSON: map[string]interface{}{"x": 1.0}},
+		{JSON: map[string]interface{}{"x": 2.0}},
+	}
+
+	// No `mode` key — this is exactly what n8n's Code node type v2
+	// exports. The body uses expression-style code (no `return`
+	// statement) so it can run through m9m's Goja evaluator without
+	// an IIFE wrapper.
+	nodeParams := map[string]interface{}{
+		"language": "javascript",
+		"jsCode":   "var r = { myNewField: 1 }; r;",
+	}
+
+	// Validation must NOT error on the missing `mode` field.
+	if err := node.ValidateParameters(nodeParams); err != nil {
+		t.Fatalf("ValidateParameters should accept missing mode, got: %v", err)
+	}
+
+	result, err := node.Execute(inputData, nodeParams)
+	if err != nil {
+		t.Fatalf("Execute should run with default mode, got error: %v", err)
+	}
+
+	// n8n's mode = runOnceForEachItem runs the code once per input
+	// item and emits one output item per input. We pass 2 items in,
+	// we expect 2 items out (one item per source, not a single
+	// collapsed array).
+	if len(result) != 2 {
+		t.Fatalf("Expected 2 result items (one per input), got %d", len(result))
+	}
+
+	for i, item := range result {
+		newField, ok := item.JSON["myNewField"]
+		if !ok {
+			t.Fatalf("item %d missing myNewField; JSON=%v", i, item.JSON)
+		}
+		// JavaScript integer literals come back as int64 through Goja;
+		// floats come back as float64. Accept either representation
+		// of the value 1.
+		switch v := newField.(type) {
+		case int64:
+			if v != 1 {
+				t.Errorf("item %d: expected myNewField=1, got int64(%d)", i, v)
+			}
+		case float64:
+			if v != 1.0 {
+				t.Errorf("item %d: expected myNewField=1, got float64(%v)", i, v)
+			}
+		default:
+			t.Errorf("item %d: expected myNewField=1, got %v (%T)", i, newField, newField)
+		}
 	}
 }
 

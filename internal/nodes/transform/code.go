@@ -34,34 +34,51 @@ func (c *CodeNode) Description() base.NodeDescription {
 	return c.BaseNode.Description()
 }
 
-// ValidateParameters validates Code node parameters
+// DefaultCodeMode is the n8n default for the Code node's `mode`
+// parameter when the workflow export omits it. n8n's Code node type v2
+// (the version used by workflow `V4432EsGIkpqIZx9` — "Simple Webhook -
+// Code") exports only `jsCode` and never emits an explicit `mode`,
+// because the UI hides the toggle behind "Settings". When m9m rejects
+// the workflow with `mode parameter is required`, it diverges from
+// n8n's drop-in compatibility promise. Mirroring n8n's default keeps
+// legacy / hand-edited exports working without forcing the operator
+// to re-publish from the n8n editor.
+const DefaultCodeMode = "runOnceForEachItem"
+
+// ValidateParameters validates Code node parameters.
+//
+// `mode` is optional — when missing or empty it defaults to
+// `DefaultCodeMode` (n8n's behaviour for typeVersion 2 Code nodes
+// that omit the parameter). This mirrors the Switch node's
+// `conditions`/`rules` alias pattern and avoids breaking older n8n
+// workflow exports that were authored before the mode toggle was
+// promoted to a top-level parameter.
 func (c *CodeNode) ValidateParameters(params map[string]interface{}) error {
 	if params == nil {
 		return c.CreateError("parameters cannot be nil", nil)
 	}
-	
-	// Check if mode exists
-	mode, ok := params["mode"]
-	if !ok {
-		return c.CreateError("mode parameter is required", nil)
+
+	// `mode` is optional — default to n8n's behaviour when missing.
+	modeStr := DefaultCodeMode
+	if rawMode, ok := params["mode"]; ok && rawMode != nil {
+		s, ok := rawMode.(string)
+		if !ok {
+			return c.CreateError("mode must be a string", nil)
+		}
+		if s != "" {
+			modeStr = s
+		}
 	}
-	
-	// Check if mode is a string
-	modeStr, ok := mode.(string)
-	if !ok {
-		return c.CreateError("mode must be a string", nil)
-	}
-	
-	// Validate mode
+
 	validModes := map[string]bool{
 		"runOnceForAllItems": true,
 		"runOnceForEachItem": true,
 	}
-	
+
 	if !validModes[modeStr] {
 		return c.CreateError(fmt.Sprintf("invalid mode: %s", modeStr), nil)
 	}
-	
+
 	// Check if language exists
 	language, ok := params["language"]
 	if !ok {
@@ -85,18 +102,73 @@ func (c *CodeNode) ValidateParameters(params map[string]interface{}) error {
 		return c.CreateError(fmt.Sprintf("invalid language: %s", languageStr), nil)
 	}
 	
-	// Check if code exists
-	code, ok := params["code"]
-	if !ok {
-		return c.CreateError("code parameter is required", nil)
+	// Check if code exists. n8n's Code node type v2 uses
+	// language-specific parameter names (`jsCode`, `pythonCode`,
+	// `pythonCode`); legacy / hand-edited exports use the generic
+	// `code` key. Accept either — pick the first one present, in
+	// language-specific order so e.g. `jsCode` wins for a JS Code
+	// node even if `code` is also accidentally set.
+	if code := extractCodeParam(params, languageStr); code == "" {
+		return c.CreateError(
+			fmt.Sprintf("%s parameter is required", languageCodeKey(languageStr)), nil,
+		)
 	}
-	
-	// Check if code is a string
-	if _, ok := code.(string); !ok {
-		return c.CreateError("code must be a string", nil)
+	// The two accepted keys must both be string-typed when present —
+	// `extractCodeParam` already coerced a present value into a
+	// string, but a non-string value (e.g. an integer `jsCode`) must
+	// be rejected at validation time, not silently dropped.
+	langKey := languageCodeKey(languageStr)
+	if v, present := params[langKey]; present {
+		if _, ok := v.(string); !ok {
+			return c.CreateError(fmt.Sprintf("%s must be a string", langKey), nil)
+		}
 	}
-	
+	if v, present := params["code"]; present {
+		if _, ok := v.(string); !ok {
+			return c.CreateError("code must be a string", nil)
+		}
+	}
+
 	return nil
+}
+
+// extractCodeParam pulls the user-supplied code out of the parameter
+// map, accepting the language-specific keys n8n's Code node type v2
+// emits (`jsCode`, `pythonCode`) alongside the legacy generic `code`
+// key. Returns "" if none of the recognised keys are set.
+func extractCodeParam(params map[string]interface{}, language string) string {
+	if s, ok := params[languageCodeKey(language)].(string); ok && s != "" {
+		return s
+	}
+	if s, ok := params["code"].(string); ok {
+		return s
+	}
+	return ""
+}
+
+// languageCodeKey returns the n8n parameter name n8n uses for the
+// given language's source code on the Code node type v2.
+//
+//	javascript -> "jsCode"
+//	python     -> "pythonCode"
+//	go         -> "goCode"
+//	<other>    -> "code"   (legacy fallback)
+//
+// n8n splits the source-code parameter per language on the newer Code
+// node type so the UI can show a typed editor (JS, Py, Go). m9m keeps
+// the same key naming for parity so workflow exports round-trip
+// without manual rewrites.
+func languageCodeKey(language string) string {
+	switch language {
+	case "javascript":
+		return "jsCode"
+	case "python":
+		return "pythonCode"
+	case "go":
+		return "goCode"
+	default:
+		return "code"
+	}
 }
 
 // Execute processes the Code node operation
@@ -105,14 +177,27 @@ func (c *CodeNode) Execute(inputData []model.DataItem, nodeParams map[string]int
 		return []model.DataItem{}, nil
 	}
 	
-	// Get parameters from node parameters
-	mode := c.GetStringParameter(nodeParams, "mode", "runOnceForAllItems")
+	// Get parameters from node parameters. Match n8n's default
+	// (`runOnceForEachItem`) so workflows that omit `mode` (e.g.
+	// Code typeVersion 2 with only `jsCode` set) execute the same
+	// way they do on n8n. ValidateParameters applies the same
+	// default at validation time, so the value passed to
+	// executeJavaScript is always either an explicit user choice
+	// or this default.
+	mode := c.GetStringParameter(nodeParams, "mode", DefaultCodeMode)
 	language := c.GetStringParameter(nodeParams, "language", "javascript")
-	code := c.GetStringParameter(nodeParams, "code", "")
-	
+
+	// Accept n8n's per-language key (`jsCode`, `pythonCode`, `goCode`)
+	// as well as the legacy generic `code` key. The validation layer
+	// validates the same lookup, so by the time we reach Execute the
+	// code is guaranteed to be a non-empty string.
+	code := extractCodeParam(nodeParams, language)
+
 	// Validate parameters
 	if code == "" {
-		return nil, c.CreateError("code parameter cannot be empty", nil)
+		return nil, c.CreateError(
+			fmt.Sprintf("%s parameter cannot be empty", languageCodeKey(language)), nil,
+		)
 	}
 	
 	// Execute code based on language

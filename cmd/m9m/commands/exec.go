@@ -353,6 +353,7 @@ func RegisterAllNodes(eng engine.WorkflowEngine) {
 
 	// Additional trigger nodes
 	eng.RegisterNodeExecutor("n8n-nodes-base.errorTrigger", trigger.NewErrorTriggerNode())
+	eng.RegisterNodeExecutor("n8n-nodes-base.respondToWebhook", trigger.NewRespondToWebhookNode())
 
 	// Additional messaging nodes
 	eng.RegisterNodeExecutor("n8n-nodes-base.twilio", messaging.NewTwilioNode())

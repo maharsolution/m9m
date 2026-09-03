@@ -195,8 +195,15 @@ func (m *WebhookManager) ExecuteWebhook(webhook *Webhook, request *WebhookReques
 
 	execution.Status = "success"
 
-	// Prepare response based on webhook configuration
-	response := m.prepareResponse(webhook, result)
+	// Prepare response based on webhook configuration. The full-fat
+	// variant receives the workflow + trigger node so it can honour
+	// `responseMode: responseNode` by reading the Respond-to-Webhook
+	// node's output out of `result.NodeOutputs`. Without the
+	// workflow + trigger context the manager would fall back to
+	// `lastNode` semantics and respond with whatever the last
+	// executed node produced — diverging from n8n's wire shape for
+	// the `webhook_code` workflow (`V4432EsGIkpqIZx9`).
+	response := m.prepareResponseWithContext(webhook, result, workflow, webhook.NodeID)
 	execution.Response = response
 
 	// Save execution record
@@ -391,6 +398,131 @@ func resolveRequestWebhookURL(request *WebhookRequest) string {
 }
 
 func (m *WebhookManager) prepareResponse(webhook *Webhook, result *engine.ExecutionResult) *WebhookResponse {
+	return m.prepareResponseWithContext(webhook, result, nil, "")
+}
+
+// respondToWebhookNodeType is the n8n node-type identifier m9m
+// registers the "Respond to Webhook" trigger under. Workflows that
+// opt into `responseMode: responseNode` on the Webhook trigger must
+// include exactly one node of this type on the webhook's downstream
+// chain; the webhook manager walks the connection graph from the
+// trigger node to find it and reads its output out of the engine's
+// NodeOutputs map.
+const respondToWebhookNodeType = "n8n-nodes-base.respondToWebhook"
+
+// findRespondToWebhookNode walks the workflow's connection graph
+// starting from `triggerNode` and returns the name of the first
+// downstream node whose `Type` matches `respondToWebhookNodeType`.
+// Returns "" when no Respond-to-Webhook node is reachable from the
+// trigger (caller should fall back to the last-node output).
+//
+// BFS is used (rather than recursive DFS) so that the *closest*
+// Respond-to-Webhook node to the trigger wins — this matches n8n's
+// own execution order, which runs the trigger, then the nodes
+// immediately connected to it, before anything further downstream.
+// Cycles are guarded by the visited set even though n8n rejects
+// workflows with cycles at import time.
+func findRespondToWebhookNode(workflow *model.Workflow, triggerNode string) string {
+	if workflow == nil || triggerNode == "" {
+		return ""
+	}
+
+	// Build the node-name → node-type lookup so we can recognise
+	// the respond-to-webhook node without iterating over the full
+	// node slice at every BFS step.
+	typeByName := make(map[string]string, len(workflow.Nodes))
+	for _, n := range workflow.Nodes {
+		typeByName[n.Name] = n.Type
+	}
+
+	visited := make(map[string]struct{})
+	queue := []string{triggerNode}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+
+		if _, seen := visited[current]; seen {
+			continue
+		}
+		visited[current] = struct{}{}
+
+		if typeByName[current] == respondToWebhookNodeType {
+			return current
+		}
+
+		conns, ok := workflow.Connections[current]
+		if !ok {
+			continue
+		}
+		for _, branch := range conns.Main {
+			for _, c := range branch {
+				if c.Node == "" {
+					continue
+				}
+				if _, seen := visited[c.Node]; seen {
+					continue
+				}
+				queue = append(queue, c.Node)
+			}
+		}
+	}
+	return ""
+}
+
+// findRespondToWebhookNodeByType scans the workflow's nodes for any
+// node whose `Type` is the respond-to-webhook node type, returning
+// its name. This is the fallback path used when the workflow has no
+// incoming-connection index for the trigger (e.g. the trigger node
+// was renamed but its connections survived): the manager picks the
+// first respond-to-webhook node it sees and lets the engine decide
+// whether it actually received the data — if it didn't, NodeOutputs
+// lookup simply returns nil and the caller falls back to the
+// last-node body.
+func findRespondToWebhookNodeByType(workflow *model.Workflow) string {
+	if workflow == nil {
+		return ""
+	}
+	for _, n := range workflow.Nodes {
+		if n.Type == respondToWebhookNodeType {
+			return n.Name
+		}
+	}
+	return ""
+}
+
+// extractResponseNodeData reads the output the Respond-to-Webhook
+// node produced and returns it. Returns nil when the node produced
+// no data, or when the engine did not populate per-node tracking
+// for this run (older engine paths). Callers MUST treat a nil
+// return as "fall back to last-node output".
+func extractResponseNodeData(workflow *model.Workflow, triggerNode string, result *engine.ExecutionResult) []model.DataItem {
+	if result == nil || result.NodeOutputs == nil {
+		return nil
+	}
+
+	nodeName := findRespondToWebhookNode(workflow, triggerNode)
+	if nodeName == "" {
+		nodeName = findRespondToWebhookNodeByType(workflow)
+	}
+	if nodeName == "" {
+		return nil
+	}
+
+	data, ok := result.NodeOutputs[nodeName]
+	if !ok || len(data) == 0 {
+		return nil
+	}
+	return data
+}
+
+// prepareResponseWithContext is the full-fat version of
+// prepareResponse that also accepts the workflow + trigger-node name
+// so it can implement `responseMode: responseNode`. The manager
+// passes the workflow it just executed; the legacy single-arg
+// prepareResponse is preserved for backwards compatibility with
+// callers (and the unit-test suite) that don't have a workflow
+// handy.
+func (m *WebhookManager) prepareResponseWithContext(webhook *Webhook, result *engine.ExecutionResult, workflow *model.Workflow, triggerNode string) *WebhookResponse {
 	response := &WebhookResponse{
 		StatusCode: 200,
 		Headers:    webhook.ResponseHeaders,
@@ -400,6 +532,51 @@ func (m *WebhookManager) prepareResponse(webhook *Webhook, result *engine.Execut
 		response.Headers = make(map[string]string)
 	}
 	response.Headers["Content-Type"] = "application/json"
+
+	// `responseMode: responseNode` overrides `responseData`. n8n's
+	// behaviour: the workflow author wires the trigger to a
+	// "Respond to Webhook" node, and that node's output is returned
+	// verbatim — regardless of `responseData`. We locate the
+	// Respond-to-Webhook node by walking the connection graph from
+	// the trigger, fall back to a flat node-type scan when the
+	// trigger was renamed (workflows in the wild sometimes drop the
+	// `connections` index for renamed nodes), and finally fall back
+	// to `lastNode` semantics if there is no Respond-to-Webhook
+	// node at all (or the engine did not populate NodeOutputs —
+	// older engine paths, parallel workers, etc.).
+	if webhook.ResponseMode == "responseNode" {
+		if data := extractResponseNodeData(workflow, triggerNode, result); data != nil {
+			switch webhook.ResponseData {
+			case "allEntries":
+				entries := make([]map[string]interface{}, len(data))
+				for i, item := range data {
+					entries[i] = item.JSON
+				}
+				response.Body = entries
+			case "noData":
+				response.Body = map[string]interface{}{"message": "success"}
+			case "firstEntryJson", "":
+				fallthrough
+			default:
+				// n8n honours the Respond-to-Webhook node's own
+				// `respondWith` shape; the most common setting is
+				// `firstIncomingItem`, which is exactly what we
+				// return here. If `respondWith=json` the upstream
+				// node already produced a single item with the
+				// literal body, so read that item verbatim.
+				if len(data) == 0 {
+					response.Body = map[string]interface{}{"message": "success"}
+				} else {
+					response.Body = data[0].JSON
+				}
+			}
+			return response
+		}
+		// No Respond-to-Webhook node found (or no per-node
+		// tracking) — fall through to the responseData-driven
+		// branch so callers that expected `lastNode` semantics
+		// still get a useful response.
+	}
 
 	// Based on response mode. n8n's wire shape for the Webhook response
 	// is *workflow-shape dependent*, not uniform across responseData
