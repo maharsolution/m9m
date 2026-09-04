@@ -81,6 +81,47 @@ func extractAssignments(params map[string]interface{}) []interface{} {
 	}
 }
 
+// writeDotPath assigns `value` to `name` inside `root`, treating dot
+// separators as nested object paths. A plain name (`"foo"`) writes
+// the value directly; a dotted name (`"body.variable"`) descends into
+// `root["body"]` (creating the map if missing) and writes at
+// `["variable"]`. This matches n8n's Set node semantics for
+// typeVersion >= 3.
+//
+// Returns an error if a dotted path segment collides with a non-map
+// value (e.g. `root["body"]` already holds a string), so misconfigured
+// assignments fail loudly instead of silently overwriting prior work.
+func writeDotPath(root map[string]interface{}, name string, value interface{}) error {
+	if name == "" {
+		return fmt.Errorf("assignment name cannot be empty")
+	}
+	segments := strings.Split(name, ".")
+	if len(segments) == 1 {
+		root[name] = value
+		return nil
+	}
+	current := root
+	for i, seg := range segments {
+		if i == len(segments)-1 {
+			current[seg] = value
+			return nil
+		}
+		existing, ok := current[seg]
+		if !ok {
+			nested := map[string]interface{}{}
+			current[seg] = nested
+			current = nested
+			continue
+		}
+		nested, ok := existing.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("cannot assign %q: path segment %q is %T, not an object", name, seg, existing)
+		}
+		current = nested
+	}
+	return nil
+}
+
 // coerceAssignmentValue converts a value produced by an assignment (after any
 // expression evaluation) to the type declared in the assignment's `type`
 // field. This matches n8n's behaviour where `type: "number"` coerces string
@@ -382,7 +423,16 @@ func (s *SetNode) Execute(inputData []model.DataItem, nodeParams map[string]inte
 			if err != nil {
 				return nil, s.CreateError(fmt.Sprintf("failed to coerce assignment %q to type %q: %v", name, assignmentType, err), nil)
 			}
-			newItem.JSON[name] = coerced
+			// n8n treats dots in assignment names as nested object
+			// paths: `name: "body.variable", value: 1` produces
+			// `{"body": {"variable": 1}}` rather than a literal
+			// `"body.variable"` key. Mirror that behaviour so
+			// existing workflow exports continue to produce the
+			// same wire shape without forcing operators to flatten
+			// the assignments.
+			if err := writeDotPath(newItem.JSON, name, coerced); err != nil {
+				return nil, s.CreateError(err.Error(), nil)
+			}
 		}
 
 		// Copy binary data if present

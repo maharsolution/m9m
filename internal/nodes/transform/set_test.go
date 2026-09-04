@@ -865,3 +865,79 @@ func TestShouldReplaceJSON(t *testing.T) {
 		})
 	}
 }
+
+// TestSetNode_DotPathAssignment pins the contract that n8n's Set node
+// treats dots in assignment names as nested object paths. The deployed
+// `simple_webhook_2` workflow exports:
+//
+//	{ name: "body.variable", value: "={{ $json.body.variable }}" }
+//
+// and n8n emits `{"body": {"variable": "1"}}` rather than a literal
+// `"body.variable"` key. Without dot-path handling m9m returned
+// `{"body.variable": "1"}` which fails byte-for-byte parity.
+func TestSetNode_DotPathAssignment(t *testing.T) {
+	node := NewSetNode()
+
+	input := []model.DataItem{
+		{JSON: map[string]interface{}{"body": map[string]interface{}{"variable": "1"}}},
+	}
+	params := map[string]interface{}{
+		"assignments": map[string]interface{}{
+			"assignments": []interface{}{
+				map[string]interface{}{
+					"name":  "body.variable",
+					"type":  "string",
+					"value": "={{ $json.body.variable }}",
+				},
+			},
+		},
+		"options": map[string]interface{}{},
+	}
+
+	out, err := node.Execute(input, params)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if len(out) != 1 {
+		t.Fatalf("Expected 1 result, got %d", len(out))
+	}
+	got := out[0].JSON
+	body, ok := got["body"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected body to be a map, got %#v", got["body"])
+	}
+	if body["variable"] != "1" {
+		t.Errorf("Expected body.variable=1, got %#v", body["variable"])
+	}
+	if _, hasLiteral := got["body.variable"]; hasLiteral {
+		t.Errorf("Should not have literal 'body.variable' key, got %#v", got)
+	}
+}
+
+// TestSetNode_DotPathAssignment_Conflict makes sure a dotted path that
+// collides with an existing non-map value fails loudly instead of
+// silently overwriting prior work. We disable keepOnlySet so the
+// pre-existing `body` value survives into the assignment phase.
+func TestSetNode_DotPathAssignment_Conflict(t *testing.T) {
+	node := NewSetNode()
+
+	input := []model.DataItem{
+		{JSON: map[string]interface{}{"body": "not a map"}},
+	}
+	params := map[string]interface{}{
+		"assignments": map[string]interface{}{
+			"assignments": []interface{}{
+				map[string]interface{}{
+					"name":  "body.variable",
+					"type":  "string",
+					"value": "1",
+				},
+			},
+		},
+		"options": map[string]interface{}{"keepOnlySet": false},
+	}
+
+	if _, err := node.Execute(input, params); err == nil {
+		t.Fatalf("Expected error on dot-path collision, got nil")
+	}
+}
