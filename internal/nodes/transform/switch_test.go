@@ -3,6 +3,7 @@ package transform
 import (
 	"testing"
 
+	"github.com/neul-labs/m9m/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -191,4 +192,48 @@ func TestExtractSwitchRules_HappyPath(t *testing.T) {
 		require.Len(t, out, 1)
 		assert.Equal(t, wantRule, out[0])
 	})
+}
+
+func TestExtractSwitchRules_NestedValues(t *testing.T) {
+	params := map[string]interface{}{
+		"rules": map[string]interface{}{
+			"values": []interface{}{map[string]interface{}{
+				"conditions": map[string]interface{}{
+					"conditions": []interface{}{map[string]interface{}{
+						"leftValue":  "={{ $json.variable }}",
+						"rightValue": "1",
+						"operator":   map[string]interface{}{"operation": "equals"},
+					}},
+				},
+			}},
+		},
+	}
+
+	rules, err := ExtractSwitchRules(params)
+	require.NoError(t, err)
+	require.Len(t, rules, 1)
+	assert.Equal(t, "={{ $json.variable }}", rules[0]["field"])
+	assert.Equal(t, "equal", rules[0]["operation"])
+	assert.Equal(t, "1", rules[0]["value"])
+}
+
+func TestSwitchExecute_NestedValuesMatches(t *testing.T) {
+	params := map[string]interface{}{
+		"rules": map[string]interface{}{
+			"values": []interface{}{map[string]interface{}{
+				"conditions": map[string]interface{}{
+					"conditions": []interface{}{map[string]interface{}{
+						"leftValue":  "={{ $json.variable }}",
+						"rightValue": "1",
+						"operator":   map[string]interface{}{"operation": "equals"},
+					}},
+				},
+			}},
+		},
+		"stopAfterFirstMatch": true,
+	}
+	out, err := NewSwitchNode().Execute([]model.DataItem{{JSON: map[string]interface{}{"variable": "1"}}}, params)
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	assert.Equal(t, 0, out[0].JSON["_switchRuleIndex"])
 }

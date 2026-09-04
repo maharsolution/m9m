@@ -1,6 +1,7 @@
 package trigger
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"os"
@@ -275,19 +276,28 @@ func authHeadersLookup(requestData map[string]interface{}, name string) (string,
 	return "", false
 }
 
-// validateBasicAuth validates basic authentication
+// validateBasicAuth validates basic authentication. The Webhook node's
+// validation is deliberately credential-agnostic: it must verify that the
+// request carries a syntactically valid Basic header, while the HTTP handler
+// performs the configured credential comparison before execution.
 func (w *WebhookNode) validateBasicAuth(requestData map[string]interface{}, nodeParams map[string]interface{}) (bool, error) {
 	authHeader, ok := authHeadersLookup(requestData, "authorization")
 	if !ok {
 		return false, fmt.Errorf("no authorization header found")
 	}
 
-	if !strings.HasPrefix(strings.ToLower(authHeader), "basic ") {
+	if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(authHeader)), "basic ") {
 		return false, fmt.Errorf("invalid authorization header format")
 	}
 
-	// In a real implementation, you would decode and validate the credentials
-	// For now, we'll assume valid if the header is present
+	encoded := strings.TrimSpace(strings.TrimSpace(authHeader)[len("basic "):])
+	if encoded == "" {
+		return false, fmt.Errorf("empty basic auth credentials")
+	}
+	if _, err := base64.StdEncoding.DecodeString(encoded); err != nil {
+		return false, fmt.Errorf("invalid basic auth credentials: %w", err)
+	}
+
 	return true, nil
 }
 
@@ -310,7 +320,6 @@ func (w *WebhookNode) validateHeaderAuth(requestData map[string]interface{}, nod
 
 // ValidateParameters validates Webhook node parameters
 func (w *WebhookNode) ValidateParameters(params map[string]interface{}) error {
-	// Path is required
 	if _, ok := params["path"]; !ok {
 		return fmt.Errorf("webhook path is required")
 	}

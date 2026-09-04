@@ -56,21 +56,119 @@ func ExtractSwitchRules(params map[string]interface{}) ([]map[string]interface{}
 	}
 
 	switch v := raw.(type) {
-	case []interface{}:
-		out := make([]map[string]interface{}, 0, len(v))
-		for i, r := range v {
-			m, ok := r.(map[string]interface{})
-			if !ok {
-				return nil, fmt.Errorf("switch rule %d is not an object", i)
-			}
-			out = append(out, m)
+	case map[string]interface{}:
+		// n8n Switch v3+ wraps its rules in {"values": [...]}. Each
+		// value contains a conditions wrapper, so normalise those
+		// conditions to the flat rule shape used by this executor.
+		values, ok := v["values"]
+		if !ok || values == nil {
+			return nil, fmt.Errorf("switch rules object must contain a values array")
 		}
-		return out, nil
+		return extractNestedSwitchRules(values)
+	case []interface{}:
+		return normalizeSwitchRuleSlice(v)
 	case []map[string]interface{}:
-		return v, nil
+		return normalizeSwitchRuleMaps(v)
 	default:
-		return nil, fmt.Errorf("switch rules must be an array")
+		return nil, fmt.Errorf("switch rules must be an array or object with values")
 	}
+}
+
+func extractNestedSwitchRules(raw interface{}) ([]map[string]interface{}, error) {
+	switch v := raw.(type) {
+	case []interface{}:
+		return normalizeSwitchRuleSlice(v)
+	case []map[string]interface{}:
+		return normalizeSwitchRuleMaps(v)
+	default:
+		return nil, fmt.Errorf("switch rules values must be an array")
+	}
+}
+
+func normalizeSwitchRuleSlice(values []interface{}) ([]map[string]interface{}, error) {
+	out := make([]map[string]interface{}, 0, len(values))
+	for i, value := range values {
+		rule, ok := value.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("switch rule %d is not an object", i)
+		}
+		rules, err := normalizeSwitchRule(rule)
+		if err != nil {
+			return nil, fmt.Errorf("switch rule %d: %w", i, err)
+		}
+		out = append(out, rules...)
+	}
+	return out, nil
+}
+
+func normalizeSwitchRuleMaps(values []map[string]interface{}) ([]map[string]interface{}, error) {
+	out := make([]map[string]interface{}, 0, len(values))
+	for i, value := range values {
+		rules, err := normalizeSwitchRule(value)
+		if err != nil {
+			return nil, fmt.Errorf("switch rule %d: %w", i, err)
+		}
+		out = append(out, rules...)
+	}
+	return out, nil
+}
+
+func normalizeSwitchRule(rule map[string]interface{}) ([]map[string]interface{}, error) {
+	conditions, ok := rule["conditions"]
+	if !ok {
+		return []map[string]interface{}{rule}, nil
+	}
+
+	conditionList, ok := conditions.([]interface{})
+	if !ok {
+		if wrapper, wrapperOK := conditions.(map[string]interface{}); wrapperOK {
+			conditionList, ok = wrapper["conditions"].([]interface{})
+		}
+	}
+	if !ok {
+		return nil, fmt.Errorf("conditions must contain an array")
+	}
+
+	out := make([]map[string]interface{}, 0, len(conditionList))
+	for _, rawCondition := range conditionList {
+		condition, ok := rawCondition.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("condition is not an object")
+		}
+		field, _ := condition["leftValue"].(string)
+		value := condition["rightValue"]
+		operation, err := switchOperation(condition["operator"])
+		if err != nil {
+			return nil, err
+		}
+		if field == "" || operation == "" {
+			return nil, fmt.Errorf("condition must contain leftValue, operator, and rightValue")
+		}
+		out = append(out, map[string]interface{}{
+			"field": field, "operation": operation, "value": value,
+		})
+	}
+	return out, nil
+}
+
+func switchOperation(raw interface{}) (string, error) {
+	operation, ok := raw.(string)
+	if !ok {
+		if typed, ok := raw.(map[string]interface{}); ok {
+			operation, _ = typed["operation"].(string)
+		}
+	}
+	mapped := map[string]string{
+		"equals": "equal", "notEquals": "notEqual", "contains": "contains",
+		"notContains": "notContains", "startsWith": "startsWith", "endsWith": "endsWith",
+		"regex": "regex", "greaterThan": "greater", "greaterThanOrEqual": "greaterEqual",
+		"lessThan": "smaller", "lessThanOrEqual": "smallerEqual",
+		"isEmpty": "isEmpty", "isNotEmpty": "isNotEmpty",
+	}
+	if normalized, ok := mapped[operation]; ok {
+		return normalized, nil
+	}
+	return "", fmt.Errorf("unsupported switch operation: %s", operation)
 }
 
 // Execute processes the Switch node operation
@@ -93,9 +191,9 @@ func (s *SwitchNode) Execute(inputData []model.DataItem, nodeParams map[string]i
 	for _, item := range inputData {
 		context := &expressions.ExpressionContext{
 			ActiveNodeName:      "Switch",
-			RunIndex:           0,
-			ItemIndex:          0,
-			Mode:               expressions.ModeManual,
+			RunIndex:            0,
+			ItemIndex:           0,
+			Mode:                expressions.ModeManual,
 			ConnectionInputData: []model.DataItem{item},
 			Workflow: &model.Workflow{
 				Name: "Switch Processing",
@@ -166,8 +264,12 @@ func (s *SwitchNode) evaluateRule(rule map[string]interface{}, context *expressi
 		return false, fmt.Errorf("field and operation are required for switch rule")
 	}
 
-	// Resolve the field value
-	fieldExpr := fmt.Sprintf("{{ %s }}", field)
+	// Resolve the field value. n8n exports may already wrap the field
+	// in `={{ ... }}`; avoid double-wrapping those expressions.
+	fieldExpr := field
+	if !strings.HasPrefix(strings.TrimSpace(fieldExpr), "{{") && !strings.HasPrefix(strings.TrimSpace(fieldExpr), "={{") {
+		fieldExpr = fmt.Sprintf("{{ %s }}", fieldExpr)
+	}
 	fieldValue, err := s.evaluator.EvaluateExpression(fieldExpr, context)
 	if err != nil {
 		return false, fmt.Errorf("failed to resolve field %s: %w", field, err)

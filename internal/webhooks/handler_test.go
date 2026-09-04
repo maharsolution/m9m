@@ -398,7 +398,46 @@ func TestHandler_Unauthorized_HeaderAuth_ReturnsJSON(t *testing.T) {
 	assert.Equal(t, float64(http.StatusUnauthorized), body["code"])
 }
 
-// TestHandler_BadRequest_MalformedJSON_ReturnsJSON pins the 400 wire
+func TestHandler_BasicAuthAlias_AcceptsConfiguredCredentials(t *testing.T) {
+	mgr, _, ws := newTestManager()
+	wf := &model.Workflow{ID: "wf-basic-alias", Name: "basic-alias", Active: true}
+	require.NoError(t, ws.SaveWorkflow(wf))
+
+	wh := &Webhook{
+		ID: "wh-basic-alias", WorkflowID: wf.ID, Path: "/basic-alias", Method: "POST", Active: true,
+		AuthType: "basicAuth", AuthData: map[string]interface{}{"username": "admin", "password": "admin123"},
+	}
+	require.NoError(t, mgr.RegisterWebhook(wh))
+
+	router := newHandlerRouter(NewHandler(mgr))
+	req := httptest.NewRequest(http.MethodPost, "/webhook/basic-alias", bytes.NewReader([]byte(`{}`)))
+	req.SetBasicAuth("admin", "admin123")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestHandler_BasicAuthAlias_RejectsWrongCredentials(t *testing.T) {
+	mgr, _, ws := newTestManager()
+	wf := &model.Workflow{ID: "wf-basic-alias-bad", Name: "basic-alias-bad", Active: true}
+	require.NoError(t, ws.SaveWorkflow(wf))
+
+	wh := &Webhook{
+		ID: "wh-basic-alias-bad", WorkflowID: wf.ID, Path: "/basic-alias-bad", Method: "POST", Active: true,
+		AuthType: "basicAuth", AuthData: map[string]interface{}{"username": "admin", "password": "admin123"},
+	}
+	require.NoError(t, mgr.RegisterWebhook(wh))
+
+	router := newHandlerRouter(NewHandler(mgr))
+	req := httptest.NewRequest(http.MethodPost, "/webhook/basic-alias-bad", bytes.NewReader([]byte(`{}`)))
+	req.SetBasicAuth("admin", "wrong")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
 // shape for callers that POST a body claiming Content-Type:
 // application/json but whose body is not valid JSON. n8n responds
 // with a JSON 400 — m9m must match.

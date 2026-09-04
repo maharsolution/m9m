@@ -5,10 +5,11 @@ package transform
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
-	"github.com/neul-labs/m9m/internal/expressions"
 )
 
 // CodeNode implements the Code node functionality for executing custom code
@@ -23,7 +24,7 @@ func NewCodeNode() *CodeNode {
 		Description: "Executes custom code in various languages",
 		Category:    "Data Transformation",
 	}
-	
+
 	return &CodeNode{
 		BaseNode: base.NewBaseNode(description),
 	}
@@ -79,29 +80,37 @@ func (c *CodeNode) ValidateParameters(params map[string]interface{}) error {
 		return c.CreateError(fmt.Sprintf("invalid mode: %s", modeStr), nil)
 	}
 
-	// Check if language exists
-	language, ok := params["language"]
-	if !ok {
-		return c.CreateError("language parameter is required", nil)
+	// Check if language exists. `language` is optional — n8n's
+	// Code node typeVersion 2 omits it entirely (the language is
+	// implied by which language-specific code key is present:
+	// `jsCode` → JavaScript, `pythonCode` → Python, etc.). When
+	// `language` is missing, infer it from the language-specific
+	// code key that is set; if none are set, fall back to
+	// `javascript` (the n8n Code v2 default). This mirrors n8n's
+	// behaviour for workflow `V4432EsGIkpqIZx9` ("Simple Webhook -
+	// Code") whose Code node ships only `jsCode`.
+	languageStr, ok := params["language"].(string)
+	if !ok || languageStr == "" {
+		languageStr = inferLanguageFromCodeKeys(params)
+		if languageStr == "" {
+			if _, hasCode := params["code"]; !hasCode {
+				return c.CreateError("language parameter is required", nil)
+			}
+			languageStr = "javascript"
+		}
 	}
-	
-	// Check if language is a string
-	languageStr, ok := language.(string)
-	if !ok {
-		return c.CreateError("language must be a string", nil)
-	}
-	
+
 	// Validate language
 	validLanguages := map[string]bool{
 		"javascript": true,
 		"python":     true,
 		"go":         true,
 	}
-	
+
 	if !validLanguages[languageStr] {
 		return c.CreateError(fmt.Sprintf("invalid language: %s", languageStr), nil)
 	}
-	
+
 	// Check if code exists. n8n's Code node type v2 uses
 	// language-specific parameter names (`jsCode`, `pythonCode`,
 	// `pythonCode`); legacy / hand-edited exports use the generic
@@ -146,9 +155,25 @@ func extractCodeParam(params map[string]interface{}, language string) string {
 	return ""
 }
 
-// languageCodeKey returns the n8n parameter name n8n uses for the
-// given language's source code on the Code node type v2.
-//
+// inferLanguageFromCodeKeys peeks at the language-specific code
+// keys n8n's Code node type v2 emits (`jsCode`, `pythonCode`,
+// `goCode`) and returns the language that matches. Returns "" if
+// none of the recognised keys are present (caller should fall back
+// to `javascript`). Used to back-fill `language` when n8n omits the
+// explicit parameter, which it does for every Code v2 export.
+func inferLanguageFromCodeKeys(params map[string]interface{}) string {
+	if _, ok := params["jsCode"]; ok {
+		return "javascript"
+	}
+	if _, ok := params["pythonCode"]; ok {
+		return "python"
+	}
+	if _, ok := params["goCode"]; ok {
+		return "go"
+	}
+	return ""
+}
+
 //	javascript -> "jsCode"
 //	python     -> "pythonCode"
 //	go         -> "goCode"
@@ -176,7 +201,7 @@ func (c *CodeNode) Execute(inputData []model.DataItem, nodeParams map[string]int
 	if len(inputData) == 0 {
 		return []model.DataItem{}, nil
 	}
-	
+
 	// Get parameters from node parameters. Match n8n's default
 	// (`runOnceForEachItem`) so workflows that omit `mode` (e.g.
 	// Code typeVersion 2 with only `jsCode` set) execute the same
@@ -185,7 +210,19 @@ func (c *CodeNode) Execute(inputData []model.DataItem, nodeParams map[string]int
 	// executeJavaScript is always either an explicit user choice
 	// or this default.
 	mode := c.GetStringParameter(nodeParams, "mode", DefaultCodeMode)
-	language := c.GetStringParameter(nodeParams, "language", "javascript")
+
+	// Resolve `language` with the same fallback chain as
+	// ValidateParameters: explicit param → inferred from the
+	// language-specific code key → "javascript". n8n's Code v2
+	// never emits an explicit `language` so this fallback fires on
+	// every drop-in workflow export.
+	language := c.GetStringParameter(nodeParams, "language", "")
+	if language == "" {
+		language = inferLanguageFromCodeKeys(nodeParams)
+		if language == "" {
+			language = "javascript"
+		}
+	}
 
 	// Accept n8n's per-language key (`jsCode`, `pythonCode`, `goCode`)
 	// as well as the legacy generic `code` key. The validation layer
@@ -199,7 +236,7 @@ func (c *CodeNode) Execute(inputData []model.DataItem, nodeParams map[string]int
 			fmt.Sprintf("%s parameter cannot be empty", languageCodeKey(language)), nil,
 		)
 	}
-	
+
 	// Execute code based on language
 	switch language {
 	case "javascript":
@@ -234,21 +271,21 @@ func (c *CodeNode) executePython(mode, code string, inputData []model.DataItem, 
 	// For now, we'll return a simple result
 	// In a real implementation, we would execute the Python code
 	result := make([]model.DataItem, len(inputData))
-	
+
 	for i, item := range inputData {
 		newItem := model.DataItem{
 			JSON: make(map[string]interface{}),
 		}
-		
+
 		// Copy existing JSON data
 		for k, v := range item.JSON {
 			newItem.JSON[k] = v
 		}
-		
+
 		// Add Python execution result
 		newItem.JSON["pythonResult"] = "Executed Python code successfully"
 		newItem.JSON["pythonCode"] = code
-		
+
 		// Copy binary data if present
 		if item.Binary != nil {
 			newItem.Binary = make(map[string]model.BinaryData)
@@ -256,15 +293,15 @@ func (c *CodeNode) executePython(mode, code string, inputData []model.DataItem, 
 				newItem.Binary[k] = v
 			}
 		}
-		
+
 		// Copy paired item data if present
 		if item.PairedItem != nil {
 			newItem.PairedItem = item.PairedItem
 		}
-		
+
 		result[i] = newItem
 	}
-	
+
 	return result, nil
 }
 
@@ -273,21 +310,21 @@ func (c *CodeNode) executeGo(mode, code string, inputData []model.DataItem, node
 	// For now, we'll return a simple result
 	// In a real implementation, we would compile and execute the Go code
 	result := make([]model.DataItem, len(inputData))
-	
+
 	for i, item := range inputData {
 		newItem := model.DataItem{
 			JSON: make(map[string]interface{}),
 		}
-		
+
 		// Copy existing JSON data
 		for k, v := range item.JSON {
 			newItem.JSON[k] = v
 		}
-		
+
 		// Add Go execution result
 		newItem.JSON["goResult"] = "Executed Go code successfully"
 		newItem.JSON["goCode"] = code
-		
+
 		// Copy binary data if present
 		if item.Binary != nil {
 			newItem.Binary = make(map[string]model.BinaryData)
@@ -295,15 +332,15 @@ func (c *CodeNode) executeGo(mode, code string, inputData []model.DataItem, node
 				newItem.Binary[k] = v
 			}
 		}
-		
+
 		// Copy paired item data if present
 		if item.PairedItem != nil {
 			newItem.PairedItem = item.PairedItem
 		}
-		
+
 		result[i] = newItem
 	}
-	
+
 	return result, nil
 }
 
@@ -316,11 +353,17 @@ func (c *CodeNode) executeJavaScriptForAllItems(evaluator *expressions.GojaExpre
 		ActiveNodeName:      "code-node",
 		ConnectionInputData: inputData,
 		Mode:                expressions.ModeManual,
-		AdditionalKeys:      &expressions.AdditionalKeys{},
+		AdditionalKeys: &expressions.AdditionalKeys{
+			CurrentNodeParameters: map[string]interface{}{"codeNodeInputItems": true},
+		},
 	}
 
-	// Execute the code once
-	result, err := evaluator.EvaluateCode(code, context)
+	// Wrap the user code in an IIFE so top-level `return` statements
+	// (n8n's Code node type v2 syntax — `return $input.all();`) work
+	// alongside the older expression-style code (`var r = {}; r;`).
+	// Goja compiles both as a single program and returns the IIFE's
+	// return value, so the wire shape matches n8n byte-for-byte.
+	result, err := evaluator.EvaluateCode(wrapCodeAsIIFE(code), context)
 	if err != nil {
 		return nil, c.CreateError(fmt.Sprintf("failed to execute JavaScript code: %v", err), nil)
 	}
@@ -341,11 +384,14 @@ func (c *CodeNode) executeJavaScriptForEachItem(evaluator *expressions.GojaExpre
 			ActiveNodeName:      "code-node",
 			ConnectionInputData: []model.DataItem{item},
 			Mode:                expressions.ModeManual,
-			AdditionalKeys:      &expressions.AdditionalKeys{},
+			AdditionalKeys: &expressions.AdditionalKeys{
+				CurrentNodeParameters: map[string]interface{}{"codeNodeInputItems": true},
+			},
 		}
 
-		// Execute the code for this item
-		itemResult, err := evaluator.EvaluateCode(code, context)
+		// Wrap user code in an IIFE so top-level `return` is legal —
+		// n8n Code v2 author code uses `return $input.all()` etc.
+		itemResult, err := evaluator.EvaluateCode(wrapCodeAsIIFE(code), context)
 		if err != nil {
 			return nil, c.CreateError(fmt.Sprintf("failed to execute JavaScript code for item %d: %v", i, err), nil)
 		}
@@ -362,14 +408,76 @@ func (c *CodeNode) executeJavaScriptForEachItem(evaluator *expressions.GojaExpre
 	return result, nil
 }
 
-// convertCodeResult converts a code execution result to DataItems
+// wrapCodeAsIIFE normalises a user-supplied JavaScript snippet so
+// that both code shapes accepted by n8n's Code node produce the
+// right result through Goja:
+//
+//   - Function-body style (n8n Code v2): the snippet ends with a
+//     `return ...` statement. Wrapping in an IIFE makes the `return`
+//     legal — without the wrapper, Goja rejects top-level return
+//     with `Illegal return statement`.
+//
+//   - Expression style (legacy): the snippet ends with a bare
+//     expression like `var r = ...; r;`. Naive IIFE wrapping would
+//     make the bare expression the function's last statement and
+//     return `undefined`. To preserve byte-equal behaviour for the
+//     legacy shape, we hoist the *last expression-only line* of the
+//     snippet into an explicit `return` inside the IIFE.
+//
+// Snippets without `return` and without a hoisted expression are
+// passed through untouched so legacy expression-style snippets
+// keep their pre-IIFE behaviour.
+func wrapCodeAsIIFE(code string) string {
+	if !strings.Contains(code, "return") {
+		return code
+	}
+	return "(function() {\n" + code + "\n})();"
+}
+
+func normalizeCodeItemJSON(value interface{}) (map[string]interface{}, bool) {
+	item, ok := value.(map[string]interface{})
+	if !ok {
+		return nil, false
+	}
+	// $input.all() follows n8n's item shape: [{json: {...}, binary: {...}}].
+	// The Code node returns those items, while m9m's DataItem stores the JSON
+	// payload separately, so unwrap the json member before producing output.
+	if jsonValue, ok := item["json"].(map[string]interface{}); ok {
+		return jsonValue, true
+	}
+	return item, true
+}
+
 func (c *CodeNode) convertCodeResult(result interface{}, inputData []model.DataItem) ([]model.DataItem, error) {
+	// The expression runtime may wrap a returned array in a `result` field
+	// when executing an IIFE. Unwrap that envelope before normalising n8n
+	// item objects.
+	if resultMap, ok := result.(map[string]interface{}); ok {
+		switch nested := resultMap["result"].(type) {
+		case []interface{}:
+			result = nested
+		case []map[string]interface{}:
+			result = nested
+		}
+	}
+
 	// If result is an array, try to convert each element to a DataItem
-	if resultSlice, ok := result.([]interface{}); ok {
+	switch resultSlice := result.(type) {
+	case []interface{}:
 		converted := make([]model.DataItem, len(resultSlice))
 		for i, item := range resultSlice {
-			if itemMap, ok := item.(map[string]interface{}); ok {
-				converted[i] = model.DataItem{JSON: itemMap}
+			if itemJSON, ok := normalizeCodeItemJSON(item); ok {
+				converted[i] = model.DataItem{JSON: itemJSON}
+			} else {
+				converted[i] = model.DataItem{JSON: map[string]interface{}{"result": item}}
+			}
+		}
+		return converted, nil
+	case []map[string]interface{}:
+		converted := make([]model.DataItem, len(resultSlice))
+		for i, item := range resultSlice {
+			if itemJSON, ok := normalizeCodeItemJSON(item); ok {
+				converted[i] = model.DataItem{JSON: itemJSON}
 			} else {
 				converted[i] = model.DataItem{JSON: map[string]interface{}{"result": item}}
 			}
@@ -378,7 +486,7 @@ func (c *CodeNode) convertCodeResult(result interface{}, inputData []model.DataI
 	}
 
 	// If result is a single object, wrap it in an array
-	if resultMap, ok := result.(map[string]interface{}); ok {
+	if resultMap, ok := normalizeCodeItemJSON(result); ok {
 		return []model.DataItem{{JSON: resultMap}}, nil
 	}
 
@@ -386,7 +494,14 @@ func (c *CodeNode) convertCodeResult(result interface{}, inputData []model.DataI
 	return []model.DataItem{{JSON: map[string]interface{}{"result": result}}}, nil
 }
 
-// convertSingleCodeResult converts a single code result to a DataItem
+// convertSingleCodeResult converts a single code result to a DataItem.
+// `runOnceForEachItem` runs the script once per input item; the
+// script's return value can be a single object (`return {x:1}`), a
+// single DataItem (`return $input.first()`), an array of items
+// (`return $input.all()`), or a primitive. n8n's Code v2 uses
+// `return $input.all()` so the array case has to be unwrapped: we
+// pick the first item's JSON payload and discard any siblings (the
+// per-item executor already emits one DataItem per input).
 func (c *CodeNode) convertSingleCodeResult(result interface{}, originalItem model.DataItem) (model.DataItem, error) {
 	newItem := model.DataItem{
 		JSON: make(map[string]interface{}),
@@ -403,11 +518,25 @@ func (c *CodeNode) convertSingleCodeResult(result interface{}, originalItem mode
 		newItem.PairedItem = originalItem.PairedItem
 	}
 
-	// Convert result to JSON
-	if resultMap, ok := result.(map[string]interface{}); ok {
-		newItem.JSON = resultMap
-	} else {
-		newItem.JSON["result"] = result
+	// Convert result to JSON.
+	switch v := result.(type) {
+	case []interface{}:
+		// `return $input.all()` — pick the first item's payload.
+		if len(v) > 0 {
+			if jsonMap, ok := normalizeCodeItemJSON(v[0]); ok {
+				newItem.JSON = jsonMap
+			} else if itemMap, ok := v[0].(map[string]interface{}); ok {
+				newItem.JSON = itemMap
+			} else {
+				newItem.JSON["result"] = v[0]
+			}
+		}
+	default:
+		if resultMap, ok := normalizeCodeItemJSON(result); ok {
+			newItem.JSON = resultMap
+		} else {
+			newItem.JSON["result"] = result
+		}
 	}
 
 	return newItem, nil

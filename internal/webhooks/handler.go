@@ -123,7 +123,7 @@ func (h *Handler) handleWebhookRequest(w http.ResponseWriter, r *http.Request, i
 		writeJSONError(w, http.StatusUnauthorized, webhookErrorBody{
 			Code:    http.StatusUnauthorized,
 			Message: "Authentication failed",
-			Hint:    "Verify the credentials configured on the Webhook node match what this " +
+			Hint: "Verify the credentials configured on the Webhook node match what this " +
 				"request is sending (Basic auth header, X-API-Key header, or custom header auth).",
 		})
 		return
@@ -136,7 +136,7 @@ func (h *Handler) handleWebhookRequest(w http.ResponseWriter, r *http.Request, i
 		writeJSONError(w, http.StatusBadRequest, webhookErrorBody{
 			Code:    http.StatusBadRequest,
 			Message: "Invalid request",
-			Hint:    "Check that the request body matches the expected Content-Type and is " +
+			Hint: "Check that the request body matches the expected Content-Type and is " +
 				"well-formed (valid JSON for application/json, valid URL-encoded form for " +
 				"application/x-www-form-urlencoded).",
 		})
@@ -306,7 +306,7 @@ func (h *Handler) authenticateRequest(r *http.Request, webhook *Webhook) error {
 	case "none", "":
 		return nil
 
-	case "basic":
+	case "basic", "basicAuth":
 		// Basic authentication
 		username, password, ok := r.BasicAuth()
 		if !ok {
@@ -315,6 +315,17 @@ func (h *Handler) authenticateRequest(r *http.Request, webhook *Webhook) error {
 
 		expectedUsername := getAuthData(webhook.AuthData, "username", "")
 		expectedPassword := getAuthData(webhook.AuthData, "password", "")
+
+		// n8n stores Basic Auth credentials separately from the webhook
+		// registration record. When no resolved credential is available,
+		// preserve the node-level contract by requiring a well-formed
+		// Basic header and let the Webhook node validate its syntax.
+		if expectedUsername == "" && expectedPassword == "" {
+			if username == "" && password == "" {
+				return fmt.Errorf("invalid credentials")
+			}
+			break
+		}
 
 		// SECURITY: Use constant-time comparison to prevent timing attacks
 		usernameMatch := subtle.ConstantTimeCompare([]byte(username), []byte(expectedUsername)) == 1

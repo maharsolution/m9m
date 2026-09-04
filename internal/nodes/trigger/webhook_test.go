@@ -14,8 +14,8 @@ import (
 // would silently miss because of the casing + shape mismatch.
 func TestNormalizeWebhookHeaders(t *testing.T) {
 	in := map[string][]string{
-		"Content-Type":   {"application/json"},
-		"X-Custom":       {"abc", "def"}, // multi-value: first wins
+		"Content-Type":    {"application/json"},
+		"X-Custom":        {"abc", "def"}, // multi-value: first wins
 		"Accept-Encoding": {},
 	}
 	got := normalizeWebhookHeaders(in)

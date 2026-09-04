@@ -28,20 +28,20 @@ const (
 
 // RunExecutionData represents data for a workflow run
 type RunExecutionData struct {
-	ExecutionData   *ExecutionData
-	ResultData      *RunData
-	ExecutionMode   WorkflowExecuteMode
-	StartedAt       time.Time
-	StoppedAt       *time.Time
-	WorkflowData    interface{}
+	ExecutionData *ExecutionData
+	ResultData    *RunData
+	ExecutionMode WorkflowExecuteMode
+	StartedAt     time.Time
+	StoppedAt     *time.Time
+	WorkflowData  interface{}
 }
 
 // ExecutionData represents execution context data
 type ExecutionData struct {
-	ContextData     map[string]interface{}
+	ContextData        map[string]interface{}
 	NodeExecutionStack []interface{}
-	MetaData        map[string]interface{}
-	WaitingExecution map[string]interface{}
+	MetaData           map[string]interface{}
+	WaitingExecution   map[string]interface{}
 }
 
 // RunData represents data from previous node runs
@@ -51,11 +51,11 @@ type RunData struct {
 
 // NodeExecutionResult represents the result of executing a node
 type NodeExecutionResult struct {
-	Data        []model.DataItem  `json:"data"`
-	Error       *ExecutionError   `json:"error,omitempty"`
-	StartTime   time.Time         `json:"startTime"`
-	ExecutionTime time.Duration   `json:"executionTime"`
-	Source      []interface{}     `json:"source,omitempty"`
+	Data          []model.DataItem `json:"data"`
+	Error         *ExecutionError  `json:"error,omitempty"`
+	StartTime     time.Time        `json:"startTime"`
+	ExecutionTime time.Duration    `json:"executionTime"`
+	Source        []interface{}    `json:"source,omitempty"`
 }
 
 // ExecutionError represents an error during execution
@@ -87,20 +87,20 @@ type ExpressionContext struct {
 
 // AdditionalKeys represents additional context keys
 type AdditionalKeys struct {
-	ExecutionId    string                 `json:"executionId"`
+	ExecutionId           string                 `json:"executionId"`
 	CurrentNodeParameters map[string]interface{} `json:"currentNodeParameters"`
-	RestApiUrl     string                 `json:"restApiUrl"`
-	InstanceBaseUrl string                `json:"instanceBaseUrl"`
-	WebhookBaseUrl  string                `json:"webhookBaseUrl"`
-	WebhookWaitingBaseUrl string          `json:"webhookWaitingBaseUrl"`
-	WebhookTestBaseUrl string             `json:"webhookTestBaseUrl"`
+	RestApiUrl            string                 `json:"restApiUrl"`
+	InstanceBaseUrl       string                 `json:"instanceBaseUrl"`
+	WebhookBaseUrl        string                 `json:"webhookBaseUrl"`
+	WebhookWaitingBaseUrl string                 `json:"webhookWaitingBaseUrl"`
+	WebhookTestBaseUrl    string                 `json:"webhookTestBaseUrl"`
 }
 
 // ExecuteData represents additional execution data
 type ExecuteData struct {
-	Data        interface{}
-	Source      interface{}
-	Metadata    map[string]interface{}
+	Data     interface{}
+	Source   interface{}
+	Metadata map[string]interface{}
 }
 
 // WorkflowDataProxy provides access to workflow data contexts ($json, $input, etc.)
@@ -116,16 +116,16 @@ type WorkflowDataProxy struct {
 	mode                WorkflowExecuteMode
 
 	// Additional context
-	additionalKeys      *AdditionalKeys
-	executeData         *ExecuteData
-	contextNodeName     *string
+	additionalKeys  *AdditionalKeys
+	executeData     *ExecuteData
+	contextNodeName *string
 
 	// Caching
-	dataCache           map[string]interface{}
-	cacheMutex          sync.RWMutex
+	dataCache  map[string]interface{}
+	cacheMutex sync.RWMutex
 
 	// JavaScript VM reference
-	vm                  *goja.Runtime
+	vm *goja.Runtime
 }
 
 // NewWorkflowDataProxy creates a new WorkflowDataProxy instance
@@ -133,17 +133,17 @@ func NewWorkflowDataProxy(context *ExpressionContext, vm *goja.Runtime) *Workflo
 	return &WorkflowDataProxy{
 		workflow:            context.Workflow,
 		runExecutionData:    context.RunExecutionData,
-		runIndex:           context.RunIndex,
-		itemIndex:          context.ItemIndex,
-		activeNodeName:     context.ActiveNodeName,
+		runIndex:            context.RunIndex,
+		itemIndex:           context.ItemIndex,
+		activeNodeName:      context.ActiveNodeName,
 		connectionInputData: context.ConnectionInputData,
 		siblingParameters:   context.SiblingParameters,
-		mode:               context.Mode,
-		additionalKeys:     context.AdditionalKeys,
-		executeData:        context.ExecuteData,
-		contextNodeName:    context.ContextNodeName,
-		dataCache:          make(map[string]interface{}),
-		vm:                 vm,
+		mode:                context.Mode,
+		additionalKeys:      context.AdditionalKeys,
+		executeData:         context.ExecuteData,
+		contextNodeName:     context.ContextNodeName,
+		dataCache:           make(map[string]interface{}),
+		vm:                  vm,
 	}
 }
 
@@ -194,8 +194,13 @@ func (p *WorkflowDataProxy) createInputProxy() goja.Value {
 
 		inputData := p.getInputConnectionData(connectionIndex)
 		jsonData := make([]interface{}, len(inputData))
+		codeNodeItems := p.additionalKeys != nil && p.additionalKeys.CurrentNodeParameters != nil && p.additionalKeys.CurrentNodeParameters["codeNodeInputItems"] == true
 		for i, item := range inputData {
-			jsonData[i] = item.JSON
+			if codeNodeItems {
+				jsonData[i] = map[string]interface{}{"json": item.JSON, "binary": item.Binary}
+			} else {
+				jsonData[i] = item.JSON
+			}
 		}
 		return p.vm.ToValue(jsonData)
 	}))
@@ -458,13 +463,13 @@ func (p *WorkflowDataProxy) createEvaluateExpressionProxy() goja.Value {
 		context := &ExpressionContext{
 			Workflow:            p.workflow,
 			RunExecutionData:    p.runExecutionData,
-			RunIndex:           p.runIndex,
-			ItemIndex:          p.itemIndex,
-			ActiveNodeName:     p.activeNodeName,
+			RunIndex:            p.runIndex,
+			ItemIndex:           p.itemIndex,
+			ActiveNodeName:      p.activeNodeName,
 			ConnectionInputData: p.connectionInputData,
-			Mode:               p.mode,
-			AdditionalKeys:     p.additionalKeys,
-			ExecuteData:        p.executeData,
+			Mode:                p.mode,
+			AdditionalKeys:      p.additionalKeys,
+			ExecuteData:         p.executeData,
 		}
 
 		result, err := evaluator.EvaluateExpression(expression, context)
@@ -622,11 +627,12 @@ func (p *WorkflowDataProxy) Reset() {
 	defer p.cacheMutex.Unlock()
 	p.dataCache = make(map[string]interface{})
 }
+
 // NewExpressionContext creates a new expression context with defaults
 func NewExpressionContext() *ExpressionContext {
 	return &ExpressionContext{
-		AdditionalKeys: &AdditionalKeys{},
-		Mode:           ModeManual,
+		AdditionalKeys:    &AdditionalKeys{},
+		Mode:              ModeManual,
 		SiblingParameters: make(map[string]interface{}),
 	}
 }

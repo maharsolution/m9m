@@ -229,7 +229,7 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 			return nil, fmt.Errorf("node %s not found in workflow", nodeName)
 		}
 
-			// Get the executor for this node type
+		// Get the executor for this node type
 		executor, err := e.GetNodeExecutor(node.Type)
 		if err != nil {
 			// n8n exports frequently include decorative nodes (Sticky

@@ -366,9 +366,9 @@ func resolveExecutionMode(request *WebhookRequest) string {
 // resolveRequestWebhookURL returns the public URL clients should use
 // to hit this webhook. The lookup order matches the trigger-node
 // resolver so both layers agree:
-//   1. `M9M_WEBHOOK_URL` (preferred — lets operators point at a proxy).
-//   2. `WEBHOOK_URL` (n8n-compatible env var).
-//   3. `M9M_HOST` + `M9M_PORT`, defaulting to `http://localhost:8080`.
+//  1. `M9M_WEBHOOK_URL` (preferred — lets operators point at a proxy).
+//  2. `WEBHOOK_URL` (n8n-compatible env var).
+//  3. `M9M_HOST` + `M9M_PORT`, defaulting to `http://localhost:8080`.
 //
 // The returned URL has the inbound path appended so callers can echo
 // it back via `{{ $json.webhookUrl }}` exactly like n8n does.
