@@ -125,10 +125,17 @@ func (e *GojaExpressionEvaluator) EvaluateExpression(
 	runtime := e.runtimePool.Get()
 	defer e.runtimePool.Put(runtime)
 
-	// 4. Create data proxy and set context
+	// 4. Create data proxy and set context. Route through
+	// `runtime.SetupDataProxy` rather than calling `proxy.Setup`
+	// directly so the runtime gets a chance to install
+	// runtime-wide helpers (currently the `toJsonString()` polyfill)
+	// before any expression runs. Without that hop, expressions
+	// like `{{ $json.foo.toJsonString() }}` fail with
+	// `TypeError: Object has no member 'toJsonString'`, which is
+	// exactly what the webhook XML parity test was hitting before
+	// this fix.
 	proxy := NewWorkflowDataProxy(context, runtime.vm)
-	err = proxy.Setup(runtime.vm)
-	if err != nil {
+	if err = runtime.SetupDataProxy(proxy); err != nil {
 		return nil, &ExpressionError{
 			Type:        "SetupError",
 			Message:     fmt.Sprintf("Failed to setup data proxy: %v", err),

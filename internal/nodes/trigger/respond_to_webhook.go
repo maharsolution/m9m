@@ -3,7 +3,9 @@ package trigger
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
+	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
 )
@@ -39,8 +41,18 @@ import (
 // value is parsed once at Execute time and surfaced as the
 // single-output DataItem so `prepareResponse` reads it back out of
 // `NodeOutputs`.
+//
+// Expression handling: when `responseBody` is a string starting with
+// `=` (the n8n convention for "this is an expression, evaluate it")
+// the value is run through the Goja expression evaluator using the
+// upstream input data as `$json` context. This is required for the
+// `webhook_xml` parity test, where the workflow uses
+// `={{ $json.data.toJsonString() }}` to stringify an XML payload
+// before it is returned to the caller. Without this step the literal
+// expression string would be emitted instead of the evaluated value.
 type RespondToWebhookNode struct {
 	*base.BaseNode
+	evaluator *expressions.GojaExpressionEvaluator
 }
 
 // NewRespondToWebhookNode creates a new Respond to Webhook node.
@@ -51,6 +63,7 @@ func NewRespondToWebhookNode() *RespondToWebhookNode {
 			Description: "Returns data from the workflow back to the webhook caller (responseMode: responseNode)",
 			Category:    "Trigger",
 		}),
+		evaluator: expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 	}
 }
 
@@ -106,6 +119,19 @@ func (r *RespondToWebhookNode) Execute(inputData []model.DataItem, nodeParams ma
 			}
 			return inputData, nil
 		}
+		// If the user supplied `responseBody` as a string starting with
+		// `=`, n8n interprets the rest as a JavaScript expression. Run
+		// it through the Goja evaluator against the upstream `$json`
+		// context so the response body reflects the actual data the
+		// workflow produced (e.g. `={{ $json.data.toJsonString() }}`)
+		// instead of returning the literal expression text.
+		if s, ok := raw.(string); ok && strings.HasPrefix(s, "=") {
+			evaluated, err := r.evaluateResponseBody(s, inputData)
+			if err != nil {
+				return nil, fmt.Errorf("failed to evaluate responseBody expression: %w", err)
+			}
+			raw = evaluated
+		}
 		body, err := normalizeResponseBody(raw)
 		if err != nil {
 			// Non-JSON string body (XML, plain text, etc.). n8n
@@ -129,6 +155,66 @@ func (r *RespondToWebhookNode) Execute(inputData []model.DataItem, nodeParams ma
 			return []model.DataItem{{JSON: map[string]interface{}{}}}, nil
 		}
 		return inputData, nil
+	}
+}
+
+// evaluateResponseBody runs an n8n `={{ ... }}` expression against the
+// given input items. The leading `=` is stripped before evaluation
+// because Goja's expression parser treats the rest as a pure
+// expression (n8n's `=` prefix means "no further interpolation, the
+// whole thing is code"). The first input item is exposed as `$json`
+// to match the parity test convention — webhook flows run a single
+// item at a time and the workflows that depend on this code path
+// reference upstream output by field rather than by item index.
+//
+// Returns the evaluated value coerced to a string when the result
+// isn't already JSON-shaped. The respond-to-webhook contract is
+// either a JSON object (one Map entry per top-level field) or a
+// string (wrapped under `data` for the manager to forward verbatim
+// as the raw HTTP body), so anything that survives JSON.stringify is
+// fine here — the value is forwarded through `data` so XML/text
+// bodies stay intact.
+func (r *RespondToWebhookNode) evaluateResponseBody(expr string, inputData []model.DataItem) (interface{}, error) {
+	// Build the ExpressionContext. We pass all upstream items through
+	// so n8n-style helpers like `$first()` / `$last()` work, but the
+	// helper-set in the Goja evaluator defaults to `$json` resolving
+	// to the first item which is what `responseBody` expressions
+	// expect on a webhook responseNode.
+	if len(inputData) == 0 {
+		// Empty upstream — n8n still evaluates the expression but
+		// `$json` resolves to `null`. Surface a stable empty item so
+		// the evaluator can still produce a deterministic value.
+		inputData = []model.DataItem{{JSON: map[string]interface{}{}}}
+	}
+
+	context := &expressions.ExpressionContext{
+		ActiveNodeName:      "Respond to Webhook",
+		RunIndex:            0,
+		ItemIndex:           0,
+		Mode:                expressions.ModeManual,
+		ConnectionInputData: inputData,
+		Workflow: &model.Workflow{
+			Name: "Respond to Webhook",
+		},
+		AdditionalKeys: &expressions.AdditionalKeys{
+			ExecutionId: "respond-to-webhook",
+		},
+	}
+
+	evaluated, err := r.evaluator.EvaluateExpression(strings.TrimPrefix(expr, "="), context)
+	if err != nil {
+		return nil, err
+	}
+
+	// If the expression already returned a structured value (map,
+	// slice, etc.), hand it through as-is so `normalizeResponseBody`
+	// keeps the shape. Otherwise stringify primitives so they flow
+	// through the `data` wrapper as a plain string body.
+	switch v := evaluated.(type) {
+	case map[string]interface{}, []interface{}, nil:
+		return v, nil
+	default:
+		return fmt.Sprintf("%v", v), nil
 	}
 }
 
