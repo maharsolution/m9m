@@ -434,6 +434,35 @@ func (r *SecureGojaRuntime) SetupDataProxy(dataProxy *WorkflowDataProxy) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
+	// Polyfill n8n-style `toJsonString()` for primitives and plain
+	// objects. n8n wraps every JSON value in a Proxy that exposes a
+	// `.toJsonString()` helper for serialisation in workflow
+	// expressions. Without this, calling `$json.foo.toJsonString()`
+	// fails with `TypeError: ... .toJsonString is not a function`.
+	// The polyfill intentionally uses `JSON.stringify` for every
+	// value, matching what n8n's `toJsonString` emits for both
+	// XML/text passthrough and structured objects alike. The
+	// auto-boxed `this` is forced through `String(this)` for
+	// strings so goja doesn't trip on wrapper vs primitive
+	// coercion.
+	if _, err := r.vm.RunString(`
+		(function() {
+			if (typeof Object.prototype.toJsonString === 'function') return;
+			function toJsonString() {
+				var v = this;
+				if (v === undefined || v === null) return '';
+				return JSON.stringify(v);
+			}
+			Object.prototype.toJsonString = toJsonString;
+			String.prototype.toJsonString = toJsonString;
+			Number.prototype.toJsonString = toJsonString;
+			Boolean.prototype.toJsonString = toJsonString;
+			Array.prototype.toJsonString = toJsonString;
+		})();
+	`); err != nil {
+		return fmt.Errorf("failed to install toJsonString polyfill: %w", err)
+	}
+
 	// Set up all the n8n context variables
 	return dataProxy.Setup(r.vm)
 }
