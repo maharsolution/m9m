@@ -274,6 +274,10 @@ func RegisterAllNodes(eng engine.WorkflowEngine) {
 	eng.RegisterNodeExecutor("n8n-nodes-base.switch", transform.NewSwitchNode())
 	eng.RegisterNodeExecutor("n8n-nodes-base.function", transform.NewFunctionNode())
 	eng.RegisterNodeExecutor("n8n-nodes-base.json", transform.NewJSONNode())
+	// XML conversion node — covers n8n's "XML to JSON" / "JSON to XML"
+	// flow used in webhook parity tests. Implementation lives in the
+	// transform package next to the other data-shaping nodes.
+	eng.RegisterNodeExecutor("n8n-nodes-base.xml", transform.NewXmlNode())
 
 	// HTTP nodes
 	eng.RegisterNodeExecutor("n8n-nodes-base.httpRequest", httpnode.NewHTTPRequestNode())
