@@ -1,6 +1,7 @@
 package webhooks
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -13,6 +14,13 @@ import (
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/storage"
 )
+
+// jsonUnmarshal is a thin wrapper around json.Unmarshal so the
+// lastNodeResponseBody helper stays small and the alias can be
+// swapped out for tolerant parsers in the future.
+var jsonUnmarshal = func(data []byte, v interface{}) error {
+	return json.Unmarshal(data, v)
+}
 
 // WebhookManager manages webhook registration and execution
 type WebhookManager struct {
@@ -608,7 +616,7 @@ func (m *WebhookManager) prepareResponseWithContext(webhook *Webhook, result *en
 		if len(result.Data) == 0 {
 			response.Body = map[string]interface{}{"message": "success"}
 		} else {
-			response.Body = result.Data[0].JSON
+			response.Body = lastNodeResponseBody(workflow, result)
 		}
 	case "allEntries":
 		entries := make([]map[string]interface{}, len(result.Data))
@@ -625,7 +633,7 @@ func (m *WebhookManager) prepareResponseWithContext(webhook *Webhook, result *en
 		if len(result.Data) == 0 {
 			response.Body = map[string]interface{}{"message": "success"}
 		} else {
-			response.Body = result.Data[0].JSON
+			response.Body = lastNodeResponseBody(workflow, result)
 		}
 	}
 
@@ -633,6 +641,54 @@ func (m *WebhookManager) prepareResponseWithContext(webhook *Webhook, result *en
 }
 
 // Helper functions
+
+// lastNodeResponseBody returns the wire-shape body for the `lastNode`
+// response mode. n8n's HTTP Request, Webhook and other transport-style
+// nodes wrap their real payload in `{body, headers, statusCode, json?}`
+// — the wrapper exists for downstream pipelines, but when the node is
+// the webhook's last node n8n emits the JSON body to the caller
+// instead. Detect that shape here so parity tests don't see the raw
+// wrapper.
+func lastNodeResponseBody(workflow *model.Workflow, result *engine.ExecutionResult) map[string]interface{} {
+	if result == nil || len(result.Data) == 0 {
+		return map[string]interface{}{"message": "success"}
+	}
+	item := result.Data[0].JSON
+
+	// Detect n8n's HTTPRequest-shaped payload by checking for the
+	// well-known wrapper keys. We only unwrap when ALL three of
+	// `body`/`headers`/`statusCode` are present — partial matches
+	// are normally user data, not a transport wrapper.
+	_, hasBody := item["body"]
+	_, hasHeaders := item["headers"]
+	_, hasStatus := item["statusCode"]
+	if hasBody && hasHeaders && hasStatus {
+		if jsonBody, ok := item["json"]; ok {
+			if unwrapped, ok := jsonBody.(map[string]interface{}); ok {
+				return unwrapped
+			}
+			// JSON body was a primitive (string/number/array) — emit
+			// it under a `data` key so callers still see a JSON
+			// object rather than a bare primitive that downstream
+			// deserializers may reject.
+			return map[string]interface{}{"data": jsonBody}
+		}
+		if bodyStr, ok := item["body"].(string); ok {
+			// Best-effort: parse the body as JSON if it looks like
+			// it. Otherwise emit under `data` so the response is
+			// well-formed JSON.
+			var parsed map[string]interface{}
+			if err := jsonUnmarshal([]byte(bodyStr), &parsed); err == nil {
+				return parsed
+			}
+			return map[string]interface{}{"data": bodyStr}
+		}
+	}
+
+	// Last node wasn't a transport wrapper (or the wrapper was
+	// incomplete) — pass through verbatim.
+	return item
+}
 
 func isWebhookNode(nodeType string) bool {
 	return nodeType == "n8n-nodes-base.webhook" ||
