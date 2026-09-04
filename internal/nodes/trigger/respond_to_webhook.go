@@ -108,6 +108,17 @@ func (r *RespondToWebhookNode) Execute(inputData []model.DataItem, nodeParams ma
 		}
 		body, err := normalizeResponseBody(raw)
 		if err != nil {
+			// Non-JSON string body (XML, plain text, etc.). n8n
+			// evaluates the `responseBody` expression and emits the
+			// literal result back to the webhook caller regardless of
+			// whether it's valid JSON. Mirror that behaviour so XML
+			// and text responses work even when the workflow author
+			// used `respondWith: "json"` out of habit. The webhook
+			// manager reads `data` back out of NodeOutputs and writes
+			// it as the raw response body when the value is a string.
+			if s, ok := raw.(string); ok {
+				return []model.DataItem{{JSON: map[string]interface{}{"data": s}}}, nil
+			}
 			return nil, fmt.Errorf("invalid responseBody JSON: %w", err)
 		}
 		return []model.DataItem{{JSON: body}}, nil
