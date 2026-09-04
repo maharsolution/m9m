@@ -258,13 +258,27 @@ func (h *HTTPRequestNode) Execute(inputData []model.DataItem, nodeParams map[str
 			return nil, h.CreateError(fmt.Sprintf("failed to create request: %v", err), nil)
 		}
 		
-		// Add headers if provided
+		// Add headers if provided. n8n's HTTP Request node exports
+		// headers in two shapes:
+		//
+		//   1. Flat map:    `headers: { "X-Foo": "bar" }`
+		//   2. Spec list:   `headerParameters: { parameters: [
+		//                       { name: "X-Foo", value: "bar" }, ... ] }`
+		//
+		// Older m9m only recognised shape (1), which broke every
+		// workflow authored in the n8n UI for typeVersion >= 4.
+		// Accept both so the `headerParameters` shape the webhook
+		// parity tests rely on flows through to the outgoing
+		// request.
 		if headers, ok := evaluatedParams["headers"].(map[string]interface{}); ok {
 			for key, value := range headers {
 				if strValue, ok := value.(string); ok {
 					req.Header.Set(key, strValue)
 				}
 			}
+		}
+		if hp, ok := evaluatedParams["headerParameters"]; ok {
+			applyHeaderParameters(req, hp)
 		}
 		
 		// Add body for POST, PUT, PATCH requests
@@ -387,6 +401,53 @@ func (h *HTTPRequestNode) evaluateParameters(params map[string]interface{}, cont
 			evaluatedParams[key] = v
 		}
 	}
-	
+
 	return evaluatedParams, nil
+}
+
+// applyHeaderParameters reads the n8n-style header spec (a list of
+// `{name, value}` records, possibly nested under
+// `headerParameters.parameters`) and applies every entry to the
+// outgoing request. Empty/whitespace names are skipped so a
+// half-filled UI row does not crash the request, and non-string
+// values are coerced via fmt.Sprintf so numeric IDs from upstream
+// expressions still flow through.
+func applyHeaderParameters(req *http.Request, raw interface{}) {
+	entries := flattenHeaderSpec(raw)
+	for _, entry := range entries {
+		name, _ := entry["name"].(string)
+		if strings.TrimSpace(name) == "" {
+			continue
+		}
+		value, ok := entry["value"].(string)
+		if !ok {
+			value = fmt.Sprintf("%v", entry["value"])
+		}
+		req.Header.Set(name, value)
+	}
+}
+
+func flattenHeaderSpec(raw interface{}) []map[string]interface{} {
+	switch v := raw.(type) {
+	case []interface{}:
+		out := make([]map[string]interface{}, 0, len(v))
+		for _, item := range v {
+			if m, ok := item.(map[string]interface{}); ok {
+				out = append(out, m)
+			}
+		}
+		return out
+	case map[string]interface{}:
+		// n8n nests the list under `parameters`:
+		// `headerParameters: { parameters: [...] }`.
+		if list, ok := v["parameters"].([]interface{}); ok {
+			return flattenHeaderSpec(list)
+		}
+		// Some workflows omit the wrapper and put a list-shaped value
+		// under the key directly.
+		if list, ok := v["values"].([]interface{}); ok {
+			return flattenHeaderSpec(list)
+		}
+	}
+	return nil
 }

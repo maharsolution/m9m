@@ -186,8 +186,11 @@ def _classify(case_no: int, n8n: dict[str, Any], m9m: dict[str, Any]) -> str:
 
     Heuristic:
     - Both endpoints must return 2xx with a non-empty body for PASS.
-    - For JSON bodies we additionally require semantic JSON equality.
-    - For XML bodies we require byte-strip equality after collapsing whitespace.
+    - For JSON bodies we additionally require semantic JSON equality
+      after normalising fields that legitimately differ between the
+      two servers (host header, webhookUrl — these are env-driven,
+      not a parity bug).
+    - For XML bodies we require whitespace-collapsed structural equality.
     """
     if n8n["status_code"] != m9m["status_code"]:
         return "FAIL"
@@ -202,8 +205,61 @@ def _classify(case_no: int, n8n: dict[str, Any], m9m: dict[str, Any]) -> str:
         if _norm(n8n["body_raw"]) != _norm(m9m["body_raw"]):
             return "FAIL"
         return "PASS"
-    # Default: JSON semantic equality.
-    return "PASS" if n8n["body_normalized"] == m9m["body_normalized"] else "FAIL"
+    # Default: JSON semantic equality with environment-noise filter.
+    return "PASS" if _semantic_json_equal(case_no, n8n["body_raw"], m9m["body_raw"]) else "FAIL"
+
+
+# Fields that legitimately differ between n8n and m9m because they are
+# bound to the listener (host header) or to operator-configured env
+# vars (webhookUrl). Filtering them out lets us detect real parity
+# bugs while tolerating well-known runtime differences.
+_ENV_NOISE_FIELDS = {
+    "headers.host",
+    "webhookUrl",
+}
+
+
+def _semantic_json_equal(case_no: int, n8n_raw: str, m9m_raw: str) -> bool:
+    """Compare two JSON bodies after stripping environment-driven noise.
+
+    Returns True if the bodies are semantically equivalent once the
+    known-different fields are removed, False otherwise. Parsing
+    failures fall back to raw string comparison so we don't silently
+    mask a different kind of regression.
+    """
+    try:
+        a = json.loads(n8n_raw)
+        b = json.loads(m9m_raw)
+    except Exception:
+        return n8n_raw == m9m_raw
+    _scrub(a)
+    _scrub(b)
+    return a == b
+
+
+def _scrub(node: Any) -> None:
+    """Recursively delete environment-driven keys in-place.
+
+    The noise-field set uses dotted paths so we can target nested
+    keys (e.g. `headers.host`) without nuking the entire `headers`
+    map. The traversal tracks the dotted path from the root and
+    compares against `_ENV_NOISE_FIELDS` so multi-segment paths work
+    the way the operator would expect.
+    """
+    _scrub_with_prefix(node, "")
+
+
+def _scrub_with_prefix(node: Any, prefix: str) -> None:
+    if isinstance(node, dict):
+        for key in list(node.keys()):
+            full_path = f"{prefix}.{key}" if prefix else key
+            if full_path in _ENV_NOISE_FIELDS or key in _ENV_NOISE_FIELDS:
+                node.pop(key, None)
+                continue
+            _scrub_with_prefix(node[key], full_path)
+    elif isinstance(node, list):
+        for item in node:
+            _scrub_with_prefix(item, prefix)
 
 
 def _write_case(out_dir: Path, case: dict[str, Any], n8n: dict[str, Any],
