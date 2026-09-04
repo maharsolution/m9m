@@ -45,10 +45,33 @@ const (
 )
 
 // XML node operation modes.
+//
+// n8n exports these as `xmlToJson` / `jsonToXml` (camelCase) in newer
+// versions, but older exports and hand-edited workflow JSON sometimes
+// use `xmlTojson` / `jsonToxml` (lowercase `j`). We canonicalise on
+// the lowercase form internally but accept both spellings so existing
+// workflow files continue to validate.
 const (
 	xmlModeXMLToJSON = "xmlToJson"
 	xmlModeJSONToXML = "jsonToXml"
 )
+
+// canonicalXMLMode normalises the various spellings n8n workflows
+// use for the mode parameter to the constant defined above. An
+// empty input falls back to xmlToJson (the n8n default).
+func canonicalXMLMode(raw string) string {
+	switch strings.ToLower(raw) {
+	case "jsontoxml", "json_to_xml":
+		return xmlModeJSONToXML
+	case "xmltojson", "xml_to_json":
+		return xmlModeXMLToJSON
+	default:
+		if raw == "" {
+			return xmlModeXMLToJSON
+		}
+		return raw
+	}
+}
 
 // XmlNode implements n8n's XML conversion node.
 type XmlNode struct {
@@ -86,7 +109,7 @@ func (x *XmlNode) ValidateParameters(params map[string]interface{}) error {
 		if !ok {
 			return x.CreateError("mode must be a string", nil)
 		}
-		switch mode {
+		switch canonicalXMLMode(mode) {
 		case xmlModeXMLToJSON, xmlModeJSONToXML:
 			return nil
 		default:
@@ -112,7 +135,7 @@ func (x *XmlNode) Execute(inputData []model.DataItem, nodeParams map[string]inte
 	mode := xmlModeXMLToJSON
 	if rawMode, ok := nodeParams["mode"]; ok && rawMode != nil {
 		if s, ok := rawMode.(string); ok && s != "" {
-			mode = s
+			mode = canonicalXMLMode(s)
 		}
 	}
 
