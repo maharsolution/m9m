@@ -575,7 +575,7 @@ func (m *WebhookManager) prepareResponseWithContext(webhook *Webhook, result *en
 				if len(data) == 0 {
 					response.Body = map[string]interface{}{"message": "success"}
 				} else {
-					response.Body = data[0].JSON
+					response.Body = unwrapRespondToWebhookBody(data[0].JSON)
 				}
 			}
 			return response
@@ -687,6 +687,35 @@ func lastNodeResponseBody(workflow *model.Workflow, result *engine.ExecutionResu
 
 	// Last node wasn't a transport wrapper (or the wrapper was
 	// incomplete) — pass through verbatim.
+	return item
+}
+
+// unwrapRespondToWebhookBody unwraps the {data: STRING} envelope the
+// Respond-to-Webhook node emits when the workflow author used
+// `respondWith: "json"` with a string-typed `responseBody` (typically
+// via `={{ $json.foo.toJsonString() }}` for XML / text passthrough).
+// The webhook response writer would otherwise emit
+// `{"data":"<xml>...</xml>"}` as the body, but n8n emits the raw
+// string under whatever content-type the workflow author set in
+// `responseHeaders`. Matching that wire shape means the manager needs
+// to recognise the envelope and pull the bare string out so the
+// `WriteResponse` path takes the `case string` branch.
+//
+// When the item is anything other than a single-key `{data: STRING}`
+// envelope (a JSON object body, multiple keys, or a non-string
+// `data`), it is returned as-is so JSON-shaped responses still pass
+// through unchanged.
+func unwrapRespondToWebhookBody(item map[string]interface{}) interface{} {
+	if len(item) != 1 {
+		return item
+	}
+	raw, ok := item["data"]
+	if !ok {
+		return item
+	}
+	if s, ok := raw.(string); ok {
+		return s
+	}
 	return item
 }
 
