@@ -36,10 +36,15 @@ func TestRespondToWebhook_EvaluatesResponseBodyExpression(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected data to be a string, got %T (%v)", out[0].JSON["data"], out[0].JSON["data"])
 	}
-	// The polyfill emits the literal XML string back (with the
-	// surrounding quotes that JSON.stringify adds).
+	// n8n's `toJsonString()` on a string returns the raw string
+	// (no JSON quoting). The webhook manager reads `data` out of
+	// NodeOutputs and forwards it verbatim as the response body,
+	// so the XML has to land here unwrapped.
 	if !strings.Contains(got, "<buku>") || !strings.Contains(got, "<id>001</id>") {
-		t.Fatalf("expected serialized XML in data, got %q", got)
+		t.Fatalf("expected raw XML in data, got %q", got)
+	}
+	if strings.HasPrefix(got, `"`) {
+		t.Fatalf("expected raw XML (no JSON quoting), got %q", got)
 	}
 }
 

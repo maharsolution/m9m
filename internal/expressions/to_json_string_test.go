@@ -33,9 +33,19 @@ func TestToJsonStringPolyfill(t *testing.T) {
 		code string
 		want string
 	}{
-		{`$json.data.toJsonString()`, `"<?xml version=\"1.0\"?><buku><id>001</id></buku>"`},
-		{`"<raw xml>".toJsonString()`, `"<raw xml>"`},
+		// n8n's string pass-through: `toJsonString()` on a string is
+		// the raw string, NOT a JSON-quoted form. This matches the
+		// upstream `webhook_xml` flow where `$json.data` is an XML
+		// payload and the workflow expects the raw XML back from
+		// `toJsonString()` rather than the JSON-encoded form.
+		{`$json.data.toJsonString()`, `<?xml version="1.0"?><buku><id>001</id></buku>`},
+		{`"<raw xml>".toJsonString()`, `<raw xml>`},
 		{`(1).toJsonString()`, `1`},
+		// Booleans come back as the literal n8n wire form.
+		{`true.toJsonString()`, `true`},
+		// Structured values keep the existing `JSON.stringify`
+		// behaviour so other parity tests that rely on JSON-wrapped
+		// objects continue to work.
 		{`({a:1, b:"x"}).toJsonString()`, `{"a":1,"b":"x"}`},
 	}
 

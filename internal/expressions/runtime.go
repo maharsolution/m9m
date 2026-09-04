@@ -439,18 +439,46 @@ func (r *SecureGojaRuntime) SetupDataProxy(dataProxy *WorkflowDataProxy) error {
 	// `.toJsonString()` helper for serialisation in workflow
 	// expressions. Without this, calling `$json.foo.toJsonString()`
 	// fails with `TypeError: ... .toJsonString is not a function`.
-	// The polyfill intentionally uses `JSON.stringify` for every
-	// value, matching what n8n's `toJsonString` emits for both
-	// XML/text passthrough and structured objects alike. The
-	// auto-boxed `this` is forced through `String(this)` for
-	// strings so goja doesn't trip on wrapper vs primitive
-	// coercion.
+	//
+	// n8n's `toJsonString` semantics:
+	//   - strings   -> raw string (no JSON quoting)
+	//   - numbers   -> raw number (no JSON quoting)
+	//   - booleans  -> "true" / "false"
+	//   - null/undef -> ""
+	//   - objects   -> JSON.stringify (the wrapped proxy
+	//                  representation is just the underlying object)
+	//
+	// The first three branches matter for the XML webhook test
+	// (`{{ $json.data.toJsonString() }}` against a stringified XML
+	// payload — n8n emits the XML verbatim, m9m was emitting the
+	// JSON-quoted form). The structured case keeps the existing
+	// `JSON.stringify` behaviour so other parity tests that rely on
+	// JSON-wrapped objects continue to work.
 	if _, err := r.vm.RunString(`
 		(function() {
 			if (typeof Object.prototype.toJsonString === 'function') return;
 			function toJsonString() {
 				var v = this;
 				if (v === undefined || v === null) return '';
+				// When called on a boxed primitive (String, Number,
+				// Boolean), typeof v is 'object' not the primitive's
+				// typeof. Detect those wrappers and unwrap to the
+				// primitive before deciding which branch to take —
+				// otherwise the JSON.stringify fallback would emit
+				// the wrapped wrapper object (e.g. a String wrapper)
+				// instead of the raw string the workflow expects.
+				if (v instanceof String || (typeof v === 'object' && v !== null && typeof v.valueOf === 'function' && typeof v.valueOf() === 'string')) {
+					return v.valueOf();
+				}
+				if (v instanceof Number || (typeof v === 'object' && v !== null && typeof v.valueOf === 'function' && typeof v.valueOf() === 'number')) {
+					return String(v.valueOf());
+				}
+				if (v instanceof Boolean || (typeof v === 'object' && v !== null && typeof v.valueOf === 'function' && typeof v.valueOf() === 'boolean')) {
+					return v.valueOf() ? 'true' : 'false';
+				}
+				if (typeof v === 'string') return v;
+				if (typeof v === 'number') return String(v);
+				if (typeof v === 'boolean') return v ? 'true' : 'false';
 				return JSON.stringify(v);
 			}
 			Object.prototype.toJsonString = toJsonString;
