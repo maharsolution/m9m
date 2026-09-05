@@ -144,6 +144,16 @@ func (r *connectionRouterImpl) RouteData(sourceNode string, workflow *model.Work
 		}
 	}
 
+	// TEMPORARY DEBUG: log the routed map AFTER for-loop so we can
+	// confirm exactly which slice landed at each target. Companion
+	// to the engine-level debugTrace* helpers; remove once
+	// webhook_loop flake is fixed.
+	if sourceNode == "Generate Mock Data" {
+		for target, items := range routedData {
+			log.Printf("DEBUG-ROUTE-FINAL [%s -> %s] out=%d", sourceNode, target, len(items))
+		}
+	}
+
 	return routedData, nil
 }
 
