@@ -203,12 +203,6 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 	if err != nil {
 		return nil, fmt.Errorf("failed to determine execution order: %w", err)
 	}
-	// TEMPORARY DEBUG: log execution order so we can correlate
-	// per-node execution traces with the actual topological
-	// sequence. Companion to the other debugTrace* helpers.
-	if workflow.ID == "t8xPqfr92w5HGeOv" {
-		log.Printf("DEBUG-EXEC-ORDER [%s] order=%v", workflow.ID, executionOrder)
-	}
 
 	// Execute nodes in order
 	nodeResults := make(map[string][]model.DataItem)
@@ -276,12 +270,6 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 			// No specific input data, use empty input
 			inputDataForNode = []model.DataItem{{JSON: make(map[string]interface{})}}
 		}
-		// TEMPORARY DEBUG: trace input data BEFORE node execution.
-		// Companion to the per-node output trace; together they show
-		// the complete data flow so we can pinpoint whether the 5→1
-		// collapse happens between Code→Loop routing, inside Loop
-		// execution, or somewhere else entirely.
-		debugTraceNodeInput(workflow, nodeName, inputDataForNode)
 
 		// Prepare node parameters with credentials if credential manager is available
 		finalNodeParams := node.Parameters
@@ -309,14 +297,6 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		// metadata (e.g. IF's `_ifResult`) so it never leaks into
 		// downstream node inputs or webhook responses.
 		nodeResults[nodeName] = stripRoutingMetadata(outputData)
-
-		// TEMPORARY DEBUG: trace per-node output shape so we can
-		// diagnose intermittent webhook_loop responses (sometimes 5
-		// items, sometimes 1 item, sometimes pending). Remove once
-		// root cause is found.
-		debugTraceNodeOutput(workflow, nodeName, inputDataForNode, nodeResults[nodeName])
-		debugTraceCodeOutput(workflow, nodeName, inputDataForNode, nodeResults[nodeName])
-		debugTraceLoopOutput(workflow, nodeName, inputDataForNode, nodeResults[nodeName])
 
 		// Route data to connected nodes
 		routedData, err := e.connectionRouter.RouteData(nodeName, workflow, outputData)
@@ -496,78 +476,6 @@ func (e *workflowEngineImpl) findStartingNodes(workflow *model.Workflow) []strin
 // annotations (sticky notes, comments, etc.) but they have no executor
 // and no connections. They should be skipped during execution rather
 // than aborting the whole workflow.
-// debugTraceNodeOutput writes a one-line summary of a node's output
-// shape to stderr so operators can diagnose intermittent workflow
-// failures (e.g. the webhook_loop flake where the response flips
-// between a 5-item array, a 1-item object, and an empty result
-// depending on which control path the engine took). Cheap to call,
-// only fires for nodes whose name matches a debug filter, and easy
-// to rip out once the root cause is confirmed.
-func debugTraceNodeOutput(wf *model.Workflow, nodeName string, input []model.DataItem, output []model.DataItem) {
-	const debugNodeFilter = "Done / Output Final"
-	if nodeName != debugNodeFilter {
-		return
-	}
-	keys := make([]string, 0, len(output))
-	for _, item := range output {
-		for k := range item.JSON {
-			if len(keys) >= 3 {
-				break
-			}
-			keys = append(keys, k)
-		}
-	}
-	log.Printf("DEBUG-LOOP [%s] in=%d out=%d keys=%v", nodeName, len(input), len(output), keys)
-}
-
-// debugTraceCodeOutput logs the input/output shape of the Code node
-// named "Generate Mock Data" so we can confirm whether the 5-item
-// array is reliably produced by the Code node or whether the
-// downstream splitInBatches node is the one collapsing the array.
-// This is part of the same webhook_loop flake investigation as
-// debugTraceNodeOutput — keep both until the root cause is found.
-func debugTraceCodeOutput(wf *model.Workflow, nodeName string, input []model.DataItem, output []model.DataItem) {
-	const debugNodeFilter = "Generate Mock Data"
-	if nodeName != debugNodeFilter {
-		return
-	}
-	log.Printf("DEBUG-CODE [%s] in=%d out=%d", nodeName, len(input), len(output))
-}
-
-// debugTraceLoopOutput logs the input/output shape of the
-// splitInBatches node named "Loop Over Items" so we can confirm
-// whether the 5-item → 1-item collapse happens inside splitInBatches
-// (when the loop-row shape detection misfires) or somewhere upstream
-// of it. Companion to debugTraceCodeOutput / debugTraceNodeOutput.
-func debugTraceLoopOutput(wf *model.Workflow, nodeName string, input []model.DataItem, output []model.DataItem) {
-	const debugNodeFilter = "Loop Over Items"
-	if nodeName != debugNodeFilter {
-		return
-	}
-	keys := make([]string, 0, len(output))
-	for _, item := range output {
-		for k := range item.JSON {
-			if len(keys) >= 3 {
-				break
-			}
-			keys = append(keys, k)
-		}
-	}
-	log.Printf("DEBUG-LOOPEXEC [%s] in=%d out=%d keys=%v", nodeName, len(input), len(output), keys)
-}
-
-// debugTraceNodeInput logs how many items arrive at each node
-// BEFORE execution runs so we can pinpoint exactly where in the
-// routing pipeline the 5→1 collapse happens. Companion to
-// debugTraceNodeOutput / debugTraceCodeOutput / debugTraceLoopOutput.
-func debugTraceNodeInput(wf *model.Workflow, nodeName string, input []model.DataItem) {
-	const debugNodeFilter = "Loop Over Items"
-	if nodeName != debugNodeFilter {
-		return
-	}
-	log.Printf("DEBUG-INPUT [%s] in=%d", nodeName, len(input))
-}
-
 func isDecorativeNodeType(nodeType string) bool {
 	switch nodeType {
 	case "n8n-nodes-base.stickyNote",

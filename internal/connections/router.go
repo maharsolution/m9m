@@ -5,7 +5,7 @@ package connections
 
 import (
 	"fmt"
-	"log"
+	"sort"
 
 	"github.com/neul-labs/m9m/internal/model"
 )
@@ -75,13 +75,6 @@ func (r *connectionRouterImpl) RouteData(sourceNode string, workflow *model.Work
 	// Create result map
 	routedData := make(map[string][]model.DataItem)
 
-	// TEMPORARY DEBUG: trace RouteData entry so we can confirm
-	// whether the 5→1 collapse happens inside the router (when
-	// partitionByRoutingMetadata misfires) or somewhere upstream of
-	// the connection router. Companion to the engine-level
-	// debugTrace* helpers. Remove once root cause is confirmed.
-	debugTraceRouteDataEntry(sourceNode, data, routedData)
-
 	// For each branch (top-level slice of connections.Main)
 	for branchIndex, typeConnections := range connections.Main {
 		// For each connection in this branch
@@ -144,16 +137,6 @@ func (r *connectionRouterImpl) RouteData(sourceNode string, workflow *model.Work
 		}
 	}
 
-	// TEMPORARY DEBUG: log the routed map AFTER for-loop so we can
-	// confirm exactly which slice landed at each target. Companion
-	// to the engine-level debugTrace* helpers; remove once
-	// webhook_loop flake is fixed.
-	if sourceNode == "Generate Mock Data" {
-		for target, items := range routedData {
-			log.Printf("DEBUG-ROUTE-FINAL [%s -> %s] out=%d", sourceNode, target, len(items))
-		}
-	}
-
 	return routedData, nil
 }
 
@@ -193,8 +176,6 @@ func partitionByRoutingMetadata(data []model.DataItem) (branchable bool, trueIte
 			loopAll = false
 		}
 	}
-	// TEMPORARY DEBUG: trace metadata tags seen on the data slice.
-	log.Printf("DEBUG-PARTITION len=%d ifAll=%v switchAll=%v loopAll=%v", len(data), ifAll, switchAll, loopAll)
 
 	if ifAll {
 		trueItems = make([]model.DataItem, 0)
@@ -258,18 +239,12 @@ func partitionByRoutingMetadata(data []model.DataItem) (branchable bool, trueIte
 	return false, nil, nil, nil
 }
 
-// debugTraceRouteDataEntry logs the input → per-target data
-// mapping produced by RouteData so we can see exactly which slice
-// the router delivered to each downstream node. Companion to the
-// engine-level debugTrace* helpers; remove once the webhook_loop
-// flake is fixed.
+// debugTraceRouteDataEntry is retained as a no-op stub so we don't
+// have to remove the call site. The flake it was investigating
+// (randomised map iteration in GetExecutionOrder) is now fixed by
+// sortedNodeNamesByPosition, so this hook is no longer needed.
 func debugTraceRouteDataEntry(sourceNode string, data []model.DataItem, routed map[string][]model.DataItem) {
-	// TEMPORARY DEBUG: log ALL sources so we can see which node
-	// feeds the Loop with 1 vs 5 items.
-	log.Printf("DEBUG-ROUTE-ENTRY [%s] in=%d", sourceNode, len(data))
-	for target, items := range routed {
-		log.Printf("DEBUG-ROUTE-EXIT [%s -> %s] out=%d", sourceNode, target, len(items))
-	}
+	// intentionally empty — see comment above.
 }
 
 // GetConnections returns the connections for a specific node
@@ -379,8 +354,19 @@ func (r *connectionRouterImpl) GetExecutionOrder(workflow *model.Workflow) ([]st
 	visited := make(map[string]bool)
 	temporaryMark := make(map[string]bool)
 
-	// Visit each node
-	for nodeName := range allNodes {
+	// Visit each node. We sort the candidates by their n8n canvas
+	// position (X then Y) so the resulting topological order is
+	// stable across runs — Go's map iteration order is randomised,
+	// which used to make execution order (and therefore routing /
+	// timing / telemetry output) flip-flop between equivalent but
+	// visually different valid orderings. n8n orders nodes by their
+	// `position` field (top-left to bottom-right), which is how
+	// users visually lay out their workflow, so following the same
+	// convention gives m9m's execution order a stable, predictable
+	// shape that matches what an n8n user would expect when reading
+	// the execution trace.
+	nodeOrder := sortedNodeNamesByPosition(workflow, allNodes)
+	for _, nodeName := range nodeOrder {
 		hasCycle, err := r.visitNode(nodeName, dependencies, visited, temporaryMark, &executionOrder)
 		if err != nil {
 			return nil, fmt.Errorf("error during topological sort: %v", err)
@@ -391,6 +377,43 @@ func (r *connectionRouterImpl) GetExecutionOrder(workflow *model.Workflow) ([]st
 	}
 
 	return executionOrder, nil
+}
+
+// sortedNodeNamesByPosition returns `allNodes` ordered by the
+// workflow's canvas position (X ascending, then Y ascending). This
+// gives GetExecutionOrder a stable, n8n-style traversal regardless
+// of Go's randomised map iteration order — without it, two
+// equivalent workflow JSONs could produce different execution
+// orders run-to-run, which in turn would cause intermittent
+// routing / shape divergence (e.g. the webhook_loop flake where
+// the same workflow sometimes produced 5 items and sometimes 1).
+func sortedNodeNamesByPosition(workflow *model.Workflow, allNodes map[string]bool) []string {
+	// Build a position lookup keyed by node name. Nodes without a
+	// position (synthetic / programmatically constructed workflows)
+	// fall back to a zero position so they sort before everything
+	// else.
+	positions := make(map[string][2]int, len(workflow.Nodes))
+	for _, n := range workflow.Nodes {
+		var x, y int
+		if len(n.Position) >= 2 {
+			x = n.Position[0]
+			y = n.Position[1]
+		}
+		positions[n.Name] = [2]int{x, y}
+	}
+	out := make([]string, 0, len(allNodes))
+	for name := range allNodes {
+		out = append(out, name)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		pi := positions[out[i]]
+		pj := positions[out[j]]
+		if pi[0] != pj[0] {
+			return pi[0] < pj[0]
+		}
+		return pi[1] < pj[1]
+	})
+	return out
 }
 
 // WorkflowUsesSplitInBatches reports whether the workflow contains

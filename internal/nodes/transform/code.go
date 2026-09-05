@@ -5,7 +5,6 @@ package transform
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/neul-labs/m9m/internal/expressions"
@@ -462,20 +461,14 @@ func normalizeCodeItemJSON(value interface{}) (map[string]interface{}, bool) {
 }
 
 func (c *CodeNode) convertCodeResult(result interface{}, inputData []model.DataItem) ([]model.DataItem, error) {
-	// TEMPORARY DEBUG: log the raw result type/shape before
-	// conversion so we can correlate it with the engine-level
-	// "DEBUG-CODE in=1 out=5" trace. Remove once root cause is found.
-	log.Printf("DEBUG-CONVERT-CODE resultType=%T", result)
 	// The expression runtime may wrap a returned array in a `result` field
 	// when executing an IIFE. Unwrap that envelope before normalising n8n
 	// item objects.
 	if resultMap, ok := result.(map[string]interface{}); ok {
 		switch nested := resultMap["result"].(type) {
 		case []interface{}:
-			log.Printf("DEBUG-CONVERT-CODE unwrap []interface{} len=%d", len(nested))
 			result = nested
 		case []map[string]interface{}:
-			log.Printf("DEBUG-CONVERT-CODE unwrap []map[string]interface{} len=%d", len(nested))
 			result = nested
 		}
 	}
