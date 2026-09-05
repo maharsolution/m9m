@@ -302,8 +302,23 @@ func shouldReplaceJSON(nodeParams map[string]interface{}) bool {
 			return b
 		}
 	}
-	// options present but no keepOnlySet flag — n8n defaults to
-	// keepOnlySet=true for typeVersion 3+ when `options` is empty.
+	// n8n's Set node typeVersion 3.0 used the legacy `includeOtherFields`
+	// flag (true = merge upstream + assignments, false = replace with
+	// assignments only). typeVersion 3.1+ renamed it to `keepOnlySet`
+	// with the inverted meaning. Workflows that have not yet been
+	// re-saved through the v3.1+ editor still ship `includeOtherFields`;
+	// honour it so MERGE vs REPLACE behaves the way the workflow author
+	// intended. `includeOtherFields=true` means "keep upstream fields",
+	// which is the opposite of `keepOnlySet=true` ("discard upstream
+	// fields"), so the boolean is inverted here.
+	if v, ok := opts["includeOtherFields"]; ok {
+		if b, ok := v.(bool); ok {
+			return !b
+		}
+	}
+	// options present but no keepOnlySet / includeOtherFields flag —
+	// n8n defaults to keepOnlySet=true for typeVersion 3+ when `options`
+	// is empty.
 	return true
 }
 
