@@ -303,6 +303,8 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		// items, sometimes 1 item, sometimes pending). Remove once
 		// root cause is found.
 		debugTraceNodeOutput(workflow, nodeName, inputDataForNode, nodeResults[nodeName])
+		debugTraceCodeOutput(workflow, nodeName, inputDataForNode, nodeResults[nodeName])
+		debugTraceLoopOutput(workflow, nodeName, inputDataForNode, nodeResults[nodeName])
 
 		// Route data to connected nodes
 		routedData, err := e.connectionRouter.RouteData(nodeName, workflow, outputData)
@@ -504,6 +506,42 @@ func debugTraceNodeOutput(wf *model.Workflow, nodeName string, input []model.Dat
 		}
 	}
 	log.Printf("DEBUG-LOOP [%s] in=%d out=%d keys=%v", nodeName, len(input), len(output), keys)
+}
+
+// debugTraceCodeOutput logs the input/output shape of the Code node
+// named "Generate Mock Data" so we can confirm whether the 5-item
+// array is reliably produced by the Code node or whether the
+// downstream splitInBatches node is the one collapsing the array.
+// This is part of the same webhook_loop flake investigation as
+// debugTraceNodeOutput — keep both until the root cause is found.
+func debugTraceCodeOutput(wf *model.Workflow, nodeName string, input []model.DataItem, output []model.DataItem) {
+	const debugNodeFilter = "Generate Mock Data"
+	if nodeName != debugNodeFilter {
+		return
+	}
+	log.Printf("DEBUG-CODE [%s] in=%d out=%d", nodeName, len(input), len(output))
+}
+
+// debugTraceLoopOutput logs the input/output shape of the
+// splitInBatches node named "Loop Over Items" so we can confirm
+// whether the 5-item → 1-item collapse happens inside splitInBatches
+// (when the loop-row shape detection misfires) or somewhere upstream
+// of it. Companion to debugTraceCodeOutput / debugTraceNodeOutput.
+func debugTraceLoopOutput(wf *model.Workflow, nodeName string, input []model.DataItem, output []model.DataItem) {
+	const debugNodeFilter = "Loop Over Items"
+	if nodeName != debugNodeFilter {
+		return
+	}
+	keys := make([]string, 0, len(output))
+	for _, item := range output {
+		for k := range item.JSON {
+			if len(keys) >= 3 {
+				break
+			}
+			keys = append(keys, k)
+		}
+	}
+	log.Printf("DEBUG-LOOPEXEC [%s] in=%d out=%d keys=%v", nodeName, len(input), len(output), keys)
 }
 
 func isDecorativeNodeType(nodeType string) bool {
