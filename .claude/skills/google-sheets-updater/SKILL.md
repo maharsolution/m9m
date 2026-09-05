@@ -1,69 +1,105 @@
 ---
 name: google-sheets-updater
-description: Update Google Sheets via the public Sheets API v4 using a service-account-style API key. Use this skill when the user wants to mark parity-test results (DONE / FAIL / status text) in the validation spreadsheet without manual browser interaction.
+description: Read and write the m9m validation Google Sheet programmatically using either a public API key (read-only) or a service account (read+write). Use this skill when the user wants to inspect, validate, or mark parity-test results (DONE / FAIL / status text) in the validation spreadsheet without manual browser interaction.
 ---
 
 # google-sheets-updater
 
-Update a Google Sheet programmatically using a public API key and the Sheets
-REST API v4. The skill targets the m9m-vs-n8n validation spreadsheet at
-`https://docs.google.com/spreadsheets/d/1PAz38gDk2Fa_6SlBtC3fWss3YfL_KgroEAwCpiY7aDQ`.
+Read and update the m9m-vs-n8n validation Google Sheet at
+
+    `https://docs.google.com/spreadsheets/d/1PAz38gDk2Fa_6SlBtC3fWss3YfL_KgroEAwCpiY7aDQ`.
+
+The spreadsheet contains three sheets:
+  * `Webhook Controlling` — positive test cases (No, name, n8n request/response, m9m request/response, code, status)
+  * `Webhook Controlling Negative Test` — negative test cases
+  * `Capabilty Gap` — known gaps
+
+Data starts at **row 5** (header at row 1, description at rows 2–4).
+Column layout:
+  * A — `No` (case number, e.g. "1", "2", ...)
+  * B — `Webhook Controling` (case name)
+  * C — `Request` (n8n curl)
+  * D — `Response` (n8n response)
+  * E — `Request` (m9m curl, port-swapped 5678 -> 8080)
+  * F — `Response` (m9m response)
+  * G — `ResponseCode` (HTTP status)
+  * H — `Status` (`OK` / `FAILED` / etc.)
 
 ## Auth model
 
-Public-sheet API-key auth (no OAuth, no service account). This only works when
-the sheet is shared publicly ("Anyone with the link") — otherwise the API
-returns `403 PERMISSION_DENIED`. The API key is held as a constant below
-rather than read from env so the skill is self-contained.
+Two auth paths are supported:
 
-```text
-API_KEY = AIzaSyC-SHoCO1DoZp3tOuyYa_W7AVVfr2tKf6k
-SPREADSHEET_ID = 1PAz38gDk2Fa_6SlBtC3fWss3YfL_KgroEAwCpiY7aDQ
-```
+### 1. Service account (preferred — supports read+write)
 
-## Endpoint shapes
+The service-account JSON lives at `secrets/sheets-sa.json`. The
+service-account email (`m9m-backend@telebot-976.iam.gserviceaccount.com`)
+must already have been granted Editor access on the target
+spreadsheet.
 
-- Read a range: `GET https://sheets.googleapis.com/v4/spreadsheets/{ID}/values/{RANGE}?key={KEY}`
-- Write a range: `PUT https://sheets.googleapis.com/v4/spreadsheets/{ID}/values/{RANGE}?valueInputOption=USER_ENTERED&key={KEY}` with body `{"range":"...", "values":[[...]]}`
-- Append rows: `POST .../values/{RANGE}:append?valueInputOption=USER_ENTERED&key={KEY}` with same body shape
-- Batch update: `POST .../values:batchUpdate?key={KEY}` with `{"valueInputRange":{"range":..., "values":[[...]]}}`
+Required Python deps (already in the m9m dev image):
+  * `google-auth`
+  * `google-api-python-client`
 
-## Common ranges for the validation sheet
+### 2. Public API key (read-only — fallback)
 
-- `Validasi N8N - M9M!A:H` — full table (cases + status)
-- `Validasi N8N - M9M!G:G` — Status column only
-- `Validasi N8N - M9M!H:H` — Notes column
+The API key (`AIzaSyC-SHoCO1DoZp3tOuyYa_W7AVVfr2tKf6k`) only
+works when the sheet is shared publicly ("Anyone with the link").
+Reads work; writes return `403 PERMISSION_DENIED`. Use the SA
+path for any update operation.
 
-## Helper script
+## Helper scripts
 
-`scripts/update_sheet.py` (created alongside this skill) wraps the three
-common operations:
+### Service account — `scripts/sheets_sa.py`
 
 ```bash
-# Read a range
-python scripts/update_sheet.py read 'Validasi N8N - M9M!A1:H20'
+# Auth + scope sanity check
+python scripts/sheets_sa.py diag
 
-# Mark case 6 as DONE
-python scripts/update_sheet.py write 'Validasi N8N - M9M!G7:G7' '[["DONE"]]'
+# Read a range
+python scripts/sheets_sa.py read "'Webhook Controlling'!A5:H12"
+
+# Mark case 6 (sheet row 11) as DONE with the m9m response
+python scripts/sheets_sa.py write \
+    "'Webhook Controlling'!F11:H11" \
+    '[["<xml>...</xml>","200","OK"]]'
 
 # Append a fresh row
-python scripts/update_sheet.py append 'Validasi N8N - M9M!A:H' '[["7","extra","","","","","","OK"]]'
+python scripts/sheets_sa.py append \
+    "'Webhook Controlling'!A:H" \
+    '[["8","extra case","","","","","","OK"]]'
 ```
+
+The `read` command prints a JSON 2D array to stdout. The
+`write` / `append` commands take the value as a JSON-encoded
+2D array on the command line so multi-line strings survive the
+shell.
+
+### API key — `scripts/update_sheet.py` (legacy)
+
+```bash
+python scripts/update_sheet.py read  'Validasi N8N - M9M!A1:H20'
+python scripts/update_sheet.py write 'Validasi N8N - M9M!G7:G7' '[["DONE"]]'
+python scripts/update_sheet.py append 'Validasi N8N - M9M!A:H' '[["..."]]'
+```
+
+Reads work with the API key. Writes require the SA path.
 
 ## Failure modes
 
-- **403 PERMISSION_DENIED** — sheet isn't public. Ask the user to either
-  set the sharing to "Anyone with the link" or provide a service-account JSON.
+- **403 PERMISSION_DENIED on write** — using the API key path; switch
+  to `scripts/sheets_sa.py` which uses the service account.
+- **403 PERMISSION_DENIED on read** — sheet isn't public AND the SA
+  wasn't granted access. Ask the user to share the sheet with
+  `m9m-backend@telebot-976.iam.gserviceaccount.com`.
 - **400 INVALID_ARGUMENT** — range syntax wrong; A1 notation requires
-  quotes in the URL path which `requests` handles automatically if you pass
-  the range as a query path segment.
-- **429 RATE_LIMITED** — back off and retry; the API key has a per-minute
-  quota. Default retry is 3 attempts with exponential backoff (1s, 2s, 4s).
+  quotes around sheet names that contain spaces or dashes.
+- **429 RATE_LIMITED** — back off and retry. Default retry is 3
+  attempts with exponential backoff (1s, 2s, 4s).
 
 ## When NOT to use this skill
 
-- Sheet has formulas referencing other sheets and you need to refresh those
-  formulas — use the browser automation path instead, or send a manual
-  `_refresh` via Apps Script.
+- Sheet has formulas referencing other sheets and you need to refresh
+  those formulas — use the browser automation path instead, or send
+  a manual `_refresh` via Apps Script.
 - The cell value needs to be a complex object (rich text, hyperlinks,
   data validation) — the API only writes plain strings/numbers.
