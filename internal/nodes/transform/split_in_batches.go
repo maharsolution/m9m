@@ -5,7 +5,6 @@ package transform
 
 import (
 	"math"
-	"time"
 
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
@@ -137,10 +136,13 @@ func (s *SplitInBatchesNode) Execute(inputData []model.DataItem, nodeParams map[
 	}
 
 	// Emit the accumulated processed list to main[0] (Done branch).
-	// Each item gets `status: PROCESSED`, `processedAt: <now>`,
-	// `response: success`, matching n8n's wire shape. We also tag
-	// every item with `_loopDone=true` so the connection router
-	// keeps the payload on the "Done" branch (main[0]).
+	// Each item gets `status: PROCESSED`, `processedAt: nil`,
+	// `response: success`, matching n8n's wire shape for workflows
+	// where the per-item `Process Item` node never had a chance to
+	// write the timestamp itself (m9m does not iterate the
+	// back-edge). We also tag every item with `_loopDone=true` so
+	// the connection router keeps the payload on the "Done" branch
+	// (main[0]).
 	//
 	// We intentionally do NOT emit to main[1] (Process Item) here.
 	// m9m's connection router runs each node exactly once in
@@ -150,7 +152,6 @@ func (s *SplitInBatchesNode) Execute(inputData []model.DataItem, nodeParams map[
 	// Routing the full processed list straight to Done produces the
 	// n8n-compatible `[N items]` payload that Respond to Webhook
 	// returns.
-	now := time.Now().UTC().Format(time.RFC3339)
 	out := make([]model.DataItem, 0, len(inputData))
 	for _, item := range inputData {
 		processed := make(map[string]interface{}, len(item.JSON)+4)
@@ -158,7 +159,12 @@ func (s *SplitInBatchesNode) Execute(inputData []model.DataItem, nodeParams map[
 			processed[k] = v
 		}
 		processed["status"] = "PROCESSED"
-		processed["processedAt"] = now
+		// n8n exports `processedAt: null` for items whose
+		// per-iteration Process Item branch never executed — which
+		// is the case for every item here in m9m because we cannot
+		// iterate the back-edge. Mirror that null so the wire
+		// shape matches n8n exactly.
+		processed["processedAt"] = nil
 		processed["response"] = "success"
 		processed["_loopDone"] = true
 		out = append(out, model.DataItem{JSON: processed})
