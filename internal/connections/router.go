@@ -5,6 +5,8 @@ package connections
 
 import (
 	"fmt"
+	"log"
+
 	"github.com/neul-labs/m9m/internal/model"
 )
 
@@ -72,6 +74,13 @@ func (r *connectionRouterImpl) RouteData(sourceNode string, workflow *model.Work
 
 	// Create result map
 	routedData := make(map[string][]model.DataItem)
+
+	// TEMPORARY DEBUG: trace RouteData entry so we can confirm
+	// whether the 5→1 collapse happens inside the router (when
+	// partitionByRoutingMetadata misfires) or somewhere upstream of
+	// the connection router. Companion to the engine-level
+	// debugTrace* helpers. Remove once root cause is confirmed.
+	debugTraceRouteDataEntry(sourceNode, data, routedData)
 
 	// For each branch (top-level slice of connections.Main)
 	for branchIndex, typeConnections := range connections.Main {
@@ -235,6 +244,21 @@ func partitionByRoutingMetadata(data []model.DataItem) (branchable bool, trueIte
 	}
 
 	return false, nil, nil, nil
+}
+
+// debugTraceRouteDataEntry logs the input → per-target data
+// mapping produced by RouteData so we can see exactly which slice
+// the router delivered to each downstream node. Companion to the
+// engine-level debugTrace* helpers; remove once the webhook_loop
+// flake is fixed.
+func debugTraceRouteDataEntry(sourceNode string, data []model.DataItem, routed map[string][]model.DataItem) {
+	const debugSource = "Generate Mock Data"
+	if sourceNode != debugSource {
+		return
+	}
+	for target, items := range routed {
+		log.Printf("DEBUG-ROUTE [%s -> %s] in=%d out=%d", sourceNode, target, len(data), len(items))
+	}
 }
 
 // GetConnections returns the connections for a specific node
