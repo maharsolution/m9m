@@ -521,3 +521,61 @@ func TestRouteDataMixedIfResultFallsBackToBroadcast(t *testing.T) {
 			len(routed["TrueBranch"]), len(routed["FalseBranch"]))
 	}
 }
+
+// TestRouteDataPartitionBySwitchRuleIndex exercises the Switch-node
+// routing tag (`_switchRuleIndex`). The router must direct each
+// output item to the corresponding `main[k]` branch instead of
+// broadcasting to every branch — otherwise both downstream Set
+// nodes would run and overwrite each other's assignments.
+func TestRouteDataPartitionBySwitchRuleIndex(t *testing.T) {
+	router := NewConnectionRouter()
+
+	workflow := &model.Workflow{
+		Nodes: []model.Node{
+			{Name: "Switch", Type: "n8n-nodes-base.switch"},
+			{Name: "Valid", Type: "n8n-nodes-base.set"},
+			{Name: "Failed", Type: "n8n-nodes-base.set"},
+		},
+		Connections: map[string]model.Connections{
+			"Switch": {
+				Main: [][]model.Connection{
+					{{Node: "Valid", Type: "main", Index: 0}},
+					{{Node: "Failed", Type: "main", Index: 0}},
+				},
+			},
+		},
+	}
+
+	data := []model.DataItem{
+		{JSON: map[string]interface{}{"inputan": "", "_switchRuleIndex": 1}},
+		{JSON: map[string]interface{}{"inputan": "1", "_switchRuleIndex": 0}},
+	}
+
+	routed, err := router.RouteData("Switch", workflow, data)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if len(routed["Valid"]) != 1 {
+		t.Errorf("expected 1 item in Valid branch, got %d", len(routed["Valid"]))
+	}
+	if got := routed["Valid"][0].JSON["inputan"]; got != "1" {
+		t.Errorf("Valid branch should hold the equals-1 item, got inputan=%v", got)
+	}
+	if len(routed["Failed"]) != 1 {
+		t.Errorf("expected 1 item in Failed branch, got %d", len(routed["Failed"]))
+	}
+	if got := routed["Failed"][0].JSON["inputan"]; got != "" {
+		t.Errorf("Failed branch should hold the notEquals item, got inputan=%v", got)
+	}
+
+	// The internal `_switchRuleIndex` tag must be stripped so it
+	// doesn't leak into downstream data.
+	for branch, items := range routed {
+		for _, item := range items {
+			if _, ok := item.JSON["_switchRuleIndex"]; ok {
+				t.Errorf("branch %q: _switchRuleIndex leaked into downstream item", branch)
+			}
+		}
+	}
+}

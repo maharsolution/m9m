@@ -39,17 +39,18 @@ func NewConnectionRouter() ConnectionRouter {
 // n8n's connection shape is `connections.Main = [[{node:T,...}], [{node:F,...}]]` —
 // each top-level slice is a branch (main[0] = first output / "true", main[1] =
 // "false", etc.). For nodes that emit per-item routing metadata (currently the IF
-// node, which tags every item with `_ifResult`), the router partitions items
-// across branches based on that metadata:
+// node, which tags every item with `_ifResult`, and the Switch node, which tags
+// every item with `_switchRuleIndex`), the router partitions items across
+// branches based on that metadata:
 //
-//	_main[0]_ → items whose `_ifResult` is true
-//	_main[1]_ → items whose `_ifResult` is false
-//	_main[k]_ (k>1) → no items (mirrors n8n: only main[0] and main[1] exist for IF)
+//	IF:        main[0] ← _ifResult==true;  main[1] ← _ifResult==false
+//	Switch:    main[k] ← _switchRuleIndex==k
+//	Switch fallback (no match): main[last] ← unmatched items
 //
 // For nodes that do not emit routing metadata, the router falls back to the
 // historic behaviour: every item produced by the source node is forwarded to
 // every target connected at that branch index. This preserves correctness for
-// the common case (single-branch nodes) while enabling true IF routing.
+// the common case (single-branch nodes) while enabling true IF/Switch routing.
 func (r *connectionRouterImpl) RouteData(sourceNode string, workflow *model.Workflow, data []model.DataItem) (map[string][]model.DataItem, error) {
 	if workflow == nil {
 		return nil, fmt.Errorf("workflow cannot be nil")
@@ -63,10 +64,11 @@ func (r *connectionRouterImpl) RouteData(sourceNode string, workflow *model.Work
 	}
 
 	// Detect whether the source emitted per-item routing metadata. The IF
-	// node (and any future node that opts into routing) tags every item
-	// with `_ifResult` — we use that as the signal to partition data
-	// across main[0] (true) and main[1] (false).
-	branchable, trueItems, falseItems := partitionByRoutingMetadata(data)
+	// node tags every item with `_ifResult`; the Switch node tags every
+	// item with `_switchRuleIndex`. The partition helper returns one of
+	// three shapes depending on the tag, plus a `branchable` flag.
+	branchable, trueItems, falseItems, switchItems := partitionByRoutingMetadata(data)
+	branchCount := len(connections.Main)
 
 	// Create result map
 	routedData := make(map[string][]model.DataItem)
@@ -77,6 +79,27 @@ func (r *connectionRouterImpl) RouteData(sourceNode string, workflow *model.Work
 		for _, connection := range typeConnections {
 			var branchData []model.DataItem
 			switch {
+			case branchable && switchItems != nil:
+				// Switch routing. Items tagged with `_switchRuleIndex`
+				// for a rule whose index matches `branchIndex` go to
+				// main[branchIndex]. Items whose rule index was outside
+				// the workflow's branch count (which is rare — n8n
+				// always exposes every rule as its own branch) fall
+				// through to the last branch as a fallback, matching
+				// the Set node's `fallbackToLast` behaviour.
+				if items, ok := switchItems[branchIndex]; ok {
+					branchData = items
+				} else if branchIndex == branchCount-1 {
+					// Last branch — collect items with no matching rule
+					// by unioning all switchItems that were not assigned
+					// to a branch above. Only meaningful when the
+					// workflow has at least one rule.
+					for idx, items := range switchItems {
+						if idx >= branchCount {
+							branchData = append(branchData, items...)
+						}
+					}
+				}
 			case branchable && branchIndex == 0:
 				branchData = trueItems
 			case branchable && branchIndex == 1:
@@ -100,12 +123,13 @@ func (r *connectionRouterImpl) RouteData(sourceNode string, workflow *model.Work
 		}
 	}
 
-	// Strip the internal `_ifResult` metadata before items reach downstream
-	// nodes — n8n does not expose this field on user data.
+	// Strip the internal routing metadata before items reach downstream
+	// nodes — n8n does not expose these fields on user data.
 	if branchable {
 		for nodeName := range routedData {
 			for i := range routedData[nodeName] {
 				delete(routedData[nodeName][i].JSON, "_ifResult")
+				delete(routedData[nodeName][i].JSON, "_switchRuleIndex")
 			}
 		}
 	}
@@ -113,35 +137,72 @@ func (r *connectionRouterImpl) RouteData(sourceNode string, workflow *model.Work
 	return routedData, nil
 }
 
-// partitionByRoutingMetadata inspects every item for the `_ifResult`
-// routing tag. If the tag is present on all items, it returns true and
-// splits items into the true/false slices. Otherwise it returns false
-// and nil slices, signalling to RouteData that the legacy broadcast
-// behaviour should be used.
-func partitionByRoutingMetadata(data []model.DataItem) (branchable bool, trueItems, falseItems []model.DataItem) {
+// partitionByRoutingMetadata inspects every item for a routing tag and
+// partitions items across branches accordingly. Two tags are supported:
+//
+//   - `_ifResult` (bool): routes to main[0] for true, main[1] for false.
+//     Set by the IF node.
+//   - `_switchRuleIndex` (int): routes to main[index] for the rule that
+//     matched. Set by the Switch node. Items that did not match any
+//     rule fall back to the last branch (main[len-1]) which matches
+//     n8n's `fallbackToLast` semantics.
+//
+// If either tag is present on every item, items are partitioned and the
+// branchable flag is true. If both tags are present (unlikely but
+// possible), `_ifResult` takes precedence — IF and Switch aren't chained
+// in the same node.
+func partitionByRoutingMetadata(data []model.DataItem) (branchable bool, trueItems, falseItems []model.DataItem, switchItems map[int][]model.DataItem) {
 	if len(data) == 0 {
-		return false, nil, nil
+		return false, nil, nil, nil
 	}
+	ifAll := true
+	switchAll := true
 	for _, item := range data {
 		if _, ok := item.JSON["_ifResult"]; !ok {
-			return false, nil, nil
+			ifAll = false
+		}
+		if _, ok := item.JSON["_switchRuleIndex"]; !ok {
+			switchAll = false
 		}
 	}
-	trueItems = make([]model.DataItem, 0)
-	falseItems = make([]model.DataItem, 0)
-	for _, item := range data {
-		switch item.JSON["_ifResult"] {
-		case true:
-			trueItems = append(trueItems, item)
-		case false:
-			falseItems = append(falseItems, item)
-		default:
-			// _ifResult exists but is neither true nor false; treat
-			// the whole batch as unbranched to be safe.
-			return false, nil, nil
+
+	if ifAll {
+		trueItems = make([]model.DataItem, 0)
+		falseItems = make([]model.DataItem, 0)
+		for _, item := range data {
+			switch item.JSON["_ifResult"] {
+			case true:
+				trueItems = append(trueItems, item)
+			case false:
+				falseItems = append(falseItems, item)
+			default:
+				return false, nil, nil, nil
+			}
 		}
+		return true, trueItems, falseItems, nil
 	}
-	return true, trueItems, falseItems
+
+	if switchAll {
+		// _switchRuleIndex was added by SwitchNode.Execute. n8n's Switch
+		// routes each matched rule to its own `main[k]` branch — items
+		// whose rule didn't match either go to the last branch when
+		// `fallbackToLast` is set, or are dropped entirely otherwise.
+		// We do not know the rule count here without inspecting the
+		// workflow, so the caller (RouteData) determines the effective
+		// branch count from `connections.Main` and falls back to
+		// broadcasting when an item's index is out of range.
+		switchItems = make(map[int][]model.DataItem)
+		for _, item := range data {
+			idx, ok := item.JSON["_switchRuleIndex"].(int)
+			if !ok {
+				return false, nil, nil, nil
+			}
+			switchItems[idx] = append(switchItems[idx], item)
+		}
+		return true, nil, nil, switchItems
+	}
+
+	return false, nil, nil, nil
 }
 
 // GetConnections returns the connections for a specific node
