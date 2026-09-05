@@ -252,22 +252,12 @@ func partitionByRoutingMetadata(data []model.DataItem) (branchable bool, trueIte
 // engine-level debugTrace* helpers; remove once the webhook_loop
 // flake is fixed.
 func debugTraceRouteDataEntry(sourceNode string, data []model.DataItem, routed map[string][]model.DataItem) {
-	// TEMPORARY DEBUG: log ALL sources, not just Code, so we can
-	// see exactly which node produced the 5→1 collapse.
-	if sourceNode != "Generate Mock Data" {
-		return
-	}
+	// TEMPORARY DEBUG: log ALL sources so we can see which node
+	// feeds the Loop with 1 vs 5 items.
 	log.Printf("DEBUG-ROUTE-ENTRY [%s] in=%d", sourceNode, len(data))
-	keys := make([]string, 0, len(data))
-	for _, item := range data {
-		for k := range item.JSON {
-			if len(keys) >= 5 {
-				break
-			}
-			keys = append(keys, k)
-		}
+	for target, items := range routed {
+		log.Printf("DEBUG-ROUTE-EXIT [%s -> %s] out=%d", sourceNode, target, len(items))
 	}
-	log.Printf("DEBUG-ROUTE-KEYS [%s] keys=%v", sourceNode, keys)
 }
 
 // GetConnections returns the connections for a specific node
