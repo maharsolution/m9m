@@ -286,6 +286,14 @@ func shouldReplaceJSON(nodeParams map[string]interface{}) bool {
 	if nodeParams == nil {
 		return true
 	}
+	// n8n sometimes promotes `includeOtherFields` (legacy v3.0) or
+	// `keepOnlySet` (v3.1+) out of `options` to the top-level of the
+	// node parameters — a quirk of the editor when the workflow has
+	// not been re-saved after the type bump. Honour the top-level
+	// flag first when present, then fall back to `options`.
+	if replace, found := shouldReplaceJSONTopLevel(nodeParams); found {
+		return replace
+	}
 	optsRaw, ok := nodeParams["options"]
 	if !ok {
 		// No options at all → n8n's behaviour is to replace.
@@ -302,15 +310,6 @@ func shouldReplaceJSON(nodeParams map[string]interface{}) bool {
 			return b
 		}
 	}
-	// n8n's Set node typeVersion 3.0 used the legacy `includeOtherFields`
-	// flag (true = merge upstream + assignments, false = replace with
-	// assignments only). typeVersion 3.1+ renamed it to `keepOnlySet`
-	// with the inverted meaning. Workflows that have not yet been
-	// re-saved through the v3.1+ editor still ship `includeOtherFields`;
-	// honour it so MERGE vs REPLACE behaves the way the workflow author
-	// intended. `includeOtherFields=true` means "keep upstream fields",
-	// which is the opposite of `keepOnlySet=true` ("discard upstream
-	// fields"), so the boolean is inverted here.
 	if v, ok := opts["includeOtherFields"]; ok {
 		if b, ok := v.(bool); ok {
 			return !b
@@ -320,6 +319,29 @@ func shouldReplaceJSON(nodeParams map[string]interface{}) bool {
 	// n8n defaults to keepOnlySet=true for typeVersion 3+ when `options`
 	// is empty.
 	return true
+}
+
+// shouldReplaceJSONFromTopLevel walks the top-level Set node params
+// (not the nested `options` object) for `includeOtherFields` /
+// `keepOnlySet`. Some n8n exports promote the legacy v3.0
+// `includeOtherFields` flag out of `options` — a quirk of the
+// editor — and shouldReplaceJSON only inspects `options`. Treat
+// the top-level presence as authoritative when found.
+func shouldReplaceJSONTopLevel(nodeParams map[string]interface{}) (bool, bool) {
+	if nodeParams == nil {
+		return true, false
+	}
+	if v, ok := nodeParams["keepOnlySet"]; ok {
+		if b, ok := v.(bool); ok {
+			return b, true
+		}
+	}
+	if v, ok := nodeParams["includeOtherFields"]; ok {
+		if b, ok := v.(bool); ok {
+			return !b, true
+		}
+	}
+	return true, false
 }
 
 // Execute processes the Set node operation
