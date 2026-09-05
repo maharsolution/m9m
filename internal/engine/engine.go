@@ -203,6 +203,12 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 	if err != nil {
 		return nil, fmt.Errorf("failed to determine execution order: %w", err)
 	}
+	// TEMPORARY DEBUG: log execution order so we can correlate
+	// per-node execution traces with the actual topological
+	// sequence. Companion to the other debugTrace* helpers.
+	if workflow.ID == "t8xPqfr92w5HGeOv" {
+		log.Printf("DEBUG-EXEC-ORDER [%s] order=%v", workflow.ID, executionOrder)
+	}
 
 	// Execute nodes in order
 	nodeResults := make(map[string][]model.DataItem)

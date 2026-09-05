@@ -193,6 +193,8 @@ func partitionByRoutingMetadata(data []model.DataItem) (branchable bool, trueIte
 			loopAll = false
 		}
 	}
+	// TEMPORARY DEBUG: trace metadata tags seen on the data slice.
+	log.Printf("DEBUG-PARTITION len=%d ifAll=%v switchAll=%v loopAll=%v", len(data), ifAll, switchAll, loopAll)
 
 	if ifAll {
 		trueItems = make([]model.DataItem, 0)
