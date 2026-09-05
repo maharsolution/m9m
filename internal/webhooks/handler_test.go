@@ -440,7 +440,9 @@ func TestHandler_BasicAuthAlias_RejectsWrongCredentials(t *testing.T) {
 
 // shape for callers that POST a body claiming Content-Type:
 // application/json but whose body is not valid JSON. n8n responds
-// with a JSON 400 — m9m must match.
+// with HTTP 422 (Unprocessable Entity) — m9m must match so parity
+// tests stay green for workflows like `bocahtuanakal` that exist
+// specifically to exercise this path.
 func TestHandler_BadRequest_MalformedJSON_ReturnsJSON(t *testing.T) {
 	mgr, _, ws := newTestManager()
 
@@ -470,14 +472,15 @@ func TestHandler_BadRequest_MalformedJSON_ReturnsJSON(t *testing.T) {
 
 	router.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code,
+		"malformed JSON must return 422 to match n8n's wire shape")
 	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"),
-		"400 must use application/json, not text/plain")
+		"422 must use application/json, not text/plain")
 
 	var body map[string]interface{}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-	assert.Equal(t, float64(http.StatusBadRequest), body["code"])
-	assert.Equal(t, "Invalid request", body["message"])
+	assert.Equal(t, float64(http.StatusUnprocessableEntity), body["code"])
+	assert.Equal(t, "Failed to parse request body", body["message"])
 	assert.NotEmpty(t, body["hint"], "hint must provide remediation guidance")
 }
 

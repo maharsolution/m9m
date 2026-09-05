@@ -3,6 +3,7 @@ package webhooks
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -133,6 +134,19 @@ func (h *Handler) handleWebhookRequest(w http.ResponseWriter, r *http.Request, i
 	webhookRequest, err := h.parseRequest(r)
 	if err != nil {
 		log.Printf("⚠️  Failed to parse webhook request: %v", err)
+		// n8n distinguishes malformed JSON (422 Unprocessable Entity)
+		// from other parse failures (400 Bad Request). Match that
+		// distinction so parity tests stay green for cases like
+		// bocahtuanakal where the caller posts invalid JSON.
+		var parseErr *parseRequestError
+		if errors.As(err, &parseErr) && parseErr.kind == parseErrorJSON {
+			writeJSONError(w, http.StatusUnprocessableEntity, webhookErrorBody{
+				Code:    http.StatusUnprocessableEntity,
+				Message: "Failed to parse request body",
+				Hint:    "The request body claims application/json but is not valid JSON. Verify the payload before retrying.",
+			})
+			return
+		}
 		writeJSONError(w, http.StatusBadRequest, webhookErrorBody{
 			Code:    http.StatusBadRequest,
 			Message: "Invalid request",
@@ -244,6 +258,26 @@ func (h *Handler) DeleteWebhook(w http.ResponseWriter, r *http.Request) {
 
 // Helper methods
 
+// parseRequestErrorKind classifies the cause of a parse failure so
+// the handler can pick the right HTTP status. n8n returns 422
+// (Unprocessable Entity) for malformed JSON and 400 for everything
+// else; matching that distinction keeps the parity test green for
+// cases like bocahtuanakal where the caller submits
+// `{"varA":a,"varB":b}` (invalid JSON).
+type parseRequestErrorKind int
+
+const (
+	parseErrorOther parseRequestErrorKind = iota
+	parseErrorJSON
+)
+
+type parseRequestError struct {
+	kind parseRequestErrorKind
+	msg  string
+}
+
+func (e *parseRequestError) Error() string { return e.msg }
+
 func (h *Handler) parseRequest(r *http.Request) (*WebhookRequest, error) {
 	// Copy the headers so we can inject the synthetic `Host` entry
 	// that n8n surfaces on its webhook trigger output. Go's
@@ -272,12 +306,18 @@ func (h *Handler) parseRequest(r *http.Request) (*WebhookRequest, error) {
 		if strings.Contains(contentType, "application/json") {
 			var body interface{}
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
-				return nil, fmt.Errorf("failed to parse JSON body: %w", err)
+				return nil, &parseRequestError{
+					kind: parseErrorJSON,
+					msg:  fmt.Sprintf("failed to parse JSON body: %v", err),
+				}
 			}
 			request.Body = body
 		} else if strings.Contains(contentType, "application/x-www-form-urlencoded") {
 			if err := r.ParseForm(); err != nil {
-				return nil, fmt.Errorf("failed to parse form data: %w", err)
+				return nil, &parseRequestError{
+					kind: parseErrorOther,
+					msg:  fmt.Sprintf("failed to parse form data: %v", err),
+				}
 			}
 			formData := make(map[string]interface{})
 			for key, values := range r.PostForm {
@@ -292,7 +332,10 @@ func (h *Handler) parseRequest(r *http.Request) (*WebhookRequest, error) {
 			// Read raw body
 			bodyBytes, err := io.ReadAll(r.Body)
 			if err != nil {
-				return nil, fmt.Errorf("failed to read body: %w", err)
+				return nil, &parseRequestError{
+					kind: parseErrorOther,
+					msg:  fmt.Sprintf("failed to read body: %v", err),
+				}
 			}
 			request.Body = string(bodyBytes)
 		}
