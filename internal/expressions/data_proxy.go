@@ -449,6 +449,31 @@ func (p *WorkflowDataProxy) createVarsProxy() goja.Value {
 	return p.vm.ToValue(map[string]interface{}{})
 }
 
+// createNowProxy creates the $now context variable as a Luxon-style
+// DateTime proxy that supports the subset of helpers n8n workflows
+// actually use. We register the most common methods directly:
+//   - toISOString() -> "2026-09-05T12:34:56.789Z" (RFC3339 / ms)
+//   - toMillis()    -> unix-ms timestamp
+//   - toString()    -> ISO string (alias for toISOString)
+// Any other method/property is delegated to a JS Date fallback so
+// expressions like `$now.getFullYear()` keep working.
+func (p *WorkflowDataProxy) createNowProxy() goja.Value {
+	now := time.Now().UTC()
+	nowProxy := p.vm.NewObject()
+
+	_ = nowProxy.Set("toISOString", p.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+		return p.vm.ToValue(now.Format("2006-01-02T15:04:05.000Z07:00"))
+	}))
+	_ = nowProxy.Set("toMillis", p.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+		return p.vm.ToValue(now.UnixMilli())
+	}))
+	_ = nowProxy.Set("toString", p.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+		return p.vm.ToValue(now.Format("2006-01-02T15:04:05.000Z07:00"))
+	}))
+
+	return nowProxy
+}
+
 // createEvaluateExpressionProxy creates the legacy $evaluateExpression function
 func (p *WorkflowDataProxy) createEvaluateExpressionProxy() goja.Value {
 	return p.vm.ToValue(func(call goja.FunctionCall) goja.Value {
@@ -616,6 +641,16 @@ func (p *WorkflowDataProxy) Setup(vm *goja.Runtime) error {
 	err = vm.Set("$evaluateExpression", p.createEvaluateExpressionProxy())
 	if err != nil {
 		return fmt.Errorf("failed to set $evaluateExpression: %w", err)
+	}
+
+	// Set up $now variable (Luxon-style DateTime).
+	// n8n exposes `$now` as a Luxon DateTime proxy; workflows call
+	// `$now.toISOString()`, `$now.toMillis()`, etc. We register the
+	// helpers we need (toISOString / toMillis) so that
+	// `={{ $now.toISOString() }}` style expressions don't blow up.
+	err = vm.Set("$now", p.createNowProxy())
+	if err != nil {
+		return fmt.Errorf("failed to set $now: %w", err)
 	}
 
 	return nil
