@@ -94,6 +94,20 @@ func writeJSONError(w http.ResponseWriter, status int, body webhookErrorBody) {
 	_, _ = w.Write(data)
 }
 
+// stripJSONErrorPrefix turns the wrapped parse error from
+// parseRequest ("failed to parse JSON body: <json-err>") into the
+// bare json-err text n8n surfaces in the `hint` field. Mirroring
+// that exact wire shape is what makes the bocahtuanakal parity
+// case pass — the caller compares `hint` strings after scrubbing
+// and the surrounding prefix would otherwise be a false negative.
+func stripJSONErrorPrefix(wrapped string) string {
+	const prefix = "failed to parse JSON body: "
+	if strings.HasPrefix(wrapped, prefix) {
+		return strings.TrimPrefix(wrapped, prefix)
+	}
+	return wrapped
+}
+
 // handleWebhookRequest processes a webhook request (test or production)
 func (h *Handler) handleWebhookRequest(w http.ResponseWriter, r *http.Request, isTest bool) {
 	// Extract path from URL
@@ -137,13 +151,17 @@ func (h *Handler) handleWebhookRequest(w http.ResponseWriter, r *http.Request, i
 		// n8n distinguishes malformed JSON (422 Unprocessable Entity)
 		// from other parse failures (400 Bad Request). Match that
 		// distinction so parity tests stay green for cases like
-		// bocahtuanakal where the caller posts invalid JSON.
+		// bocahtuanakal where the caller posts invalid JSON. The
+		// hint carries the underlying json package error so callers
+		// get actionable detail (e.g. "Unexpected token 'a'… is not
+		// valid JSON") instead of a generic "check your payload"
+		// string.
 		var parseErr *parseRequestError
 		if errors.As(err, &parseErr) && parseErr.kind == parseErrorJSON {
 			writeJSONError(w, http.StatusUnprocessableEntity, webhookErrorBody{
 				Code:    http.StatusUnprocessableEntity,
 				Message: "Failed to parse request body",
-				Hint:    "The request body claims application/json but is not valid JSON. Verify the payload before retrying.",
+				Hint:    stripJSONErrorPrefix(parseErr.msg),
 			})
 			return
 		}

@@ -184,7 +184,9 @@ func (m *WebhookManager) ExecuteWebhook(webhook *Webhook, request *WebhookReques
 	result, err := m.engine.ExecuteWorkflow(workflow, inputData)
 	executionErr := engine.ResolveExecutionError(result, err)
 
-	// Create execution record
+	// Create execution record (webhook-specific view, used by the
+	// webhook dashboards; carries the inbound HTTP request alongside
+	// the execution summary).
 	execution := &WebhookExecution{
 		ID:          generateWebhookExecutionID(),
 		WebhookID:   webhook.ID,
@@ -198,6 +200,7 @@ func (m *WebhookManager) ExecuteWebhook(webhook *Webhook, request *WebhookReques
 		execution.Status = "failed"
 		execution.Error = executionErr.Error()
 		_ = m.storage.SaveWebhookExecution(execution)
+		m.recordWorkflowExecution(workflow, executionID, request, "error", startTime, nil, executionErr)
 		return nil, fmt.Errorf("workflow execution failed: %w", executionErr)
 	}
 
@@ -219,7 +222,52 @@ func (m *WebhookManager) ExecuteWebhook(webhook *Webhook, request *WebhookReques
 		log.Printf("⚠️  Failed to save webhook execution: %v", err)
 	}
 
+	// Also persist a WorkflowExecution record so the GUI / telemetry
+	// surfaces see webhook-driven runs alongside manual / CLI runs.
+	// Without this, webhook executions only appear in the
+	// webhook-specific dashboards, which broke the parity-suite
+	// telemetry contract from 2026-09-05.
+	m.recordWorkflowExecution(workflow, executionID, request, "success", startTime, result.Data, nil)
+
 	return response, nil
+}
+
+// recordWorkflowExecution writes a `WorkflowExecution` row for every
+// webhook-triggered workflow invocation so the GUI's executions list
+// and downstream telemetry can observe them. Mode is recorded as
+// "trigger" because the call originated from a registered webhook,
+// not a manual button click ("manual") or an editor test ("test").
+//
+// Storage errors are logged but never propagated — webhook responses
+// must stay correct even when the GUI's executions table is briefly
+// unavailable (e.g. the MySQL backend is restarting).
+func (m *WebhookManager) recordWorkflowExecution(
+	workflow *model.Workflow,
+	executionID string,
+	request *WebhookRequest,
+	status string,
+	startTime time.Time,
+	data []model.DataItem,
+	runErr error,
+) {
+	now := time.Now()
+	wfExec := &model.WorkflowExecution{
+		ID:         executionID,
+		WorkflowID: workflow.ID,
+		Status:     status,
+		Mode:       "trigger",
+		StartedAt:  startTime,
+		FinishedAt: &now,
+		Data:       data,
+	}
+	if runErr != nil {
+		wfExec.Error = runErr
+	}
+	if m.workflowStorage != nil {
+		if err := m.workflowStorage.SaveExecution(wfExec); err != nil {
+			log.Printf("⚠️  Failed to save workflow execution for webhook trigger: %v", err)
+		}
+	}
 }
 
 // DefaultAsyncAckBody is the wire body returned to clients when a webhook

@@ -577,6 +577,42 @@ func TestWebhookManager_ExecuteWebhook(t *testing.T) {
 	assert.Equal(t, "application/json", resp.Headers["Content-Type"])
 }
 
+// TestWebhookManager_ExecuteWebhook_RecordsWorkflowExecution pins the
+// contract from 2026-09-05: every webhook-triggered workflow run must
+// produce a WorkflowExecution row in addition to the webhook-specific
+// row, so the GUI's executions list and downstream telemetry surfaces
+// show webhook calls alongside manual / CLI runs. The mode is recorded
+// as "trigger" because the call originated from a registered webhook,
+// not a manual run ("manual") or an editor test ("test").
+func TestWebhookManager_ExecuteWebhook_RecordsWorkflowExecution(t *testing.T) {
+	mgr, _, ws := newTestManager()
+
+	wf := &model.Workflow{
+		ID: "wf-telemetry", Name: "telemetry-test", Active: true, Nodes: []model.Node{},
+	}
+	require.NoError(t, ws.SaveWorkflow(wf))
+
+	wh := &Webhook{
+		ID: "wh-telemetry", WorkflowID: wf.ID, Path: "/telemetry",
+		Method: "POST", Active: true, ResponseData: "firstEntryJson",
+	}
+	require.NoError(t, mgr.RegisterWebhook(wh))
+
+	req := &WebhookRequest{Method: "POST", Path: "/telemetry", Body: map[string]interface{}{}}
+	_, err := mgr.ExecuteWebhook(wh, req)
+	require.NoError(t, err)
+
+	execs, total, err := ws.ListExecutions(storage.ExecutionFilters{WorkflowID: wf.ID})
+	require.NoError(t, err)
+	assert.Equal(t, 1, total, "exactly one WorkflowExecution should be persisted per webhook call")
+	require.Len(t, execs, 1)
+	assert.Equal(t, wf.ID, execs[0].WorkflowID)
+	assert.Equal(t, "trigger", execs[0].Mode, "webhook runs must surface as mode=trigger so the GUI can distinguish them from manual runs")
+	assert.Equal(t, "success", execs[0].Status)
+	assert.False(t, execs[0].StartedAt.IsZero(), "StartedAt must be set for telemetry consumers")
+	require.NotNil(t, execs[0].FinishedAt, "FinishedAt must be set so duration is observable")
+}
+
 func TestWebhookManager_ExecuteWebhook_WorkflowNotFound(t *testing.T) {
 	mgr, _, _ := newTestManager()
 
