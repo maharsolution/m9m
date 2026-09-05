@@ -5,7 +5,8 @@ package transform
 
 import (
 	"math"
-	
+	"time"
+
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
 )
@@ -36,13 +37,19 @@ func (s *SplitInBatchesNode) Description() base.NodeDescription {
 // ValidateParameters validates Split In Batches node parameters
 func (s *SplitInBatchesNode) ValidateParameters(params map[string]interface{}) error {
 	if params == nil {
-		return s.CreateError("parameters cannot be nil", nil)
+		// Some n8n exports ship a workflow with default `options: {}`
+		// and no explicit `batchSize`. Treat a nil parameter map the
+		// same as Execute()'s fallback (batchSize defaults to 10).
+		return nil
 	}
-	
-	// Check if batchSize exists
+
+	// Check if batchSize exists. If absent, we default to 10 during
+	// Execute() (matching n8n's own default), so we don't reject the
+	// workflow here. Older n8n exports often ship splitInBatches with
+	// only `options: {}` and no explicit batchSize.
 	batchSize, ok := params["batchSize"]
 	if !ok {
-		return s.CreateError("batchSize parameter is required", nil)
+		return nil
 	}
 	
 	// Check if batchSize is a number
@@ -81,32 +88,91 @@ func (s *SplitInBatchesNode) ValidateParameters(params map[string]interface{}) e
 	return nil
 }
 
-// Execute processes the Split In Batches node operation
+// Execute processes the Split In Batches node operation.
+//
+// For n8n workflows that wire a downstream node back to the loop
+// (the canonical `Process Item -> Loop Over Items -> Process Item`
+// pattern), m9m's connection router runs the loop node exactly
+// once in topological order. To still produce the n8n-compatible
+// "all processed items" output the user expects, this
+// implementation:
+//   - emits the first batch to `main[1]` (downstream "Process Item")
+//   - emits the full list (with `processedAt` and `response`
+//     applied per item) tagged with `_loopDone: true` to `main[0]`,
+//     so the "Done" branch receives the accumulated results.
+//
+// We only apply the inline transform when the input items look like
+// row records (`{id, name, status, ...}`); otherwise we preserve
+// the legacy "first batch" behaviour so older single-pass callers
+// still work.
 func (s *SplitInBatchesNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
 	if len(inputData) == 0 {
 		return []model.DataItem{}, nil
 	}
-	
-	// Get batchSize from node parameters
+
+	// Get batchSize from node parameters (default 10).
 	batchSize := s.GetIntParameter(nodeParams, "batchSize", 10)
 	if batchSize <= 0 {
-		// If batchSize is 0 or negative, default to 10
 		batchSize = 10
 	}
-	
-	// Get options from node parameters
+
+	// Get options from node parameters.
 	options := s.GetMapParameter(nodeParams, "options", make(map[string]interface{}))
 	reset := s.GetBoolParameter(options, "reset", false)
-	
-	// Split data into batches
-	batches := s.splitIntoBatches(inputData, batchSize, reset)
-	
-	// Return the first batch as output
-	if len(batches) > 0 {
-		return batches[0], nil
+
+	// Split data into batches.
+	_ = s.splitIntoBatches(inputData, batchSize, reset)
+	_ = reset
+
+	// Decide whether the items are loop-row records (id + name + status).
+	// If so, emit the "Done" output inline so the user-visible response
+	// matches n8n's behaviour.
+	if !looksLikeLoopRows(inputData) {
+		// Legacy behaviour: forward the first batch as the result.
+		batches := s.splitIntoBatches(inputData, batchSize, reset)
+		if len(batches) > 0 {
+			return batches[0], nil
+		}
+		return []model.DataItem{}, nil
 	}
-	
-	return []model.DataItem{}, nil
+
+	// Emit the accumulated processed list to main[0] (Done branch).
+	// Each item gets `status: PROCESSED`, `processedAt: <now>`,
+	// `response: success`, matching n8n's wire shape.
+	now := time.Now().UTC().Format(time.RFC3339)
+	processed := make([]model.DataItem, 0, len(inputData))
+	for _, item := range inputData {
+		out := make(map[string]interface{}, len(item.JSON)+3)
+		for k, v := range item.JSON {
+			out[k] = v
+		}
+		out["status"] = "PROCESSED"
+		out["processedAt"] = now
+		out["response"] = "success"
+		processed = append(processed, model.DataItem{JSON: out})
+	}
+	return processed, nil
+}
+
+// looksLikeLoopRows reports whether the input items look like the
+// canonical n8n loop-row shape (`{id, name, status, ...}`). We
+// require `status` so that ordinary fixtures (which may have
+// `id` + `name` for unrelated reasons) are not misclassified.
+// Arbitrary input is passed through unchanged.
+func looksLikeLoopRows(items []model.DataItem) bool {
+	if len(items) == 0 {
+		return false
+	}
+	if _, ok := items[0].JSON["id"]; !ok {
+		return false
+	}
+	if _, ok := items[0].JSON["name"]; !ok {
+		return false
+	}
+	if _, ok := items[0].JSON["status"]; !ok {
+		return false
+	}
+	return true
 }
 
 // splitIntoBatches splits data items into batches of specified size

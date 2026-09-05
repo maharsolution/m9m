@@ -20,20 +20,25 @@ func TestSplitInBatchesNodeCreation(t *testing.T) {
 
 func TestSplitInBatchesNodeValidateParameters(t *testing.T) {
 	node := NewSplitInBatchesNode()
-	
-	// Test with nil params
+
+	// n8n exports frequently ship a workflow with default `options: {}`
+	// and no explicit `batchSize`. We default to 10 in Execute(), so
+	// nil/missing batchSize is fine — only an *invalid* batchSize
+	// (non-numeric, zero, or negative) is rejected.
+
+	// Test with nil params (older n8n export style)
 	err := node.ValidateParameters(nil)
-	if err == nil {
-		t.Error("Expected error with nil params, got nil")
+	if err != nil {
+		t.Errorf("Expected no error with nil params (defaults to 10), got %v", err)
 	}
-	
-	// Test with missing batchSize
+
+	// Test with missing batchSize (also defaults to 10)
 	params := map[string]interface{}{}
 	err = node.ValidateParameters(params)
-	if err == nil {
-		t.Error("Expected error with missing batchSize, got nil")
+	if err != nil {
+		t.Errorf("Expected no error with missing batchSize (defaults to 10), got %v", err)
 	}
-	
+
 	// Test with invalid batchSize type
 	invalidTypeParams := map[string]interface{}{
 		"batchSize": "not a number",
@@ -42,7 +47,7 @@ func TestSplitInBatchesNodeValidateParameters(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error with invalid batchSize type, got nil")
 	}
-	
+
 	// Test with zero batchSize (should be rejected during validation)
 	zeroBatchSizeParams := map[string]interface{}{
 		"batchSize": 0,
@@ -51,7 +56,7 @@ func TestSplitInBatchesNodeValidateParameters(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error with zero batchSize, got nil")
 	}
-	
+
 	// Test with negative batchSize (should be rejected during validation)
 	negativeBatchSizeParams := map[string]interface{}{
 		"batchSize": -5,
