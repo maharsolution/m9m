@@ -270,6 +270,12 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 			// No specific input data, use empty input
 			inputDataForNode = []model.DataItem{{JSON: make(map[string]interface{})}}
 		}
+		// TEMPORARY DEBUG: trace input data BEFORE node execution.
+		// Companion to the per-node output trace; together they show
+		// the complete data flow so we can pinpoint whether the 5→1
+		// collapse happens between Code→Loop routing, inside Loop
+		// execution, or somewhere else entirely.
+		debugTraceNodeInput(workflow, nodeName, inputDataForNode)
 
 		// Prepare node parameters with credentials if credential manager is available
 		finalNodeParams := node.Parameters
@@ -542,6 +548,18 @@ func debugTraceLoopOutput(wf *model.Workflow, nodeName string, input []model.Dat
 		}
 	}
 	log.Printf("DEBUG-LOOPEXEC [%s] in=%d out=%d keys=%v", nodeName, len(input), len(output), keys)
+}
+
+// debugTraceNodeInput logs how many items arrive at each node
+// BEFORE execution runs so we can pinpoint exactly where in the
+// routing pipeline the 5→1 collapse happens. Companion to
+// debugTraceNodeOutput / debugTraceCodeOutput / debugTraceLoopOutput.
+func debugTraceNodeInput(wf *model.Workflow, nodeName string, input []model.DataItem) {
+	const debugNodeFilter = "Loop Over Items"
+	if nodeName != debugNodeFilter {
+		return
+	}
+	log.Printf("DEBUG-INPUT [%s] in=%d", nodeName, len(input))
 }
 
 func isDecorativeNodeType(nodeType string) bool {
