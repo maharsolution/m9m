@@ -298,6 +298,12 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		// downstream node inputs or webhook responses.
 		nodeResults[nodeName] = stripRoutingMetadata(outputData)
 
+		// TEMPORARY DEBUG: trace per-node output shape so we can
+		// diagnose intermittent webhook_loop responses (sometimes 5
+		// items, sometimes 1 item, sometimes pending). Remove once
+		// root cause is found.
+		debugTraceNodeOutput(workflow, nodeName, inputDataForNode, nodeResults[nodeName])
+
 		// Route data to connected nodes
 		routedData, err := e.connectionRouter.RouteData(nodeName, workflow, outputData)
 		if err != nil {
@@ -476,6 +482,30 @@ func (e *workflowEngineImpl) findStartingNodes(workflow *model.Workflow) []strin
 // annotations (sticky notes, comments, etc.) but they have no executor
 // and no connections. They should be skipped during execution rather
 // than aborting the whole workflow.
+// debugTraceNodeOutput writes a one-line summary of a node's output
+// shape to stderr so operators can diagnose intermittent workflow
+// failures (e.g. the webhook_loop flake where the response flips
+// between a 5-item array, a 1-item object, and an empty result
+// depending on which control path the engine took). Cheap to call,
+// only fires for nodes whose name matches a debug filter, and easy
+// to rip out once the root cause is confirmed.
+func debugTraceNodeOutput(wf *model.Workflow, nodeName string, input []model.DataItem, output []model.DataItem) {
+	const debugNodeFilter = "Done / Output Final"
+	if nodeName != debugNodeFilter {
+		return
+	}
+	keys := make([]string, 0, len(output))
+	for _, item := range output {
+		for k := range item.JSON {
+			if len(keys) >= 3 {
+				break
+			}
+			keys = append(keys, k)
+		}
+	}
+	log.Printf("DEBUG-LOOP [%s] in=%d out=%d keys=%v", nodeName, len(input), len(output), keys)
+}
+
 func isDecorativeNodeType(nodeType string) bool {
 	switch nodeType {
 	case "n8n-nodes-base.stickyNote",
