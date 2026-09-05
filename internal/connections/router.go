@@ -130,6 +130,7 @@ func (r *connectionRouterImpl) RouteData(sourceNode string, workflow *model.Work
 			for i := range routedData[nodeName] {
 				delete(routedData[nodeName][i].JSON, "_ifResult")
 				delete(routedData[nodeName][i].JSON, "_switchRuleIndex")
+				delete(routedData[nodeName][i].JSON, "_loopDone")
 			}
 		}
 	}
@@ -138,7 +139,7 @@ func (r *connectionRouterImpl) RouteData(sourceNode string, workflow *model.Work
 }
 
 // partitionByRoutingMetadata inspects every item for a routing tag and
-// partitions items across branches accordingly. Two tags are supported:
+// partitions items across branches accordingly. Three tags are supported:
 //
 //   - `_ifResult` (bool): routes to main[0] for true, main[1] for false.
 //     Set by the IF node.
@@ -146,9 +147,13 @@ func (r *connectionRouterImpl) RouteData(sourceNode string, workflow *model.Work
 //     matched. Set by the Switch node. Items that did not match any
 //     rule fall back to the last branch (main[len-1]) which matches
 //     n8n's `fallbackToLast` semantics.
+//   - `_loopDone` (bool): routes to main[0] for items with `_loopDone=true`
+//     (the "done" branch of a splitInBatches loop) and main[1] for items
+//     with `_loopDone=false` (the "process" branch carrying the next
+//     batch). Set by SplitInBatchesNode.Execute.
 //
-// If either tag is present on every item, items are partitioned and the
-// branchable flag is true. If both tags are present (unlikely but
+// If any tag is present on every item, items are partitioned and the
+// branchable flag is true. If multiple tags are present (unlikely but
 // possible), `_ifResult` takes precedence — IF and Switch aren't chained
 // in the same node.
 func partitionByRoutingMetadata(data []model.DataItem) (branchable bool, trueItems, falseItems []model.DataItem, switchItems map[int][]model.DataItem) {
@@ -157,12 +162,16 @@ func partitionByRoutingMetadata(data []model.DataItem) (branchable bool, trueIte
 	}
 	ifAll := true
 	switchAll := true
+	loopAll := true
 	for _, item := range data {
 		if _, ok := item.JSON["_ifResult"]; !ok {
 			ifAll = false
 		}
 		if _, ok := item.JSON["_switchRuleIndex"]; !ok {
 			switchAll = false
+		}
+		if _, ok := item.JSON["_loopDone"]; !ok {
+			loopAll = false
 		}
 	}
 
@@ -200,6 +209,29 @@ func partitionByRoutingMetadata(data []model.DataItem) (branchable bool, trueIte
 			switchItems[idx] = append(switchItems[idx], item)
 		}
 		return true, nil, nil, switchItems
+	}
+
+	if loopAll {
+		// _loopDone was added by SplitInBatchesNode.Execute. Items with
+		// _loopDone=true carry the accumulated "done" payload and are
+		// routed to main[0] (the user's "Done" branch); items with
+		// _loopDone=false carry the next batch and are routed to
+		// main[1] (the user's "Process Item" branch). This mirrors the
+		// n8n splitInBatches convention where main[0] is the
+		// completion branch and main[1] is the per-iteration branch.
+		trueItems = make([]model.DataItem, 0)
+		falseItems = make([]model.DataItem, 0)
+		for _, item := range data {
+			switch item.JSON["_loopDone"] {
+			case true:
+				trueItems = append(trueItems, item)
+			case false:
+				falseItems = append(falseItems, item)
+			default:
+				return false, nil, nil, nil
+			}
+		}
+		return true, trueItems, falseItems, nil
 	}
 
 	return false, nil, nil, nil

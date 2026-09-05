@@ -501,17 +501,27 @@ func isTriggerOnlyNodeType(nodeType string) bool {
 }
 
 // stripRoutingMetadata returns a copy of items with internal routing
-// metadata removed (currently the IF node's `_ifResult` tag). The
-// connection router consumes this metadata to partition items across
-// branches; once that has happened the tag must not leak into
-// downstream node inputs or webhook responses.
+// metadata removed (currently the IF node's `_ifResult`, the Switch
+// node's `_switchRuleIndex`, and the splitInBatches node's
+// `_loopDone` tags). The connection router consumes these to
+// partition items across branches; once that has happened the tag
+// must not leak into downstream node inputs or webhook responses.
 //
 // Items are shallow-copied only when they actually contain a routing
-// field, so the no-op case (no IF involved) is allocation-free.
+// field, so the no-op case (no IF/Switch/Loop involved) is
+// allocation-free.
 func stripRoutingMetadata(items []model.DataItem) []model.DataItem {
 	clean := false
 	for i := range items {
 		if _, ok := items[i].JSON["_ifResult"]; ok {
+			clean = true
+			break
+		}
+		if _, ok := items[i].JSON["_switchRuleIndex"]; ok {
+			clean = true
+			break
+		}
+		if _, ok := items[i].JSON["_loopDone"]; ok {
 			clean = true
 			break
 		}
@@ -526,7 +536,7 @@ func stripRoutingMetadata(items []model.DataItem) []model.DataItem {
 			// Copy on first write to avoid mutating the source.
 			newJSON := make(map[string]interface{}, len(out[i].JSON))
 			for k, v := range out[i].JSON {
-				if k == "_ifResult" {
+				if k == "_ifResult" || k == "_switchRuleIndex" || k == "_loopDone" {
 					continue
 				}
 				newJSON[k] = v

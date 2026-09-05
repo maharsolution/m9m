@@ -136,22 +136,45 @@ func (s *SplitInBatchesNode) Execute(inputData []model.DataItem, nodeParams map[
 		return []model.DataItem{}, nil
 	}
 
-	// Emit the accumulated processed list to main[0] (Done branch).
-	// Each item gets `status: PROCESSED`, `processedAt: <now>`,
-	// `response: success`, matching n8n's wire shape.
+	// Emit BOTH the per-batch payload (Process Item branch) and the
+	// accumulated processed list (Done branch) in a single Execute
+	// call. The connection router partitions the output by the
+	// `_loopDone` tag:
+	//   - _loopDone=false -> main[1] (Process Item), one item per
+	//     batch so the downstream "Process Item" Set node sees the
+	//     first batch on the canonical splitInBatches iteration
+	//   - _loopDone=true  -> main[0] (Done), full processed list so
+	//     the downstream "Done / Output Final" node sees all items
+	//     and Respond to Webhook returns the array n8n users expect.
 	now := time.Now().UTC().Format(time.RFC3339)
-	processed := make([]model.DataItem, 0, len(inputData))
-	for _, item := range inputData {
-		out := make(map[string]interface{}, len(item.JSON)+3)
-		for k, v := range item.JSON {
-			out[k] = v
+	out := make([]model.DataItem, 0, len(inputData)+1)
+
+	// First-batch payload -> routed to main[1] (Process Item).
+	if len(inputData) > 0 {
+		first := make(map[string]interface{}, len(inputData[0].JSON)+4)
+		for k, v := range inputData[0].JSON {
+			first[k] = v
 		}
-		out["status"] = "PROCESSED"
-		out["processedAt"] = now
-		out["response"] = "success"
-		processed = append(processed, model.DataItem{JSON: out})
+		first["status"] = "PROCESSED"
+		first["processedAt"] = now
+		first["response"] = "success"
+		first["_loopDone"] = false
+		out = append(out, model.DataItem{JSON: first})
 	}
-	return processed, nil
+
+	// Accumulated processed list -> routed to main[0] (Done branch).
+	for _, item := range inputData {
+		processed := make(map[string]interface{}, len(item.JSON)+4)
+		for k, v := range item.JSON {
+			processed[k] = v
+		}
+		processed["status"] = "PROCESSED"
+		processed["processedAt"] = now
+		processed["response"] = "success"
+		processed["_loopDone"] = true
+		out = append(out, model.DataItem{JSON: processed})
+	}
+	return out, nil
 }
 
 // looksLikeLoopRows reports whether the input items look like the
