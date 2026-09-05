@@ -248,6 +248,14 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 				nodeResults[nodeName] = []model.DataItem{}
 				continue
 			}
+			// Trigger-only nodes (e.g. Manual Trigger) are UI-side
+			// start buttons: they have no executable side. When the
+			// workflow runs via a real trigger (Webhook, Cron, etc.)
+			// these should be skipped silently, not abort execution.
+			if isTriggerOnlyNodeType(node.Type) {
+				nodeResults[nodeName] = []model.DataItem{}
+				continue
+			}
 			return nil, fmt.Errorf("failed to get executor for node %s: %w", node.Name, err)
 		}
 
@@ -473,6 +481,20 @@ func isDecorativeNodeType(nodeType string) bool {
 	case "n8n-nodes-base.stickyNote",
 		"n8n-nodes-base.note",
 		"@n8n/n8n-nodes-langchain.note":
+		return true
+	}
+	return false
+}
+
+// isTriggerOnlyNodeType reports whether a node type is a UI-side
+// trigger that has no executable side (it just kicks off the workflow
+// when a developer clicks "Test workflow"). When the workflow is run
+// via a different real trigger (e.g. Webhook) these nodes should be
+// silently skipped — otherwise the engine aborts with
+// "no executor registered for node type".
+func isTriggerOnlyNodeType(nodeType string) bool {
+	switch nodeType {
+	case "n8n-nodes-base.manualTrigger":
 		return true
 	}
 	return false
