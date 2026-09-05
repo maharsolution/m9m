@@ -1051,9 +1051,27 @@ func TestWebhookManager_prepareResponse_ResponseNode_AllEntries(t *testing.T) {
 		},
 	}
 
-	resp := mgr.prepareResponseWithContext(wh, result, makeResponseNodeWorkflow(), "Webhook")
+	// When `respondWith` is `allIncomingItems` (the canonical Loop /
+	// splitInBatches wire shape), the response is the full array
+	// regardless of the trigger-level `responseData`. Build a
+	// workflow fixture that sets `respondWith=allIncomingItems`.
+	wf := &model.Workflow{
+		Nodes: []model.Node{
+			{Name: "Webhook", Type: "n8n-nodes-base.webhook",
+				Parameters: map[string]interface{}{"path": "loop", "responseMode": "responseNode"}},
+			{Name: "Set", Type: "n8n-nodes-base.set"},
+			{Name: "RespondToWebhook", Type: "n8n-nodes-base.respondToWebhook",
+				Parameters: map[string]interface{}{"respondWith": "allIncomingItems"}},
+		},
+		Connections: map[string]model.Connections{
+			"Webhook":          {Main: [][]model.Connection{{{Node: "Set", Type: "main", Index: 0}}}},
+			"Set":              {Main: [][]model.Connection{{{Node: "RespondToWebhook", Type: "main", Index: 0}}}},
+		},
+	}
+
+	resp := mgr.prepareResponseWithContext(wh, result, wf, "Webhook")
 	body, ok := resp.Body.([]map[string]interface{})
-	require.True(t, ok, "responseNode+allEntries body should be a JSON array")
+	require.True(t, ok, "responseNode+respondWith=allIncomingItems body should be a JSON array")
 	assert.Len(t, body, 2)
 }
 
@@ -1088,7 +1106,21 @@ func TestWebhookManager_prepareResponse_ResponseNode_FallsBackWithoutNode(t *tes
 func TestWebhookManager_prepareResponse_ResponseNode_NoData(t *testing.T) {
 	mgr, _, _ := newTestManager()
 
-	wh := &Webhook{ResponseMode: "responseNode", ResponseData: "noData"}
+	// When the Respond-to-Webhook node pins `respondWith: noData`
+	// the manager returns a `{message: success}` body, ignoring
+	// both the upstream output and the trigger-level `responseData`.
+	wh := &Webhook{ResponseMode: "responseNode", ResponseData: "firstEntryJson"}
+	wf := &model.Workflow{
+		Nodes: []model.Node{
+			{Name: "Webhook", Type: "n8n-nodes-base.webhook",
+				Parameters: map[string]interface{}{"responseMode": "responseNode"}},
+			{Name: "RespondToWebhook", Type: "n8n-nodes-base.respondToWebhook",
+				Parameters: map[string]interface{}{"respondWith": "noData"}},
+		},
+		Connections: map[string]model.Connections{
+			"Webhook": {Main: [][]model.Connection{{{Node: "RespondToWebhook", Type: "main", Index: 0}}}},
+		},
+	}
 	result := &engine.ExecutionResult{
 		Data: []model.DataItem{{JSON: map[string]interface{}{"ignored": true}}},
 		NodeOutputs: map[string][]model.DataItem{
@@ -1096,7 +1128,7 @@ func TestWebhookManager_prepareResponse_ResponseNode_NoData(t *testing.T) {
 		},
 	}
 
-	resp := mgr.prepareResponseWithContext(wh, result, makeResponseNodeWorkflow(), "Webhook")
+	resp := mgr.prepareResponseWithContext(wh, result, wf, "Webhook")
 	body, ok := resp.Body.(map[string]interface{})
 	require.True(t, ok)
 	assert.Equal(t, "success", body["message"])

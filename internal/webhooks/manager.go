@@ -546,6 +546,33 @@ func findRespondToWebhookNodeByType(workflow *model.Workflow) string {
 	return ""
 }
 
+// findRespondToWebhookRespondWith returns the `respondWith` parameter
+// of the Respond-to-Webhook node that the manager would consult for
+// responseNode mode. Used by the responseNode branch to honour the
+// node's own serialisation choice (`allIncomingItems`,
+// `firstIncomingItem`, `json`).
+func findRespondToWebhookRespondWith(workflow *model.Workflow, triggerNode string) string {
+	if workflow == nil {
+		return ""
+	}
+	name := findRespondToWebhookNode(workflow, triggerNode)
+	if name == "" {
+		name = findRespondToWebhookNodeByType(workflow)
+	}
+	if name == "" {
+		return ""
+	}
+	for _, n := range workflow.Nodes {
+		if n.Name == name {
+			if rw, ok := n.Parameters["respondWith"].(string); ok {
+				return rw
+			}
+			return ""
+		}
+	}
+	return ""
+}
+
 // extractResponseNodeData reads the output the Respond-to-Webhook
 // node produced and returns it. Returns nil when the node produced
 // no data, or when the engine did not populate per-node tracking
@@ -602,8 +629,19 @@ func (m *WebhookManager) prepareResponseWithContext(webhook *Webhook, result *en
 	// older engine paths, parallel workers, etc.).
 	if webhook.ResponseMode == "responseNode" {
 		if data := extractResponseNodeData(workflow, triggerNode, result); data != nil {
-			switch webhook.ResponseData {
-			case "allEntries":
+			// The Respond-to-Webhook node's own `respondWith` parameter
+			// controls how *its* output is serialised — overriding the
+			// trigger's `responseData`. n8n honours this:
+			//   * "allIncomingItems" (default) -> emit every item as an
+			//     array (matches the canonical splitInBatches / Loop
+			//     wire shape `[N items]`).
+			//   * "firstIncomingItem" -> emit only the first item as a
+			//     bare object (legacy default).
+			//   * "json" -> the node already produced a literal body
+			//     envelope; read the first item's JSON verbatim.
+			respondWith := findRespondToWebhookRespondWith(workflow, triggerNode)
+			switch respondWith {
+			case "allIncomingItems":
 				entries := make([]map[string]interface{}, len(data))
 				for i, item := range data {
 					entries[i] = item.JSON
@@ -611,15 +649,9 @@ func (m *WebhookManager) prepareResponseWithContext(webhook *Webhook, result *en
 				response.Body = entries
 			case "noData":
 				response.Body = map[string]interface{}{"message": "success"}
-			case "firstEntryJson", "":
+			case "firstIncomingItem", "json", "":
 				fallthrough
 			default:
-				// n8n honours the Respond-to-Webhook node's own
-				// `respondWith` shape; the most common setting is
-				// `firstIncomingItem`, which is exactly what we
-				// return here. If `respondWith=json` the upstream
-				// node already produced a single item with the
-				// literal body, so read that item verbatim.
 				if len(data) == 0 {
 					response.Body = map[string]interface{}{"message": "success"}
 				} else {
