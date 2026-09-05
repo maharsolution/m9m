@@ -272,33 +272,46 @@ func (r *connectionRouterImpl) GetExecutionOrder(workflow *model.Workflow) ([]st
 	if workflow == nil {
 		return nil, fmt.Errorf("workflow cannot be nil")
 	}
-	
+
+	// Detect the splitInBatches loop pattern. When present, edges that
+	// target a `splitInBatches` node are back-edges of an n8n loop
+	// (e.g. `Process Item → Loop Over Items`) and should be ignored
+	// for ordering purposes — the engine runs the loop node's body
+	// to completion before producing output.
+	tolerateCycles := WorkflowUsesSplitInBatches(workflow)
+
 	// Build dependency graph
 	dependencies := make(map[string][]string) // node -> list of dependencies
 	allNodes := make(map[string]bool)
-	
+
 	// Initialize dependencies for all nodes
 	for _, node := range workflow.Nodes {
 		allNodes[node.Name] = true
 		dependencies[node.Name] = []string{}
 	}
-	
-	// Build dependency relationships from connections
+
+	// Build dependency relationships from connections. Edges that
+	// target a `splitInBatches` node are back-edges of the n8n loop
+	// pattern and are skipped when computing execution order; the
+	// engine instead executes the loop to completion before yielding
+	// to the next node.
 	for sourceNode, connections := range workflow.Connections {
 		for _, typeConnections := range connections.Main {
 			for _, connection := range typeConnections {
 				targetNode := connection.Node
-				// Add sourceNode as a dependency of targetNode
+				if tolerateCycles && isSplitInBatchesNode(workflow, targetNode) {
+					continue
+				}
 				dependencies[targetNode] = append(dependencies[targetNode], sourceNode)
 			}
 		}
 	}
-	
+
 	// Perform topological sort
 	executionOrder := []string{}
 	visited := make(map[string]bool)
 	temporaryMark := make(map[string]bool)
-	
+
 	// Visit each node
 	for nodeName := range allNodes {
 		hasCycle, err := r.visitNode(nodeName, dependencies, visited, temporaryMark, &executionOrder)
@@ -309,8 +322,41 @@ func (r *connectionRouterImpl) GetExecutionOrder(workflow *model.Workflow) ([]st
 			return nil, fmt.Errorf("workflow contains cycles - cannot determine execution order")
 		}
 	}
-	
+
 	return executionOrder, nil
+}
+
+// WorkflowUsesSplitInBatches reports whether the workflow contains
+// n8n's splitInBatches (Loop) node. The caller uses this to decide
+// whether the connection-level cycle (`Process Item → Loop Over
+// Items`) should be tolerated when computing execution order and
+// detecting cycles.
+//
+// Exported so the engine package can reuse the same predicate.
+func WorkflowUsesSplitInBatches(workflow *model.Workflow) bool {
+	if workflow == nil {
+		return false
+	}
+	for _, node := range workflow.Nodes {
+		if node.Type == "n8n-nodes-base.splitInBatches" {
+			return true
+		}
+	}
+	return false
+}
+
+// isSplitInBatchesNode returns true if the named node is the n8n
+// splitInBatches (Loop) node in the given workflow.
+func isSplitInBatchesNode(workflow *model.Workflow, nodeName string) bool {
+	if workflow == nil {
+		return false
+	}
+	for _, node := range workflow.Nodes {
+		if node.Name == nodeName {
+			return node.Type == "n8n-nodes-base.splitInBatches"
+		}
+	}
+	return false
 }
 
 // visitNode is a helper function for topological sorting

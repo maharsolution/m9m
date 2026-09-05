@@ -174,13 +174,19 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		return nil, fmt.Errorf("invalid workflow connections: %w", err)
 	}
 
-	// Check for cycles in workflow
+	// Check for cycles in workflow. We tolerate cycles when the
+	// workflow uses n8n's `splitInBatches` (Loop) node, because the
+	// pattern `Process Item → Loop Over Items → Process Item` is the
+	// canonical n8n loop construction: `splitInBatches` sends the
+	// next batch to its `main[1]` branch each iteration, then sends
+	// the final "done" payload to `main[0]`. The engine handles the
+	// iteration internally, so the connection-level cycle is benign.
 	hasCycles, err := e.connectionRouter.HasCycles(workflow)
 	if err != nil {
 		return nil, fmt.Errorf("error checking for workflow cycles: %w", err)
 	}
 
-	if hasCycles {
+	if hasCycles && !connections.WorkflowUsesSplitInBatches(workflow) {
 		return nil, fmt.Errorf("workflow contains cycles - cannot execute")
 	}
 

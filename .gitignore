@@ -11,6 +11,7 @@ __pycache__/
 *.pyc
 *.pyo
 .venv/
+secrets/
 
 # Build artifacts
 *.o
@@ -103,3 +104,4 @@ parity-test.ps1
 m9m-simple_webhook.json
 n8n-simple_webhook.json
 tmp/
+secrets/
