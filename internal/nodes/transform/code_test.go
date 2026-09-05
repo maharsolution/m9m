@@ -378,8 +378,16 @@ func TestCodeNode_Execute_NoModeParam(t *testing.T) {
 	// exports. The body uses expression-style code (no `return`
 	// statement) so it can run through m9m's Goja evaluator without
 	// an IIFE wrapper.
+	//
+	// As of the loop-test fix we default to `runOnceForAllItems`
+	// (n8n's modern Code v2 default), but this test asserts the
+	// legacy `runOnceForEachItem` semantics explicitly. The Code v2
+	// default change only matters when the workflow does not pin
+	// `mode` at all, so explicitly pinning it here keeps the
+	// per-item semantics intact for this fixture.
 	nodeParams := map[string]interface{}{
 		"language": "javascript",
+		"mode":     "runOnceForEachItem",
 		"jsCode":   "var r = { myNewField: 1 }; r;",
 	}
 

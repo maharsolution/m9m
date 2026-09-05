@@ -44,7 +44,19 @@ func (c *CodeNode) Description() base.NodeDescription {
 // n8n's drop-in compatibility promise. Mirroring n8n's default keeps
 // legacy / hand-edited exports working without forcing the operator
 // to re-publish from the n8n editor.
-const DefaultCodeMode = "runOnceForEachItem"
+// DefaultCodeMode is the `mode` parameter used by the Code node when
+// the workflow JSON does not specify one. n8n Code typeVersion 2 —
+// the default for any modern n8n export — defaults to
+// `runOnceForAllItems`, where the snippet is executed once and its
+// return value (typically an array of items) becomes the node's
+// full output. The legacy `runOnceForEachItem` is used by Code v1
+// workflows that explicitly set it.
+//
+// We default to `runOnceForAllItems` because that matches n8n's
+// current editor default and unblocks workflows like
+// `t8xPqfr92w5HGeOv` (Loop test) whose Code v2 node returns an
+// array of mock-data items without specifying `mode`.
+const DefaultCodeMode = "runOnceForAllItems"
 
 // ValidateParameters validates Code node parameters.
 //
