@@ -301,6 +301,32 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 			inputDataForNode = []model.DataItem{{JSON: make(map[string]interface{})}}
 		}
 
+		// Skip nodes that received no items. This matches n8n's
+		// execution semantics: a node is only invoked when its
+		// upstream routed at least one item into it. Without this
+		// guard, the engine executes every node in topological
+		// order with a synthetic empty item, which causes
+		// downstream-side-effect nodes (notably Respond-to-Webhook)
+		// to fire with `$json` resolved to an empty object and
+		// overwrite the *correct* response from the branch the item
+		// actually took. For example, an IF node that routes a
+		// valid item to "Loop Over Orders" and an invalid item to
+		// "Respond Invalid Input" — when a valid item is processed,
+		// the IF routes it to Loop, but m9m still invokes Respond
+		// Invalid Input with an empty item, producing a stale
+		// `{"error": "<undefined>", "status": "REJECTED"}` response
+		// body that overrides the legitimate Respond Processed
+		// Summary's body.
+		//
+		// The starting-node branch above already seeds non-empty
+		// data, and triggers emit their own items, so legitimate
+		// starts are unaffected. Decorative / trigger-only nodes
+		// are skipped earlier in the loop.
+		if len(inputDataForNode) == 0 {
+			nodeResults[nodeName] = []model.DataItem{}
+			continue
+		}
+
 		// Prepare node parameters with credentials if credential manager is available
 		finalNodeParams := node.Parameters
 		if e.credentialManager != nil {
