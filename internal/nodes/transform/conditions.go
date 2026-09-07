@@ -14,6 +14,12 @@ import (
 type ConditionEvaluator struct{}
 
 // ValidOperators is the set of supported condition operators.
+//
+// Includes legacy string operators (`equals`, `notEquals`, ...) AND the
+// n8n IF v2 typed operators (`true`, `false`) emitted when the operator
+// `type` is `boolean`. n8n writes these as
+// `{type: "boolean", operation: "true", singleValue: true}` for the
+// "is true" / "is false" condition UI.
 var ValidOperators = map[string]bool{
 	"equals":             true,
 	"notEquals":          true,
@@ -31,6 +37,9 @@ var ValidOperators = map[string]bool{
 	"between":            true,
 	"empty":              true,
 	"notEmpty":           true,
+	// n8n IF v2 boolean operators
+	"true":  true,
+	"false": true,
 }
 
 // ValidateConditions validates the conditions array and combiner.
@@ -204,6 +213,15 @@ func evaluateCondition(item model.DataItem, condition map[string]interface{}, ev
 		return condIsEmpty(leftResolved)
 	case "notEmpty":
 		return !condIsEmpty(leftResolved)
+	// n8n IF v2 boolean operators: the leftValue is evaluated as a
+	// boolean expression; `true` matches when the resolved value is
+	// truthy, `false` matches when it is falsy. The rightValue field
+	// is ignored (n8n wires `singleValue: true` on the operator
+	// object to signal that).
+	case "true":
+		return condIsTruthy(leftResolved)
+	case "false":
+		return !condIsTruthy(leftResolved)
 	}
 
 	if leftResolved == nil || rightResolved == nil {
@@ -349,6 +367,31 @@ func condIsEmpty(value interface{}) bool {
 		return !v
 	default:
 		return false
+	}
+}
+
+// condIsTruthy reports whether a value is "truthy" in the n8n IF v2
+// sense: nil/empty/zero/false are falsy, everything else is true. This
+// is the boolean used by the IF v2 boolean operators (`true`/`false`).
+func condIsTruthy(value interface{}) bool {
+	if value == nil {
+		return false
+	}
+	switch v := value.(type) {
+	case bool:
+		return v
+	case string:
+		return v != "" && v != "false"
+	case float64:
+		return v != 0
+	case int:
+		return v != 0
+	case []interface{}:
+		return len(v) > 0
+	case map[string]interface{}:
+		return len(v) > 0
+	default:
+		return true
 	}
 }
 
