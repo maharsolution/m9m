@@ -546,6 +546,64 @@ func findRespondToWebhookNodeByType(workflow *model.Workflow) string {
 	return ""
 }
 
+// findRespondToWebhookNodes returns every Respond-to-Webhook node
+// reachable from `triggerNode`, in BFS order (closest first). This
+// is the multi-node variant of findRespondToWebhookNode and is used
+// by extractResponseNodeData to handle workflows where the trigger
+// fans out to multiple Respond-to-Webhook nodes through conditional
+// branches (e.g. an IF node with one Respond per branch). In n8n,
+// only the Respond-to-Webhook node that the item actually flows to
+// executes — and that node's output is the one returned to the
+// caller. The manager must therefore iterate through the reachable
+// Respond-to-Webhook nodes and pick the one whose entry in
+// NodeOutputs actually contains data; the static "closest by graph
+// distance" choice was wrong because the IF branch the item took
+// determines which Respond node ran, not the trigger's BFS order.
+func findRespondToWebhookNodes(workflow *model.Workflow, triggerNode string) []string {
+	if workflow == nil || triggerNode == "" {
+		return nil
+	}
+
+	typeByName := make(map[string]string, len(workflow.Nodes))
+	for _, n := range workflow.Nodes {
+		typeByName[n.Name] = n.Type
+	}
+
+	var found []string
+	visited := make(map[string]struct{})
+	queue := []string{triggerNode}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+
+		if _, seen := visited[current]; seen {
+			continue
+		}
+		visited[current] = struct{}{}
+
+		if typeByName[current] == respondToWebhookNodeType {
+			found = append(found, current)
+		}
+
+		conns, ok := workflow.Connections[current]
+		if !ok {
+			continue
+		}
+		for _, branch := range conns.Main {
+			for _, c := range branch {
+				if c.Node == "" {
+					continue
+				}
+				if _, seen := visited[c.Node]; seen {
+					continue
+				}
+				queue = append(queue, c.Node)
+			}
+		}
+	}
+	return found
+}
+
 // findRespondToWebhookRespondWith returns the `respondWith` parameter
 // of the Respond-to-Webhook node that the manager would consult for
 // responseNode mode. Used by the responseNode branch to honour the
@@ -574,28 +632,41 @@ func findRespondToWebhookRespondWith(workflow *model.Workflow, triggerNode strin
 }
 
 // extractResponseNodeData reads the output the Respond-to-Webhook
-// node produced and returns it. Returns nil when the node produced
-// no data, or when the engine did not populate per-node tracking
+// node produced and returns it. Returns nil when no Respond-to-Webhook
+// node has data, or when the engine did not populate per-node tracking
 // for this run (older engine paths). Callers MUST treat a nil
 // return as "fall back to last-node output".
+//
+// When the workflow has multiple Respond-to-Webhook nodes reachable
+// from the trigger (e.g. via an IF node that routes to either
+// "respond invalid" or "respond processed" depending on the input),
+// only one of them runs per execution. The reachable nodes are
+// walked in BFS order and the first with non-empty NodeOutputs wins
+// — this matches n8n's runtime, which sends the response from the
+// Respond-to-Webhook node that the item actually reached.
 func extractResponseNodeData(workflow *model.Workflow, triggerNode string, result *engine.ExecutionResult) []model.DataItem {
 	if result == nil || result.NodeOutputs == nil {
 		return nil
 	}
 
-	nodeName := findRespondToWebhookNode(workflow, triggerNode)
-	if nodeName == "" {
-		nodeName = findRespondToWebhookNodeByType(workflow)
+	candidates := findRespondToWebhookNodes(workflow, triggerNode)
+	if len(candidates) == 0 {
+		// Fallback when the trigger's outgoing edges aren't indexed
+		// (renamed trigger, etc.): scan by node type.
+		if name := findRespondToWebhookNodeByType(workflow); name != "" {
+			candidates = []string{name}
+		}
 	}
-	if nodeName == "" {
+	if len(candidates) == 0 {
 		return nil
 	}
 
-	data, ok := result.NodeOutputs[nodeName]
-	if !ok || len(data) == 0 {
-		return nil
+	for _, name := range candidates {
+		if data, ok := result.NodeOutputs[name]; ok && len(data) > 0 {
+			return data
+		}
 	}
-	return data
+	return nil
 }
 
 // prepareResponseWithContext is the full-fat version of
