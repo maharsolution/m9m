@@ -29,6 +29,22 @@ type ContextAwareNodeExecutor interface {
 	ExecuteWithContext(ctx context.Context, inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error)
 }
 
+// RunAwareNodeExecutor optionally exposes the live `Workflow` and
+// `RunExecutionData` to a node. The Code node uses this to make
+// `$("OtherNode").item.json` resolve inside a snippet — without the
+// run context, the data proxy has no way to find a sibling node's
+// most-recent output and `$(...)` collapses to `undefined`.
+//
+// Engines should prefer this interface when available. The run
+// context passed here is the SAME pointer that the engine stores
+// results into as the workflow runs, so writes through this pointer
+// are visible to downstream nodes that resolve later in the same
+// execution.
+type RunAwareNodeExecutor interface {
+	NodeExecutor
+	ExecuteWithRun(workflow *model.Workflow, runData *expressions.RunExecutionData, runIndex, itemIndex int, inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error)
+}
+
 // NodeDescription provides metadata about a node type
 type NodeDescription struct {
 	Name        string         `json:"name"`

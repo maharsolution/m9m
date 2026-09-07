@@ -1,6 +1,6 @@
 # m9m ↔ n8n Webhook Parity Test Report
 
-_Last refreshed: 2026-09-07T12:09:48.871098Z_
+_Last refreshed: 2026-09-07T13:34:53.704931Z_
 
 This document is the canonical record of parity testing between n8n (port 5678) and m9m (port 8080) for webhook-triggered workflows. It is generated from the Google Sheet at [Validasi N8N - M9M](https://docs.google.com/spreadsheets/d/1PAz38gDk2Fa_6SlBtC3fWss3YfL_KgroEAwCpiY7aDQ) and from live API calls against both servers. Both this file and the sheet are kept in sync — `scripts/parity_orchestrator.py all` updates both.
 
@@ -178,7 +178,7 @@ Source: sheet `Capabilty Gap`.
 
 ## Section E — Auto-discovered Workflows (n8n API)
 
-_Pulled live via `GET /api/v1/workflows?limit=250` at 2026-09-07T12:09:48.871098Z._ n8n reports 13 workflows (12 active). m9m reports 18.
+_Pulled live via `GET /api/v1/workflows?limit=250` at 2026-09-07T13:34:53.704931Z._ n8n reports 13 workflows (12 active). m9m reports 18.
 
 | # | n8n id | Name | Active | Webhook? | Path | In m9m? | Sync gap |
 |---|--------|------|--------|----------|------|---------|----------|

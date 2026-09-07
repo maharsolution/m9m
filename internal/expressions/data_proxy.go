@@ -312,26 +312,38 @@ func (p *WorkflowDataProxy) createNodeProxy() goja.Value {
 
 		nodeProxy := p.vm.NewObject()
 
-		// Current item from node (for current run/item index)
+		// Current item from node (for current run/item index).
+		//
+		// The n8n node proxy exposes `.json` / `.binary` as a *wrapper*
+		// (the same shape `$input.first().json` resolves to) so that
+		// `$("Loop").item.json.body` continues to work the way it does
+		// on n8n. Returning the bare JSON map directly would force
+		// authors to write `$("Loop").item.body` instead — which
+		// diverges from the n8n surface area and silently breaks
+		// drop-in workflows.
 		if len(nodeExecutionData) > 0 && p.itemIndex < len(nodeExecutionData) {
-			_ = nodeProxy.Set("json", p.vm.ToValue(nodeExecutionData[p.itemIndex].JSON))
+			_ = nodeProxy.Set("json", p.vm.ToValue(n8nItemWrapper(nodeExecutionData[p.itemIndex])))
 			_ = nodeProxy.Set("binary", p.vm.ToValue(nodeExecutionData[p.itemIndex].Binary))
 		} else {
 			_ = nodeProxy.Set("json", goja.Undefined())
 			_ = nodeProxy.Set("binary", goja.Undefined())
 		}
 
-		// Array-like access methods
+		// Array-like access methods. Each method returns the n8n-shaped
+		// `{json, binary, pairedItem}` wrapper for the same reason as
+		// the `.json` setter above — `$("Loop").first().json.body`
+		// is the canonical n8n form and dropping the wrapper here
+		// would silently swallow fields under spread operators.
 		_ = nodeProxy.Set("first", p.vm.ToValue(func(call goja.FunctionCall) goja.Value {
 			if len(nodeExecutionData) > 0 {
-				return p.vm.ToValue(nodeExecutionData[0].JSON)
+				return p.vm.ToValue(n8nItemWrapper(nodeExecutionData[0]))
 			}
 			return goja.Undefined()
 		}))
 
 		_ = nodeProxy.Set("last", p.vm.ToValue(func(call goja.FunctionCall) goja.Value {
 			if len(nodeExecutionData) > 0 {
-				return p.vm.ToValue(nodeExecutionData[len(nodeExecutionData)-1].JSON)
+				return p.vm.ToValue(n8nItemWrapper(nodeExecutionData[len(nodeExecutionData)-1]))
 			}
 			return goja.Undefined()
 		}))
@@ -339,22 +351,29 @@ func (p *WorkflowDataProxy) createNodeProxy() goja.Value {
 		_ = nodeProxy.Set("all", p.vm.ToValue(func(call goja.FunctionCall) goja.Value {
 			jsonData := make([]interface{}, len(nodeExecutionData))
 			for i, item := range nodeExecutionData {
-				jsonData[i] = item.JSON
+				jsonData[i] = n8nItemWrapper(item)
 			}
 			return p.vm.ToValue(jsonData)
 		}))
 
-		_ = nodeProxy.Set("item", p.vm.ToValue(func(call goja.FunctionCall) goja.Value {
-			var itemIndex int = 0
-			if len(call.Arguments) > 0 {
-				itemIndex = int(call.Arguments[0].ToInteger())
+		// `.item` accessor. n8n exposes `.item` as a *property* that
+		// returns the n8n-shaped wrapper for the *current* iteration
+		// item, so `$("Loop").item.json` works directly without
+		// invoking `.item()` as a method. Storing the wrapper as a
+		// plain property here matches that semantics.
+		//
+		// `$(node).item(index)` (with an explicit index) is a less
+		// common form but still supported via a separate function
+		// exposed as `itemAt` so authors who use it don't break.
+		if len(nodeExecutionData) > 0 {
+			idx := p.itemIndex
+			if idx >= len(nodeExecutionData) {
+				idx = 0
 			}
-
-			if itemIndex >= 0 && itemIndex < len(nodeExecutionData) {
-				return p.vm.ToValue(nodeExecutionData[itemIndex].JSON)
-			}
-			return goja.Undefined()
-		}))
+			_ = nodeProxy.Set("item", p.vm.ToValue(n8nItemWrapper(nodeExecutionData[idx])))
+		} else {
+			_ = nodeProxy.Set("item", goja.Undefined())
+		}
 
 		// Paired item support for data lineage
 		_ = nodeProxy.Set("pairedItem", p.vm.ToValue(func(call goja.FunctionCall) goja.Value {

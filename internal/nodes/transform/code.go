@@ -4,6 +4,7 @@ Package transform provides data transformation node implementations for m9m.
 package transform
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -15,6 +16,13 @@ import (
 // CodeNode implements the Code node functionality for executing custom code
 type CodeNode struct {
 	*base.BaseNode
+
+	// runCtx is populated by ExecuteWithRun before delegating to the
+	// legacy Execute path. Stored as a pointer so the field is shared
+	// across any concurrent reads of the same node (the engine never
+	// invokes a single node instance concurrently for the same
+	// workflow run, so this is safe without a mutex).
+	runCtx *codeRunContext
 }
 
 // NewCodeNode creates a new Code node
@@ -208,6 +216,65 @@ func languageCodeKey(language string) string {
 	}
 }
 
+// ExecuteWithRun is the run-aware execution path. Engines that
+// implement the RunAwareNodeExecutor interface should call this
+// instead of Execute so that `$("OtherNode").item.json` inside the
+// snippet can resolve to the live runExecutionData. Falls back to
+// the legacy Execute when runData is nil.
+func (c *CodeNode) ExecuteWithRun(workflow *model.Workflow, runData *expressions.RunExecutionData, runIndex, itemIndex int, inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
+	c.runCtx = &codeRunContext{
+		workflow:  workflow,
+		runData:   runData,
+		runIndex:  runIndex,
+		itemIndex: itemIndex,
+	}
+	defer func() { c.runCtx = nil }()
+	return c.Execute(inputData, nodeParams)
+}
+
+// ExecuteWithContext is the cancellation-aware execution path; the
+// Code node doesn't currently honour cancellation beyond what the
+// underlying goja runtime enforces, but we still thread it through
+// so future cancellation hooks land in one place.
+func (c *CodeNode) ExecuteWithContext(ctx context.Context, inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
+	return c.Execute(inputData, nodeParams)
+}
+
+// codeRunContext is the per-execution context the engine threads
+// through to ExecuteWithRun. Stored on the CodeNode as `runCtx` so
+// the legacy Execute path can pick it up when called by engines that
+// haven't migrated to RunAwareNodeExecutor yet.
+type codeRunContext struct {
+	workflow  *model.Workflow
+	runData   *expressions.RunExecutionData
+	runIndex  int
+	itemIndex int
+}
+
+// populateRunContext copies run-aware fields from the cached runCtx
+// (set by ExecuteWithRun) into a freshly-built ExpressionContext.
+//
+// The Code node builds its own context inside the executor helpers
+// instead of receiving the engine's context, because the helpers
+// pre-date the RunAwareNodeExecutor interface. Threading the run
+// pointer through here keeps backward compatibility for any caller
+// still on the legacy Execute path while letting engines that have
+// migrated to RunAwareNodeExecutor unlock `$("OtherNode").item.json`
+// references inside snippets.
+//
+// If runCtx is nil (legacy Execute path or test harness), the
+// additional context fields are left zero and `getNodeExecutionData`
+// will simply return `nil` for any `$("name")` lookup — which matches
+// the historical m9m behaviour, so existing snapshots don't change.
+func (c *CodeNode) populateRunContext(ctx *expressions.ExpressionContext) {
+	if c == nil || c.runCtx == nil {
+		return
+	}
+	ctx.Workflow = c.runCtx.workflow
+	ctx.RunExecutionData = c.runCtx.runData
+	ctx.RunIndex = c.runCtx.runIndex
+}
+
 // Execute processes the Code node operation
 func (c *CodeNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
 	if len(inputData) == 0 {
@@ -369,6 +436,9 @@ func (c *CodeNode) executeJavaScriptForAllItems(evaluator *expressions.GojaExpre
 			CurrentNodeParameters: map[string]interface{}{"codeNodeInputItems": true},
 		},
 	}
+	// Inherit run-aware fields from the engine-supplied context so
+	// `$("OtherNode").item.json` resolves inside the snippet.
+	c.populateRunContext(context)
 
 	// Wrap the user code in an IIFE so top-level `return` statements
 	// (n8n's Code node type v2 syntax — `return $input.all();`) work
@@ -400,6 +470,9 @@ func (c *CodeNode) executeJavaScriptForEachItem(evaluator *expressions.GojaExpre
 				CurrentNodeParameters: map[string]interface{}{"codeNodeInputItems": true},
 			},
 		}
+		// Inherit run-aware fields so per-item $("NodeName").item.json
+		// references inside the snippet resolve correctly.
+		c.populateRunContext(context)
 
 		// Wrap user code in an IIFE so top-level `return` is legal —
 		// n8n Code v2 author code uses `return $input.all()` etc.

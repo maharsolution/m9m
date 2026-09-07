@@ -443,17 +443,17 @@ func TestDataProxy(t *testing.T) {
 		},
 		{
 			name:       "input_first",
-			expression: "{{ $input.first().name }}",
+			expression: "{{ $input.first().json.name }}",
 			expected:   "John",
 		},
 		{
 			name:       "input_last",
-			expression: "{{ $input.last().name }}",
+			expression: "{{ $input.last().json.name }}",
 			expected:   "Jane",
 		},
 		{
 			name:       "node_access",
-			expression: "{{ $node('node1').json.result }}",
+			expression: "{{ $node('node1').item.json.result }}",
 			expected:   "test1",
 		},
 		{

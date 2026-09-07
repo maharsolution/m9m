@@ -9,9 +9,11 @@ import (
 	"log"
 	"runtime/debug"
 	"sync"
+	"time"
 
 	"github.com/neul-labs/m9m/internal/connections"
 	"github.com/neul-labs/m9m/internal/credentials"
+	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
 )
@@ -87,6 +89,16 @@ type workflowEngineImpl struct {
 	nodeRegistry      NodeRegistry
 	credentialManager *credentials.CredentialManager
 	connectionRouter  connections.ConnectionRouter
+
+	// Per-execution context. Populated at the start of every
+	// ExecuteWorkflow call and read by executeNodeWithContext so the
+	// RunAwareNodeExecutor interface can hand the workflow + live
+	// runExecutionData to nodes that need it (Code, primarily, for
+	// `$("OtherNode").item.json` lookups).
+	workflow        *model.Workflow
+	runExecutionData *expressions.RunExecutionData
+	runIndex         int
+	itemIndex        int
 }
 
 // NewWorkflowEngine creates a new workflow engine
@@ -161,6 +173,24 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 	if ctx == nil {
 		ctx = context.Background()
 	}
+
+	// Set run context on the engine so that RunAwareNodeExecutor
+	// implementations (e.g. Code) can pull sibling node outputs from
+	// the live runExecutionData. Both fields are cleared at the end
+	// to keep the engine re-entrant across concurrent workflows.
+	e.workflow = workflow
+	e.runExecutionData = &expressions.RunExecutionData{
+		ExecutionData: &expressions.ExecutionData{},
+		ResultData: &expressions.RunData{
+			NodeData: make(map[string][]expressions.NodeExecutionResult),
+		},
+	}
+	defer func() {
+		e.workflow = nil
+		e.runExecutionData = nil
+		e.runIndex = 0
+		e.itemIndex = 0
+	}()
 
 	// Handle empty workflow
 	if len(workflow.Nodes) == 0 {
@@ -298,6 +328,23 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		// downstream node inputs or webhook responses.
 		nodeResults[nodeName] = stripRoutingMetadata(outputData)
 
+		// Also store in runExecutionData so RunAwareNodeExecutor
+		// implementations (Code node, primarily) can pull sibling
+		// node outputs via `$("OtherNode").item.json`. The slice
+		// is keyed by runIndex so multiple iterations of a Loop
+		// node each get their own slot.
+		if e.runExecutionData != nil && e.runExecutionData.ResultData != nil {
+			results := e.runExecutionData.ResultData.NodeData[nodeName]
+			for len(results) <= e.runIndex {
+				results = append(results, expressions.NodeExecutionResult{})
+			}
+			results[e.runIndex] = expressions.NodeExecutionResult{
+				Data:      stripRoutingMetadata(outputData),
+				StartTime: time.Now(),
+			}
+			e.runExecutionData.ResultData.NodeData[nodeName] = results
+		}
+
 		// Route data to connected nodes
 		routedData, err := e.connectionRouter.RouteData(nodeName, workflow, outputData)
 		if err != nil {
@@ -353,6 +400,16 @@ func (e *workflowEngineImpl) executeNodeWithContext(
 ) ([]model.DataItem, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+
+	// Prefer the run-aware executor when available — Code node
+	// snippets use `$("OtherNode").item.json` to pull sibling node
+	// outputs, which only resolves when the executor gets the live
+	// runExecutionData. Without this, the Code node builds its own
+	// context internally and silently swallows fields under spread
+	// operators (`...$(Loop).item.json`).
+	if runExecutor, ok := executor.(base.RunAwareNodeExecutor); ok {
+		return runExecutor.ExecuteWithRun(e.workflow, e.runExecutionData, e.runIndex, e.itemIndex, inputData, nodeParams)
 	}
 
 	if contextExecutor, ok := executor.(base.ContextAwareNodeExecutor); ok {

@@ -159,8 +159,14 @@ func (e *EnhancedWorkflowEngine) ExecuteWorkflowWithExpressions(
 				}, nil
 			}
 
-			// Execute the node with resolved parameters
-			outputData, err := executor.Execute([]model.DataItem{inputItem}, finalParams)
+			// Execute the node with resolved parameters. Prefer the
+			// run-aware variant when available so Code node snippets
+			// can use `$("OtherNode").item.json` against the live
+			// runExecutionData — without this, the Code node builds
+			// its own context internally and loses access to sibling
+			// node outputs, which surfaces as fields silently
+			// disappearing from spread operators.
+			outputData, err := e.executeNode(executor, workflow, runExecutionData, runIndex, itemIndex, []model.DataItem{inputItem}, finalParams)
 			if err != nil {
 				return &ExecutionResult{
 					Error: fmt.Errorf("error executing node %s: %w", node.Name, err),
@@ -217,6 +223,43 @@ func (e *EnhancedWorkflowEngine) ExecuteWorkflowWithExpressions(
 	runExecutionData.StoppedAt = &now
 
 	return &ExecutionResult{Data: finalOutput}, nil
+}
+
+// executeNode invokes a node executor using the most capable interface
+// it implements. The preference order is:
+//
+//  1. RunAwareNodeExecutor — gives the node access to the live
+//     runExecutionData (Code nodes use this to resolve
+//     `$("OtherNode").item.json` against sibling outputs).
+//  2. ContextAwareNodeExecutor — falls back to context.Context for
+//     cancellation; does not propagate run data.
+//  3. NodeExecutor — plain legacy call.
+//
+// The interface check is type-asserted rather than registered because
+// the engine has no compile-time guarantee that an executor knows
+// about the run-aware interface (third-party nodes may implement only
+// NodeExecutor). All callers go through this helper so the preference
+// ladder is exercised uniformly across the codebase.
+func (e *EnhancedWorkflowEngine) executeNode(
+	executor interface{},
+	workflow *model.Workflow,
+	runExecutionData *expressions.RunExecutionData,
+	runIndex, itemIndex int,
+	inputData []model.DataItem,
+	finalParams map[string]interface{},
+) ([]model.DataItem, error) {
+	type runner interface {
+		Execute([]model.DataItem, map[string]interface{}) ([]model.DataItem, error)
+	}
+	if r, ok := executor.(interface {
+		ExecuteWithRun(*model.Workflow, *expressions.RunExecutionData, int, int, []model.DataItem, map[string]interface{}) ([]model.DataItem, error)
+	}); ok {
+		return r.ExecuteWithRun(workflow, runExecutionData, runIndex, itemIndex, inputData, finalParams)
+	}
+	if r, ok := executor.(runner); ok {
+		return r.Execute(inputData, finalParams)
+	}
+	return nil, fmt.Errorf("executor %T does not implement NodeExecutor", executor)
 }
 
 // resolveNodeParameters resolves expressions in node parameters
