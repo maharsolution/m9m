@@ -205,7 +205,23 @@ func (p *WorkflowDataProxy) createInputProxy() goja.Value {
 		return p.vm.ToValue(jsonData)
 	}))
 
-	// $input.first() - first item from connection
+	// $input.first() - first item from connection.
+	//
+	// n8n's `$input.first()` (and `.last()`, `.item`, `.all()`) returns the
+	// n8n-shaped item wrapper `{json, binary, pairedItem}`, NOT the bare JSON
+	// map. Code node snippets like `$input.first().json.body` rely on this
+	// wrapper shape. Returning the bare `item.JSON` map would mean `.json`
+	// resolves to `undefined` inside the snippet (because maps don't carry
+	// their own `json` key), and downstream JS expressions like
+	// `if (!$input.first()?.json)` end up taking the wrong branch.
+	//
+	// When `codeNodeInputItems` is set on `CurrentNodeParameters` (the Code
+	// node calls these proxies from inside `runOnceForAllItems` /
+	// `runOnceForEachItem`), we therefore wrap the inner JSON in the n8n
+	// item shape so `$input.first().json` and `$input.first().binary` both
+	// resolve correctly. Outside the Code node (e.g. expression-only paths
+	// where only `$json` is consumed) the same wrapper is harmless and
+	// keeps the wire shape consistent.
 	_ = inputProxy.Set("first", p.vm.ToValue(func(call goja.FunctionCall) goja.Value {
 		var connectionIndex int = 0
 		if len(call.Arguments) > 0 {
@@ -214,7 +230,7 @@ func (p *WorkflowDataProxy) createInputProxy() goja.Value {
 
 		inputData := p.getInputConnectionData(connectionIndex)
 		if len(inputData) > 0 {
-			return p.vm.ToValue(inputData[0].JSON)
+			return p.vm.ToValue(n8nItemWrapper(inputData[0]))
 		}
 		return goja.Undefined()
 	}))
@@ -228,7 +244,7 @@ func (p *WorkflowDataProxy) createInputProxy() goja.Value {
 
 		inputData := p.getInputConnectionData(connectionIndex)
 		if len(inputData) > 0 {
-			return p.vm.ToValue(inputData[len(inputData)-1].JSON)
+			return p.vm.ToValue(n8nItemWrapper(inputData[len(inputData)-1]))
 		}
 		return goja.Undefined()
 	}))
@@ -247,12 +263,39 @@ func (p *WorkflowDataProxy) createInputProxy() goja.Value {
 
 		inputData := p.getInputConnectionData(connectionIndex)
 		if itemIndex >= 0 && itemIndex < len(inputData) {
-			return p.vm.ToValue(inputData[itemIndex].JSON)
+			return p.vm.ToValue(n8nItemWrapper(inputData[itemIndex]))
 		}
 		return goja.Undefined()
 	}))
 
 	return inputProxy
+}
+
+// n8nItemWrapper builds the n8n-shaped item envelope used by
+// `$input.first()`, `$input.last()`, `$input.item`, and (already, prior to
+// this change) `$input.all()`.
+//
+// The wrapper is the canonical n8n wire shape:
+//
+//	{json: {...}, binary: {...}, pairedItem: {...}}
+//
+// Code node snippets read `$input.first().json.<key>` (e.g.
+// `$input.first().json.body`), expressions read `$json.<key>` (which the
+// proxy resolves via `createJsonProxy`), and downstream merge/loop nodes
+// rely on `pairedItem` to track provenance. Returning the bare JSON map
+// instead of the wrapper would silently break any of those.
+//
+// `Binary` and `PairedItem` may be nil on the DataItem; we emit them as
+// `nil` rather than omit the keys, so downstream code that explicitly
+// destructures `{json, binary, pairedItem}` doesn't see `undefined`
+// collapse the destructuring. (`nil` in Go maps to `null` in Goja,
+// which is the value n8n emits on its data layer for missing fields.)
+func n8nItemWrapper(item model.DataItem) map[string]interface{} {
+	return map[string]interface{}{
+		"json":       item.JSON,
+		"binary":     item.Binary,
+		"pairedItem": item.PairedItem,
+	}
 }
 
 // createNodeProxy creates the $node context variable and $() function
@@ -599,6 +642,20 @@ func (p *WorkflowDataProxy) Setup(vm *goja.Runtime) error {
 	err = vm.Set("$node", p.createNodeProxy())
 	if err != nil {
 		return fmt.Errorf("failed to set $node: %w", err)
+	}
+
+	// Set up $ alias for the node proxy (n8n allows `$(name).item.json`
+	// as shorthand for `$node[name].item.json`). The Code node and
+	// expression evaluator both run through this Setup path, so both
+	// need the shorthand registered here — registering it inside
+	// `CreateJavaScriptProxy` only (which the Expression wrapper uses)
+	// leaves the Code node path without the alias, and workflows like
+	// `Batch Order Processing System` that read `$("Loop Over Orders")`
+	// inside a Code node snippet fail with `ReferenceError: $ is not
+	// defined`.
+	err = vm.Set("$", p.createNodeProxy())
+	if err != nil {
+		return fmt.Errorf("failed to set $: %w", err)
 	}
 
 	// Set up $parameter variable

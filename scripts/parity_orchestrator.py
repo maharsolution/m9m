@@ -398,10 +398,12 @@ def cmd_sync(_args) -> int:
 def cmd_validate(args) -> int:
     """Run all cases (or a single one) and write case_*.json."""
     cases = list(ALL_CASES)
-    if args.case:
-        cases = [c for c in cases if c["no"] == args.case and c["sheet"] == args.sheet]
+    case_filter = getattr(args, "case", None)
+    sheet_filter = getattr(args, "sheet", None)
+    if case_filter:
+        cases = [c for c in cases if c["no"] == case_filter and c["sheet"] == sheet_filter]
         if not cases:
-            print(f"no case {args.sheet}/{args.no}", file=sys.stderr)
+            print(f"no case {sheet_filter}/{case_filter}", file=sys.stderr)
             return 2
     n8n_host = N8N_BASE.split(":")[1].strip("//")
     n8n_port = int(N8N_BASE.split(":")[2].rstrip("/"))
@@ -485,7 +487,7 @@ def cmd_update_sheet(args) -> int:
             target_row = 4 + r["no"]
             sheet_name = "'Webhook Controlling Negative Test'"
 
-        if args.only_row and args.only_row != target_row:
+        if getattr(args, "only_row", None) and args.only_row != target_row:
             continue
 
         # F = m9m response body, G = ResponseCode, H = Status
