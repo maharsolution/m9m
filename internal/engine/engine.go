@@ -621,6 +621,27 @@ func (e *workflowEngineImpl) executeSplitInBatchesLoop(
 		// accumulator instead of just the most recent batch.
 		iterRunIndex := e.runIndex + 1 + batchIdx
 
+		// Publish the *current* batch at the splitInBatches
+		// node's iteration slot before the body chain runs.
+		// Body-chain nodes that read `$("Loop Over Items").item.json`
+		// (e.g. Code snippets in positive/8's `Merge Inventory
+		// & Price` node) need this lookup to return the items
+		// the loop is currently processing, not the aggregated
+		// output across all batches (which is published later
+		// at the top-level slot). Without this publish the
+		// Code node sees `undefined.item` and crashes.
+		if runData != nil && runData.ResultData != nil {
+			results := runData.ResultData.NodeData[node.Name]
+			for len(results) <= iterRunIndex {
+				results = append(results, expressions.NodeExecutionResult{})
+			}
+			results[iterRunIndex] = expressions.NodeExecutionResult{
+				Data:      batch,
+				StartTime: time.Now(),
+			}
+			runData.ResultData.NodeData[node.Name] = results
+		}
+
 		batchOutput, err := e.runLoopBodyChain(
 			ctx,
 			workflow,
