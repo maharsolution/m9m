@@ -2,7 +2,6 @@ package expressions
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"sync"
@@ -635,8 +634,6 @@ func (p *WorkflowDataProxy) getNodeExecutionData(nodeName string) []model.DataIt
 	} else {
 		slotInfo = "no runExecutionData"
 	}
-	log.Printf("[DEBUG proxy] getNodeExecutionData(%q) activeNode=%q %s returnedLen=%d", nodeName, p.activeNodeName, slotInfo, len(data))
-	// also dump to file for guaranteed capture
 	if f, err := os.OpenFile("/tmp/m9m-proxy-debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err == nil {
 		fmt.Fprintf(f, "[DEBUG proxy] getNodeExecutionData(%q) activeNode=%q %s returnedLen=%d\n", nodeName, p.activeNodeName, slotInfo, len(data))
 		f.Close()
