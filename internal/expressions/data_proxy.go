@@ -2,6 +2,7 @@ package expressions
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"sync"
@@ -608,8 +609,10 @@ func (p *WorkflowDataProxy) getNodeExecutionData(nodeName string) []model.DataIt
 
 	// Load data from run execution data
 	var data []model.DataItem
+	var slotInfo string
 	if p.runExecutionData != nil && p.runExecutionData.ResultData != nil {
 		if nodeResults, exists := p.runExecutionData.ResultData.NodeData[nodeName]; exists {
+			slotInfo = fmt.Sprintf("slots=%d runIndex=%d", len(nodeResults), p.runIndex)
 			if len(nodeResults) > p.runIndex {
 				data = nodeResults[p.runIndex].Data
 			}
@@ -621,11 +624,22 @@ func (p *WorkflowDataProxy) getNodeExecutionData(nodeName string) []model.DataIt
 				for i := len(nodeResults) - 1; i >= 0; i-- {
 					if len(nodeResults[i].Data) > 0 {
 						data = nodeResults[i].Data
+						slotInfo += fmt.Sprintf(" -> fell through to slot %d", i)
 						break
 					}
 				}
 			}
+		} else {
+			slotInfo = "no entry"
 		}
+	} else {
+		slotInfo = "no runExecutionData"
+	}
+	log.Printf("[DEBUG proxy] getNodeExecutionData(%q) activeNode=%q %s returnedLen=%d", nodeName, p.activeNodeName, slotInfo, len(data))
+	// also dump to file for guaranteed capture
+	if f, err := os.OpenFile("/tmp/m9m-proxy-debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "[DEBUG proxy] getNodeExecutionData(%q) activeNode=%q %s returnedLen=%d\n", nodeName, p.activeNodeName, slotInfo, len(data))
+		f.Close()
 	}
 
 	// Cache the result
