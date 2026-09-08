@@ -488,7 +488,7 @@ func addSplitInBatchesDoneBranchDependencies(workflow *model.Workflow, dependenc
 		if len(doneTargets) == 0 || len(processDescendants) == 0 {
 			continue
 		}
-		anchor := deepestProcessBranchNode(processDescendants, dependencies)
+		anchor := deepestProcessBranchNode(workflow, processDescendants)
 		if anchor == "" {
 			continue
 		}
@@ -559,18 +559,57 @@ func collectBranchDescendants(workflow *model.Workflow, source string, branchInd
 }
 
 // deepestProcessBranchNode picks the node in the process-branch
-// descendant set with the largest in-degree (i.e. the most
-// dependencies). That node is the last to run in the body and
-// therefore the correct anchor for the synthetic done-branch
-// dependency. Ties are broken by string ordering for determinism.
-func deepestProcessBranchNode(descendants map[string]bool, dependencies map[string][]string) string {
-	var pick string
-	var pickDepth int
+// descendant set that is the *last* to execute in topological
+// order — the body-end aggregation node. The cleanest signal is
+// the count of *outgoing* edges to other descendant nodes: a node
+// with no further outgoing edges within the branch is the end of
+// the body. Ties are broken by string ordering for determinism.
+func deepestProcessBranchNode(workflow *model.Workflow, descendants map[string]bool) string {
+	if len(descendants) == 0 {
+		return ""
+	}
+	// hasOutgoing[n] = true if n has at least one Main edge to
+	// another descendant (i.e. there's more body after n).
+	hasOutgoing := make(map[string]bool, len(descendants))
 	for n := range descendants {
-		depth := len(dependencies[n])
-		if depth > pickDepth || (depth == pickDepth && n < pick) {
+		conns, ok := workflow.Connections[n]
+		if !ok {
+			continue
+		}
+		for _, branch := range conns.Main {
+			for _, c := range branch {
+				if c.Node == "" {
+					continue
+				}
+				if descendants[c.Node] {
+					hasOutgoing[n] = true
+				}
+			}
+		}
+	}
+	// The anchor is the node with the *smallest* outgoing-edge
+	// count to other descendants (preferring nodes with none). This
+	// matches n8n's "deepest" node in the chain — the leaf that
+	// finishes the body. When multiple candidates tie (e.g. several
+	// sibling leaves), pick the lexicographically smallest name for
+	// determinism.
+	var pick string
+	for n := range descendants {
+		if hasOutgoing[n] {
+			continue
+		}
+		if pick == "" || n < pick {
 			pick = n
-			pickDepth = depth
+		}
+	}
+	if pick != "" {
+		return pick
+	}
+	// Fallback: every candidate has further descendants (shouldn't
+	// happen for acyclic branches). Pick the lex-smallest name.
+	for n := range descendants {
+		if pick == "" || n < pick {
+			pick = n
 		}
 	}
 	return pick
