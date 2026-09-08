@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -252,6 +253,10 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 	}
 
 	// Execute each node in order
+	if f, err := os.OpenFile("/tmp/m9m-engine-debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+		fmt.Fprintf(f, "[engine] executionOrder=%v\n", executionOrder)
+		f.Close()
+	}
 	for _, nodeName := range executionOrder {
 		select {
 		case <-ctx.Done():
@@ -324,7 +329,15 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		// are skipped earlier in the loop.
 		if len(inputDataForNode) == 0 {
 			nodeResults[nodeName] = []model.DataItem{}
+			if f, err := os.OpenFile("/tmp/m9m-engine-debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+				fmt.Fprintf(f, "[engine] SKIP %q (no input data)\n", nodeName)
+				f.Close()
+			}
 			continue
+		}
+		if f, err := os.OpenFile("/tmp/m9m-engine-debug.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+			fmt.Fprintf(f, "[engine] RUN  %q (input len=%d)\n", nodeName, len(inputDataForNode))
+			f.Close()
 		}
 
 		// Prepare node parameters with credentials if credential manager is available
