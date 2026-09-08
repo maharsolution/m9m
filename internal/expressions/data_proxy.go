@@ -572,23 +572,27 @@ func (p *WorkflowDataProxy) createNowProxy() goja.Value {
 // Unrecognised tokens are passed through unchanged. This matches
 // DateExtensions.convertDateFormat so `$now.format('yyyy-MM-dd')`
 // and `Date.format()` produce identical strings.
+//
+// Tokens are applied in order of length, longest first, so the
+// shorter `yy` token never matches the first two characters of
+// the longer `yyyy` token. If `yy` were applied first, `yyyy-MM-dd`
+// would become `06yy-MM-dd`, after which `yyyy` no longer appears
+// in the string and the year token would be left half-converted
+// — producing nonsense years like `0606` instead of `2006`.
 func luxonToGoFormat(pattern string) string {
-	replacements := map[string]string{
-		"yyyy": "2006",
-		"yy":   "06",
-		"MM":   "01",
-		"dd":   "02",
-		"HH":   "15",
-		"mm":   "04",
-		"ss":   "05",
-		"SSS":  "000",
+	replacements := []struct{ old, new string }{
+		{"yyyy", "2006"}, // longest first
+		{"SSS", "000"},
+		{"MM", "01"},
+		{"dd", "02"},
+		{"HH", "15"},
+		{"mm", "04"},
+		{"ss", "05"},
+		{"yy", "06"}, // shortest last
 	}
-	// Iterate in order of length so longer tokens (yyyy) match
-	// before shorter ones (yy) when the pattern contains the
-	// shorter token as a prefix.
 	out := pattern
-	for old, new := range replacements {
-		out = strings.ReplaceAll(out, old, new)
+	for _, r := range replacements {
+		out = strings.ReplaceAll(out, r.old, r.new)
 	}
 	return out
 }
