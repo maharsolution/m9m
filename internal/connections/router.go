@@ -349,6 +349,27 @@ func (r *connectionRouterImpl) GetExecutionOrder(workflow *model.Workflow) ([]st
 		}
 	}
 
+	// For workflows that contain a splitInBatches (Loop) node, the
+	// done-branch (`main[0]`) must execute AFTER the process-branch
+	// (`main[1]`) downstream completes — that's the n8n invariant
+	// the "done" port encodes: "fire me once the body has finished
+	// every iteration". m9m's topological sort treats `main[0]` and
+	// `main[1]` as siblings because both are direct children of the
+	// Loop node, which causes the done-branch (e.g. "Format Summary
+	// Data") to run BEFORE the body has executed. The reader then
+	// sees an empty `$("Filter Paid & In-Stock").all()` and emits a
+	// partial / empty response.
+	//
+	// The fix: for each splitInBatches node, compute the set of
+	// nodes reachable from `main[1]` (process-branch downstream),
+	// then add a synthetic dependency from the *deepest* node in
+	// that set to each `main[0]` (done-branch) target. This forces
+	// the done-branch to be scheduled after the body has run, while
+	// leaving the process-branch ordering itself untouched.
+	if tolerateCycles {
+		addSplitInBatchesDoneBranchDependencies(workflow, dependencies)
+	}
+
 	// Perform topological sort
 	executionOrder := []string{}
 	visited := make(map[string]bool)
@@ -444,6 +465,121 @@ func isSplitInBatchesNode(workflow *model.Workflow, nodeName string) bool {
 	for _, node := range workflow.Nodes {
 		if node.Name == nodeName {
 			return node.Type == "n8n-nodes-base.splitInBatches"
+		}
+	}
+	return false
+}
+
+// splitInBatchesDoneBranchDependencies adds synthetic ordering
+// edges to `dependencies` so that the done-branch (`main[0]`) of
+// every splitInBatches node is scheduled AFTER the process-branch
+// (`main[1]`) body has run to completion. See the comment in
+// GetExecutionOrder for the rationale.
+func addSplitInBatchesDoneBranchDependencies(workflow *model.Workflow, dependencies map[string][]string) {
+	if workflow == nil || dependencies == nil {
+		return
+	}
+	for _, node := range workflow.Nodes {
+		if node.Type != "n8n-nodes-base.splitInBatches" {
+			continue
+		}
+		doneTargets := collectDirectBranchTargets(workflow, node.Name, 0)
+		processDescendants := collectBranchDescendants(workflow, node.Name, 1)
+		if len(doneTargets) == 0 || len(processDescendants) == 0 {
+			continue
+		}
+		anchor := deepestProcessBranchNode(processDescendants, dependencies)
+		if anchor == "" {
+			continue
+		}
+		for _, target := range doneTargets {
+			if target == anchor || target == node.Name {
+				continue
+			}
+			if !containsString(dependencies[target], anchor) {
+				dependencies[target] = append(dependencies[target], anchor)
+			}
+		}
+	}
+}
+
+// collectDirectBranchTargets returns the immediate downstream
+// nodes connected to `source` at the given `branchIndex` in
+// connections.Main (0 = done, 1 = process for splitInBatches).
+func collectDirectBranchTargets(workflow *model.Workflow, source string, branchIndex int) []string {
+	conns, ok := workflow.Connections[source]
+	if !ok {
+		return nil
+	}
+	if branchIndex >= len(conns.Main) {
+		return nil
+	}
+	var out []string
+	for _, c := range conns.Main[branchIndex] {
+		if c.Node == "" {
+			continue
+		}
+		out = append(out, c.Node)
+	}
+	return out
+}
+
+// collectBranchDescendants returns every node reachable from
+// `source` via main[branchIndex] and below (transitive closure,
+// excluding back-edges that target splitInBatches nodes).
+func collectBranchDescendants(workflow *model.Workflow, source string, branchIndex int) map[string]bool {
+	visited := make(map[string]bool)
+	var walk func(string)
+	walk = func(node string) {
+		if visited[node] {
+			return
+		}
+		visited[node] = true
+		conns, ok := workflow.Connections[node]
+		if !ok {
+			return
+		}
+		for _, branch := range conns.Main {
+			for _, c := range branch {
+				if c.Node == "" {
+					continue
+				}
+				if isSplitInBatchesNode(workflow, c.Node) {
+					continue
+				}
+				walk(c.Node)
+			}
+		}
+	}
+	for _, target := range collectDirectBranchTargets(workflow, source, branchIndex) {
+		walk(target)
+	}
+	delete(visited, source)
+	return visited
+}
+
+// deepestProcessBranchNode picks the node in the process-branch
+// descendant set with the largest in-degree (i.e. the most
+// dependencies). That node is the last to run in the body and
+// therefore the correct anchor for the synthetic done-branch
+// dependency. Ties are broken by string ordering for determinism.
+func deepestProcessBranchNode(descendants map[string]bool, dependencies map[string][]string) string {
+	var pick string
+	var pickDepth int
+	for n := range descendants {
+		depth := len(dependencies[n])
+		if depth > pickDepth || (depth == pickDepth && n < pick) {
+			pick = n
+			pickDepth = depth
+		}
+	}
+	return pick
+}
+
+func containsString(slice []string, s string) bool {
+	for _, x := range slice {
+		if x == s {
+			return true
 		}
 	}
 	return false

@@ -51,17 +51,23 @@ func TestGetExecutionOrder_RespectsPosition(t *testing.T) {
 		t.Fatalf("GetExecutionOrder: %v", err)
 	}
 
-	// Expected order based on the positions defined in
-	// buildWebhookLoopWorkflow. We sort by (X ascending, then Y
-	// ascending), so "Done / Output Final" (Y=192) comes before
-	// "Process Item" (Y=384) at the same X.
+	// Expected order: "Process Item" (the body) must execute
+	// before "Done / Output Final" (the done-branch) because the
+	// done-branch aggregates the body's output. The router adds a
+	// synthetic dependency from the deepest process-branch node
+	// to each main[0] target to enforce n8n's "fire done after
+	// body" invariant (see addSplitInBatchesDoneBranchDependencies).
+	// Position-based tie-breaking then orders within the same
+	// dependency level: at X=240, "Done / Output Final" (Y=192)
+	// would normally come before "Process Item" (Y=384), but the
+	// synthetic dependency forces Process Item first.
 	want := []string{
 		"When clicking 'Test workflow'", // position [-432, 192] (manualTrigger)
 		"Webhook",                       // position [-432, 384]
 		"Generate Mock Data",            // position [-208, 336]
 		"Loop Over Items",               // position [16, 336] (splitInBatches)
-		"Done / Output Final",           // position [240, 192]
-		"Process Item",                  // position [240, 384]
+		"Process Item",                  // position [240, 384] — body must run before done-branch
+		"Done / Output Final",           // position [240, 192] — done-branch fires after body
 		"Respond to Webhook",            // position [464, 192]
 	}
 	if !equalStringSlices(want, got) {
