@@ -580,7 +580,24 @@ func (p *WorkflowDataProxy) getInputConnectionData(connectionIndex int) []model.
 	return []model.DataItem{}
 }
 
-// getNodeExecutionData gets execution data for a specific node
+// getNodeExecutionData gets execution data for a specific node.
+//
+// n8n's `$(NodeName).all()` returns the items from the *most recent*
+// execution of the named node, regardless of which runIndex is
+// currently active. This matters for nodes that sit downstream of a
+// `splitInBatches` loop: each iteration of the loop writes a fresh
+// slot in `ResultData.NodeData[nodeName][runIndex]`, but a Code node
+// that runs *after* the loop (e.g. "Format Summary Data") needs to
+// see the cumulative result, which on n8n is the last slot the loop
+// populated. Reading only `ResultData.NodeData[nodeName][runIndex]`
+// at runIndex=0 would silently return the first iteration's items,
+// not the final aggregate.
+//
+// The fix: when the current runIndex's slot is empty but later slots
+// exist, fall through to the highest populated slot. This preserves
+// the in-loop semantics (Code nodes inside the loop still see their
+// own iteration's data at runIndex=k) while making post-loop readers
+// see the final aggregate.
 func (p *WorkflowDataProxy) getNodeExecutionData(nodeName string) []model.DataItem {
 	p.cacheMutex.RLock()
 	if cached, exists := p.dataCache[nodeName]; exists {
@@ -595,6 +612,18 @@ func (p *WorkflowDataProxy) getNodeExecutionData(nodeName string) []model.DataIt
 		if nodeResults, exists := p.runExecutionData.ResultData.NodeData[nodeName]; exists {
 			if len(nodeResults) > p.runIndex {
 				data = nodeResults[p.runIndex].Data
+			}
+			// Fall back to the most recent populated slot when the
+			// caller's runIndex has no items yet. Walk from the end
+			// so we pick the latest loop iteration's data instead of
+			// the earliest.
+			if len(data) == 0 {
+				for i := len(nodeResults) - 1; i >= 0; i-- {
+					if len(nodeResults[i].Data) > 0 {
+						data = nodeResults[i].Data
+						break
+					}
+				}
 			}
 		}
 	}
