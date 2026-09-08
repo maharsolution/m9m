@@ -517,6 +517,13 @@ func (p *WorkflowDataProxy) createVarsProxy() goja.Value {
 //   - toISOString() -> "2026-09-05T12:34:56.789Z" (RFC3339 / ms)
 //   - toMillis()    -> unix-ms timestamp
 //   - toString()    -> ISO string (alias for toISOString)
+//   - format(fmt)   -> string formatted with a Luxon/Moment-style
+//     pattern (yyyy-MM-dd, yyyy-MM-dd HH:mm:ss, etc.). This is the
+//     most commonly-used helper in real n8n workflows (e.g. to
+//     stamp `processedAt` in a Loop body). Patterns are mapped to
+//     Go's time.Format tokens via the same conversion table the
+//     legacy DateExtensions.formatDate uses, so behaviour matches
+//     the `Date.format()` helper for the same input.
 // Any other method/property is delegated to a JS Date fallback so
 // expressions like `$now.getFullYear()` keep working.
 func (p *WorkflowDataProxy) createNowProxy() goja.Value {
@@ -532,8 +539,58 @@ func (p *WorkflowDataProxy) createNowProxy() goja.Value {
 	_ = nowProxy.Set("toString", p.vm.ToValue(func(call goja.FunctionCall) goja.Value {
 		return p.vm.ToValue(now.Format("2006-01-02T15:04:05.000Z07:00"))
 	}))
+	_ = nowProxy.Set("format", p.vm.ToValue(func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) < 1 {
+			panic(p.vm.ToValue("format() requires 1 argument: format string"))
+		}
+		pattern := call.Arguments[0].String()
+		// Map Luxon/Moment-style tokens to Go's time.Format
+		// tokens. Keep this list in sync with the DateExtensions
+		// format converter - the same pattern is recognised
+		// here so a Set node's `={{ $now.format('yyyy-MM-dd') }}`
+		// produces the same string as `Date.format()` would.
+		converted := luxonToGoFormat(pattern)
+		return p.vm.ToValue(now.Format(converted))
+	}))
 
 	return nowProxy
+}
+
+// luxonToGoFormat converts a Luxon/Moment-style date format string
+// to the equivalent Go time.Format reference string. It recognises
+// the tokens n8n users most commonly write in workflow expressions:
+//
+//	yyyy -> 2006    (4-digit year)
+//	yy   -> 06      (2-digit year)
+//	MM   -> 01      (2-digit month)
+//	dd   -> 02      (2-digit day)
+//	HH   -> 15      (2-digit hour, 24h)
+//	mm   -> 04      (2-digit minute)
+//	ss   -> 05      (2-digit second)
+//	SSS  -> 000     (3-digit millisecond)
+//
+// Unrecognised tokens are passed through unchanged. This matches
+// DateExtensions.convertDateFormat so `$now.format('yyyy-MM-dd')`
+// and `Date.format()` produce identical strings.
+func luxonToGoFormat(pattern string) string {
+	replacements := map[string]string{
+		"yyyy": "2006",
+		"yy":   "06",
+		"MM":   "01",
+		"dd":   "02",
+		"HH":   "15",
+		"mm":   "04",
+		"ss":   "05",
+		"SSS":  "000",
+	}
+	// Iterate in order of length so longer tokens (yyyy) match
+	// before shorter ones (yy) when the pattern contains the
+	// shorter token as a prefix.
+	out := pattern
+	for old, new := range replacements {
+		out = strings.ReplaceAll(out, old, new)
+	}
+	return out
 }
 
 // createEvaluateExpressionProxy creates the legacy $evaluateExpression function
