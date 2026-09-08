@@ -483,8 +483,8 @@ func addSplitInBatchesDoneBranchDependencies(workflow *model.Workflow, dependenc
 		if node.Type != "n8n-nodes-base.splitInBatches" {
 			continue
 		}
-		doneTargets := collectDirectBranchTargets(workflow, node.Name, 0)
-		processDescendants := collectBranchDescendants(workflow, node.Name, 1)
+		doneTargets := CollectDirectBranchTargets(workflow, node.Name, 0)
+		processDescendants := CollectBranchDescendants(workflow, node.Name, 1)
 		if len(doneTargets) == 0 || len(processDescendants) == 0 {
 			continue
 		}
@@ -503,10 +503,14 @@ func addSplitInBatchesDoneBranchDependencies(workflow *model.Workflow, dependenc
 	}
 }
 
-// collectDirectBranchTargets returns the immediate downstream
+// CollectDirectBranchTargets returns the immediate downstream
 // nodes connected to `source` at the given `branchIndex` in
 // connections.Main (0 = done, 1 = process for splitInBatches).
-func collectDirectBranchTargets(workflow *model.Workflow, source string, branchIndex int) []string {
+// Exported so the engine package can reuse it when driving
+// splitInBatches iteration (the engine needs to know which
+// downstream chain corresponds to the per-iteration "Process Item"
+// branch vs. the once-per-loop "Done" branch).
+func CollectDirectBranchTargets(workflow *model.Workflow, source string, branchIndex int) []string {
 	conns, ok := workflow.Connections[source]
 	if !ok {
 		return nil
@@ -524,10 +528,12 @@ func collectDirectBranchTargets(workflow *model.Workflow, source string, branchI
 	return out
 }
 
-// collectBranchDescendants returns every node reachable from
+// CollectBranchDescendants returns every node reachable from
 // `source` via main[branchIndex] and below (transitive closure,
 // excluding back-edges that target splitInBatches nodes).
-func collectBranchDescendants(workflow *model.Workflow, source string, branchIndex int) map[string]bool {
+// Exported so the engine can iterate the per-iteration "Process
+// Item" body chain for each batch.
+func CollectBranchDescendants(workflow *model.Workflow, source string, branchIndex int) map[string]bool {
 	visited := make(map[string]bool)
 	var walk func(string)
 	walk = func(node string) {
@@ -551,7 +557,7 @@ func collectBranchDescendants(workflow *model.Workflow, source string, branchInd
 			}
 		}
 	}
-	for _, target := range collectDirectBranchTargets(workflow, source, branchIndex) {
+	for _, target := range CollectDirectBranchTargets(workflow, source, branchIndex) {
 		walk(target)
 	}
 	delete(visited, source)
@@ -663,12 +669,98 @@ func (r *connectionRouterImpl) HasCycles(workflow *model.Workflow) (bool, error)
 	if workflow == nil {
 		return false, fmt.Errorf("workflow cannot be nil")
 	}
-	
+
 	// Try to get execution order - if it fails due to cycles, there are cycles
 	_, err := r.GetExecutionOrder(workflow)
 	if err != nil && fmt.Sprintf("%v", err) == "workflow contains cycles - cannot determine execution order" {
 		return true, nil
 	}
-	
+
 	return false, nil
+}
+
+// GetLoopIterationOrder returns the per-iteration "Process Item"
+// body chain (the nodes that run once per batch, between the
+// splitInBatches node's `main[1]` branch and the back-edge that
+// returns control to the splitInBatches node) in execution order.
+// The back-edge targets are excluded because the engine itself
+// drives the iteration — it does not need to traverse the
+// back-edge as part of a single iteration's body walk.
+//
+// This helper is consumed by the engine's splitInBatches loop
+// driver so that, for each batch, it knows the ordered list of
+// body nodes to execute before resuming the outer loop.
+//
+// Returns an empty slice if `loopNodeName` is not a splitInBatches
+// node, the workflow is nil, or the body chain is empty.
+func GetLoopIterationOrder(workflow *model.Workflow, loopNodeName string) []string {
+	if workflow == nil || loopNodeName == "" {
+		return nil
+	}
+	if !isSplitInBatchesNode(workflow, loopNodeName) {
+		return nil
+	}
+	descendants := CollectBranchDescendants(workflow, loopNodeName, 1)
+	if len(descendants) == 0 {
+		return nil
+	}
+	// Use the workflow's existing topological order so we honour
+	// every dependency (including any IF/Switch branches inside
+	// the body). We restrict to the descendant set, which already
+	// excludes the back-edge targets.
+	fullOrder, err := NewConnectionRouter().GetExecutionOrder(workflow)
+	if err != nil {
+		// On cycle error, fall back to a stable alphabetical sort
+		// so the engine still has a deterministic iteration order
+		// for the body chain.
+		var fallback []string
+		for n := range descendants {
+			fallback = append(fallback, n)
+		}
+		sort.Strings(fallback)
+		return fallback
+	}
+	var order []string
+	for _, n := range fullOrder {
+		if descendants[n] {
+			order = append(order, n)
+		}
+	}
+	return order
+}
+
+// GetLoopDoneOrder returns the nodes on the once-per-loop "Done"
+// branch (the nodes downstream of splitInBatches's `main[0]`,
+// excluding the back-edge) in execution order. Like
+// GetLoopIterationOrder, this drives the engine's splitInBatches
+// loop driver so that after the per-iteration body has run for
+// every batch, the engine can execute the Done branch exactly once
+// with the aggregated output.
+func GetLoopDoneOrder(workflow *model.Workflow, loopNodeName string) []string {
+	if workflow == nil || loopNodeName == "" {
+		return nil
+	}
+	if !isSplitInBatchesNode(workflow, loopNodeName) {
+		return nil
+	}
+	descendants := CollectBranchDescendants(workflow, loopNodeName, 0)
+	if len(descendants) == 0 {
+		return nil
+	}
+	fullOrder, err := NewConnectionRouter().GetExecutionOrder(workflow)
+	if err != nil {
+		var fallback []string
+		for n := range descendants {
+			fallback = append(fallback, n)
+		}
+		sort.Strings(fallback)
+		return fallback
+	}
+	var order []string
+	for _, n := range fullOrder {
+		if descendants[n] {
+			order = append(order, n)
+		}
+	}
+	return order
 }

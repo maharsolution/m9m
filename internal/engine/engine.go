@@ -251,6 +251,44 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		nodeResults[nodeName] = inputData
 	}
 
+	// Pre-compute the body-chain and done-chain orderings for every
+	// splitInBatches node in the workflow. The engine drives
+	// iteration for these nodes itself (instead of calling
+	// splitInBatches.Execute as a normal node) because n8n's loop
+	// pattern relies on the back-edge from the body chain to the
+	// splitInBatches node — a connection-level cycle that the
+	// per-node topological loop cannot iterate on its own. Each
+	// batch's body chain is executed with an incrementing runIndex
+	// so `$("Process Item").all()` and friends resolve correctly
+	// during the iteration and again after the loop is done.
+	loopBodyOrder := map[string][]string{}
+	loopDoneOrder := map[string][]string{}
+	// nodesHandledByLoopDriver is the union of every node that
+	// belongs to *some* splitInBatches loop's body or done chain.
+	// The main engine loop skips these nodes (they're executed
+	// by the loop driver when the splitInBatches node itself
+	// runs). Without this skip the body chain would execute
+	// twice: once inside the loop driver and again from the
+	// top-level topological loop, producing duplicate `processedAt`
+	// assignments and (for the done branch) duplicate `response`
+	// fields.
+	nodesHandledByLoopDriver := make(map[string]bool)
+	for _, n := range workflow.Nodes {
+		if n.Type != "n8n-nodes-base.splitInBatches" {
+			continue
+		}
+		bodyOrder := connections.GetLoopIterationOrder(workflow, n.Name)
+		doneOrder := connections.GetLoopDoneOrder(workflow, n.Name)
+		loopBodyOrder[n.Name] = bodyOrder
+		loopDoneOrder[n.Name] = doneOrder
+		for _, name := range bodyOrder {
+			nodesHandledByLoopDriver[name] = true
+		}
+		for _, name := range doneOrder {
+			nodesHandledByLoopDriver[name] = true
+		}
+	}
+
 	// Execute each node in order
 	for _, nodeName := range executionOrder {
 		select {
@@ -263,6 +301,15 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		node := nodeMap[nodeName]
 		if node == nil {
 			return nil, fmt.Errorf("node %s not found in workflow", nodeName)
+		}
+
+		// Skip nodes that belong to a splitInBatches body or done
+		// chain. These are executed by the engine's loop driver
+		// when the splitInBatches node itself runs; the top-level
+		// topological loop would otherwise execute them a second
+		// time and double-apply their assignments.
+		if nodesHandledByLoopDriver[nodeName] {
+			continue
 		}
 
 		// Get the executor for this node type
@@ -299,6 +346,35 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		if inputDataForNode == nil {
 			// No specific input data, use empty input
 			inputDataForNode = []model.DataItem{{JSON: make(map[string]interface{})}}
+		}
+
+		// splitInBatches is n8n's loop construct. The connection
+		// graph contains a back-edge from the body chain back to
+		// this node, which the per-node topological sort cannot
+		// iterate on its own. The engine therefore takes over the
+		// node's execution: it splits the input into batches,
+		// executes the body chain once per batch (with an
+		// incrementing runIndex), then executes the once-per-loop
+		// done branch exactly once with the aggregated output.
+		// The splitInBatches node itself only contributes its
+		// nodeParameters to this loop (batchSize, options).
+		if node.Type == "n8n-nodes-base.splitInBatches" {
+			if err := e.executeSplitInBatchesLoop(
+				ctx,
+				workflow,
+				node,
+				nodeResults,
+				e.runExecutionData,
+				inputDataForNode,
+				loopBodyOrder[node.Name],
+				loopDoneOrder[node.Name],
+			); err != nil {
+				return &ExecutionResult{
+					Data:  nil,
+					Error: fmt.Errorf("error executing splitInBatches loop %s: %w", node.Name, err),
+				}, nil
+			}
+			continue
 		}
 
 		// Skip nodes that received no items. This matches n8n's
@@ -460,6 +536,450 @@ func (e *workflowEngineImpl) executeNodeWithContext(
 	}
 }
 
+// executeSplitInBatchesLoop drives the iteration for a single
+// splitInBatches (Loop) node. The contract is:
+//
+//  1. `inputData` (the items that routed into this node) is split
+//     into batches of `batchSize` (default 10).
+//  2. For each batch, the per-iteration body chain (the nodes
+//     reachable from `main[1]`, NOT including the back-edge that
+//     targets this splitInBatches node) executes in topological
+//     order with the batch as its input. Each batch gets its own
+//     `runIndex` slot so `$("Process Item").all()` inside the body
+//     resolves correctly during iteration.
+//  3. The "anchor" output for each batch (the deepest body node's
+//     output after routing) is appended to an accumulator.
+//  4. After every batch has been processed, the once-per-loop done
+//     branch (nodes reachable from `main[0]`) executes exactly once
+//     with the accumulator as its input. This matches n8n's
+//     invariant: "fire Done / Output Final once, after every batch
+//     has run".
+//  5. The aggregator's items are written back to `nodeResults`
+//     under the splitInBatches node name so downstream readers
+//     (e.g. Respond to Webhook) see the same shape as n8n.
+//
+// The splitInBatches node itself does NOT need an executor call -
+// the engine handles iteration entirely, so this method never
+// invokes `splitInBatchesNode.Execute`. (That node is now a
+// pass-through so other engine paths can still call it safely.)
+func (e *workflowEngineImpl) executeSplitInBatchesLoop(
+	ctx context.Context,
+	workflow *model.Workflow,
+	node *model.Node,
+	nodeResults map[string][]model.DataItem,
+	runData *expressions.RunExecutionData,
+	inputData []model.DataItem,
+	bodyOrder []string,
+	doneOrder []string,
+) error {
+	if len(inputData) == 0 {
+		// No items to iterate. Mark this node as having
+		// produced no output so downstream "Skip if empty"
+		// semantics apply. We do NOT execute the done branch
+		// when there were no batches because n8n doesn't fire
+		// "Done" when the upstream had nothing to split.
+		nodeResults[node.Name] = []model.DataItem{}
+		return nil
+	}
+
+	// Read batchSize (default 10) from the node's parameters.
+	batchSize := 10
+	if node.Parameters != nil {
+		if v, ok := node.Parameters["batchSize"]; ok {
+			switch n := v.(type) {
+			case int:
+				if n > 0 {
+					batchSize = n
+				}
+			case float64:
+				if n > 0 {
+					batchSize = int(n)
+				}
+			}
+		}
+	}
+
+	// Build the list of batches. Each batch is a sub-slice of the
+	// original input items so per-iteration state (JSON, Binary,
+	// PairedItem) flows through unchanged.
+	batches := splitIntoBatches(inputData, batchSize)
+
+	// For every batch, run the body chain and capture the body's
+	// final output. The aggregated output across all batches is
+	// what the done branch will see.
+	aggregated := make([]model.DataItem, 0, len(inputData))
+	for batchIdx, batch := range batches {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		// Use a per-iteration runIndex slot. The top-level
+		// `e.runIndex` is preserved (so the rest of the
+		// workflow still indexes off it), but every batch
+		// pushes one slot into each body node's result so
+		// `$("Process Item").all()` returns the running
+		// accumulator instead of just the most recent batch.
+		iterRunIndex := e.runIndex + 1 + batchIdx
+
+		batchOutput, err := e.runLoopBodyChain(
+			ctx,
+			workflow,
+			node,
+			nodeResults,
+			runData,
+			bodyOrder,
+			batch,
+			iterRunIndex,
+		)
+		if err != nil {
+			return fmt.Errorf("batch %d: %w", batchIdx, err)
+		}
+		aggregated = append(aggregated, batchOutput...)
+	}
+
+	// Publish the per-iteration results so the done branch (and
+	// any node that resolves `$("Loop Over Items").all()`) can
+	// see the aggregated state. The splitInBatches node itself
+	// is also tagged here - its "output" is the aggregated list
+	// - so the `last-node` resolution downstream picks up the
+	// right payload.
+	nodeResults[node.Name] = aggregated
+	if runData != nil && runData.ResultData != nil {
+		results := runData.ResultData.NodeData[node.Name]
+		for len(results) <= e.runIndex {
+			results = append(results, expressions.NodeExecutionResult{})
+		}
+		results[e.runIndex] = expressions.NodeExecutionResult{
+			Data:      aggregated,
+			StartTime: time.Now(),
+		}
+		runData.ResultData.NodeData[node.Name] = results
+	}
+
+	// Now run the once-per-loop done branch with the aggregated
+	// items as input. The done branch receives the full set of
+	// processed items (not just the last batch's), which is the
+	// n8n invariant: "Done / Output Final fires after every
+	// iteration, with the accumulator visible to it".
+	if len(doneOrder) == 0 {
+		return nil
+	}
+	if _, err := e.runLoopDoneChain(
+		ctx,
+		workflow,
+		node,
+		nodeResults,
+		runData,
+		doneOrder,
+		aggregated,
+	); err != nil {
+		return err
+	}
+	return nil
+}
+
+// runLoopBodyChain executes the per-iteration body chain
+// (splitInBatches's main[1] descendants) for a single batch and
+// returns the chain's terminal output. The terminal node is the
+// last node in `bodyOrder` (the deepest body node); its output is
+// what the engine aggregates across batches.
+//
+// The body chain is intentionally a straight-line sequence in
+// execution order - n8n's Loop body does not branch. If a
+// downstream node *does* branch (e.g. an IF inside the body),
+// each branch's output is preserved in `nodeResults` so the next
+// iteration (or the done branch) can read it via
+// `$("Node").all()`. The return value of this helper is just the
+// terminal node's output, used by the loop driver to build the
+// accumulator.
+func (e *workflowEngineImpl) runLoopBodyChain(
+	ctx context.Context,
+	workflow *model.Workflow,
+	loopNode *model.Node,
+	nodeResults map[string][]model.DataItem,
+	runData *expressions.RunExecutionData,
+	bodyOrder []string,
+	batch []model.DataItem,
+	iterRunIndex int,
+) ([]model.DataItem, error) {
+	if len(bodyOrder) == 0 {
+		// No body chain - the loop had a splitInBatches node
+		// with nothing connected to main[1]. Pass the batch
+		// through unchanged so the aggregator at least sees
+		// the input items.
+		return batch, nil
+	}
+
+	// Seed the first body node's input with the batch.
+	currentInput := batch
+	currentInputFor := bodyOrder[0]
+	nodeResults[currentInputFor] = currentInput
+
+	// We re-use the top-level engine executor / credential
+	// injection helpers. Build a temporary "nodeMap" view that
+	// resolves workflow nodes by name without rebuilding it on
+	// every iteration (the caller already built it).
+	nodeMap := make(map[string]*model.Node, len(workflow.Nodes))
+	for i := range workflow.Nodes {
+		nodeMap[workflow.Nodes[i].Name] = &workflow.Nodes[i]
+	}
+
+	// Execute each body node in order, routing its output to
+	// downstream body nodes as we go. The routing step uses the
+	// SAME connection router as the top-level engine so
+	// per-item routing metadata (IF's `_ifResult`, Switch's
+	// `_switchRuleIndex`) is honoured.
+	for _, name := range bodyOrder {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		bodyNode := nodeMap[name]
+		if bodyNode == nil {
+			return nil, fmt.Errorf("body node %q not found in workflow", name)
+		}
+
+		// Skip decorative / trigger-only nodes inside the body
+		// chain (defensive - the connection walker already
+		// drops them, but a future change could re-add them).
+		if isDecorativeNodeType(bodyNode.Type) {
+			nodeResults[name] = []model.DataItem{}
+			continue
+		}
+		if isTriggerOnlyNodeType(bodyNode.Type) {
+			nodeResults[name] = []model.DataItem{}
+			continue
+		}
+
+		executor, err := e.GetNodeExecutor(bodyNode.Type)
+		if err != nil {
+			return nil, fmt.Errorf("body node %q: %w", name, err)
+		}
+		if err := executor.ValidateParameters(bodyNode.Parameters); err != nil {
+			return nil, fmt.Errorf("body node %q invalid parameters: %w", name, err)
+		}
+
+		// Resolve credentials (same as top-level path).
+		finalParams := bodyNode.Parameters
+		if e.credentialManager != nil {
+			finalParams, err = e.credentialManager.InjectCredentialsIntoNodeParameters(bodyNode.ID, bodyNode.Parameters)
+			if err != nil {
+				return nil, fmt.Errorf("body node %q credential injection: %w", name, err)
+			}
+		}
+
+		// Skip body nodes that received no items (matches the
+		// top-level skip-empty-input guard).
+		input := nodeResults[name]
+		if len(input) == 0 {
+			nodeResults[name] = []model.DataItem{}
+			continue
+		}
+
+		// Run the body node with the iteration's runIndex so
+		// sibling-node lookups (e.g. `$("Other Body Node")`)
+		// resolve against the same iteration slot.
+		prevRunIndex := e.runIndex
+		e.runIndex = iterRunIndex
+		outputData, err := e.executeNodeWithContext(ctx, executor, input, finalParams)
+		e.runIndex = prevRunIndex
+		if err != nil {
+			return nil, fmt.Errorf("body node %q: %w", name, err)
+		}
+
+		// Store the cleaned output. Strip routing metadata so
+		// back-edge iteration does not propagate `_ifResult`
+		// etc. into the next batch.
+		cleaned := stripRoutingMetadata(outputData)
+		nodeResults[name] = cleaned
+
+		// Publish to runData at this iteration's slot.
+		if runData != nil && runData.ResultData != nil {
+			results := runData.ResultData.NodeData[name]
+			for len(results) <= iterRunIndex {
+				results = append(results, expressions.NodeExecutionResult{})
+			}
+			results[iterRunIndex] = expressions.NodeExecutionResult{
+				Data:      cleaned,
+				StartTime: time.Now(),
+			}
+			runData.ResultData.NodeData[name] = results
+		}
+
+		// Route the output to downstream body nodes (and to
+		// the splitInBatches back-edge, which we ignore here).
+		// The router already filters out back-edges to
+		// splitInBatches when the workflow uses the loop
+		// pattern.
+		routed, err := e.connectionRouter.RouteData(name, workflow, outputData)
+		if err != nil {
+			return nil, fmt.Errorf("body node %q routing: %w", name, err)
+		}
+		for target, data := range routed {
+			// Don't let body-chain output leak back into the
+			// splitInBatches node's input (the loop driver
+			// controls that flow). The connection router
+			// already drops edges that target a
+			// splitInBatches node, but we double-check
+			// defensively.
+			if target == loopNode.Name {
+				continue
+			}
+			if nodeResults[target] == nil {
+				nodeResults[target] = data
+			} else {
+				nodeResults[target] = append(nodeResults[target], data...)
+			}
+		}
+	}
+
+	// The terminal output is the deepest body node's last
+	// result. We use the last node in bodyOrder as the
+	// terminal, which matches the connection router's
+	// "deepest process branch" anchor.
+	terminal := bodyOrder[len(bodyOrder)-1]
+	return nodeResults[terminal], nil
+}
+
+// runLoopDoneChain executes the once-per-loop done branch
+// (splitInBatches's main[0] descendants) with `aggregated` as the
+// input. Unlike the body chain, the done branch runs exactly once
+// per loop (not per batch), and it always sees the *full*
+// aggregated output across all batches.
+//
+// Internally it reuses the same per-node execution helpers as
+// the body chain so expression evaluation, credential injection,
+// and routing metadata all behave identically.
+func (e *workflowEngineImpl) runLoopDoneChain(
+	ctx context.Context,
+	workflow *model.Workflow,
+	loopNode *model.Node,
+	nodeResults map[string][]model.DataItem,
+	runData *expressions.RunExecutionData,
+	doneOrder []string,
+	aggregated []model.DataItem,
+) ([]model.DataItem, error) {
+	if len(doneOrder) == 0 {
+		return nil, nil
+	}
+
+	nodeMap := make(map[string]*model.Node, len(workflow.Nodes))
+	for i := range workflow.Nodes {
+		nodeMap[workflow.Nodes[i].Name] = &workflow.Nodes[i]
+	}
+
+	// Seed the first done-branch node's input with the
+	// aggregated items.
+	nodeResults[doneOrder[0]] = aggregated
+
+	for _, name := range doneOrder {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		doneNode := nodeMap[name]
+		if doneNode == nil {
+			return nil, fmt.Errorf("done node %q not found in workflow", name)
+		}
+		if isDecorativeNodeType(doneNode.Type) {
+			nodeResults[name] = []model.DataItem{}
+			continue
+		}
+		if isTriggerOnlyNodeType(doneNode.Type) {
+			nodeResults[name] = []model.DataItem{}
+			continue
+		}
+		executor, err := e.GetNodeExecutor(doneNode.Type)
+		if err != nil {
+			return nil, fmt.Errorf("done node %q: %w", name, err)
+		}
+		if err := executor.ValidateParameters(doneNode.Parameters); err != nil {
+			return nil, fmt.Errorf("done node %q invalid parameters: %w", name, err)
+		}
+
+		finalParams := doneNode.Parameters
+		if e.credentialManager != nil {
+			finalParams, err = e.credentialManager.InjectCredentialsIntoNodeParameters(doneNode.ID, doneNode.Parameters)
+			if err != nil {
+				return nil, fmt.Errorf("done node %q credential injection: %w", name, err)
+			}
+		}
+
+		input := nodeResults[name]
+		if len(input) == 0 {
+			nodeResults[name] = []model.DataItem{}
+			continue
+		}
+
+		outputData, err := e.executeNodeWithContext(ctx, executor, input, finalParams)
+		if err != nil {
+			return nil, fmt.Errorf("done node %q: %w", name, err)
+		}
+
+		cleaned := stripRoutingMetadata(outputData)
+		nodeResults[name] = cleaned
+
+		if runData != nil && runData.ResultData != nil {
+			results := runData.ResultData.NodeData[name]
+			for len(results) <= e.runIndex {
+				results = append(results, expressions.NodeExecutionResult{})
+			}
+			results[e.runIndex] = expressions.NodeExecutionResult{
+				Data:      cleaned,
+				StartTime: time.Now(),
+			}
+			runData.ResultData.NodeData[name] = results
+		}
+
+		// Route the done-branch output to its downstream
+		// (typically Respond to Webhook). We do NOT skip the
+		// splitInBatches target here because done-branch
+		// targets don't have a back-edge to the loop node.
+		routed, err := e.connectionRouter.RouteData(name, workflow, outputData)
+		if err != nil {
+			return nil, fmt.Errorf("done node %q routing: %w", name, err)
+		}
+		for target, data := range routed {
+			if target == loopNode.Name {
+				continue
+			}
+			if nodeResults[target] == nil {
+				nodeResults[target] = data
+			} else {
+				nodeResults[target] = append(nodeResults[target], data...)
+			}
+		}
+	}
+
+	// The terminal done-branch node is the last in doneOrder.
+	terminal := doneOrder[len(doneOrder)-1]
+	return nodeResults[terminal], nil
+}
+
+// splitIntoBatches splits `items` into batches of at most
+// `batchSize` (>=1). Returns an empty slice when `items` is empty
+// or `batchSize` is non-positive. Each batch is a fresh slice so
+// downstream callers can mutate items without aliasing the
+// upstream input.
+func splitIntoBatches(items []model.DataItem, batchSize int) [][]model.DataItem {
+	if len(items) == 0 {
+		return nil
+	}
+	if batchSize <= 0 {
+		batchSize = 10
+	}
+	numBatches := (len(items) + batchSize - 1) / batchSize
+	batches := make([][]model.DataItem, 0, numBatches)
+	for i := 0; i < len(items); i += batchSize {
+		end := i + batchSize
+		if end > len(items) {
+			end = len(items)
+		}
+		batch := make([]model.DataItem, end-i)
+		copy(batch, items[i:end])
+		batches = append(batches, batch)
+	}
+	return batches
+}
+
 // ExecuteWorkflowParallel executes multiple workflows in parallel
 func (e *workflowEngineImpl) ExecuteWorkflowParallel(workflows []*model.Workflow, inputData [][]model.DataItem) ([]*ExecutionResult, error) {
 	if len(workflows) == 0 {
@@ -468,7 +988,7 @@ func (e *workflowEngineImpl) ExecuteWorkflowParallel(workflows []*model.Workflow
 
 	if len(workflows) != len(inputData) {
 		return nil, fmt.Errorf("number of workflows (%d) must match number of input data arrays (%d)", len(workflows), len(inputData))
-	}
+}
 
 	// Create channel for results
 	results := make([]*ExecutionResult, len(workflows))

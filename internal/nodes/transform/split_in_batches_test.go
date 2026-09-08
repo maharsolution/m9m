@@ -1,7 +1,9 @@
 package transform
 
 import (
+	"reflect"
 	"testing"
+
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
 )
@@ -11,7 +13,7 @@ func TestSplitInBatchesNodeCreation(t *testing.T) {
 	if node == nil {
 		t.Fatal("Expected node to be created, got nil")
 	}
-	
+
 	desc := node.Description()
 	if desc.Name != "Split In Batches" {
 		t.Errorf("Expected name 'Split In Batches', got '%s'", desc.Name)
@@ -22,9 +24,9 @@ func TestSplitInBatchesNodeValidateParameters(t *testing.T) {
 	node := NewSplitInBatchesNode()
 
 	// n8n exports frequently ship a workflow with default `options: {}`
-	// and no explicit `batchSize`. We default to 10 in Execute(), so
-	// nil/missing batchSize is fine — only an *invalid* batchSize
-	// (non-numeric, zero, or negative) is rejected.
+	// and no explicit `batchSize`. We default to 10 in the loop
+	// driver, so nil/missing batchSize is fine - only an *invalid*
+	// batchSize (non-numeric, zero, or negative) is rejected.
 
 	// Test with nil params (older n8n export style)
 	err := node.ValidateParameters(nil)
@@ -65,7 +67,7 @@ func TestSplitInBatchesNodeValidateParameters(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error with negative batchSize, got nil")
 	}
-	
+
 	// Test with valid batchSize
 	validBatchSizeParams := map[string]interface{}{
 		"batchSize": 10,
@@ -74,7 +76,7 @@ func TestSplitInBatchesNodeValidateParameters(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected no error with valid batchSize, got %v", err)
 	}
-	
+
 	// Test with valid options
 	validOptionsParams := map[string]interface{}{
 		"batchSize": 10,
@@ -86,7 +88,7 @@ func TestSplitInBatchesNodeValidateParameters(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected no error with valid options, got %v", err)
 	}
-	
+
 	// Test with valid options and reset false
 	validOptionsResetFalseParams := map[string]interface{}{
 		"batchSize": 10,
@@ -100,196 +102,37 @@ func TestSplitInBatchesNodeValidateParameters(t *testing.T) {
 	}
 }
 
+func TestSplitInBatchesNodeExecutePassThrough(t *testing.T) {
+	node := NewSplitInBatchesNode()
+
+	inputData := []model.DataItem{
+		{JSON: map[string]interface{}{"id": float64(1), "name": "Andi"}},
+		{JSON: map[string]interface{}{"id": float64(2), "name": "Budi"}},
+		{JSON: map[string]interface{}{"id": float64(3), "name": "Citra"}},
+	}
+
+	// The node is now an engine-driven pass-through: real iteration
+	// happens inside engine.executeSplitInBatchesLoop. Execute just
+	// hands the input back unchanged so the engine's per-node routing
+	// sees a well-formed slice it can re-route per batch.
+	result, err := node.Execute(inputData, map[string]interface{}{"batchSize": 2})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(result, inputData) {
+		t.Fatalf("Expected Execute to return input unchanged.\n got: %+v\nwant: %+v", result, inputData)
+	}
+}
+
 func TestSplitInBatchesNodeExecuteWithEmptyInput(t *testing.T) {
 	node := NewSplitInBatchesNode()
-	
-	inputData := []model.DataItem{}
-	nodeParams := map[string]interface{}{
-		"batchSize": 10,
-	}
-	
-	result, err := node.Execute(inputData, nodeParams)
+
+	result, err := node.Execute([]model.DataItem{}, map[string]interface{}{"batchSize": 10})
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	
 	if len(result) != 0 {
 		t.Errorf("Expected empty result, got %d items", len(result))
-	}
-}
-
-func TestSplitInBatchesNodeExecuteWithSmallBatchSize(t *testing.T) {
-	node := NewSplitInBatchesNode()
-	
-	// Create 5 data items
-	inputData := make([]model.DataItem, 5)
-	for i := 0; i < 5; i++ {
-		inputData[i] = model.DataItem{
-			JSON: map[string]interface{}{
-				"id":   float64(i + 1),
-				"name": "Item 1",
-			},
-		}
-	}
-	
-	nodeParams := map[string]interface{}{
-		"batchSize": 2, // Batch size of 2
-	}
-	
-	result, err := node.Execute(inputData, nodeParams)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-	
-	// Should return the first batch (2 items)
-	if len(result) != 2 {
-		t.Fatalf("Expected 2 items in first batch, got %d", len(result))
-	}
-	
-	// Check first item
-	if id, ok := result[0].JSON["id"].(float64); !ok || int(id) != 1 {
-		t.Errorf("Expected first item id to be 1, got %v", result[0].JSON["id"])
-	}
-	
-	if name, ok := result[0].JSON["name"].(string); !ok || name != "Item 1" {
-		t.Errorf("Expected first item name to be 'Item 1', got %v", result[0].JSON["name"])
-	}
-	
-	// Check second item
-	if id, ok := result[1].JSON["id"].(float64); !ok || int(id) != 2 {
-		t.Errorf("Expected second item id to be 2, got %v", result[1].JSON["id"])
-	}
-	
-	if name, ok := result[1].JSON["name"].(string); !ok || name != "Item 1" {
-		t.Errorf("Expected second item name to be 'Item 1', got %v", result[1].JSON["name"])
-	}
-}
-
-func TestSplitInBatchesNodeExecuteWithLargeBatchSize(t *testing.T) {
-	node := NewSplitInBatchesNode()
-	
-	// Create 3 data items
-	inputData := make([]model.DataItem, 3)
-	for i := 0; i < 3; i++ {
-		inputData[i] = model.DataItem{
-			JSON: map[string]interface{}{
-				"id":   float64(i + 1),
-				"name": "Item 1",
-			},
-		}
-	}
-	
-	nodeParams := map[string]interface{}{
-		"batchSize": 10, // Batch size larger than data
-	}
-	
-	result, err := node.Execute(inputData, nodeParams)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-	
-	if len(result) != 3 {
-		t.Fatalf("Expected 3 result items, got %d", len(result))
-	}
-	
-	// Check that all items are present
-	for i := 0; i < 3; i++ {
-		if id, ok := result[i].JSON["id"].(float64); !ok || int(id) != i+1 {
-			t.Errorf("Expected item %d id to be %d, got %v", i, i+1, result[i].JSON["id"])
-		}
-		
-		if name, ok := result[i].JSON["name"].(string); !ok || name != "Item 1" {
-			t.Errorf("Expected item %d name to be 'Item 1', got %v", i, result[i].JSON["name"])
-		}
-	}
-}
-
-func TestSplitInBatchesNodeExecuteWithDefaultBatchSize(t *testing.T) {
-	node := NewSplitInBatchesNode()
-	
-	// Create 15 data items
-	inputData := make([]model.DataItem, 15)
-	for i := 0; i < 15; i++ {
-		inputData[i] = model.DataItem{
-			JSON: map[string]interface{}{
-				"id":   float64(i + 1),
-				"name": "Item 1",
-			},
-		}
-	}
-	
-	nodeParams := map[string]interface{}{
-		"batchSize": 10, // Default batch size
-	}
-	
-	result, err := node.Execute(inputData, nodeParams)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-	
-	// Should return the first batch (10 items)
-	if len(result) != 10 {
-		t.Fatalf("Expected 10 items in first batch, got %d", len(result))
-	}
-	
-	// Check that the first 10 items are present
-	for i := 0; i < 10; i++ {
-		if id, ok := result[i].JSON["id"].(float64); !ok || int(id) != i+1 {
-			t.Errorf("Expected item %d id to be %d, got %v", i, i+1, result[i].JSON["id"])
-		}
-		
-		if name, ok := result[i].JSON["name"].(string); !ok || name != "Item 1" {
-			t.Errorf("Expected item %d name to be 'Item 1', got %v", i, result[i].JSON["name"])
-		}
-	}
-}
-
-func TestSplitInBatchesNodeExecuteWithOptions(t *testing.T) {
-	node := NewSplitInBatchesNode()
-	
-	// Create 5 data items
-	inputData := make([]model.DataItem, 5)
-	for i := 0; i < 5; i++ {
-		inputData[i] = model.DataItem{
-			JSON: map[string]interface{}{
-				"id":   float64(i + 1),
-				"name": "Item 1",
-			},
-		}
-	}
-	
-	nodeParams := map[string]interface{}{
-		"batchSize": 2,
-		"options": map[string]interface{}{
-			"reset": true,
-		},
-	}
-	
-	result, err := node.Execute(inputData, nodeParams)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-	
-	if len(result) != 2 {
-		t.Fatalf("Expected 2 items in first batch, got %d", len(result))
-	}
-	
-	// Check first item
-	if id, ok := result[0].JSON["id"].(float64); !ok || int(id) != 1 {
-		t.Errorf("Expected first item id to be 1, got %v", result[0].JSON["id"])
-	}
-	
-	if name, ok := result[0].JSON["name"].(string); !ok || name != "Item 1" {
-		t.Errorf("Expected first item name to be 'Item 1', got %v", result[0].JSON["name"])
-	}
-	
-	// Check second item
-	if id, ok := result[1].JSON["id"].(float64); !ok || int(id) != 2 {
-		t.Errorf("Expected second item id to be 2, got %v", result[1].JSON["id"])
-	}
-	
-	if name, ok := result[1].JSON["name"].(string); !ok || name != "Item 1" {
-		t.Errorf("Expected second item name to be 'Item 1', got %v", result[1].JSON["name"])
 	}
 }
 
