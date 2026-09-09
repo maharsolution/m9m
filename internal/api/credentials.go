@@ -83,8 +83,15 @@ func (s *APIServer) GetCredential(w http.ResponseWriter, r *http.Request) {
 }
 
 // credentialCreateRequest is the inbound POST/PATCH body. Mirrors n8n's
-// { name, type, data, isGlobal? } shape.
+// { name, type, data, isGlobal?, id? } shape.
+//
+// `id` is OPTIONAL. n8n's own REST API accepts a client-supplied id on
+// create (a 7-char alphanumeric like `7yYBGnRIN6EZRLD5`); honouring
+// it here lets the sync bridge round-trip without generating new ids
+// on every cycle. When omitted, m9m falls back to its own server-side
+// id scheme (cred_<ts>_<seq>) so existing callers aren't broken.
 type credentialCreateRequest struct {
+	ID       string                 `json:"id,omitempty"`
 	Name     string                 `json:"name"`
 	Type     string                 `json:"type"`
 	Data     map[string]interface{} `json:"data"`
@@ -111,6 +118,7 @@ func (s *APIServer) CreateCredential(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cred := &storage.Credential{
+		ID:        req.ID,
 		Name:      req.Name,
 		Type:      req.Type,
 		Data:      req.Data,
