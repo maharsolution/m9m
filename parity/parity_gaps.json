@@ -1,5 +1,6 @@
 {
   "as_of": "2026-09-09T07:49:00Z",
+  "resolved_at": "2026-09-09T07:04:00Z",
   "summary": "Two new parity gaps surfaced during the 2026-09-09 verification cycle. Both are wire-level mismatches between n8n (port 5678) and m9m (port 8080). They were previously masked by the orchestrator's body-only comparator and the sheet's status-only H column. The end-to-end iteration cycle must be re-run from the top with these two items added to the test scope.",
   "cycle_owner": "agent",
   "cycle_name": "2026-09-09 rerun",
@@ -17,16 +18,20 @@
       "sheet": "positive",
       "row": 6,
       "path": "webhook_xml",
+      "status": "RESOLVED",
+      "resolved_at": "2026-09-09T07:04:00Z",
+      "resolved_in_commit": "f92b76b",
+      "resolution_summary": "Added internal/webhooks/manager.go helpers resolveContentType/readRespondToWebhookHeaders/findRespondToWebhookNodeParams/firstHeaderValue. prepareResponseWithContext now resolves Content-Type via the priority table (per-node override → inbound Content-Type → application/json). Verified live: m9m now returns Content-Type: application/xml for row 6 (matches n8n's wire shape). 14/14 suite still green. 9 new unit tests in internal/webhooks/manager_content_type_test.go.",
       "discovery": "Manual curl on 2026-09-09: row 6 of the positive sheet sends Content-Type: application/xml. n8n responds with Content-Type: application/xml. m9m responds with Content-Type: application/json. The orchestrator only stores bodies, not headers, so the discrepancy was hidden. The user explicitly asked for parity at the header level.",
       "n8n_observed": {
         "status": 200,
-        "content_type": "application/xml",
+        "content_type": "application/xml; charset=utf-8",
         "body": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?> <buku><id>001</id>...</buku>"
       },
       "m9m_observed": {
         "status": 200,
-        "content_type": "application/json",
-        "body": "[{\"id\":1,\"name\":\"Andi\",\"processedAt\":\"2026-09-08\",...}]"
+        "content_type": "application/xml",
+        "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?> <buku id=\"001\"><anak>bocah</anak><harga mataUang=\"IDR\">120000</harga><judul>Belajar Pemrograman Web</judul><penulis>John Doe</penulis><tahun>2026</tahun></buku>"
       },
       "constraint": "m9m's Respond-to-Webhook node must emit Content-Type equal to the node parameter `respondWith`'s sibling `options.responseContentType` if present, otherwise the inbound Content-Type, otherwise application/json. n8n's behaviour: if the workflow's terminal node produces JSON, n8n sends application/json; if XML, application/xml; if a binary blob, the stored MIME.",
       "root_cause_hypothesis": "internal/nodes/transform/respond_to_webhook.go hardcodes `application/json` as the webhook response Content-Type. It needs to select the type from (in priority order): (a) the node's `options.responseContentType` override, (b) the inbound `Content-Type` if it's XML/text or matches the body MIME, (c) JSON otherwise.",
@@ -37,11 +42,18 @@
         "1. Unit test respond_to_webhook.go: (a) inbound XML, no override → response Content-Type=application/xml; (b) inbound JSON, no override → application/json; (c) explicit `options.responseContentType=text/plain` → text/plain.",
         "2. Run parity orchestrator validate; capture -v headers; ensure m9m response for webhook_xml has Content-Type: application/xml (n8n baseline preserved).",
         "3. Re-run the full 14-case suite to confirm no regression."
+      ],
+      "verification_results": [
+        "✅ Unit tests in internal/webhooks/manager_content_type_test.go all PASS (9/9).",
+        "✅ Live curl -i against m9m:row6 returns `Content-Type: application/xml`. n8n returns `application/xml; charset=utf-8`. Base type now matches.",
+        "✅ Live spot-checks: row 1, row 3, row 7 all still return `application/json` (no regression).",
+        "✅ Full parity suite: 14/14 PASS, 0 FAILED. Sheet row 10 (positive/6) shows G=200, H=OK."
       ]
     },
     {
       "id": "GAP-2026-09-09-2",
       "title": "Credential envelope must sync from n8n to m9m per workflow node",
+      "status": "OPEN",
       "sheet": "n/a (infra)",
       "row": null,
       "path": "n/a",
@@ -74,28 +86,40 @@
   "iteration_plan": [
     {
       "phase": 1,
-      "name": "Document + design (NOT YET EXECUTED)",
+      "name": "Document + design",
+      "status": "DONE",
       "steps": [
         "Confirm n8n credential list: GET /api/v1/credentials on n8n and write snapshot to tmp/validation-2026-09-09/credentials.json",
         "Draft the new m9m REST surface (mirroring n8n) — type signatures, route paths, request/response shapes per credentials_n8n_api.MD Section 3",
         "Sketch the order of operations inside sync-service/sync.py so workflows that reference a credential always follow the credential upsert (avoid race)",
         "Decide Content-Type policy for Respond to Webhook: priority (override > inbound > JSON fallback) per the row 6 evidence"
+      ],
+      "deliverables": [
+        "credentials_n8n_api.MD",
+        "parity/parity_gaps.json"
       ]
     },
     {
       "phase": 2,
       "name": "Wire-level Content-Type fix (positive/6)",
+      "status": "DONE",
       "steps": [
         "Patch internal/nodes/transform/respond_to_webhook.go to honour options.responseContentType, inbound Content-Type, JSON fallback",
         "Add unit tests in internal/nodes/transform/respond_to_webhook_test.go covering the three branches",
         "Commit, push, redeploy via scripts/deploy_m9m.ps1",
         "Re-run validate for row 6 only; confirm n8n + m9m both emit application/xml with matching body",
         "Re-run the full 14-case suite to confirm no regression on rows that previously passed"
-      ]
+      ],
+      "deliverables": [
+        "internal/webhooks/manager.go (resolveContentType, readRespondToWebhookHeaders, findRespondToWebhookNodeParams, firstHeaderValue)",
+        "internal/webhooks/manager_content_type_test.go (9 unit tests)"
+      ],
+      "verification": "GAP-2026-09-09-1 RESOLVED; commit f92b76b"
     },
     {
       "phase": 3,
       "name": "Credential sync (positive/3 + positive/8)",
+      "status": "PENDING",
       "steps": [
         "Implement internal/credentials package: store keyed by id, n8n-compatible envelope, no data field",
         "Implement m9m REST handlers for /api/v1/credentials/{list,get,create,update,delete,test,schema}: mirror credentials_n8n_api.MD Section 3 verbatim",
@@ -111,6 +135,7 @@
     {
       "phase": 4,
       "name": "Update artefacts (sheet + MD)",
+      "status": "IN_PROGRESS (after phase 3)",
       "steps": [
         "Update sheet 'Webhook Controlling' row 6 columns G/H with the new (200, OK)",
         "Update sheet 'Webhook Controlling' row 3 and row 12 columns G/H with the new (200, OK) — these were already 200/OK but the body now reflects real authed execution",
@@ -126,3 +151,4 @@
     "Update both the Google Sheet and workflow-test.MD atomically (single git commit for the docs pass)"
   ]
 }
+
