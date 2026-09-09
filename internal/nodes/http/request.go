@@ -136,14 +136,101 @@ func NewHTTPRequestNode() *HTTPRequestNode {
 		Name:        "HTTP Request",
 		Description: "Makes HTTP requests to REST APIs and other web services",
 		Category:    "HTTP",
+		Properties:  httpRequestProperties(),
+		Inputs:      []string{"main"},
+		Outputs:     []string{"main"},
 	}
-	
+
 	return &HTTPRequestNode{
 		BaseNode: base.NewBaseNode(description),
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
 	}
+}
+
+// httpRequestProperties returns the property descriptors for the
+// n8n-style HTTP Request Parameters tab. Mirrors n8n's
+// `INodeTypeDescription.properties` so the m9m NDV-style UI can
+// render the same form n8n's editor does. The actual execution
+// only reads the keys it knows (method, url, headers, body, …);
+// extra fields are ignored so adding new metadata here is safe.
+func httpRequestProperties() []base.NodeProperty {
+	authOptions := []base.Option{
+		{Name: "None", Value: "none"},
+		{Name: "Predefined credential type", Value: "predefinedCredentialType"},
+		{Name: "Generic credential type", Value: "genericCredentialType"},
+	}
+	genericAuthTypes := []base.Option{
+		{Name: "Basic auth", Value: "basicAuth"},
+		{Name: "Custom auth", Value: "customAuth"},
+		{Name: "Digest auth", Value: "digestAuth"},
+		{Name: "Header auth", Value: "headerAuth"},
+		{Name: "OAuth1 API", Value: "oAuth1Api"},
+		{Name: "OAuth2 API", Value: "oAuth2Api"},
+		{Name: "Query auth", Value: "queryAuth"},
+		{Name: "Simplified Custom Auth", Value: "simplifiedCustomAuth"},
+	}
+	methods := []base.Option{
+		{Name: "DELETE", Value: "DELETE"},
+		{Name: "GET", Value: "GET"},
+		{Name: "HEAD", Value: "HEAD"},
+		{Name: "OPTIONS", Value: "OPTIONS"},
+		{Name: "PATCH", Value: "PATCH"},
+		{Name: "POST", Value: "POST"},
+		{Name: "PUT", Value: "PUT"},
+	}
+	bodyContentTypes := []base.Option{
+		{Name: "Form URLencoded", Value: "form-urlencoded"},
+		{Name: "Form-Data (multipart)", Value: "multipart-form-data"},
+		{Name: "JSON", Value: "json"},
+		{Name: "n8n Binary File", Value: "n8nBinary"},
+		{Name: "Raw", Value: "raw"},
+	}
+	arrayFormats := []base.Option{
+		{Name: "No Brackets", Value: "noBrackets"},
+		{Name: "Brackets Only", Value: "bracketsOnly"},
+		{Name: "Brackets with Indices", Value: "bracketsWithIndices"},
+	}
+	responseFormats := []base.Option{
+		{Name: "Autodetect", Value: "autodetect"},
+		{Name: "File", Value: "file"},
+		{Name: "JSON", Value: "json"},
+		{Name: "Text", Value: "text"},
+	}
+	paginationModes := []base.Option{
+		{Name: "Off", Value: "off"},
+		{Name: "Update a parameter in each request", Value: "updateAParameterInEachRequest"},
+		{Name: "Response contains next URL", Value: "responseContainsNextURL"},
+	}
+
+	props := []base.NodeProperty{
+		base.StringOpt("Method", "method", "GET", "HTTP method to use.", methods, true),
+		base.StringProp("URL", "url", "", "Endpoint to call. Expressions are evaluated.", "https://example.com/path", true),
+		base.StringOpt("Authentication", "authentication", "none", "How to authenticate this request.", authOptions, false),
+		base.StringProp("Predefined credential type", "nodeCredentialType", "", "Pick a credential the node knows about.", "Choose a credential", false),
+		base.StringOpt("Generic auth type", "genericAuthType", "", "When using a generic credential, pick its auth scheme.", genericAuthTypes, false),
+		base.BoolProp("Send Query Parameters", "sendQuery", false, "Add query string parameters to the request."),
+		base.CollectionProp("Query Parameters", "queryParameters", "Name/value pairs to send as the URL query.", nil),
+		base.BoolProp("Send Headers", "sendHeaders", false, "Add headers to the request."),
+		base.CollectionProp("Header Parameters", "headerParameters", "Name/value pairs to send as headers.", nil),
+		base.BoolProp("Send Body", "sendBody", false, "Add a request body."),
+		base.StringOpt("Body Content Type", "bodyContentType", "json", "How to encode the body.", bodyContentTypes, false),
+		base.JsonProp("Body (JSON)", "body", "{}", "Raw JSON body sent when Body Content Type is JSON."),
+		base.BoolProp("Ignore SSL issues", "ignoreSSLIssues", false, "Allow requests to servers with invalid TLS certificates."),
+		base.BoolProp("Lowercase headers", "lowercaseHeaders", true, "Force lowercase header names."),
+		base.BoolProp("Redirects", "redirects", true, "Follow HTTP redirects."),
+		base.NumberProp("Max redirects", "maxRedirects", 5, "Maximum number of redirects to follow.", false),
+		base.StringOpt("Response format", "response.responseFormat", "autodetect", "How the response body should be parsed.", responseFormats, false),
+		base.BoolProp("Include response headers and status", "response.includeResponseHeadersAndStatus", false, "Add the response status code and headers to the output."),
+		base.BoolProp("Never error", "response.neverError", false, "Treat non-2xx responses as success."),
+		base.StringOpt("Pagination mode", "pagination.paginationMode", "off", "How to fetch additional pages.", paginationModes, false),
+		base.StringProp("Next URL expression", "pagination.nextURLExpression", "", "When pagination.responseContainsNextURL, the expression that resolves to the next page URL.", "{{ $response.body.next }}", false),
+		base.StringProp("Proxy", "proxy", "", "HTTP proxy URL (overrides HTTP_PROXY env).", "http://proxy.local:3128", false),
+		base.NumberProp("Timeout (ms)", "timeout", 30000, "Maximum time to wait for response headers.", false),
+		base.StringOpt("Array format in query parameters", "arrayFormatInQueryParameters", "bracketsOnly", "How arrays appear in query strings.", arrayFormats, false),
+	}
+	return append(props, base.CommonSettings()...)
 }
 
 // Description returns the node description

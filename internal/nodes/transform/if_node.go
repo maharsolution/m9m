@@ -21,9 +21,50 @@ func NewIfNode() *IfNode {
 			Name:        "IF",
 			Description: "Routes items based on conditions",
 			Category:    "Data Transformation",
+			Properties:  ifProperties(),
+			Inputs:      []string{"main"},
+			Outputs:     []string{"main", "main"},
 		}),
 		evaluator: expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 	}
+}
+
+// ifProperties returns the property descriptors for the IF node.
+// The combinator + conditions shape matches n8n's
+// INodeTypeDescription.properties so the n8n-style editor renders
+// the same Parameters form.
+func ifProperties() []base.NodeProperty {
+	combinators := []base.Option{
+		{Name: "All conditions must be true (AND)", Value: "and"},
+		{Name: "Any condition may be true (OR)", Value: "or"},
+	}
+	// Subset of n8n's IF operators. The engine evaluates them via
+	// the existing condition logic — adding more here is purely a
+	// UI affordance and does not change runtime behaviour.
+	operators := []base.Option{
+		{Name: "equals", Value: "equals"},
+		{Name: "not equals", Value: "notEquals"},
+		{Name: "contains", Value: "contains"},
+		{Name: "does not contain", Value: "notContains"},
+		{Name: "starts with", Value: "startsWith"},
+		{Name: "ends with", Value: "endsWith"},
+		{Name: "is empty", Value: "isEmpty"},
+		{Name: "is not empty", Value: "isNotEmpty"},
+		{Name: "greater than", Value: "greaterThan"},
+		{Name: "less than", Value: "lessThan"},
+		{Name: "greater than or equal", Value: "gte"},
+		{Name: "less than or equal", Value: "lte"},
+		{Name: "is true", Value: "isTrue"},
+		{Name: "is false", Value: "isFalse"},
+	}
+	conditionRow := base.CollectionProp("Conditions", "conditions.conditions", "Conditions to evaluate per item.", operators)
+	props := []base.NodeProperty{
+		base.StringOpt("Combinator", "conditions.combinator", "and", "How to combine multiple conditions.", combinators, true),
+		conditionRow,
+		base.BoolProp("Case sensitive", "options.caseSensitive", true, "Whether string comparisons are case-sensitive."),
+		base.BoolProp("Type validation", "options.typeValidation", false, "When true, mismatched types compare as unequal instead of being coerced."),
+	}
+	return append(props, base.CommonSettings()...)
 }
 
 // Execute evaluates conditions for each input item.

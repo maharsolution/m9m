@@ -23,11 +23,58 @@ func NewWebhookNode() *WebhookNode {
 		Name:        "Webhook",
 		Description: "Receives HTTP webhook requests",
 		Category:    "Trigger",
+		Properties:  webhookProperties(),
+		Inputs:      []string{},
+		Outputs:     []string{"main"},
 	}
 
 	return &WebhookNode{
 		BaseNode: base.NewBaseNode(description),
 	}
+}
+
+// webhookProperties returns the property descriptors for the
+// Webhook trigger's Parameters tab. Mirrors n8n's
+// INodeTypeDescription.properties.
+func webhookProperties() []base.NodeProperty {
+	methods := []base.Option{
+		{Name: "DELETE", Value: "DELETE"},
+		{Name: "GET", Value: "GET"},
+		{Name: "HEAD", Value: "HEAD"},
+		{Name: "OPTIONS", Value: "OPTIONS"},
+		{Name: "PATCH", Value: "PATCH"},
+		{Name: "POST", Value: "POST"},
+		{Name: "PUT", Value: "PUT"},
+	}
+	authOptions := []base.Option{
+		{Name: "None", Value: "none"},
+		{Name: "Basic auth", Value: "basicAuth"},
+		{Name: "Header auth", Value: "headerAuth"},
+		{Name: "JWT auth", Value: "jwtAuth"},
+	}
+	responseModes := []base.Option{
+		{Name: "On Received", Value: "onReceived"},
+		{Name: "Immediately", Value: "immediately"},
+		{Name: "Last Node", Value: "lastNode"},
+		{Name: "Response Node", Value: "responseNode"},
+	}
+	responseDataOptions := []base.Option{
+		{Name: "All Entries", Value: "allEntries"},
+		{Name: "First Entry", Value: "firstEntry"},
+		{Name: "No Data", Value: "noData"},
+	}
+	props := []base.NodeProperty{
+		base.StringOpt("HTTP method", "httpMethod", "POST", "HTTP method the webhook accepts.", methods, true),
+		base.StringProp("Path", "path", "", "URL path the webhook listens on (e.g. `incoming`).", "incoming", true),
+		base.StringOpt("Authentication", "authentication", "none", "Authentication required for incoming requests.", authOptions, false),
+		base.StringOpt("Response mode", "responseMode", "onReceived", "When to send the HTTP response.", responseModes, true),
+		base.StringOpt("Response data", "responseData", "allEntries", "What data to send back to the caller when Response mode is On Received.", responseDataOptions, false),
+		base.BoolProp("Binary data", "options.binaryData", false, "When true, the request body is exposed as a binary item."),
+		base.BoolProp("Raw body", "options.rawBody", false, "When true, the raw request body is included in the output as a string."),
+		base.TextProp("IP allowlist (comma-separated CIDRs)", "options.ipWhitelist", "", "If set, only requests from these CIDRs are accepted.", "127.0.0.1/32", 4),
+		base.BoolProp("No response body", "options.noResponseBody", false, "When true, the webhook returns an empty body."),
+	}
+	return append(props, base.CommonSettings()...)
 }
 
 // normalizeWebhookHeaders converts a `map[string][]string` (the

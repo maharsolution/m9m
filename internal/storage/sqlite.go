@@ -72,6 +72,7 @@ func (s *SQLiteStorage) initSchema() error {
 			started_at DATETIME NOT NULL,
 			finished_at DATETIME,
 			data TEXT,
+			node_data TEXT,
 			error TEXT,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
@@ -120,8 +121,17 @@ func (s *SQLiteStorage) initSchema() error {
 		"TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'"); err != nil {
 		return err
 	}
-	return ensureColumn(s.db, "executions", "workspace_id",
-		"TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'")
+	if err := ensureColumn(s.db, "executions", "workspace_id",
+		"TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'"); err != nil {
+		return err
+	}
+	// node_data: per-node input/output snapshot used by the
+	// n8n-style execution detail view. Stored as JSON-encoded
+	// map[string][]DataItem (same shape as the model struct).
+	if err := ensureColumn(s.db, "executions", "node_data", "TEXT"); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Workflow operations (similar to PostgreSQL but adapted for SQLite)
@@ -337,6 +347,15 @@ func (s *SQLiteStorage) SaveExecution(execution *model.WorkflowExecution) error 
 	}
 
 	dataJSON, _ := json.Marshal(execution.Data)
+	// Per-node input/output snapshot. Empty when the engine did
+	// not populate NodeOutputs (older engines, before the
+	// n8n-style execution detail view existed).
+	var nodeDataJSON []byte
+	if execution.NodeData != nil {
+		nodeDataJSON, _ = json.Marshal(execution.NodeData)
+	} else {
+		nodeDataJSON = []byte("{}")
+	}
 	errorText := ""
 	if execution.Error != nil {
 		errorText = execution.Error.Error()
@@ -344,8 +363,8 @@ func (s *SQLiteStorage) SaveExecution(execution *model.WorkflowExecution) error 
 	createdAt := time.Now()
 
 	query := `
-		INSERT INTO executions (id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, error, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO executions (id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			workflow_id = excluded.workflow_id,
 			workspace_id = excluded.workspace_id,
@@ -354,29 +373,31 @@ func (s *SQLiteStorage) SaveExecution(execution *model.WorkflowExecution) error 
 			started_at = excluded.started_at,
 			finished_at = excluded.finished_at,
 			data = excluded.data,
+			node_data = excluded.node_data,
 			error = excluded.error
 	`
 
 	_, err := s.db.Exec(query, execution.ID, execution.WorkflowID, execution.WorkspaceID, execution.Status,
-		execution.Mode, execution.StartedAt, execution.FinishedAt, string(dataJSON), errorText, createdAt)
+		execution.Mode, execution.StartedAt, execution.FinishedAt, string(dataJSON), string(nodeDataJSON), errorText, createdAt)
 
 	return err
 }
 
 func (s *SQLiteStorage) GetExecution(id string) (*model.WorkflowExecution, error) {
 	query := `
-		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, error
+		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error
 		FROM executions WHERE id = ?
 	`
 
 	var execution model.WorkflowExecution
 	var dataJSON string
+	var nodeDataJSON sql.NullString
 	var errorText sql.NullString
 	var finishedAt sql.NullTime
 
 	err := s.db.QueryRow(query, id).Scan(
 		&execution.ID, &execution.WorkflowID, &execution.WorkspaceID, &execution.Status, &execution.Mode,
-		&execution.StartedAt, &finishedAt, &dataJSON, &errorText,
+		&execution.StartedAt, &finishedAt, &dataJSON, &nodeDataJSON, &errorText,
 	)
 
 	if err == sql.ErrNoRows {
@@ -391,6 +412,12 @@ func (s *SQLiteStorage) GetExecution(id string) (*model.WorkflowExecution, error
 	}
 
 	_ = json.Unmarshal([]byte(dataJSON), &execution.Data)
+	// node_data is JSON-encoded map[string][]DataItem. Treat
+	// NULL/empty as "no per-node snapshot" rather than an error
+	// — older executions simply lack the column entirely.
+	if nodeDataJSON.Valid && nodeDataJSON.String != "" && nodeDataJSON.String != "{}" {
+		_ = json.Unmarshal([]byte(nodeDataJSON.String), &execution.NodeData)
+	}
 
 	if errorText.Valid && errorText.String != "" {
 		execution.Error = fmt.Errorf("%s", errorText.String)
@@ -433,7 +460,7 @@ func (s *SQLiteStorage) ListExecutions(filters ExecutionFilters) ([]*model.Workf
 
 	// Get executions with pagination
 	query := fmt.Sprintf(`
-		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, error
+		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error
 		FROM executions %s
 		ORDER BY started_at DESC
 		LIMIT ? OFFSET ?
@@ -451,12 +478,13 @@ func (s *SQLiteStorage) ListExecutions(filters ExecutionFilters) ([]*model.Workf
 	for rows.Next() {
 		var execution model.WorkflowExecution
 		var dataJSON string
+		var nodeDataJSON sql.NullString
 		var errorText sql.NullString
 		var finishedAt sql.NullTime
 
 		err := rows.Scan(
 			&execution.ID, &execution.WorkflowID, &execution.WorkspaceID, &execution.Status, &execution.Mode,
-			&execution.StartedAt, &finishedAt, &dataJSON, &errorText,
+			&execution.StartedAt, &finishedAt, &dataJSON, &nodeDataJSON, &errorText,
 		)
 		if err != nil {
 			continue
@@ -467,6 +495,9 @@ func (s *SQLiteStorage) ListExecutions(filters ExecutionFilters) ([]*model.Workf
 		}
 
 		_ = json.Unmarshal([]byte(dataJSON), &execution.Data)
+		if nodeDataJSON.Valid && nodeDataJSON.String != "" && nodeDataJSON.String != "{}" {
+			_ = json.Unmarshal([]byte(nodeDataJSON.String), &execution.NodeData)
+		}
 
 		if errorText.Valid && errorText.String != "" {
 			execution.Error = fmt.Errorf("%s", errorText.String)

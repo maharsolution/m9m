@@ -87,10 +87,17 @@ const deleteNode = (event: MouseEvent) => {
       selected ? 'selected' : ''
     ]"
   >
-    <!-- Input Handle -->
+    <!-- Input Handle. The :id binding (not the static `id`
+         attribute) is required because Vue Flow's <Handle> declares
+         `id` as a prop. Using `id="input-0"` lets Vue's attribute
+         inheritance push it onto the DOM root (which is just an
+         empty div, so the prop never reaches the component),
+         resulting in Vue Flow rendering edges from the node center
+         because both handles have null id. The :id binding makes
+         it an explicit prop binding and forces the id through. -->
     <Handle
       v-if="data.category !== 'trigger'"
-      id="input-0"
+      :id="'input-0'"
       type="target"
       :position="Position.Left"
       :connectable="true"
@@ -155,9 +162,10 @@ const deleteNode = (event: MouseEvent) => {
       </div>
     </div>
 
-    <!-- Output Handle -->
+    <!-- Output Handle. See note on the input handle above re:
+         why this uses :id instead of static `id`. -->
     <Handle
-      id="output-0"
+      :id="'output-0'"
       type="source"
       :position="Position.Right"
       :connectable="true"

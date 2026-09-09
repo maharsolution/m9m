@@ -174,6 +174,76 @@ func (c *RemoteClient) ListExecutions(filters storage.ExecutionFilters) ([]*mode
 	return executions, response.Total, nil
 }
 
+// CountExecutions returns the total execution count for the
+// Performance page. Hits the server's count endpoint which
+// avoids loading execution bodies into memory.
+func (c *RemoteClient) CountExecutions(filters storage.ExecutionFilters) (int, error) {
+	params := url.Values{}
+	if filters.WorkflowID != "" {
+		params.Set("workflowId", filters.WorkflowID)
+	}
+	if filters.Status != "" {
+		params.Set("status", filters.Status)
+	}
+	path := "/api/v1/executions/count"
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+	var response struct {
+		Count int `json:"count"`
+	}
+	if err := c.get(path, &response); err != nil {
+		return 0, err
+	}
+	return response.Count, nil
+}
+
+// RecentExecutions returns up to `limit` (default 200) most-recent
+// executions for the Performance page to compute avg duration and
+// success rate from.
+func (c *RemoteClient) RecentExecutions(filters storage.ExecutionFilters, limit int) ([]*model.WorkflowExecution, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	params := url.Values{}
+	if filters.WorkflowID != "" {
+		params.Set("workflowId", filters.WorkflowID)
+	}
+	if filters.Status != "" {
+		params.Set("status", filters.Status)
+	}
+	params.Set("limit", fmt.Sprintf("%d", limit))
+	path := "/api/v1/executions?" + params.Encode()
+
+	var executions []*model.WorkflowExecution
+	if err := c.get(path, &executions); err != nil {
+		return nil, err
+	}
+	return executions, nil
+}
+
+// CountWorkflows returns the total workflow count matching filters.
+func (c *RemoteClient) CountWorkflows(filters storage.WorkflowFilters) (int, error) {
+	params := url.Values{}
+	if filters.Search != "" {
+		params.Set("search", filters.Search)
+	}
+	if filters.Active != nil {
+		params.Set("active", fmt.Sprintf("%t", *filters.Active))
+	}
+	path := "/api/v1/workflows/count"
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+	var response struct {
+		Count int `json:"count"`
+	}
+	if err := c.get(path, &response); err != nil {
+		return 0, err
+	}
+	return response.Count, nil
+}
+
 func (c *RemoteClient) DeleteExecution(id string) error {
 	return c.delete(fmt.Sprintf("/api/v1/executions/%s", id))
 }

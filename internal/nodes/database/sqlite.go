@@ -24,8 +24,11 @@ func NewSQLiteNode() *SQLiteNode {
 		Name:        "SQLite",
 		Description: "Executes queries against SQLite databases",
 		Category:    "Database",
+		Properties:  sqlProperties(),
+		Inputs:      []string{"main"},
+		Outputs:     []string{"main"},
 	}
-	
+
 	return &SQLiteNode{
 		BaseNode: base.NewBaseNode(description),
 	}

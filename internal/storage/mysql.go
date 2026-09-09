@@ -99,6 +99,7 @@ func (s *MySQLStorage) initSchema() error {
 			started_at TIMESTAMP NOT NULL,
 			finished_at TIMESTAMP NULL,
 			data JSON,
+			node_data JSON,
 			error TEXT,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
@@ -382,6 +383,12 @@ func (s *MySQLStorage) SaveExecution(execution *model.WorkflowExecution) error {
 	}
 
 	dataJSON, _ := json.Marshal(execution.Data)
+	var nodeDataJSON []byte
+	if execution.NodeData != nil {
+		nodeDataJSON, _ = json.Marshal(execution.NodeData)
+	} else {
+		nodeDataJSON = []byte("{}")
+	}
 	errorText := ""
 	if execution.Error != nil {
 		errorText = execution.Error.Error()
@@ -389,8 +396,8 @@ func (s *MySQLStorage) SaveExecution(execution *model.WorkflowExecution) error {
 	createdAt := time.Now()
 
 	query := `
-		INSERT INTO executions (id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, error, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO executions (id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			workflow_id = VALUES(workflow_id),
 			workspace_id = VALUES(workspace_id),
@@ -399,6 +406,7 @@ func (s *MySQLStorage) SaveExecution(execution *model.WorkflowExecution) error {
 			started_at = VALUES(started_at),
 			finished_at = VALUES(finished_at),
 			data = VALUES(data),
+			node_data = VALUES(node_data),
 			error = VALUES(error)
 	`
 
@@ -409,25 +417,26 @@ func (s *MySQLStorage) SaveExecution(execution *model.WorkflowExecution) error {
 
 	_, err := s.db.Exec(query,
 		execution.ID, execution.WorkflowID, execution.WorkspaceID, execution.Status,
-		execution.Mode, execution.StartedAt, finishedAt, string(dataJSON), errorText, createdAt)
+		execution.Mode, execution.StartedAt, finishedAt, string(dataJSON), string(nodeDataJSON), errorText, createdAt)
 
 	return err
 }
 
 func (s *MySQLStorage) GetExecution(id string) (*model.WorkflowExecution, error) {
 	query := `
-		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, error
+		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error
 		FROM executions WHERE id = ?
 	`
 
 	var execution model.WorkflowExecution
 	var dataJSON sql.NullString
+	var nodeDataJSON sql.NullString
 	var errorText sql.NullString
 	var finishedAt sql.NullTime
 
 	err := s.db.QueryRow(query, id).Scan(
 		&execution.ID, &execution.WorkflowID, &execution.WorkspaceID, &execution.Status, &execution.Mode,
-		&execution.StartedAt, &finishedAt, &dataJSON, &errorText,
+		&execution.StartedAt, &finishedAt, &dataJSON, &nodeDataJSON, &errorText,
 	)
 
 	if err == sql.ErrNoRows {
@@ -442,6 +451,9 @@ func (s *MySQLStorage) GetExecution(id string) (*model.WorkflowExecution, error)
 	}
 	if dataJSON.Valid {
 		_ = json.Unmarshal([]byte(dataJSON.String), &execution.Data)
+	}
+	if nodeDataJSON.Valid && nodeDataJSON.String != "" && nodeDataJSON.String != "{}" {
+		_ = json.Unmarshal([]byte(nodeDataJSON.String), &execution.NodeData)
 	}
 	if errorText.Valid && errorText.String != "" {
 		execution.Error = fmt.Errorf("%s", errorText.String)
@@ -479,7 +491,7 @@ func (s *MySQLStorage) ListExecutions(filters ExecutionFilters) ([]*model.Workfl
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, error
+		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error
 		FROM executions %s
 		ORDER BY started_at DESC
 		LIMIT ? OFFSET ?
@@ -497,12 +509,13 @@ func (s *MySQLStorage) ListExecutions(filters ExecutionFilters) ([]*model.Workfl
 	for rows.Next() {
 		var execution model.WorkflowExecution
 		var dataJSON sql.NullString
+		var nodeDataJSON sql.NullString
 		var errorText sql.NullString
 		var finishedAt sql.NullTime
 
 		err := rows.Scan(
 			&execution.ID, &execution.WorkflowID, &execution.WorkspaceID, &execution.Status, &execution.Mode,
-			&execution.StartedAt, &finishedAt, &dataJSON, &errorText,
+			&execution.StartedAt, &finishedAt, &dataJSON, &nodeDataJSON, &errorText,
 		)
 		if err != nil {
 			continue
@@ -513,6 +526,9 @@ func (s *MySQLStorage) ListExecutions(filters ExecutionFilters) ([]*model.Workfl
 		}
 		if dataJSON.Valid {
 			_ = json.Unmarshal([]byte(dataJSON.String), &execution.Data)
+		}
+		if nodeDataJSON.Valid && nodeDataJSON.String != "" && nodeDataJSON.String != "{}" {
+			_ = json.Unmarshal([]byte(nodeDataJSON.String), &execution.NodeData)
 		}
 		if errorText.Valid && errorText.String != "" {
 			execution.Error = fmt.Errorf("%s", errorText.String)
@@ -628,7 +644,7 @@ func (s *MySQLStorage) RecentExecutions(filters ExecutionFilters, limit int) ([]
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, error
+		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error
 		FROM executions %s
 		ORDER BY started_at DESC
 		LIMIT ?
@@ -645,13 +661,14 @@ func (s *MySQLStorage) RecentExecutions(filters ExecutionFilters, limit int) ([]
 	for rows.Next() {
 		var execution model.WorkflowExecution
 		var dataJSON []byte
+		var nodeDataJSON []byte
 		var errorText sql.NullString
 		var finishedAt sql.NullTime
 
 		if err := rows.Scan(
 			&execution.ID, &execution.WorkflowID, &execution.WorkspaceID,
 			&execution.Status, &execution.Mode, &execution.StartedAt,
-			&finishedAt, &dataJSON, &errorText,
+			&finishedAt, &dataJSON, &nodeDataJSON, &errorText,
 		); err != nil {
 			continue
 		}
@@ -659,6 +676,9 @@ func (s *MySQLStorage) RecentExecutions(filters ExecutionFilters, limit int) ([]
 			execution.FinishedAt = &finishedAt.Time
 		}
 		_ = json.Unmarshal(dataJSON, &execution.Data)
+		if len(nodeDataJSON) > 0 && string(nodeDataJSON) != "{}" {
+			_ = json.Unmarshal(nodeDataJSON, &execution.NodeData)
+		}
 		if errorText.Valid && errorText.String != "" {
 			execution.Error = fmt.Errorf("%s", errorText.String)
 		}

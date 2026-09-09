@@ -24,11 +24,38 @@ func NewCronNode() *CronNode {
 		Name:        "Cron",
 		Description: "Triggers workflows on a schedule using cron expressions",
 		Category:    "Triggers",
+		Properties:  cronProperties(),
+		Inputs:      []string{},
+		Outputs:     []string{"main"},
 	}
 
 	return &CronNode{
 		BaseNode: base.NewBaseNode(description),
 	}
+}
+
+// cronProperties returns the property descriptors for the Cron
+// trigger. The UI exposes a "Mode" switch between Cron expression
+// and Interval (n8n's `scheduleTrigger`).
+func cronProperties() []base.NodeProperty {
+	modes := []base.Option{
+		{Name: "Cron expression", Value: "cron"},
+		{Name: "Every X", Value: "interval"},
+	}
+	intervalUnits := []base.Option{
+		{Name: "Minutes", Value: "minutes"},
+		{Name: "Hours", Value: "hours"},
+		{Name: "Days", Value: "days"},
+		{Name: "Weeks", Value: "weeks"},
+		{Name: "Months", Value: "months"},
+	}
+	props := []base.NodeProperty{
+		base.StringOpt("Mode", "rule.mode", "cron", "Whether to use a cron expression or a fixed interval.", modes, true),
+		base.StringProp("Cron expression", "rule.cron", "*/5 * * * *", "Standard 5-field cron expression.", "0 9 * * 1-5", false),
+		base.StringOpt("Unit", "rule.interval.mode", "hours", "Time unit for interval mode.", intervalUnits, false),
+		base.NumberProp("Every", "rule.interval.every", 1, "Run the workflow every N units (interval mode).", false),
+	}
+	return append(props, base.CommonSettings()...)
 }
 
 // Description returns the node description

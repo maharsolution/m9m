@@ -31,11 +31,34 @@ func NewCodeNode() *CodeNode {
 		Name:        "Code",
 		Description: "Executes custom code in various languages",
 		Category:    "Data Transformation",
+		Properties:  codeProperties(),
+		Inputs:      []string{"main"},
+		Outputs:     []string{"main"},
 	}
 
 	return &CodeNode{
 		BaseNode: base.NewBaseNode(description),
 	}
+}
+
+// codeProperties returns the Code node's property descriptors.
+// Matches n8n's INodeTypeDescription.properties so the editor
+// renders a language picker + multi-line source editor.
+func codeProperties() []base.NodeProperty {
+	languages := []base.Option{
+		{Name: "JavaScript", Value: "javaScript"},
+		{Name: "Python (beta)", Value: "python"},
+	}
+	modes := []base.Option{
+		{Name: "Run Once for Each Item", Value: "runOnceForEachItem"},
+		{Name: "Run Once for All Items", Value: "runOnceForAllItems"},
+	}
+	props := []base.NodeProperty{
+		base.StringOpt("Language", "language", "javaScript", "Which runtime executes the snippet.", languages, true),
+		base.StringOpt("Mode", "mode", "runOnceForEachItem", "How the snippet is invoked.", modes, true),
+		base.TextProp("Source code", "sourceCode", "", "The snippet to execute.", "// Return items to pass them downstream.", 10),
+	}
+	return append(props, base.CommonSettings()...)
 }
 
 // Description returns the node description

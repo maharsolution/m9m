@@ -27,11 +27,21 @@ func NewPostgresNode() *PostgresNode {
 		Name:        "PostgreSQL",
 		Description: "Executes queries against PostgreSQL databases",
 		Category:    "Database",
+		Properties:  postgresProperties(),
+		Inputs:      []string{"main"},
+		Outputs:     []string{"main"},
 	}
-	
+
 	return &PostgresNode{
 		BaseNode: base.NewBaseNode(description),
 	}
+}
+
+// postgresProperties returns the property descriptors for the
+// PostgreSQL node. Same shape as MySQL / SQLite — see
+// sqlProperties in properties.go.
+func postgresProperties() []base.NodeProperty {
+	return sqlProperties()
 }
 
 // Description returns the node description

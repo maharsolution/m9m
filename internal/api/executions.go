@@ -70,6 +70,28 @@ func (s *APIServer) ExecuteWorkflow(w http.ResponseWriter, r *http.Request) {
 		execution.Data = result.Data
 	}
 
+	// Publish per-node I/O snapshots so the execution-detail UI can
+	// render the n8n-style Node Details View (Input / Output /
+	// Schema / Table / JSON per node). The engine populates
+	// result.NodeOutputs with one entry per executed node; we copy
+	// it into execution.NodeData so it survives the round trip into
+	// storage. For backwards compatibility the previous
+	// `execution.Data` field (the workflow-level last-node output)
+	// is left intact.
+	if result != nil && len(result.NodeOutputs) > 0 {
+		execution.NodeData = make(map[string][]model.DataItem, len(result.NodeOutputs))
+		for nodeName, items := range result.NodeOutputs {
+			if len(items) == 0 {
+				// Still record the node so the UI can show
+				// "ran but produced no items" instead of
+				// silently treating it as never-run.
+				execution.NodeData[nodeName] = []model.DataItem{}
+				continue
+			}
+			execution.NodeData[nodeName] = items
+		}
+	}
+
 	if err := s.storage.SaveExecution(execution); err != nil {
 		s.sendError(w, http.StatusInternalServerError, "Failed to update execution", err)
 		return
@@ -342,6 +364,20 @@ func (s *APIServer) RetryExecution(w http.ResponseWriter, r *http.Request) {
 		newExecution.Data = result.Data
 	}
 
+	// Mirror the per-node output snapshot so retries preserve the
+	// same execution detail that a fresh run would. See the
+	// matching block in ExecuteWorkflow for context.
+	if result != nil && len(result.NodeOutputs) > 0 {
+		newExecution.NodeData = make(map[string][]model.DataItem, len(result.NodeOutputs))
+		for nodeName, items := range result.NodeOutputs {
+			if len(items) == 0 {
+				newExecution.NodeData[nodeName] = []model.DataItem{}
+				continue
+			}
+			newExecution.NodeData[nodeName] = items
+		}
+	}
+
 	if err := s.storage.SaveExecution(newExecution); err != nil {
 		s.sendError(w, http.StatusInternalServerError, "Failed to update execution", err)
 		return
@@ -381,4 +417,63 @@ func (s *APIServer) CancelExecution(w http.ResponseWriter, r *http.Request) {
 		"executionId": id,
 		"status":      "cancel_requested",
 	})
+}
+
+// CountExecutions returns the total number of executions matching
+// the query. Used by the Performance page so it doesn't have to
+// load every execution body into memory just to count them.
+func (s *APIServer) CountExecutions(w http.ResponseWriter, r *http.Request) {
+	filters := storage.ExecutionFilters{
+		WorkflowID: r.URL.Query().Get("workflowId"),
+		Status:     r.URL.Query().Get("status"),
+	}
+	count, err := s.storage.CountExecutions(filters)
+	if err != nil {
+		s.sendError(w, http.StatusInternalServerError, "Failed to count executions", err)
+		return
+	}
+	s.sendJSON(w, http.StatusOK, map[string]interface{}{"count": count})
+}
+
+// RecentExecutions returns up to `limit` (default 200) most-recent
+// executions. Powers the avg-duration / success-rate metrics on
+// the Performance page. The full bodies (including nodeData) are
+// returned so this endpoint doubles as the canonical execution
+// detail source for the n8n-style debug UI.
+func (s *APIServer) RecentExecutions(w http.ResponseWriter, r *http.Request) {
+	limit := parseIntParam(r.URL.Query().Get("limit"), 200, 500)
+	filters := storage.ExecutionFilters{
+		WorkflowID: r.URL.Query().Get("workflowId"),
+		Status:     r.URL.Query().Get("status"),
+	}
+	executions, err := s.storage.RecentExecutions(filters, limit)
+	if err != nil {
+		s.sendError(w, http.StatusInternalServerError, "Failed to list executions", err)
+		return
+	}
+	s.sendJSON(w, http.StatusOK, map[string]interface{}{
+		"data":       executions,
+		"executions": executions,
+		"count":      len(executions),
+	})
+}
+
+// CountWorkflows returns the total workflow count matching filters.
+// Like CountExecutions, this avoids loading every workflow body
+// just to populate the "Active Workflows" metric on the
+// Performance page.
+func (s *APIServer) CountWorkflows(w http.ResponseWriter, r *http.Request) {
+	filters := storage.WorkflowFilters{
+		Search: r.URL.Query().Get("search"),
+	}
+	if activeStr := r.URL.Query().Get("active"); activeStr != "" {
+		active := activeStr == "true"
+		filters.Active = &active
+	}
+	count, err := s.storage.CountWorkflows(filters)
+	if err != nil {
+		s.sendError(w, http.StatusInternalServerError, "Failed to count workflows", err)
+		return
+	}
+	s.sendJSON(w, http.StatusOK, map[string]interface{}{"count": count})
 }

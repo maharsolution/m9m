@@ -72,6 +72,7 @@ func (s *PostgresStorage) initSchema() error {
 			started_at TIMESTAMP NOT NULL,
 			finished_at TIMESTAMP,
 			data JSONB,
+			node_data JSONB,
 			error TEXT,
 			created_at TIMESTAMP NOT NULL DEFAULT NOW()
 		);
@@ -349,9 +350,16 @@ func (s *PostgresStorage) SaveExecution(execution *model.WorkflowExecution) erro
 	}
 	createdAt := time.Now()
 
+	var nodeDataJSON []byte
+	if execution.NodeData != nil {
+		nodeDataJSON, _ = json.Marshal(execution.NodeData)
+	} else {
+		nodeDataJSON = []byte("{}")
+	}
+
 	query := `
-		INSERT INTO executions (id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, error, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO executions (id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (id) DO UPDATE SET
 			workflow_id = EXCLUDED.workflow_id,
 			workspace_id = EXCLUDED.workspace_id,
@@ -360,29 +368,31 @@ func (s *PostgresStorage) SaveExecution(execution *model.WorkflowExecution) erro
 			started_at = EXCLUDED.started_at,
 			finished_at = EXCLUDED.finished_at,
 			data = EXCLUDED.data,
+			node_data = EXCLUDED.node_data,
 			error = EXCLUDED.error
 	`
 
 	_, err := s.db.Exec(query, execution.ID, execution.WorkflowID, execution.WorkspaceID, execution.Status,
-		execution.Mode, execution.StartedAt, execution.FinishedAt, dataJSON, errorText, createdAt)
+		execution.Mode, execution.StartedAt, execution.FinishedAt, dataJSON, nodeDataJSON, errorText, createdAt)
 
 	return err
 }
 
 func (s *PostgresStorage) GetExecution(id string) (*model.WorkflowExecution, error) {
 	query := `
-		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, error
+		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error
 		FROM executions WHERE id = $1
 	`
 
 	var execution model.WorkflowExecution
 	var dataJSON []byte
+	var nodeDataJSON []byte
 	var errorText sql.NullString
 	var finishedAt sql.NullTime
 
 	err := s.db.QueryRow(query, id).Scan(
 		&execution.ID, &execution.WorkflowID, &execution.WorkspaceID, &execution.Status, &execution.Mode,
-		&execution.StartedAt, &finishedAt, &dataJSON, &errorText,
+		&execution.StartedAt, &finishedAt, &dataJSON, &nodeDataJSON, &errorText,
 	)
 
 	if err == sql.ErrNoRows {
@@ -397,6 +407,12 @@ func (s *PostgresStorage) GetExecution(id string) (*model.WorkflowExecution, err
 	}
 
 	_ = json.Unmarshal(dataJSON, &execution.Data)
+	// node_data is JSONB. NULL/empty becomes "no per-node
+	// snapshot" rather than an error — older executions
+	// simply lack the column entirely.
+	if len(nodeDataJSON) > 0 && string(nodeDataJSON) != "{}" {
+		_ = json.Unmarshal(nodeDataJSON, &execution.NodeData)
+	}
 
 	if errorText.Valid && errorText.String != "" {
 		execution.Error = fmt.Errorf("%s", errorText.String)
@@ -443,7 +459,7 @@ func (s *PostgresStorage) ListExecutions(filters ExecutionFilters) ([]*model.Wor
 
 	// Get executions with pagination
 	query := fmt.Sprintf(`
-		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, error
+		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error
 		FROM executions %s
 		ORDER BY started_at DESC
 		LIMIT $%d OFFSET $%d
@@ -461,12 +477,13 @@ func (s *PostgresStorage) ListExecutions(filters ExecutionFilters) ([]*model.Wor
 	for rows.Next() {
 		var execution model.WorkflowExecution
 		var dataJSON []byte
+		var nodeDataJSON []byte
 		var errorText sql.NullString
 		var finishedAt sql.NullTime
 
 		err := rows.Scan(
 			&execution.ID, &execution.WorkflowID, &execution.WorkspaceID, &execution.Status, &execution.Mode,
-			&execution.StartedAt, &finishedAt, &dataJSON, &errorText,
+			&execution.StartedAt, &finishedAt, &dataJSON, &nodeDataJSON, &errorText,
 		)
 		if err != nil {
 			continue
@@ -477,6 +494,9 @@ func (s *PostgresStorage) ListExecutions(filters ExecutionFilters) ([]*model.Wor
 		}
 
 		_ = json.Unmarshal(dataJSON, &execution.Data)
+		if len(nodeDataJSON) > 0 && string(nodeDataJSON) != "{}" {
+			_ = json.Unmarshal(nodeDataJSON, &execution.NodeData)
+		}
 
 		if errorText.Valid && errorText.String != "" {
 			execution.Error = fmt.Errorf("%s", errorText.String)
@@ -595,7 +615,7 @@ func (s *PostgresStorage) RecentExecutions(filters ExecutionFilters, limit int) 
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, error
+		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error
 		FROM executions %s
 		ORDER BY started_at DESC
 		LIMIT $1
@@ -612,13 +632,14 @@ func (s *PostgresStorage) RecentExecutions(filters ExecutionFilters, limit int) 
 	for rows.Next() {
 		var execution model.WorkflowExecution
 		var dataJSON []byte
+		var nodeDataJSON []byte
 		var errorText sql.NullString
 		var finishedAt sql.NullTime
 
 		if err := rows.Scan(
 			&execution.ID, &execution.WorkflowID, &execution.WorkspaceID,
 			&execution.Status, &execution.Mode, &execution.StartedAt,
-			&finishedAt, &dataJSON, &errorText,
+			&finishedAt, &dataJSON, &nodeDataJSON, &errorText,
 		); err != nil {
 			continue
 		}
@@ -626,6 +647,9 @@ func (s *PostgresStorage) RecentExecutions(filters ExecutionFilters, limit int) 
 			execution.FinishedAt = &finishedAt.Time
 		}
 		_ = json.Unmarshal(dataJSON, &execution.Data)
+		if len(nodeDataJSON) > 0 && string(nodeDataJSON) != "{}" {
+			_ = json.Unmarshal(nodeDataJSON, &execution.NodeData)
+		}
 		if errorText.Valid && errorText.String != "" {
 			execution.Error = fmt.Errorf("%s", errorText.String)
 		}

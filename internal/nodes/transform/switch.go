@@ -23,12 +23,32 @@ func NewSwitchNode() *SwitchNode {
 		Name:        "Switch",
 		Description: "Route data based on conditions",
 		Category:    "Flow Control",
+		Properties:  switchProperties(),
+		Inputs:      []string{"main"},
+		Outputs:     []string{"main", "main", "main", "main"},
 	}
 
 	return &SwitchNode{
 		BaseNode:  base.NewBaseNode(description),
 		evaluator: expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 	}
+}
+
+// switchProperties returns the Switch node's property
+// descriptors. The rule structure mirrors n8n:
+//
+//   rules.values[]    — list of routing conditions
+//   options.fallbackOutput — index of the connection to use when no
+//                            rule matches (matches `outputIndex` of
+//                            a `main` slot)
+func switchProperties() []base.NodeProperty {
+	props := []base.NodeProperty{
+		base.FixedCollectionProp("Routing Rules", "rules.values", "Conditions that route items to each output."),
+		base.NumberProp("Fallback output", "options.fallbackOutput", 0, "Output index to use when no rule matches.", false),
+		base.BoolProp("Case sensitive", "options.caseSensitive", true, "Whether string comparisons are case-sensitive."),
+		base.BoolProp("Type validation", "options.typeValidation", false, "If true, mismatched types compare as unequal instead of being coerced."),
+	}
+	return append(props, base.CommonSettings()...)
 }
 
 // ExtractSwitchRules pulls the Switch routing rules out of the parameter

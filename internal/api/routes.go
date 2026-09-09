@@ -11,6 +11,7 @@ func (s *APIServer) RegisterRoutes(router *mux.Router) {
 	api := router.PathPrefix("/api/v1").Subrouter()
 
 	api.HandleFunc("/workflows", s.ListWorkflows).Methods("GET", "OPTIONS")
+	api.HandleFunc("/workflows/count", s.CountWorkflows).Methods("GET", "OPTIONS")
 	api.HandleFunc("/workflows", s.CreateWorkflow).Methods("POST", "OPTIONS")
 	api.HandleFunc("/workflows/{id}", s.GetWorkflow).Methods("GET", "OPTIONS")
 	api.HandleFunc("/workflows/{id}", s.UpdateWorkflow).Methods("PUT", "PATCH", "OPTIONS")
@@ -33,6 +34,8 @@ func (s *APIServer) RegisterRoutes(router *mux.Router) {
 
 	api.HandleFunc("/executions", s.CreateExecution).Methods("POST", "OPTIONS")
 	api.HandleFunc("/executions", s.ListExecutions).Methods("GET", "OPTIONS")
+	api.HandleFunc("/executions/count", s.CountExecutions).Methods("GET", "OPTIONS")
+	api.HandleFunc("/executions/recent", s.RecentExecutions).Methods("GET", "OPTIONS")
 	api.HandleFunc("/executions/{id}", s.GetExecution).Methods("GET", "OPTIONS")
 	api.HandleFunc("/executions/{id}", s.DeleteExecution).Methods("DELETE", "OPTIONS")
 	api.HandleFunc("/executions/{id}/retry", s.RetryExecution).Methods("POST", "OPTIONS")

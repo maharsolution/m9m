@@ -24,11 +24,38 @@ func NewFilterNode() *FilterNode {
 		Name:        "Filter",
 		Description: "Filters items based on conditions",
 		Category:    "Data Transformation",
+		Properties:  filterProperties(),
+		Inputs:      []string{"main"},
+		Outputs:     []string{"main"},
 	}
-	
+
 	return &FilterNode{
 		BaseNode: base.NewBaseNode(description),
 	}
+}
+
+// filterProperties returns the Filter node's property descriptors.
+// Same shape as IF — only difference is Filter drops items that
+// don't match instead of routing them to a second output.
+func filterProperties() []base.NodeProperty {
+	combinators := []base.Option{
+		{Name: "All conditions must be true (AND)", Value: "and"},
+		{Name: "Any condition may be true (OR)", Value: "or"},
+	}
+	operators := []base.Option{
+		{Name: "equals", Value: "equals"},
+		{Name: "not equals", Value: "notEquals"},
+		{Name: "contains", Value: "contains"},
+		{Name: "greater than", Value: "greaterThan"},
+		{Name: "less than", Value: "lessThan"},
+	}
+	conditionRow := base.CollectionProp("Conditions", "conditions.conditions", "Conditions each item is tested against.", operators)
+	props := []base.NodeProperty{
+		base.StringOpt("Combinator", "conditions.combinator", "and", "How to combine conditions.", combinators, true),
+		conditionRow,
+		base.BoolProp("Case sensitive", "options.caseSensitive", true, "Whether string comparisons are case-sensitive."),
+	}
+	return append(props, base.CommonSettings()...)
 }
 
 // Description returns the node description

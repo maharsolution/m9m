@@ -27,8 +27,11 @@ func NewMySQLNode() *MySQLNode {
 		Name:        "MySQL",
 		Description: "Executes queries against MySQL databases",
 		Category:    "Database",
+		Properties:  sqlProperties(),
+		Inputs:      []string{"main"},
+		Outputs:     []string{"main"},
 	}
-	
+
 	return &MySQLNode{
 		BaseNode: base.NewBaseNode(description),
 	}

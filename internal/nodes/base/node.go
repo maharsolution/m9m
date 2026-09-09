@@ -217,13 +217,25 @@ type NodeMetadata struct {
 
 // NodeProperty describes a node parameter/property
 type NodeProperty struct {
-	DisplayName string      `json:"displayName"`
-	Name        string      `json:"name"`
-	Type        string      `json:"type"`
-	Default     interface{} `json:"default"`
-	Description string      `json:"description"`
-	Required    bool        `json:"required"`
-	Options     []Option    `json:"options,omitempty"`
+	DisplayName string                 `json:"displayName"`
+	Name        string                 `json:"name"`
+	Type        string                 `json:"type"`
+	Default     interface{}            `json:"default"`
+	Description string                 `json:"description"`
+	Required    bool                   `json:"required"`
+	Options     []Option               `json:"options,omitempty"`
+	// TypeOptions holds n8n-style per-type metadata: rows for
+	// textareas, minValue/maxValue for numbers, password flag for
+	// strings, multipleValues for collections, etc. Mirrors
+	// n8n's `INodeProperties.typeOptions`.
+	TypeOptions map[string]interface{} `json:"typeOptions,omitempty"`
+	// DisplayOptions carries n8n-style visibility rules
+	// (show/hide based on sibling field values). Most m9m core
+	// nodes do not need this yet — left here so future schema
+	// changes do not break the wire format.
+	DisplayOptions map[string]interface{} `json:"displayOptions,omitempty"`
+	// Placeholder mirrors n8n's `INodeProperties.placeholder`.
+	Placeholder string `json:"placeholder,omitempty"`
 }
 
 // Option represents a selection option for a property

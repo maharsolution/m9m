@@ -25,12 +25,42 @@ func NewSetNode() *SetNode {
 		Name:        "Set",
 		Description: "Sets values on items",
 		Category:    "Data Transformation",
+		Properties:  setProperties(),
+		Inputs:      []string{"main"},
+		Outputs:     []string{"main"},
 	}
 
 	return &SetNode{
 		BaseNode:  base.NewBaseNode(description),
 		evaluator: expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 	}
+}
+
+// setProperties returns the property descriptors for the Set node's
+// Parameters tab. Mirrors n8n's INodeTypeDescription.properties.
+func setProperties() []base.NodeProperty {
+	modes := []base.Option{
+		{Name: "Manual", Value: "manual"},
+		{Name: "Raw", Value: "raw"},
+	}
+	assignmentTypes := []base.Option{
+		{Name: "String", Value: "string"},
+		{Name: "Number", Value: "number"},
+		{Name: "Boolean", Value: "boolean"},
+		{Name: "Array", Value: "array"},
+		{Name: "Object", Value: "object"},
+		{Name: "Date & Time", Value: "dateTime"},
+	}
+	assignmentRow := base.CollectionProp("Assignments", "assignments.assignments", "Values to write onto each item.", assignmentTypes)
+	props := []base.NodeProperty{
+		base.StringOpt("Mode", "mode", "manual", "How to provide the assignments.", modes, true),
+		base.BoolProp("Duplicate item", "duplicateItem", false, "If enabled, the node emits one item per assignment instead of merging into the input."),
+		assignmentRow,
+		base.JsonProp("JSON", "json", "{}", "Raw JSON for the item, used when Mode is Raw."),
+		base.BoolProp("Strip binary data", "options.stripBinary", true, "If enabled, binary fields on the item are removed."),
+		base.BoolProp("Dot notation", "options.dotNotation", false, "When true, assignment names like `a.b` write to nested fields instead of using dots literally."),
+	}
+	return append(props, base.CommonSettings()...)
 }
 
 // Description returns the node description
