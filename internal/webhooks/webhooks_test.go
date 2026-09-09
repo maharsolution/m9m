@@ -1020,7 +1020,7 @@ func TestWebhookManager_prepareResponse_ResponseNode_FromNodeOutputs(t *testing.
 	}
 
 	wf := makeResponseNodeWorkflow()
-	resp := mgr.prepareResponseWithContext(wh, result, wf, "Webhook")
+	resp := mgr.prepareResponseWithContext(wh, result, wf, "Webhook", "")
 
 	body, ok := resp.Body.(map[string]interface{})
 	require.True(t, ok, "responseNode body should be a bare JSON object")
@@ -1069,7 +1069,7 @@ func TestWebhookManager_prepareResponse_ResponseNode_AllEntries(t *testing.T) {
 		},
 	}
 
-	resp := mgr.prepareResponseWithContext(wh, result, wf, "Webhook")
+	resp := mgr.prepareResponseWithContext(wh, result, wf, "Webhook", "")
 	body, ok := resp.Body.([]map[string]interface{})
 	require.True(t, ok, "responseNode+respondWith=allIncomingItems body should be a JSON array")
 	assert.Len(t, body, 2)
@@ -1096,7 +1096,7 @@ func TestWebhookManager_prepareResponse_ResponseNode_FallsBackWithoutNode(t *tes
 		Connections: map[string]model.Connections{
 			"Webhook": {Main: [][]model.Connection{{{Node: "Set", Type: "main", Index: 0}}}},
 		},
-	}, "Webhook")
+	}, "Webhook", "")
 
 	body, ok := resp.Body.(map[string]interface{})
 	require.True(t, ok)
@@ -1128,7 +1128,7 @@ func TestWebhookManager_prepareResponse_ResponseNode_NoData(t *testing.T) {
 		},
 	}
 
-	resp := mgr.prepareResponseWithContext(wh, result, wf, "Webhook")
+	resp := mgr.prepareResponseWithContext(wh, result, wf, "Webhook", "")
 	body, ok := resp.Body.(map[string]interface{})
 	require.True(t, ok)
 	assert.Equal(t, "success", body["message"])

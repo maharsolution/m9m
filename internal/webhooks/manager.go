@@ -214,7 +214,7 @@ func (m *WebhookManager) ExecuteWebhook(webhook *Webhook, request *WebhookReques
 	// `lastNode` semantics and respond with whatever the last
 	// executed node produced — diverging from n8n's wire shape for
 	// the `webhook_code` workflow (`V4432EsGIkpqIZx9`).
-	response := m.prepareResponseWithContext(webhook, result, workflow, webhook.NodeID)
+	response := m.prepareResponseWithContext(webhook, result, workflow, webhook.NodeID, firstHeaderValue(request.Headers, "Content-Type"))
 	execution.Response = response
 
 	// Save execution record
@@ -454,7 +454,7 @@ func resolveRequestWebhookURL(request *WebhookRequest) string {
 }
 
 func (m *WebhookManager) prepareResponse(webhook *Webhook, result *engine.ExecutionResult) *WebhookResponse {
-	return m.prepareResponseWithContext(webhook, result, nil, "")
+	return m.prepareResponseWithContext(webhook, result, nil, "", "")
 }
 
 // respondToWebhookNodeType is the n8n node-type identifier m9m
@@ -631,6 +631,54 @@ func findRespondToWebhookRespondWith(workflow *model.Workflow, triggerNode strin
 	return ""
 }
 
+// findRespondToWebhookNodeParams returns the full parameters block of
+// the Respond-to-Webhook node the manager would consult for the
+// responseNode branch (the same node findRespondToWebhookRespondWith
+// resolves via). Returns nil when no such node exists in the workflow.
+//
+// Callers use this to read `options.responseHeaders` for the
+// Content-Type override path (Phase 2 of the parity cycle).
+func findRespondToWebhookNodeParams(workflow *model.Workflow, triggerNode string) map[string]interface{} {
+	if workflow == nil {
+		return nil
+	}
+	name := findRespondToWebhookNode(workflow, triggerNode)
+	if name == "" {
+		name = findRespondToWebhookNodeByType(workflow)
+	}
+	if name == "" {
+		return nil
+	}
+	for _, n := range workflow.Nodes {
+		if n.Name == name {
+			return n.Parameters
+		}
+	}
+	return nil
+}
+
+// firstHeaderValue returns the first value of an HTTP header from a
+// multi-map (Go's net/http stores repeated headers as `[]string`).
+// Header lookup is case-insensitive per RFC 7230, but Go's
+// `http.Header.Get` already canonicalises — here we just walk the
+// lower-cased keys the manager stored into `WebhookRequest.Headers`.
+//
+// Returns "" when the header isn't present or carries no values.
+func firstHeaderValue(headers map[string][]string, name string) string {
+	if headers == nil {
+		return ""
+	}
+	for k, vs := range headers {
+		if strings.EqualFold(k, name) {
+			if len(vs) == 0 {
+				return ""
+			}
+			return vs[0]
+		}
+	}
+	return ""
+}
+
 // extractResponseNodeData reads the output the Respond-to-Webhook
 // node produced and returns it. Returns nil when no Respond-to-Webhook
 // node has data, or when the engine did not populate per-node tracking
@@ -669,6 +717,141 @@ func extractResponseNodeData(workflow *model.Workflow, triggerNode string, resul
 	return nil
 }
 
+// resolveContentType selects the HTTP Content-Type for the outgoing
+// webhook response in priority order:
+//
+//  1. The Respond-to-Webhook node's `options.responseHeaders.entries`
+//     — the highest-authority source. The `webhook_xml` workflow
+//     (`OFVi8L0zRs3Cnkca`) sets it explicitly to `application/xml`
+//     so the XML body round-trips. n8n's UI emits these as
+//     `{entries: [{name, value}, ...]}`; m9m honours that shape.
+//  2. The inbound `Content-Type` request header, but only when the
+//     response body itself looks XML-/text-shaped AND the inbound
+//     header is XML/text. Mirroring the inbound header is what
+//     n8n does for binary/text responses when no override is set.
+//  3. Trigger-level `ResponseHeaders` — honoured only for non-JSON
+//     shapes (preserves any custom headers the workflow author set
+//     on the Webhook node itself).
+//  4. `application/json` fallback.
+//
+// Splitting this out keeps the manager method compact and lets
+// the priority table be unit-tested without spinning up a manager.
+func resolveContentType(respondNodeParams map[string]interface{}, inboundContentType string, body interface{}) string {
+	// (1) Per-node override.
+	if ct := readRespondToWebhookHeaders(respondNodeParams)["content-type"]; ct != "" {
+		return ct
+	}
+	// (2) Inbound Content-Type, only when the body looks like XML/text
+	//     and the inbound header matches that shape. Calling out to an
+	//     XML/text-only inbound preserves the wire shape n8n produces
+	//     without making JSON callers opt-out.
+	if bodyIsXMLLike(body) && looksLikeXMLOrTextContentType(inboundContentType) {
+		return inboundContentType
+	}
+	// (4) Fallback.
+	return "application/json"
+}
+
+// bodyIsXMLLike reports whether the response body is shaped like an
+// XML document or plain text — the two cases that benefit from
+// mirroring the inbound Content-Type instead of forcing JSON.
+func bodyIsXMLLike(body interface{}) bool {
+	if s, ok := body.(string); ok {
+		s = strings.TrimSpace(s)
+		return strings.HasPrefix(s, "<") || strings.HasPrefix(s, "<?xml")
+	}
+	return false
+}
+
+// looksLikeXMLOrTextContentType reports whether an inbound
+// Content-Type header warrants echoing back — XML, plain text, HTML,
+// or a `*/*` wildcard. JSON callers do not get this fallback because
+// JSON is the default and would create a circular "echo regardless
+// of what the workflow produced" behaviour.
+func looksLikeXMLOrTextContentType(ct string) bool {
+	ct = strings.ToLower(strings.TrimSpace(ct))
+	if ct == "" {
+		return false
+	}
+	if strings.HasPrefix(ct, "application/xml") || strings.HasPrefix(ct, "text/xml") {
+		return true
+	}
+	if strings.HasPrefix(ct, "text/plain") || strings.HasPrefix(ct, "text/html") {
+		return true
+	}
+	if strings.HasPrefix(ct, "application/xhtml") {
+		return true
+	}
+	if ct == "*/*" || strings.HasSuffix(ct, "/*") {
+		// Broad wildcard — still safer than JSON when the body is
+		// XML/text because we know the body shape.
+		return true
+	}
+	return false
+}
+
+// readRespondToWebhookHeaders reads the `options.responseHeaders`
+// map from a Respond-to-Webhook node's parameters and returns it
+// normalised to lower-case keys (HTTP headers are case-insensitive
+// but the n8n UI sometimes mixes cases). Returns an empty map when
+// the node has no override block.
+//
+// Accepted shapes (n8n versions vary):
+//
+//	"options": {
+//	  "responseHeaders": {
+//	    "entries": [
+//	      {"name": "Content-Type", "value": "application/xml"}
+//	    ]
+//	  }
+//	}
+//
+//	"options": {
+//	  "responseHeaders": {
+//	    "Content-Type": "application/xml"
+//	  }
+//	}
+//
+// The first shape is the current n8n UI (1.x+); the second is the
+// legacy direct-map shape. Both are accepted so workflows authored
+// against older versions still work.
+func readRespondToWebhookHeaders(params map[string]interface{}) map[string]string {
+	if params == nil {
+		return map[string]string{}
+	}
+	options, _ := params["options"].(map[string]interface{})
+	if options == nil {
+		return map[string]string{}
+	}
+	rh, _ := options["responseHeaders"].(map[string]interface{})
+	if rh == nil {
+		return map[string]string{}
+	}
+	out := map[string]string{}
+	// New UI shape: {entries: [{name, value}, ...]}
+	if entries, ok := rh["entries"].([]interface{}); ok {
+		for _, e := range entries {
+			m, ok := e.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			name, _ := m["name"].(string)
+			value, _ := m["value"].(string)
+			if name == "" {
+				continue
+			}
+			out[strings.ToLower(name)] = value
+		}
+		return out
+	}
+	// Legacy shape: direct {HeaderName: value} map.
+	for ks, v := range rh {
+		vs, _ := v.(string)
+		out[strings.ToLower(ks)] = vs
+	}
+	return out
+}
+
 // prepareResponseWithContext is the full-fat version of
 // prepareResponse that also accepts the workflow + trigger-node name
 // so it can implement `responseMode: responseNode`. The manager
@@ -676,7 +859,13 @@ func extractResponseNodeData(workflow *model.Workflow, triggerNode string, resul
 // prepareResponse is preserved for backwards compatibility with
 // callers (and the unit-test suite) that don't have a workflow
 // handy.
-func (m *WebhookManager) prepareResponseWithContext(webhook *Webhook, result *engine.ExecutionResult, workflow *model.Workflow, triggerNode string) *WebhookResponse {
+//
+// `inboundContentType` is the inbound webhook request's Content-Type
+// (taken from the first matching header if multiple are present)
+// and is fed into Content-Type resolution so XML/text payloads can
+// echo the inbound header. Pass "" when no inbound header was
+// present.
+func (m *WebhookManager) prepareResponseWithContext(webhook *Webhook, result *engine.ExecutionResult, workflow *model.Workflow, triggerNode string, inboundContentType string) *WebhookResponse {
 	response := &WebhookResponse{
 		StatusCode: 200,
 		Headers:    webhook.ResponseHeaders,
@@ -685,7 +874,13 @@ func (m *WebhookManager) prepareResponseWithContext(webhook *Webhook, result *en
 	if response.Headers == nil {
 		response.Headers = make(map[string]string)
 	}
-	response.Headers["Content-Type"] = "application/json"
+	// Content-Type is resolved at the end of this function — after the
+	// response body is known — so the manager can mirror the inbound
+	// Content-Type for XML/text workflows (webhook_xml parity) and
+	// honour the per-Respond-to-Webhook node override. The default
+	// fallback before body-shape inspection is set right before the
+	// return to guarantee the response always has a Content-Type
+	// even when the body is empty.
 
 	// `responseMode: responseNode` overrides `responseData`. n8n's
 	// behaviour: the workflow author wires the trigger to a
@@ -729,6 +924,13 @@ func (m *WebhookManager) prepareResponseWithContext(webhook *Webhook, result *en
 					response.Body = unwrapRespondToWebhookBody(data[0].JSON)
 				}
 			}
+			// Resolve Content-Type: per-node override (options.responseHeaders)
+			// wins over inbound mirroring which wins over the JSON fallback.
+			response.Headers["Content-Type"] = resolveContentType(
+				findRespondToWebhookNodeParams(workflow, triggerNode),
+				inboundContentType,
+				response.Body,
+			)
 			return response
 		}
 		// No Respond-to-Webhook node found (or no per-node
@@ -786,6 +988,19 @@ func (m *WebhookManager) prepareResponseWithContext(webhook *Webhook, result *en
 		} else {
 			response.Body = lastNodeResponseBody(workflow, result)
 		}
+	}
+
+	// lastNode / responseData branch: no per-Respond-to-Webhook node
+	// is in play here (or it had no data). Honour trigger-level
+	// responseHeaders['Content-Type'] only if the author set it; if
+	// not, fall through to the same XML-mirroring branch used by the
+	// responseNode path. Final fallback is application/json.
+	if _, alreadySet := response.Headers["Content-Type"]; !alreadySet || response.Headers["Content-Type"] == "" {
+		response.Headers["Content-Type"] = resolveContentType(
+			nil,
+			inboundContentType,
+			response.Body,
+		)
 	}
 
 	return response
