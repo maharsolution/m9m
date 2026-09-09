@@ -114,6 +114,7 @@ def sanitize_type_versions(workflow):
 
 def push_to_m9m(workflow, source="manual"):
     """Push a single workflow. Returns ("created"|"updated"|"failed", status, body)."""
+    wf_id = workflow.get("id")
     headers = {"Content-Type": "application/json"}
 
     status, body = http_json("POST", f"{M9M_BASE_URL}/api/v1/workflows", headers, workflow)
