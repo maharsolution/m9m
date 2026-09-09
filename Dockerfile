@@ -1,6 +1,24 @@
 # syntax=docker/dockerfile:1
 
-# Build stage
+# Stage 1 — build the Vue frontend. web/dist is .gitignored, so it MUST
+# be produced here, otherwise `//go:embed all:dist/*` in the Go binary
+# captures an empty directory and the running container serves a
+# stale bundle.
+FROM node:20-alpine AS web-builder
+
+WORKDIR /web
+
+# Copy package files first so the npm install layer caches across
+# source-only edits.
+COPY web/package.json web/package-lock.json* ./
+RUN npm ci --no-audit --no-fund
+
+# Now copy the rest of the source and build.
+COPY web/ ./
+RUN npm run build
+
+# Stage 2 — build the Go binary. The dist directory produced above is
+# the one //go:embed captures.
 FROM golang:1.24-alpine AS builder
 
 # Install build dependencies
@@ -15,6 +33,10 @@ RUN go mod download
 
 # Copy source code
 COPY . .
+
+# Bring in the freshly-built frontend dist (overwrites the .gitignored
+# web/dist that came in via COPY . . — which would be empty).
+COPY --from=web-builder /web/dist ./web/dist
 
 # Build the application
 # CGO is needed for sqlite3
