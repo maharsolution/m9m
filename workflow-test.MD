@@ -226,3 +226,125 @@ Each parity iteration follows this loop (automated by `scripts/parity_orchestrat
 
 - Positive sheet rows: 10 (8 OK, 2 FAILED)
 - Negative sheet rows: 7 (3 OK, 0 FAILED)
+
+## Section I — Active parity gaps + iteration plan
+
+This section is the live backlog of parity gaps. It is rendered from `parity/parity_gaps.json` on every `parity_orchestrator update-md` run. The JSON is the source of truth for what the next iteration cycle must fix; this section is just the rendering. Append a new entry to the JSON and the next regeneration will pick it up.
+
+Two new parity gaps surfaced during the 2026-09-09 verification cycle. Both are wire-level mismatches between n8n (port 5678) and m9m (port 8080). They were previously masked by the orchestrator's body-only comparator and the sheet's status-only H column. The end-to-end iteration cycle must be re-run from the top with these two items added to the test scope.
+
+_Recorded: 2026-09-09T07:49:00Z._ Owner: agent. Cycle: 2026-09-09 rerun.
+
+**Exit criteria for this cycle:**
+
+1. positive/6 (webhook_xml) returns Content-Type: application/xml from m9m â€” header parity with n8n
+2. positive/3 (webhook_callrest) and any other authed node resolve their credential envelope via m9m's credential store
+3. All 14 parity cases still PASS after the two fixes
+4. Google Sheet columns G and H reflect the new state
+5. workflow-test.MD and credentials_n8n_api.MD regenerated and committed
+
+### Active gaps
+
+#### GAP-2026-09-09-1 — Webhook response Content-Type must mirror the inbound Content-Type
+
+Sheet row: `positive/6`  Path: `webhook_xml`
+
+**Discovery.** Manual curl on 2026-09-09: row 6 of the positive sheet sends Content-Type: application/xml. n8n responds with Content-Type: application/xml. m9m responds with Content-Type: application/json. The orchestrator only stores bodies, not headers, so the discrepancy was hidden. The user explicitly asked for parity at the header level.
+
+**Constraint.** m9m's Respond-to-Webhook node must emit Content-Type equal to the node parameter `respondWith`'s sibling `options.responseContentType` if present, otherwise the inbound Content-Type, otherwise application/json. n8n's behaviour: if the workflow's terminal node produces JSON, n8n sends application/json; if XML, application/xml; if a binary blob, the stored MIME.
+
+**Observed diff.**
+
+| | n8n | m9m |
+|---|---|---|
+| `body` | `"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?> <buku><id>001</id>...</buku>"` | `"[{\"id\":1,\"name\":\"Andi\",\"processedAt\":\"2026-09-08\",...}]"` |
+| `content_type` | `"application/xml"` | `"application/json"` |
+| `status` | `200` | `200` |
+
+**Root-cause hypothesis.** internal/nodes/transform/respond_to_webhook.go hardcodes `application/json` as the webhook response Content-Type. It needs to select the type from (in priority order): (a) the node's `options.responseContentType` override, (b) the inbound `Content-Type` if it's XML/text or matches the body MIME, (c) JSON otherwise.
+
+**Scope estimate.** 1 file (respond_to_webhook.go), ~30-50 LOC + tests + sheet/MD update
+
+**Blocking rows:** positive/6
+**Regression-risk rows:** positive/1, positive/2, positive/4, positive/5, positive/7, positive/8, negative/1..6
+
+**Verification steps:**
+
+- 1. Unit test respond_to_webhook.go: (a) inbound XML, no override â†’ response Content-Type=application/xml; (b) inbound JSON, no override â†’ application/json; (c) explicit `options.responseContentType=text/plain` â†’ text/plain.
+- 2. Run parity orchestrator validate; capture -v headers; ensure m9m response for webhook_xml has Content-Type: application/xml (n8n baseline preserved).
+- 3. Re-run the full 14-case suite to confirm no regression.
+
+#### GAP-2026-09-09-2 — Credential envelope must sync from n8n to m9m per workflow node
+
+Sheet row: `n/a (infra)/None`  Path: `n/a`
+
+**Discovery.** Manual workflow diff on 2026-09-09: `node.credentials` is a non-empty object on at least 1 active n8n workflow (Simple Basic Auth `BZ6M9tFegX5fWPIh`) and on the `process-batch-orders` workflow (`hxePxjCyvoFFaIlO`, uses `postgres`). m9m currently stores the workflow with `credentials: null` because (a) sync-service strips the field and (b) m9m has no credential API. n8n has full credential REST endpoints (see `credentials_n8n_api.MD`). Without the envelope, authed nodes resolve to anonymous â€” that's why positive/3's m9m response is `{"body":{"variable":"1"}}` (anon upstream echo) instead of an authed `{"Response":"OK"}`.
+
+**Constraint.** Workflow execution in m9m must look up `node.credentials[typeName]` against the m9m credential store and pass the resolved {user, password, ...} to the node's Execute method. If the credential is missing the node must fail with the same error n8n emits (e.g. `No credentials found for type 'httpBasicAuth'`), NOT fall back to anonymous. sync-service must upsert credentials before POSTing workflows that reference them â€” same order as n8n's UI imports.
+
+**Observed diff.**
+
+| | n8n | m9m |
+|---|---|---|
+| `credential_resolver_at_engine_level` | `""` | `false` |
+| `credentials_api` | `""` | `false` |
+| `credentials_on_workflows` | `[{"workflow_id": "BZ6M9tFegX5fWPIh", "name": "Simple Basic Auth", "nodes_with_credentials": ["HTTP Request"], "types": ["httpBasicAuth"]}, {"workflow_id": "hxeP` | `""` |
+| `credentials_stored_in_workflow_json` | `""` | `false` |
+
+**Root-cause hypothesis.** Three-layer gap: (1) sync-service/sync.py drops `credentials` from the workflow payload; (2) m9m has no `/api/v1/credentials` endpoints and no `internal/credentials` store; (3) `BaseNode.credentialManager` either doesn't exist or returns nil. Fix requires all three layers.
+
+**Scope estimate.** M â€” sync-service/sync.py additions, new internal/credentials package + storage, REST handlers in internal/api, integration into BaseNode, m9m REST surface mirroring the 7 endpoints in credentials_n8n_api.MD Section 2/3, tests for the sync layer. Roughly 5-7 files touched.
+
+**Blocking rows:** positive/3 (webhook_callrest), positive/8 (process-batch-orders)
+**Regression-risk rows:** all positive + all negative â€” every node lookup hits the credential resolver path
+
+**Verification steps:**
+
+- 1. After implementation, GET /api/v1/credentials on m9m returns the same set (id, name, type) as GET /api/v1/credentials on n8n (minus any marked managed).
+- 2. After implementation, GET /api/v1/workflows/{id} on m9m returns the same `nodes[*].credentials` map as n8n (id-stable).
+- 3. The basic auth test in m9m (`webhook_callrest`) returns the same authed upstream body as n8n, not the anon echo.
+- 4. The Postgres lookup in `process-batch-orders` returns the same rows as n8n (a real DB connection, not a 500 error).
+- 5. Re-run parity orchestrator validate; expect 14/14 still PASS.
+
+### Iteration plan
+
+**Phase 1 — Document + design (NOT YET EXECUTED)**
+
+- Confirm n8n credential list: GET /api/v1/credentials on n8n and write snapshot to tmp/validation-2026-09-09/credentials.json
+- Draft the new m9m REST surface (mirroring n8n) â€” type signatures, route paths, request/response shapes per credentials_n8n_api.MD Section 3
+- Sketch the order of operations inside sync-service/sync.py so workflows that reference a credential always follow the credential upsert (avoid race)
+- Decide Content-Type policy for Respond to Webhook: priority (override > inbound > JSON fallback) per the row 6 evidence
+
+**Phase 2 — Wire-level Content-Type fix (positive/6)**
+
+- Patch internal/nodes/transform/respond_to_webhook.go to honour options.responseContentType, inbound Content-Type, JSON fallback
+- Add unit tests in internal/nodes/transform/respond_to_webhook_test.go covering the three branches
+- Commit, push, redeploy via scripts/deploy_m9m.ps1
+- Re-run validate for row 6 only; confirm n8n + m9m both emit application/xml with matching body
+- Re-run the full 14-case suite to confirm no regression on rows that previously passed
+
+**Phase 3 — Credential sync (positive/3 + positive/8)**
+
+- Implement internal/credentials package: store keyed by id, n8n-compatible envelope, no data field
+- Implement m9m REST handlers for /api/v1/credentials/{list,get,create,update,delete,test,schema}: mirror credentials_n8n_api.MD Section 3 verbatim
+- Unmarshal `credentials` field in POST /api/v1/workflows (was being dropped at unmarshal)
+- Update BaseNode.credentialManager (or add it) â€” per-node `credentials` map resolves to the store at execution time
+- Patch sync-service/sync.py: at every poll, GET /api/v1/credentials on n8n BEFORE POSTing workflows; resolve node.credentials[name] â†’ n8n id; pass the resolved map into the workflow body
+- Add integration test: simulate n8n â†’ sync-service â†’ m9m cycle for one auth'd workflow; assert m9m record matches
+- Commit, push, redeploy
+- Re-run validate; expect positive/3 and positive/8 to PASS via real credential resolution (not anonymous)
+- Re-run full 14-case suite for regression
+
+**Phase 4 — Update artefacts (sheet + MD)**
+
+- Update sheet 'Webhook Controlling' row 6 columns G/H with the new (200, OK)
+- Update sheet 'Webhook Controlling' row 3 and row 12 columns G/H with the new (200, OK) â€” these were already 200/OK but the body now reflects real authed execution
+- Regenerate workflow-test.MD from tmp/pull_sheet.py + tmp/generate_workflow_test_md.py; the new Section I from tmp/parity_gaps.json becomes Section I of the MD
+- Commit workflow-test.MD + parity_gaps.json + credentials_n8n_api.MD in a single docs commit
+
+### Guardrails
+
+- Do NOT modify sync-service/sync.py to mask a parity gap (Section G hard constraint still applies). The credential sync addition IS a real implementation step, not a bypass â€” it has to exist because m9m has no other way to know what credential envelope to use.
+- Do NOT modify any n8n workflow JSON. All fixes go in Go under internal/nodes, internal/api, internal/credentials, and in sync-service/sync.py for the credential sync orchestration only.
+- Every executed workflow step must produce a WorkflowExecution record visible in /api/v1/executions â€” apply to the new authed positive/3 and positive/8 cases in particular
+- Update both the Google Sheet and workflow-test.MD atomically (single git commit for the docs pass)
