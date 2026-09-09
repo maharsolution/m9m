@@ -132,9 +132,25 @@ func (h *Handler) handleWebhookRequest(w http.ResponseWriter, r *http.Request, i
 		return
 	}
 
-	// Authenticate request
+	// Authenticate request. JWT auth has its own n8n-compatible wire
+	// shape (HTTP 403 + plain-text body "jwt expired" / "jwt not yet
+	// valid") which doesn't fit the generic JSON 401 envelope — branch
+	// out for those sentinel errors before falling through to the
+	// generic 401 response.
 	if err := h.authenticateRequest(r, webhook); err != nil {
 		log.Printf("⚠️  Authentication failed for webhook %s: %v", webhook.ID, err)
+		switch {
+		case errors.Is(err, errJWTExpired):
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte("jwt expired"))
+			return
+		case errors.Is(err, errJWTNotYetValid):
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte("jwt not yet valid"))
+			return
+		}
 		writeJSONError(w, http.StatusUnauthorized, webhookErrorBody{
 			Code:    http.StatusUnauthorized,
 			Message: "Authentication failed",
@@ -416,7 +432,7 @@ func (h *Handler) authenticateRequest(r *http.Request, webhook *Webhook) error {
 			return fmt.Errorf("invalid API key")
 		}
 
-	case "header":
+	case "header", "headerAuth":
 		// Custom header authentication
 		headerName := getAuthData(webhook.AuthData, "headerName", "Authorization")
 		headerValue := getAuthData(webhook.AuthData, "headerValue", "")
@@ -426,6 +442,30 @@ func (h *Handler) authenticateRequest(r *http.Request, webhook *Webhook) error {
 		// SECURITY: Use constant-time comparison to prevent timing attacks
 		if subtle.ConstantTimeCompare([]byte(actualValue), []byte(headerValue)) != 1 {
 			return fmt.Errorf("invalid header authentication")
+		}
+
+	case "jwtAuth", "jwt":
+		// JWT bearer authentication. Supports the n8n parity-test
+		// workflows (RSA public/private key, HS256 secret) by
+		// signature-verifying the supplied JWT against the credential
+		// stored on the Webhook node. Expired tokens are rejected with
+		// the same wire shape n8n uses (HTTP 403, body "jwt expired")
+		// rather than the generic 401 + JSON envelope — the sheet's
+		// case 3 test (`token_auth`) was previously failing because
+		// m9m was 401ing on expired tokens with the generic body,
+		// which doesn't match n8n's response at all.
+		//
+		// Scope: this is a minimal RS256/HS256 implementation that
+		// honours `alg` from the JWT header, `exp`/`nbf` claim
+		// checks, and the credential's public key (RS256) or shared
+		// secret (HS256). RS512/ES256/etc. are out of scope; they
+		// will fall through with a generic "unsupported alg" error.
+		token := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+		if token == "" || token == r.Header.Get("Authorization") {
+			return fmt.Errorf("jwt auth required")
+		}
+		if err := verifyJWT(token, webhook.AuthData); err != nil {
+			return err
 		}
 
 	default:
