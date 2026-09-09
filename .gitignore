@@ -52,6 +52,7 @@ Thumbs.db
 # Web frontend
 web/node_modules/
 web/dist/
+internal/web/dist/
 
 # Python bindings (build artifacts)
 bindings/python/.venv/

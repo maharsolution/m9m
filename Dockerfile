@@ -37,9 +37,14 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Bring in the freshly-built frontend dist (overwrites the .gitignored
-# web/dist that came in via COPY . . — which would be empty).
-COPY --from=web-builder /web/dist ./web/dist
+# Bring in the freshly-built frontend dist. CRITICAL: this must land in
+# internal/web/dist because that's what //go:embed dist/* in
+# internal/web/handler.go captures at compile time. Putting it in
+# web/dist/ instead leaves Go compiling with whatever stale files
+# happen to live in internal/web/dist (e.g. files tracked in git from
+# an old local build) — the resulting binary then serves those old
+# bundles regardless of how fresh web/dist/ is.
+COPY --from=web-builder /web/dist ./internal/web/dist
 
 # Build the application
 # CGO is needed for sqlite3
