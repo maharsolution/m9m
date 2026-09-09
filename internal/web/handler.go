@@ -19,7 +19,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
-//go:embed dist/*
+//go:embed all:dist/*
 var embeddedFS embed.FS
 
 // Handler provides HTTP handlers for serving the frontend
