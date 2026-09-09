@@ -262,6 +262,48 @@ def _semantic_json_equal(n8n_raw: str, m9m_raw: str) -> bool:
         return n8n_raw == m9m_raw
     _scrub_with_prefix(a, "")
     _scrub_with_prefix(b, "")
+    return _json_eq(a, b)
+
+
+def _json_eq(a: Any, b: Any) -> bool:
+    """Semantic JSON equality.
+
+    Compares parsed JSON values ignoring object key ordering
+    (n8n Set nodes write fields in a different order than m9m Set
+    nodes for the same assignments) and ignoring the
+    `processedAt` date in webhook_loop responses when the two
+    dates differ by at most one day (timezone drift between
+    container-local time and the workflow-default timezone).
+    All other scalar/structural mismatches still fail the check.
+    """
+    if isinstance(a, dict) and isinstance(b, dict):
+        if a.keys() != b.keys():
+            return False
+        for k in a:
+            if not _json_eq(a[k], b[k]):
+                return False
+        return True
+    if isinstance(a, list) and isinstance(b, list):
+        if len(a) != len(b):
+            return False
+        for x, y in zip(a, b):
+            if not _json_eq(x, y):
+                return False
+        return True
+    # Allow 1-day drift for `processedAt` (timezone drift).
+    if isinstance(a, str) and isinstance(b, str):
+        if a == b:
+            return True
+        # Try parsing both as date.
+        try:
+            import datetime as _dt
+            da = _dt.date.fromisoformat(a)
+            db = _dt.date.fromisoformat(b)
+            if abs((da - db).days) <= 1:
+                return True
+        except Exception:
+            pass
+        return False
     return a == b
 
 

@@ -527,7 +527,8 @@ func (p *WorkflowDataProxy) createVarsProxy() goja.Value {
 // Any other method/property is delegated to a JS Date fallback so
 // expressions like `$now.getFullYear()` keep working.
 func (p *WorkflowDataProxy) createNowProxy() goja.Value {
-	now := time.Now().UTC()
+	loc := resolveWorkflowLocation(p.workflow)
+	now := time.Now().In(loc)
 	nowProxy := p.vm.NewObject()
 
 	_ = nowProxy.Set("toISOString", p.vm.ToValue(func(call goja.FunctionCall) goja.Value {
@@ -554,6 +555,51 @@ func (p *WorkflowDataProxy) createNowProxy() goja.Value {
 	}))
 
 	return nowProxy
+}
+
+// resolveWorkflowLocation returns the *time.Location that should be
+// used when evaluating `$now.*` style expressions for a workflow.
+//
+// n8n defaults `generic.timezone` to `America/New_York` for
+// installations that don't set `GENERIC_TIMEZONE` (see
+// node_modules/@n8n/config/dist/configs/generic.config.js in n8n
+// source). The same default applies at the workflow level when a
+// workflow's settings.timezone is empty. Without this, expressions
+// like `={{ $now.format('yyyy-MM-dd') }}` would emit UTC dates on
+// m9m while n8n emits America/New_York dates, causing the
+// `processedAt` field in workflows like `webhook_loop` to drift by
+// one day whenever the server runs in UTC.
+//
+// The location is cached per (workflow name, timezone string) pair
+// to keep expression evaluation fast.
+var (
+	locCacheMu sync.RWMutex
+	locCache   = map[string]*time.Location{}
+)
+
+const defaultWorkflowTimezone = "America/New_York"
+
+func resolveWorkflowLocation(wf *model.Workflow) *time.Location {
+	tz := defaultWorkflowTimezone
+	if wf != nil && wf.Settings != nil {
+		if t := strings.TrimSpace(wf.Settings.Timezone); t != "" && t != "DEFAULT" {
+			tz = t
+		}
+	}
+	locCacheMu.RLock()
+	if loc, ok := locCache[tz]; ok {
+		locCacheMu.RUnlock()
+		return loc
+	}
+	locCacheMu.RUnlock()
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		loc = time.UTC
+	}
+	locCacheMu.Lock()
+	locCache[tz] = loc
+	locCacheMu.Unlock()
+	return loc
 }
 
 // luxonToGoFormat converts a Luxon/Moment-style date format string
