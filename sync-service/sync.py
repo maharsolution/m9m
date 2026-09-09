@@ -56,6 +56,19 @@ SYNC_PORT = int(os.environ.get("SYNC_PORT", "8001"))
 # also work without code changes.
 N8N_ENCRYPTION_KEY = os.environ.get("N8N_ENCRYPTION_KEY") or os.environ.get("GEN_ENCRYPTION_KEY", "")
 
+# n8n Postgres connection. n8n's PUBLIC REST API does NOT return the
+# `data` field of credentials (it's `writeOnly` per the OpenAPI spec,
+# and `?includeData=true` returns REDACTED placeholders). To get the
+# actual encrypted blobs we query the same Postgres that backs the
+# n8n UI directly. Connection details default to the in-network DSN
+# of the docker-compose `postgres-db` service; override via env vars
+# if you deploy elsewhere.
+N8N_PG_HOST = os.environ.get("N8N_PG_HOST", "postgres-db")
+N8N_PG_PORT = int(os.environ.get("N8N_PG_PORT", "5432"))
+N8N_PG_USER = os.environ.get("N8N_PG_USER", "database_admin")
+N8N_PG_PASSWORD = os.environ.get("N8N_PG_PASSWORD", "Secure_Db_Pass_2026")
+N8N_PG_DATABASE = os.environ.get("N8N_PG_DATABASE", "n8n_prod")
+
 _last_hash = {}  # n8n workflow id -> content hash, to skip unchanged workflows
 
 # Concurrency control + last-cycle status surfaced via /status.
@@ -206,20 +219,76 @@ def decrypt_n8n_credential_data(ciphertext_b64):
 
 
 def fetch_n8n_credentials():
-    """GET /api/v1/credentials from n8n. Returns list of safe envelopes
-    (with `data` still encrypted — caller must call decrypt on each).
+    """Read credentials directly from n8n's Postgres database.
+
+    The n8n PUBLIC REST API does NOT return the `data` field of
+    credentials (it's writeOnly per the OpenAPI spec, and
+    `?includeData=true` returns REDACTED placeholders), so we query
+    the same Postgres that backs the n8n UI directly. The `data`
+    column is AES-256-CBC ciphertext; the caller decrypts each
+    envelope locally with `decrypt_n8n_credential_data`.
+
+    Returns a list of envelopes shaped like n8n's REST API:
+    `{id, name, type, data}` where `data` is the base64 ciphertext
+    blob. n8n's REST API doesn't return `data` in list endpoints, but
+    the DB does, so this function is the authoritative source.
     """
-    status, body = http_json(
-        "GET",
-        f"{N8N_BASE_URL}/api/v1/credentials",
-        headers={"X-N8N-API-KEY": N8N_API_KEY, "Accept": "application/json"},
-    )
-    if status != 200:
-        print(f"[sync] n8n credentials API error {status}: {body}")
+    if not N8N_PG_HOST:
+        print("[sync] N8N_PG_HOST is not set; cannot query n8n Postgres for credentials")
         return []
-    if isinstance(body, dict):
-        return body.get("data", [])
-    return body or []
+
+    try:
+        import psycopg2
+        import psycopg2.extras
+    except ImportError:
+        print("[sync] psycopg2 not installed; cannot query n8n Postgres for credentials")
+        return []
+
+    try:
+        conn = psycopg2.connect(
+            host=N8N_PG_HOST,
+            port=N8N_PG_PORT,
+            user=N8N_PG_USER,
+            password=N8N_PG_PASSWORD,
+            dbname=N8N_PG_DATABASE,
+            connect_timeout=5,
+        )
+    except Exception as e:
+        print(f"[sync] n8n Postgres connect failed: {e}")
+        return []
+
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT id, name, type, data
+                FROM credentials_entity
+                ORDER BY name
+            """)
+            rows = cur.fetchall()
+    except Exception as e:
+        print(f"[sync] n8n Postgres query failed: {e}")
+        return []
+    finally:
+        conn.close()
+
+    envelopes = []
+    for row in rows:
+        # n8n stores the data column as a JSON-encoded ciphertext
+        # string (e.g. `"U2FsdGVkX1+..."`). The outer JSON quotes are
+        # part of the stored value; strip them so decrypt gets the raw
+        # base64 ciphertext.
+        raw = row.get("data") or ""
+        if isinstance(raw, str) and len(raw) >= 2 and raw[0] == '"' and raw[-1] == '"':
+            raw = raw[1:-1]
+        envelopes.append({
+            "id": row["id"],
+            "name": row["name"],
+            "type": row["type"],
+            "data": raw,
+            "isGlobal": False,  # column not loaded; m9m tolerates default
+        })
+    print(f"[sync] fetched {len(envelopes)} credentials from n8n Postgres")
+    return envelopes
 
 
 def push_credential_to_m9m(cred_envelope, source="manual"):

@@ -3,3 +3,8 @@ uvicorn[standard]>=0.27
 # cryptography is required for decrypting n8n's AES-256-CBC credential
 # envelopes during sync. Same algorithm as internal/credentials/n8n_cipher.go.
 cryptography>=42.0
+# psycopg2 reads credentials directly from n8n's Postgres database
+# because n8n's REST API strips the encrypted `data` field from its
+# responses (writeOnly per the OpenAPI spec). The bridge decrypts
+# the rows locally before pushing the plaintext envelope to m9m.
+psycopg2-binary>=2.9
