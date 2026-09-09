@@ -171,7 +171,32 @@ const flowNodes = computed(() => {
   })
 })
 
-const flowEdges = computed(() => buildFlowEdges(workflow.value as Workflow | null))
+const flowEdges = computed(() => {
+  const base = buildFlowEdges(workflow.value as Workflow | null)
+  return base.map((e) => {
+    const sourceName = workflow.value?.nodes.find((n) => n.id === e.source)?.name
+    const targetName = workflow.value?.nodes.find((n) => n.id === e.target)?.name
+    const sourceState = sourceName ? nodeStates.value.get(sourceName) : undefined
+    const targetState = targetName ? nodeStates.value.get(targetName) : undefined
+    let stroke = '#94a3b8' // neutral slate-400 for pending/default
+    let animated = false
+    if (sourceState === 'success' && targetState !== 'skipped') {
+      stroke = '#22c55e' // green-500
+    } else if (sourceState === 'failed' || targetState === 'failed') {
+      stroke = '#ef4444' // red-500
+    } else if (sourceState === 'running' || targetState === 'running') {
+      stroke = '#3b82f6' // blue-500
+      animated = true
+    } else if (targetState === 'skipped') {
+      stroke = '#cbd5e1' // slate-300
+    }
+    return {
+      ...e,
+      animated,
+      style: { ...(e.style ?? {}), stroke, strokeWidth: 2.5 },
+    }
+  })
+})
 
 const selectedNodeId = computed<string | null>(() => {
   if (!selectedNodeName.value || !workflow.value) return null
@@ -656,12 +681,14 @@ function downloadData() {
         <VueFlow
           :nodes="flowNodes"
           :edges="flowEdges"
-          :default-viewport="{ x: 100, y: 100, zoom: 0.8 }"
-          :min-zoom="0.2"
+          :default-viewport="{ x: 100, y: 100, zoom: 1 }"
+          :min-zoom="0.3"
           :max-zoom="2"
           :nodes-draggable="false"
           :nodes-connectable="false"
           :elements-selectable="true"
+          fit-view-on-init
+          :fit-view-on-init-options="{ padding: 0.25, minZoom: 0.7, maxZoom: 1.2, includeHiddenNodes: false }"
           @node-click="onNodeClick"
         >
           <Background :pattern-color="'#cbd5e1'" :gap="20" />
@@ -946,5 +973,17 @@ function downloadData() {
   outline: 3px solid rgb(99 102 241);
   outline-offset: 2px;
   border-radius: 8px;
+}
+
+/* Edge path styles. Vue Flow renders the SVG stroke from the
+ * per-edge `style.stroke` we set in flowEdges, but we also need to
+ * override the default fill / opacity rules so dark-mode edges
+ * stay visible. */
+.vue-flow__edge-path {
+  fill: none;
+}
+
+.vue-flow__edge.selected .vue-flow__edge-path {
+  stroke-width: 3;
 }
 </style>

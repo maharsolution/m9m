@@ -81,7 +81,7 @@ const deleteNode = (event: MouseEvent) => {
 <template>
   <div
     :class="[
-      'workflow-node min-w-[180px] max-w-[220px]',
+      'workflow-node min-w-[200px] max-w-[260px] min-h-[80px]',
       categoryStyles.border,
       'border-l-4',
       selected ? 'selected' : ''

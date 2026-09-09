@@ -333,8 +333,20 @@ export function buildFlowEdges(workflow: Workflow | null): Edge[] {
           target: targetNode.id,
           sourceHandle: `output-${outputIndex}`,
           targetHandle: `input-${connection.index}`,
+          // Vue Flow's default-edge-style is the most reliable way to
+          // paint edges across themes; the SVG `stroke` value here is
+          // a literal colour, NOT a CSS var (vars resolve to RGB
+          // triplets in our main.css but SVG stroke can't parse them
+          // without `rgb(...)` wrapping, which Vue Flow doesn't add).
+          // Use a neutral slate-400 grey that works in light + dark
+          // themes. The selected edge picks up primary-500 via the
+          // `.vue-flow__edge.selected` rule in WorkflowCanvas.
           animated: false,
-          style: { stroke: 'var(--color-connection)' },
+          type: 'default',
+          style: {
+            stroke: '#94a3b8',
+            strokeWidth: 2,
+          },
         })
       })
     })

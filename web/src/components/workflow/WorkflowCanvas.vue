@@ -106,9 +106,34 @@ const onDrop = (event: DragEvent) => {
     y: event.clientY - top,
   })
 
+  // Ensure a unique node `name` (used as the connections map key).
+  // If two nodes of the same type end up with the same name, the
+  // connections map collapses them into one entry and Vue Flow
+  // can't draw the right edge.
+  //
+  // Naming convention follows n8n's UI: the first instance keeps
+  // the bare display name ("HTTP Request"), and subsequent
+  // duplicates get a numeric suffix with no space
+  // ("HTTP Request1", "HTTP Request2"). This matches what the
+  // sync-service/sync.py bridge pushes in for workflows imported
+  // from n8n — i.e. what n8n's API returns for nodes duplicated
+  // inside its own editor — so a workflow built in the m9m UI
+  // and a workflow imported from n8n produce the same connection
+  // keys, and round-tripping through sync.py doesn't break
+  // anything.
+  const baseName = nodeTypeInfo.displayName
+  const existingNames = new Set(
+    (workflowStore.currentWorkflow?.nodes ?? []).map((n) => n.name)
+  )
+  let name = baseName
+  let counter = 1
+  while (existingNames.has(name)) {
+    name = `${baseName}${counter++}`
+  }
+
   const newNode: WorkflowNode = {
     id: `node_${Date.now()}`,
-    name: nodeTypeInfo.displayName,
+    name,
     type: nodeType,
     typeVersion: nodeTypeInfo.version,
     position: [position.x, position.y],
