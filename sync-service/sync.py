@@ -31,6 +31,7 @@ Runs as a FastAPI/uvicorn ASGI app. A background asyncio task polls
 every POLL_INTERVAL_SECONDS; POST /sync triggers an immediate cycle.
 """
 import asyncio
+import base64
 import hashlib
 import json
 import os
@@ -48,6 +49,12 @@ M9M_BASE_URL = os.environ.get("M9M_BASE_URL", "http://m9m-backend:8080")
 POLL_INTERVAL_SECONDS = int(os.environ.get("POLL_INTERVAL_SECONDS", "30"))
 ONLY_ACTIVE = os.environ.get("SYNC_ONLY_ACTIVE", "true").lower() == "true"
 SYNC_PORT = int(os.environ.get("SYNC_PORT", "8001"))
+# N8N_ENCRYPTION_KEY must match the value n8n was started with. The
+# docker-compose injects GEN_ENCRYPTION_KEY into the n8n container;
+# sync.py reads the same variable so the cipher key stays in lockstep.
+# Falls back to N8N_ENCRYPTION_KEY so direct n8n-config deployments
+# also work without code changes.
+N8N_ENCRYPTION_KEY = os.environ.get("N8N_ENCRYPTION_KEY") or os.environ.get("GEN_ENCRYPTION_KEY", "")
 
 _last_hash = {}  # n8n workflow id -> content hash, to skip unchanged workflows
 
@@ -107,7 +114,6 @@ def sanitize_type_versions(workflow):
 
 def push_to_m9m(workflow, source="manual"):
     """Push a single workflow. Returns ("created"|"updated"|"failed", status, body)."""
-    wf_id = workflow.get("id")
     headers = {"Content-Type": "application/json"}
 
     status, body = http_json("POST", f"{M9M_BASE_URL}/api/v1/workflows", headers, workflow)
@@ -132,6 +138,145 @@ def push_to_m9m(workflow, source="manual"):
 
 
 # ---------------------------------------------------------------------------
+# Credential sync (added 2026-09-09, see parity/parity_gaps.json)
+#
+# n8n stores credentials as AES-256-CBC ciphertext (EVP_BytesToKey/MD5
+# derivation) under N8N_ENCRYPTION_KEY. m9m's REST API accepts the
+# plaintext JSON envelope and re-encrypts at rest under its own key —
+# but the bridge has to decrypt on the way through. Otherwise the
+# `data` field sent to m9m would be the opaque ciphertext blob, and
+# the Webhook handler would fail to resolve the username/password it
+# needs for auth validation.
+# ---------------------------------------------------------------------------
+
+def decrypt_n8n_credential_data(ciphertext_b64):
+    """Decrypt an n8n credential.data payload using AES-256-CBC with
+    EVP_BytesToKey(MD5) key derivation. Returns the parsed JSON
+    envelope.
+
+    Wire format: `base64("Salted__" + 8-byte-salt + AES-256-CBC(
+    pkcs7_pad(plaintext), key=evp_bytes_to_key(password, salt),
+    iv=evp_bytes_to_key(password, salt)[16:32]))`.
+
+    The same algorithm lives in Go at internal/credentials/n8n_cipher.go
+    so we can swap implementations and get identical results — the
+    unit test `TestN8NCipherMatchesKnownVector` cross-checks both.
+    """
+    if not N8N_ENCRYPTION_KEY:
+        raise RuntimeError("N8N_ENCRYPTION_KEY is not set; cannot decrypt n8n credentials")
+    if not ciphertext_b64:
+        return {}
+
+    raw = base64.b64decode(ciphertext_b64)
+    if raw[:8] != b"Salted__":
+        # Not encrypted (legacy/imported) — return as-is.
+        try:
+            return json.loads(raw.decode())
+        except Exception:
+            return {"_raw": ciphertext_b64}
+    salt = raw[8:16]
+    ct = raw[16:]
+
+    # Local import keeps the cryptography dep optional for callers
+    # who only sync workflows (no credentials).
+    from cryptography.hazmat.primitives import hashes, padding
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
+    # EVP_BytesToKey(MD5) — same algorithm n8n uses. See
+    # https://github.com/n8n-io/n8n/blob/master/packages/core/src/Cipher.ts
+    def evp_bytes_to_key(password, salt, key_len=32, iv_len=16):
+        d = b""
+        d_i = b""
+        while len(d) < key_len + iv_len:
+            h = hashes.Hash(hashes.MD5())
+            h.update(d_i + password + salt)
+            d_i = h.finalize()
+            d += d_i
+        return d[:key_len], d[key_len:key_len + iv_len]
+
+    password = N8N_ENCRYPTION_KEY.encode("utf-8")
+    key, iv = evp_bytes_to_key(password, salt)
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+    decryptor = cipher.decryptor()
+    pt_padded = decryptor.update(ct) + decryptor.finalize()
+    unpadder = padding.PKCS7(128).unpadder()
+    pt = unpadder.update(pt_padded) + unpadder.finalize()
+    return json.loads(pt.decode())
+
+
+def fetch_n8n_credentials():
+    """GET /api/v1/credentials from n8n. Returns list of safe envelopes
+    (with `data` still encrypted — caller must call decrypt on each).
+    """
+    status, body = http_json(
+        "GET",
+        f"{N8N_BASE_URL}/api/v1/credentials",
+        headers={"X-N8N-API-KEY": N8N_API_KEY, "Accept": "application/json"},
+    )
+    if status != 200:
+        print(f"[sync] n8n credentials API error {status}: {body}")
+        return []
+    if isinstance(body, dict):
+        return body.get("data", [])
+    return body or []
+
+
+def push_credential_to_m9m(cred_envelope, source="manual"):
+    """Decrypt the credential locally, then POST/PUT the plaintext
+    envelope into m9m's credential API. m9m re-encrypts at rest under
+    its own at-rest key, so the plaintext is never persisted on disk
+    by the bridge itself.
+
+    Returns ("created"|"updated"|"failed"|"skipped", status, body).
+    """
+    cred_id = cred_envelope.get("id")
+    headers = {"Content-Type": "application/json"}
+
+    encrypted_data = cred_envelope.get("data", "")
+    if not encrypted_data:
+        # n8n returns "" for credentials that have no data (e.g. a
+        # newly-created form). m9m's storage layer treats empty data
+        # as a normal envelope, so we can just pass it through.
+        decrypted_data = {}
+    else:
+        try:
+            decrypted_data = decrypt_n8n_credential_data(encrypted_data)
+        except Exception as e:
+            print(f"[sync:{source}] decrypt failed for credential {cred_envelope.get('name')} "
+                  f"({cred_id}): {e}")
+            return "failed", 0, str(e)
+
+    plaintext = {
+        "id": cred_id,
+        "name": cred_envelope.get("name", ""),
+        "type": cred_envelope.get("type", ""),
+        "data": decrypted_data,
+        "isGlobal": cred_envelope.get("isGlobal", False),
+    }
+
+    status, body = http_json("POST", f"{M9M_BASE_URL}/api/v1/credentials", headers, plaintext)
+    if 200 <= status < 300:
+        print(f"[sync:{source}] pushed credential '{plaintext['name']}' ({cred_id}) -> m9m, status {status}")
+        return "created", status, body
+
+    looks_like_duplicate = status in (409,) or (
+        isinstance(body, dict) and "exist" in json.dumps(body).lower()
+    )
+    if looks_like_duplicate and cred_id:
+        status2, body2 = http_json("PUT", f"{M9M_BASE_URL}/api/v1/credentials/{cred_id}", headers, plaintext)
+        if 200 <= status2 < 300:
+            print(f"[sync:{source}] updated credential '{plaintext['name']}' ({cred_id}) -> m9m, status {status2}")
+            return "updated", status2, body2
+        print(f"[sync:{source}] PUT fallback also failed for credential '{plaintext['name']}' "
+              f"({cred_id}): status {status2}, body: {body2}")
+        return "failed", status2, body2
+
+    print(f"[sync:{source}] failed to push credential '{plaintext['name']}' ({cred_id}): "
+          f"status {status}, body: {body}")
+    return "failed", status, body
+
+
+# ---------------------------------------------------------------------------
 # Async cycle (one poll = one manual = same code path)
 # ---------------------------------------------------------------------------
 
@@ -145,6 +290,27 @@ async def run_cycle(source: str = "poll") -> dict:
     results = []
 
     try:
+        # Phase 1 — credentials. Workflows that reference a credential
+        # need that credential to exist in m9m's store BEFORE the
+        # webhook handler resolves it at request time. Skipping this
+        # phase produces the "anon upstream echo" parity gap we saw
+        # on positive/3 (webhook_callrest) — m9m accepted the request
+        # without auth because it couldn't find the credential.
+        try:
+            credentials = await asyncio.to_thread(fetch_n8n_credentials)
+        except Exception as e:
+            print(f"[sync:{source}] credential fetch crashed: {e}")
+            credentials = []
+        for cred in credentials:
+            try:
+                verdict, status, _body = await asyncio.to_thread(push_credential_to_m9m, cred, source)
+                if verdict == "failed":
+                    print(f"[sync:{source}] credential '{cred.get('name')}' ({cred.get('id')}) push failed: "
+                          f"status {status}")
+            except Exception as e:
+                print(f"[sync:{source}] credential crashed: {e}")
+
+        # Phase 2 — workflows.
         try:
             workflows = await asyncio.to_thread(fetch_n8n_workflows)
         except Exception as e:

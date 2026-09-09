@@ -33,6 +33,16 @@ services:
       - POLL_INTERVAL_SECONDS=30
       - SYNC_ONLY_ACTIVE=true
       - SYNC_PORT=8001
+      # Credential sync: sync.py uses the same key as n8n to decrypt
+      # `credentials_entity.data` blobs on its way through to m9m's
+      # REST API. The two env vars are aliases of each other in n8n's
+      # own config (n8n reads GEN_ENCRYPTION_KEY first, then
+      # N8N_ENCRYPTION_KEY); we mirror that order here so a single
+      # source of truth in .env (GEN_ENCRYPTION_KEY) feeds both
+      # containers without copy-paste drift. See
+      # parity/parity_gaps.json GAP-2026-09-09-2.
+      - GEN_ENCRYPTION_KEY=${GEN_ENCRYPTION_KEY:-Default_Secure_Key_Change_Me_!!!}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-${GEN_ENCRYPTION_KEY:-Default_Secure_Key_Change_Me_!!!}}
     volumes:
       - m9m_backend_storage:/app/data
 

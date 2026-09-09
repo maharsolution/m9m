@@ -1,2 +1,5 @@
 fastapi>=0.110
 uvicorn[standard]>=0.27
+# cryptography is required for decrypting n8n's AES-256-CBC credential
+# envelopes during sync. Same algorithm as internal/credentials/n8n_cipher.go.
+cryptography>=42.0
