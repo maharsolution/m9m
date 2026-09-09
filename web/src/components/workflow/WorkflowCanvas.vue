@@ -156,8 +156,10 @@ const getMinimapNodeColor = (node: Node) => {
       :max-zoom="2"
       :snap-to-grid="true"
       :snap-grid="[20, 20]"
-      :connection-radius="30"
+      :connection-radius="60"
       :elevate-edges-on-select="true"
+      :connection-line-style="{ stroke: '#6366f1', strokeWidth: 2 }"
+      :default-edge-options="{ style: { stroke: '#94a3b8', strokeWidth: 2 } }"
       fit-view-on-init
       class="bg-[#f5f5f7] dark:bg-slate-900"
     >
@@ -217,8 +219,19 @@ const getMinimapNodeColor = (node: Node) => {
 }
 
 .vue-flow__handle {
-  @apply w-3 h-3 !bg-slate-400 dark:!bg-slate-500 !border-2 !border-white dark:!border-slate-800;
+  @apply w-4 h-4 !bg-slate-400 dark:!bg-slate-500 !border-2 !border-white dark:!border-slate-800;
   @apply transition-all duration-150;
+  /* Invisible larger hit-area: keeps the visual handle small but makes
+     pointerdown/move more forgiving. Vue Flow measures the connection
+     line against the visible handle, not the hit-area. */
+  position: relative;
+}
+
+.vue-flow__handle::before {
+  content: '';
+  position: absolute;
+  inset: -10px;
+  /* transparent hit-target — no visual change */
 }
 
 .vue-flow__handle:hover {

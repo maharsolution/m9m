@@ -220,7 +220,7 @@ const deleteNode = (event: MouseEvent) => {
  * aim. The hit area does not shift the visual dot.
  */
 .connection-handle {
-  @apply !w-3.5 !h-3.5 rounded-full;
+  @apply !w-4 !h-4 rounded-full;
   @apply !bg-slate-400 dark:!bg-slate-500;
   @apply !border-2 !border-white dark:!border-slate-800;
   @apply transition-all duration-150;
