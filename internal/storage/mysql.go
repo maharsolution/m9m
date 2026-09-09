@@ -161,8 +161,17 @@ func (s *MySQLStorage) initSchema() error {
 		"VARCHAR(255) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'"); err != nil {
 		return err
 	}
-	return ensureColumn(s.db, "executions", "workspace_id",
-		"VARCHAR(255) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'")
+	if err := ensureColumn(s.db, "executions", "workspace_id",
+		"VARCHAR(255) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'"); err != nil {
+		return err
+	}
+	// node_data: per-node input/output snapshot used by the n8n-style
+	// execution detail view. Stored as JSON so it survives across engine
+	// upgrades without altering the column type.
+	if err := ensureColumn(s.db, "executions", "node_data", "JSON"); err != nil {
+		return err
+	}
+	return nil
 }
 
 // --- Workflow operations ---

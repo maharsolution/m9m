@@ -129,8 +129,17 @@ func (s *PostgresStorage) initSchema() error {
 		"VARCHAR(255) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'"); err != nil {
 		return err
 	}
-	return ensureColumn(s.db, "executions", "workspace_id",
-		"VARCHAR(255) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'")
+	if err := ensureColumn(s.db, "executions", "workspace_id",
+		"VARCHAR(255) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'"); err != nil {
+		return err
+	}
+	// node_data: per-node input/output snapshot used by the n8n-style
+	// execution detail view. JSONB gives indexed access in case the
+	// Performance page wants to query specific node states later.
+	if err := ensureColumn(s.db, "executions", "node_data", "JSONB"); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Workflow operations
