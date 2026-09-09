@@ -536,6 +536,137 @@ func (s *MySQLStorage) DeleteExecution(id string) error {
 	return nil
 }
 
+// CountWorkflows returns the total workflow count matching filters.
+// Used by the Performance dashboard.
+func (s *MySQLStorage) CountWorkflows(filters WorkflowFilters) (int, error) {
+	var conditions []string
+	var args []interface{}
+
+	if filters.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filters.WorkspaceID)
+	}
+	if filters.Active != nil {
+		conditions = append(conditions, "active = ?")
+		args = append(args, *filters.Active)
+	}
+	if filters.Search != "" {
+		conditions = append(conditions, "LOWER(name) LIKE ?")
+		args = append(args, "%"+strings.ToLower(filters.Search)+"%")
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var count int
+	err := s.db.QueryRow(
+		"SELECT COUNT(*) FROM workflows "+whereClause, args...,
+	).Scan(&count)
+	return count, err
+}
+
+// CountExecutions returns the total execution count matching filters.
+// Drives the "Total Executions" metric on the Performance page.
+func (s *MySQLStorage) CountExecutions(filters ExecutionFilters) (int, error) {
+	var conditions []string
+	var args []interface{}
+
+	if filters.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filters.WorkspaceID)
+	}
+	if filters.WorkflowID != "" {
+		conditions = append(conditions, "workflow_id = ?")
+		args = append(args, filters.WorkflowID)
+	}
+	if filters.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filters.Status)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	var count int
+	err := s.db.QueryRow(
+		"SELECT COUNT(*) FROM executions "+whereClause, args...,
+	).Scan(&count)
+	return count, err
+}
+
+// RecentExecutions returns up to `limit` executions (default 200) most
+// recently started, for the Performance page to compute avg duration
+// and success rate.
+func (s *MySQLStorage) RecentExecutions(filters ExecutionFilters, limit int) ([]*model.WorkflowExecution, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+
+	var conditions []string
+	var args []interface{}
+
+	if filters.WorkspaceID != "" {
+		conditions = append(conditions, "workspace_id = ?")
+		args = append(args, filters.WorkspaceID)
+	}
+	if filters.WorkflowID != "" {
+		conditions = append(conditions, "workflow_id = ?")
+		args = append(args, filters.WorkflowID)
+	}
+	if filters.Status != "" {
+		conditions = append(conditions, "status = ?")
+		args = append(args, filters.Status)
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, error
+		FROM executions %s
+		ORDER BY started_at DESC
+		LIMIT ?
+	`, whereClause)
+
+	args = append(args, limit)
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var executions []*model.WorkflowExecution
+	for rows.Next() {
+		var execution model.WorkflowExecution
+		var dataJSON []byte
+		var errorText sql.NullString
+		var finishedAt sql.NullTime
+
+		if err := rows.Scan(
+			&execution.ID, &execution.WorkflowID, &execution.WorkspaceID,
+			&execution.Status, &execution.Mode, &execution.StartedAt,
+			&finishedAt, &dataJSON, &errorText,
+		); err != nil {
+			continue
+		}
+		if finishedAt.Valid {
+			execution.FinishedAt = &finishedAt.Time
+		}
+		_ = json.Unmarshal(dataJSON, &execution.Data)
+		if errorText.Valid && errorText.String != "" {
+			execution.Error = fmt.Errorf("%s", errorText.String)
+		}
+		executions = append(executions, &execution)
+	}
+	return executions, nil
+}
+
 // --- Credential operations ---
 
 func (s *MySQLStorage) SaveCredential(credential *Credential) error {

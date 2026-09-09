@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -273,6 +274,90 @@ func (s *MemoryStorage) DeleteExecution(id string) error {
 
 	delete(s.executions, id)
 	return nil
+}
+
+// CountWorkflows returns the number of workflows matching filters,
+// ignoring pagination. Used by the Performance dashboard for the
+// "active workflows" total.
+func (s *MemoryStorage) CountWorkflows(filters WorkflowFilters) (int, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	count := 0
+	for _, w := range s.workflows {
+		if filters.WorkspaceID != "" && w.WorkspaceID != filters.WorkspaceID {
+			continue
+		}
+		if filters.Active != nil && w.Active != *filters.Active {
+			continue
+		}
+		if filters.Search != "" {
+			needle := strings.ToLower(filters.Search)
+			if !strings.Contains(strings.ToLower(w.Name), needle) {
+				continue
+			}
+		}
+		count++
+	}
+	return count, nil
+}
+
+// CountExecutions returns the total number of executions matching the
+// filters, ignoring pagination. Drives the "Total Executions" metric.
+func (s *MemoryStorage) CountExecutions(filters ExecutionFilters) (int, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	count := 0
+	for _, e := range s.executions {
+		if filters.WorkspaceID != "" && e.WorkspaceID != filters.WorkspaceID {
+			continue
+		}
+		if filters.WorkflowID != "" && e.WorkflowID != filters.WorkflowID {
+			continue
+		}
+		if filters.Status != "" && e.Status != filters.Status {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
+// RecentExecutions returns up to `limit` executions matching the filters,
+// most-recent-first by StartedAt. The caller computes avg duration and
+// success rate from this slice — limit=200 keeps that math cheap.
+func (s *MemoryStorage) RecentExecutions(filters ExecutionFilters, limit int) ([]*model.WorkflowExecution, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if limit <= 0 {
+		limit = 200
+	}
+
+	var matching []*model.WorkflowExecution
+	for _, e := range s.executions {
+		if filters.WorkspaceID != "" && e.WorkspaceID != filters.WorkspaceID {
+			continue
+		}
+		if filters.WorkflowID != "" && e.WorkflowID != filters.WorkflowID {
+			continue
+		}
+		if filters.Status != "" && e.Status != filters.Status {
+			continue
+		}
+		matching = append(matching, e)
+	}
+
+	// Sort descending by StartedAt (newest first).
+	sort.Slice(matching, func(i, j int) bool {
+		return matching[i].StartedAt.After(matching[j].StartedAt)
+	})
+
+	if len(matching) > limit {
+		matching = matching[:limit]
+	}
+	return matching, nil
 }
 
 // Credential operations

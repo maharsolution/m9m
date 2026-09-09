@@ -152,7 +152,7 @@ const getMinimapNodeColor = (node: Node) => {
       :edges="flowEdges"
       :node-types="nodeTypes"
       :default-viewport="{ x: 100, y: 100, zoom: 1 }"
-      :min-zoom="0.1"
+      :min-zoom="0.2"
       :max-zoom="2"
       :snap-to-grid="true"
       :snap-grid="[20, 20]"
@@ -160,6 +160,7 @@ const getMinimapNodeColor = (node: Node) => {
       :elevate-edges-on-select="true"
       :connection-line-style="{ stroke: '#6366f1', strokeWidth: 3 }"
       :default-edge-options="{ style: { stroke: '#94a3b8', strokeWidth: 2 } }"
+      :fit-view-on-init-options="{ padding: 0.2, minZoom: 0.6, maxZoom: 1, includeHiddenNodes: false }"
       fit-view-on-init
       class="bg-[#f5f5f7] dark:bg-slate-900"
     >

@@ -34,6 +34,14 @@ type WorkflowStorage interface {
 	ListExecutions(filters ExecutionFilters) ([]*model.WorkflowExecution, int, error)
 	DeleteExecution(id string) error
 
+	// Aggregate metrics. The Performance page renders these directly, so
+	// the values must reflect the actual stored data — not random or
+	// hard-coded marketing numbers. Limit = 0 means "use a sensible
+	// default" (typically 200 recent rows for avg-latency math).
+	CountWorkflows(filters WorkflowFilters) (int, error)
+	CountExecutions(filters ExecutionFilters) (int, error)
+	RecentExecutions(filters ExecutionFilters, limit int) ([]*model.WorkflowExecution, error)
+
 	// Credential operations
 	SaveCredential(credential *Credential) error
 	GetCredential(id string) (*Credential, error)

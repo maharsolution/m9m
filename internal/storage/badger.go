@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -303,6 +304,133 @@ func (s *BadgerStorage) DeleteExecution(id string) error {
 	}
 
 	return s.raft.Apply(cmd)
+}
+
+// CountWorkflows returns the total workflow count matching filters.
+// Used by the Performance dashboard for the "active workflows" tile.
+func (s *BadgerStorage) CountWorkflows(filters WorkflowFilters) (int, error) {
+	count := 0
+	err := s.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchValues = false
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		prefix := []byte("workflow:")
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			_ = item.Value(func(val []byte) error {
+				var w model.Workflow
+				if err := json.Unmarshal(val, &w); err != nil {
+					return nil
+				}
+				if filters.WorkspaceID != "" && w.WorkspaceID != filters.WorkspaceID {
+					return nil
+				}
+				if filters.Active != nil && w.Active != *filters.Active {
+					return nil
+				}
+				if filters.Search != "" {
+					needle := strings.ToLower(filters.Search)
+					if !strings.Contains(strings.ToLower(w.Name), needle) {
+						return nil
+					}
+				}
+				count++
+				return nil
+			})
+		}
+		return nil
+	})
+	return count, err
+}
+
+// CountExecutions returns the total execution count matching filters.
+// Drives the "Total Executions" metric on the Performance page.
+func (s *BadgerStorage) CountExecutions(filters ExecutionFilters) (int, error) {
+	count := 0
+	err := s.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchValues = false
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		prefix := []byte("execution:")
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			_ = item.Value(func(val []byte) error {
+				var e model.WorkflowExecution
+				if err := json.Unmarshal(val, &e); err != nil {
+					return nil
+				}
+				if filters.WorkspaceID != "" && e.WorkspaceID != filters.WorkspaceID {
+					return nil
+				}
+				if filters.WorkflowID != "" && e.WorkflowID != filters.WorkflowID {
+					return nil
+				}
+				if filters.Status != "" && e.Status != filters.Status {
+					return nil
+				}
+				count++
+				return nil
+			})
+		}
+		return nil
+	})
+	return count, err
+}
+
+// RecentExecutions returns up to `limit` executions (default 200) most
+// recently started, for the Performance page to compute avg duration
+// and success rate.
+func (s *BadgerStorage) RecentExecutions(filters ExecutionFilters, limit int) ([]*model.WorkflowExecution, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+
+	var matching []*model.WorkflowExecution
+	err := s.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		prefix := []byte("execution:")
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+			_ = item.Value(func(val []byte) error {
+				var e model.WorkflowExecution
+				if err := json.Unmarshal(val, &e); err != nil {
+					return nil
+				}
+				if filters.WorkspaceID != "" && e.WorkspaceID != filters.WorkspaceID {
+					return nil
+				}
+				if filters.WorkflowID != "" && e.WorkflowID != filters.WorkflowID {
+					return nil
+				}
+				if filters.Status != "" && e.Status != filters.Status {
+					return nil
+				}
+				matching = append(matching, &e)
+				return nil
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort descending by StartedAt (newest first).
+	sort.Slice(matching, func(i, j int) bool {
+		return matching[i].StartedAt.After(matching[j].StartedAt)
+	})
+
+	if len(matching) > limit {
+		matching = matching[:limit]
+	}
+	return matching, nil
 }
 
 // Credential Operations

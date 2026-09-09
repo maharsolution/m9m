@@ -228,7 +228,10 @@ const deleteNode = (event: MouseEvent) => {
  * aim. The hit area does not shift the visual dot.
  */
 .connection-handle {
-  @apply !w-5 !h-5 rounded-full;
+  /* Logical (CSS) size — what users see at 100% zoom. The visible dot
+   * is intentionally larger than n8n's default so it stays grabbable
+   * even when fit-view-on-init scales the canvas down (0.6x = 17 px). */
+  @apply !w-7 !h-7 rounded-full;
   @apply !bg-slate-400 dark:!bg-slate-500;
   @apply !border-2 !border-white dark:!border-slate-800;
   @apply transition-all duration-150;
@@ -239,13 +242,15 @@ const deleteNode = (event: MouseEvent) => {
 /* Larger hit-area rendered as a child of <Handle>. By default it is
  * invisible; on hover or while another handle is being dragged it shows
  * a faint halo so users see where to drop. pointer-events: none keeps
- * drag initiation working. */
+ * drag initiation working. The 72px box gives ~36px of slop on every
+ * side which, even at 0.6x zoom, is still ~22 px — far above the
+ * usual ~5 px click target of an unscaled handle. */
 .handle-hit-area {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 48px;
-  height: 48px;
+  width: 72px;
+  height: 72px;
   transform: translate(-50%, -50%);
   border-radius: 9999px;
   background: transparent;
@@ -264,11 +269,12 @@ const deleteNode = (event: MouseEvent) => {
 }
 
 .connection-handle--input {
-  left: -10px !important;
+  /* Offset = half of 28px handle so the dot sits flush on the node edge. */
+  left: -14px !important;
 }
 
 .connection-handle--output {
-  right: -10px !important;
+  right: -14px !important;
 }
 
 .connection-handle:hover {

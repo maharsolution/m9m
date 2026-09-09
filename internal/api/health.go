@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/neul-labs/m9m/internal/storage"
 )
 
 func (s *APIServer) HealthCheck(w http.ResponseWriter, r *http.Request) {
@@ -225,33 +226,108 @@ func (s *APIServer) DetailedHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *APIServer) GetPerformanceStats(w http.ResponseWriter, r *http.Request) {
+	// Real metrics from storage. Everything here comes from saved workflows
+	// and executions — no hard-coded marketing numbers.
+	//
+	// We compute averages over up to 200 most-recent executions and use
+	// the full stored counts for "Total Executions" / "Active Workflows".
+	// Any failure (e.g. before storage is initialized) collapses to
+	// null values so the frontend can show "No data yet" instead of a
+	// random fallback.
+
+	metrics := map[string]interface{}{
+		"avgExecutionTime":  nil,
+		"successRate":       nil,
+		"totalExecutions":   0,
+		"activeWorkflows":   0,
+		"failedExecutions":  0,
+		"sampledExecutions": 0,
+		"sampleWindow":      "200 most recent",
+		"generatedAt":       time.Now().UTC().Format(time.RFC3339),
+	}
+
+	if s.storage == nil {
+		s.sendJSON(w, http.StatusOK, map[string]interface{}{
+			"metrics":     metrics,
+			"improvement": map[string]interface{}{},
+		})
+		return
+	}
+
+	// Active workflows = stored workflows with active == true.
+	activeTrue := true
+	activeWorkflows, err := s.storage.CountWorkflows(storage.WorkflowFilters{Active: &activeTrue})
+	if err == nil {
+		metrics["activeWorkflows"] = activeWorkflows
+	}
+
+	// Total executions (across all status values).
+	totalExec, err := s.storage.CountExecutions(storage.ExecutionFilters{})
+	if err == nil {
+		metrics["totalExecutions"] = totalExec
+	}
+
+	// Failed executions (status == "error" or "failed" — both spellings
+	// can appear depending on engine version).
+	failed := 0
+	for _, st := range []string{"error", "failed"} {
+		n, err := s.storage.CountExecutions(storage.ExecutionFilters{Status: st})
+		if err == nil {
+			failed += n
+		}
+	}
+	metrics["failedExecutions"] = failed
+
+	// Average duration + success rate from the last 200 executions.
+	recent, err := s.storage.RecentExecutions(storage.ExecutionFilters{}, 200)
+	if err == nil && len(recent) > 0 {
+		var totalMs float64
+		var withDuration int
+		var succeeded int
+		for _, e := range recent {
+			if e.FinishedAt != nil && !e.StartedAt.IsZero() {
+				dur := e.FinishedAt.Sub(e.StartedAt).Milliseconds()
+				if dur >= 0 {
+					totalMs += float64(dur)
+					withDuration++
+				}
+			}
+			if e.Status == "success" || e.Status == "completed" {
+				succeeded++
+			}
+		}
+		if withDuration > 0 {
+			avgMs := totalMs / float64(withDuration)
+			metrics["avgExecutionTime"] = map[string]interface{}{
+				"ms":          avgMs,
+				"display":     formatDuration(avgMs),
+				"sampleCount": withDuration,
+			}
+		}
+		metrics["sampledExecutions"] = len(recent)
+		metrics["successRate"] = map[string]interface{}{
+			"percent":     float64(succeeded) / float64(len(recent)) * 100,
+			"succeeded":   succeeded,
+			"sampleCount": len(recent),
+		}
+	}
+
 	s.sendJSON(w, http.StatusOK, map[string]interface{}{
-		"comparison": map[string]interface{}{
-			"m9m": map[string]interface{}{
-				"avgExecutionTime": "45ms",
-				"memoryUsage":      "150MB",
-				"startupTime":      "500ms",
-				"containerSize":    "300MB",
-			},
-			"n8n": map[string]interface{}{
-				"avgExecutionTime": "450ms",
-				"memoryUsage":      "512MB",
-				"startupTime":      "3000ms",
-				"containerSize":    "1200MB",
-			},
-		},
-		"improvement": map[string]interface{}{
-			"speed":     "10x faster",
-			"memory":    "70% less",
-			"startup":   "6x faster",
-			"container": "75% smaller",
-		},
-		"metrics": map[string]interface{}{
-			"workflowsExecuted":   0,
-			"nodesProcessed":      0,
-			"avgNodeLatency":      "5ms",
-			"circuitBreakerState": "closed",
-			"dlqSize":             0,
-		},
+		"metrics":     metrics,
+		"improvement": map[string]interface{}{},
 	})
+}
+
+// formatDuration converts a millisecond float into a human-readable
+// short string ("42ms", "1.2s", "1m 4s") for the Performance page.
+func formatDuration(ms float64) string {
+	if ms < 1000 {
+		return fmt.Sprintf("%.0fms", ms)
+	}
+	if ms < 60_000 {
+		return fmt.Sprintf("%.2fs", ms/1000)
+	}
+	minutes := int(ms / 60_000)
+	seconds := int((ms - float64(minutes)*60_000) / 1000)
+	return fmt.Sprintf("%dm %ds", minutes, seconds)
 }
