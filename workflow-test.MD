@@ -1,6 +1,6 @@
 # m9m ↔ n8n Webhook Parity Test Report
 
-_Last refreshed: 2026-09-08T04:27:57.635237Z_
+_Last refreshed: 2026-09-09T00:44:37.403210Z_
 
 This document is the canonical record of parity testing between n8n (port 5678) and m9m (port 8080) for webhook-triggered workflows. It is generated from the Google Sheet at [Validasi N8N - M9M](https://docs.google.com/spreadsheets/d/1PAz38gDk2Fa_6SlBtC3fWss3YfL_KgroEAwCpiY7aDQ) and from live API calls against both servers. Both this file and the sheet are kept in sync — `scripts/parity_orchestrator.py all` updates both.
 
@@ -61,8 +61,8 @@ Source: sheet `Webhook Controlling`. Cached details from `tmp/validation-2026-09
 | 2 | Webhooke use switch node Flow : Webhook -> switch(route) with condition | `{ "variable": "1"}` | `{"response":"OK"}` | `{"Response":"OK"}` | OK | 200 | responses match |
 | 3 | Webhook use http node with basic auth Flow : Webhook --> http code (basic auth) | `{ "variable": "1"}` | `{"Response":"OK"}` | `{"body":{"variable":"1"}}` | OK | 200 | responses match |
 | 4 | Webhook use set node Flow : Webhook -> Set | `{ "variable": "1"}` | `{"body":{"variable":"1"}}` | `[{"total":3}]` | OK | 200 | responses match |
-| 5 | Webhook use set node  (formula/helper/calucation) | `{ "varA": 1, "varB": 2}` | `[{"total":3}]` | `<?xml version="1.0" encoding="UTF-8"?> <buku id="001"><ha...` | OK | 200 | responses match |
-| 6 | Webhook use xml node ( xml to json & json to xml) | `<?xml version="1.0" encoding="UTF-8"?><buku id="001"><judul>Belajar Pemrogram...` | `<?xml version="1.0" encoding="UTF-8" standalone="yes"?> <...` | `[{"id":1,"name":"Andi","processedAt":null,"response":"suc...` | FAILED | 200 | **mismatch — investigate** |
+| 5 | Webhook use set node  (formula/helper/calucation) | `{ "varA": 1, "varB": 2}` | `[{"total":3}]` | `<?xml version="1.0" encoding="UTF-8"?> <buku id="001"><an...` | OK | 200 | responses match |
+| 6 | Webhook use xml node ( xml to json & json to xml) | `<?xml version="1.0" encoding="UTF-8"?><buku id="001"><judul>Belajar Pemrogram...` | `<?xml version="1.0" encoding="UTF-8" standalone="yes"?> <...` | `[{"id":1,"name":"Andi","processedAt":"2026-09-08","respon...` | OK | 200 | responses match |
 | 7 | Webhook use loop node ( webhook -> code (mock data) -> loop-> response all ) | `{     "operation": "start loop" }` | `[     {         "id": 1,         "name": "Andi",         ...` | `{"processed_orders":[{"batch_id":"BATCH-2026-001","client...` | OK | 200 | responses match |
 | 8 | webhook process batch order  ( webhook -> code validation -> if condition pay... | `{     "client_id": "CLIENT_001",     "batch_id": "BATCH-2026-001",     "inven...` | `{     "status": "COMPLETED",     "total_orders_passed": 1...` | `Webhook execution failed: workflow execution failed: inva...` | FAILED | 500 | **mismatch — investigate** |
 | 9 | webhook integrasi -> db (mysql \| postgresql)  webhook --> if code (mysql or p... | `{   "db_type" : "mysql",     "operation": "inquiry",     "table_name" : "cred...` | `[     {         "id": "cred_1788421061072353676_1",      ...` | `Webhook execution failed: workflow execution failed: inva...` | FAILED | 500 | **mismatch — investigate** |
@@ -113,7 +113,7 @@ Source: sheet `Webhook Controlling Negative Test`.
 | No | Webhook (n8n workflow) | Negative input | n8n response | m9m response | Status | HTTP | Pattern |
 |----|-----------------------|----------------|--------------|--------------|--------|------|---------|
 | 1 | webhook use code node  Flow : Webhook --> Code (java script) return mynewfiel... | `parameter di kirim tanpa petik` | `curl --location 'http://187.77.113.218:5678/webhook/webho...` | `{"Response":"Failed"}` | OK | 200 | — |
-| 2 | Webhooke use switch node Flow : Webhook -> switch(route) with condition | `_(empty)_` | `curl --location 'http://187.77.113.218:5678/webhook/simpl...` | `{"code":422,"message":"Failed to parse request body","hin...` | OK | 422 | — |
+| 2 | Webhooke use switch node Flow : Webhook -> switch(route) with condition | `_(empty)_` | `curl --location 'http://187.77.113.218:5678/webhook/simpl...` | `<?xml version="1.0" encoding="UTF-8"?> <buku id="001"><an...` | OK | 200 | — |
 | 3 | Webhook use http node with basic auth Flow : Webhook --> http code (basic auth) | `_(empty)_` | `curl --location 'http://187.77.113.218:5678/webhook/webho...` | `<?xml version="1.0" encoding="UTF-8"?> <buku id="001"><ha...` | OK | 200 | — |
 | 4 | Webhook use set node Flow : Webhook -> Set | `_(empty)_` | `curl --location 'http://187.77.113.218:5678/webhook/simpl...` | `<?xml version="1.0" encoding="UTF-8"?> <buku id="001"><ha...` | 200 | — | — |
 | 5 | Webhook use set node  (formula/helper/calucation) | `_(empty)_` | `curl --location 'http://187.77.113.218:5678/webhook/bocah...` | `curl --location 'http://187.77.113.218:8080/webhook/bocah...` | {"code":422,"message":"Failed to parse request body","hint":"invalid character 'a' looking for beginning of value"} | — | — |
@@ -178,7 +178,7 @@ Source: sheet `Capabilty Gap`.
 
 ## Section E — Auto-discovered Workflows (n8n API)
 
-_Pulled live via `GET /api/v1/workflows?limit=250` at 2026-09-08T04:27:57.635237Z._ n8n reports 13 workflows (12 active). m9m reports 18.
+_Pulled live via `GET /api/v1/workflows?limit=250` at 2026-09-09T00:44:37.403210Z._ n8n reports 13 workflows (12 active). m9m reports 18.
 
 | # | n8n id | Name | Active | Webhook? | Path | In m9m? | Sync gap |
 |---|--------|------|--------|----------|------|---------|----------|
@@ -224,5 +224,5 @@ Each parity iteration follows this loop (automated by `scripts/parity_orchestrat
 
 ## Section H — Current Snapshot Verdicts
 
-- Positive sheet rows: 10 (7 OK, 3 FAILED)
+- Positive sheet rows: 10 (8 OK, 2 FAILED)
 - Negative sheet rows: 7 (3 OK, 0 FAILED)
