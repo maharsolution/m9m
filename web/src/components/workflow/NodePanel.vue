@@ -1,11 +1,24 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { XMarkIcon, TrashIcon } from '@heroicons/vue/24/outline'
-import { useWorkflowEditorStore, useNodesStore } from '@/stores'
-import { getNodeCategory } from '@/types/node'
+import {
+  XMarkIcon,
+  TrashIcon,
+  KeyIcon,
+  PlusIcon,
+} from '@heroicons/vue/24/outline'
+import { useRouter } from 'vue-router'
+import {
+  useWorkflowEditorStore,
+  useNodesStore,
+  useCredentialsStore,
+} from '@/stores'
+import { getNodeCategory, getNodeCredentialTypes } from '@/types/node'
+import type { Credential } from '@/types/api'
 
 const workflowEditorStore = useWorkflowEditorStore()
 const nodesStore = useNodesStore()
+const credentialsStore = useCredentialsStore()
+const router = useRouter()
 
 const node = computed(() => workflowEditorStore.selectedNode)
 const nodeType = computed(() => {
@@ -19,14 +32,34 @@ const category = computed(() => {
 
 const localName = ref('')
 const localParameters = ref<Record<string, unknown>>({})
+// Mirror of `WorkflowNode.credentials` — id+name are required, type is
+// implicit from the map key. We cast through `any` because TS does not
+// narrow optional id with the dynamic key signature.
+const localCredentials = ref<Record<string, BoundCredential>>({})
 
 // Sync local state with selected node
-watch(node, (newNode) => {
-  if (newNode) {
-    localName.value = newNode.name
-    localParameters.value = { ...newNode.parameters }
-  }
-}, { immediate: true })
+watch(
+  node,
+  (newNode) => {
+    if (newNode) {
+      localName.value = newNode.name
+      localParameters.value = { ...newNode.parameters }
+      // The WorkflowNode.credentials map values are NodeCredential
+      // objects with an optional id; coerce to BoundCredential which
+      // requires id+name. n8n guarantees id+name are always present.
+      const source = (newNode.credentials ?? {}) as Record<
+        string,
+        { id?: string; name: string }
+      >
+      const next: LocalCredentialsMap = {}
+      for (const [k, v] of Object.entries(source)) {
+        if (v.id) next[k] = { id: v.id, name: v.name }
+      }
+      localCredentials.value = next
+    }
+  },
+  { immediate: true }
+)
 
 const close = () => {
   workflowEditorStore.clearSelection()
@@ -45,19 +78,91 @@ const updateName = () => {
 }
 
 const updateParameter = (key: string, value: unknown) => {
-  if (node.value) {
-    const newParams = { ...localParameters.value, [key]: value }
-    localParameters.value = newParams
-    workflowEditorStore.updateNode(node.value.id, { parameters: newParams })
+  if (!node.value) return
+  const newParams = { ...localParameters.value, [key]: value }
+  localParameters.value = newParams
+  workflowEditorStore.updateNode(node.value.id, { parameters: newParams })
+}
+
+// Credentials section — derives the supported credential types from the
+// static helper map and shows a select per type. The UI matches n8n's
+// node-side "Credential" picker: one dropdown per supported type, with a
+// "Create new" link that jumps to /credentials?type=<type>.
+const supportedCredentialTypes = computed<string[]>(() => {
+  if (!node.value) return []
+  return getNodeCredentialTypes(node.value.type)
+})
+
+const credentialsAvailable = computed(() => credentialsStore.credentials)
+
+type BoundCredential = { id: string; name: string }
+type LocalCredentialsMap = Record<string, BoundCredential>
+
+const setCredential = (credType: string, credId: string) => {
+  if (!node.value) return
+  if (!credId) {
+    workflowEditorStore.bindCredential(node.value.id, credType, null)
+    const next: LocalCredentialsMap = { ...localCredentials.value }
+    delete next[credType]
+    localCredentials.value = next
+    return
   }
+  const found = credentialsAvailable.value.find((c) => c.id === credId)
+  if (!found) return
+  const next: LocalCredentialsMap = {
+    ...localCredentials.value,
+    [credType]: { id: found.id, name: found.name },
+  }
+  localCredentials.value = next
+  workflowEditorStore.bindCredential(node.value.id, credType, {
+    id: found.id,
+    name: found.name,
+  })
+}
+
+const credentialLabel = (credType: string): string => {
+  const known: Record<string, string> = {
+    httpBasicAuth: 'Basic Auth',
+    httpHeaderAuth: 'Header Auth',
+    oAuth2Api: 'OAuth2 API',
+    apiKey: 'API Key',
+    postgres: 'Postgres',
+    mysql: 'MySQL',
+    slackApi: 'Slack API',
+    discord: 'Discord',
+    openAi: 'OpenAI',
+    anthropic: 'Anthropic',
+    jwtAuth: 'JWT Auth',
+    aws: 'AWS',
+    notion: 'Notion',
+    stripe: 'Stripe',
+    sendGrid: 'SendGrid',
+    twilio: 'Twilio',
+    smtp: 'SMTP',
+    googleApi: 'Google API',
+    github: 'GitHub',
+    gitlab: 'GitLab',
+    microsoftTeams: 'Microsoft Teams',
+  }
+  return known[credType] ?? credType
+}
+
+const goToCreateCredential = (credType: string) => {
+  router.push({ path: '/credentials', query: { newType: credType } })
 }
 
 const getCategoryColor = () => {
   switch (category.value) {
-    case 'trigger': return 'border-green-500'
-    case 'action': return 'border-indigo-500'
-    case 'transform': return 'border-amber-500'
-    default: return 'border-slate-500'
+    case 'trigger':
+      return 'border-green-500'
+    case 'action':
+      return 'border-indigo-500'
+    case 'transform':
+      return 'border-amber-500'
+    case 'flow':
+      return 'border-purple-500'
+    default:
+      return 'border-slate-500'
   }
 }
 </script>
@@ -92,6 +197,48 @@ const getCategoryColor = () => {
       <!-- Node Description -->
       <div v-if="nodeType?.description" class="text-sm text-slate-600 dark:text-slate-300">
         {{ nodeType.description }}
+      </div>
+
+      <!-- Credentials Section -->
+      <div v-if="supportedCredentialTypes.length > 0" class="space-y-3">
+        <div class="flex items-center gap-2">
+          <KeyIcon class="w-4 h-4 text-slate-500 dark:text-slate-400" />
+          <h4 class="font-medium text-slate-900 dark:text-white">
+            Credentials
+          </h4>
+        </div>
+        <div
+          v-for="credType in supportedCredentialTypes"
+          :key="credType"
+          class="space-y-1"
+        >
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            {{ credentialLabel(credType) }}
+            <span class="text-xs text-slate-400 ml-1">({{ credType }})</span>
+          </label>
+          <select
+            :value="localCredentials[credType]?.id ?? ''"
+            @change="setCredential(credType, ($event.target as HTMLSelectElement).value)"
+            class="input"
+          >
+            <option value="">— None —</option>
+            <option
+              v-for="c in credentialsAvailable.filter((c: Credential) => c.type === credType)"
+              :key="c.id"
+              :value="c.id"
+            >
+              {{ c.name }}
+            </option>
+          </select>
+          <button
+            type="button"
+            @click="goToCreateCredential(credType)"
+            class="text-xs text-primary-600 dark:text-primary-400 hover:underline flex items-center gap-1"
+          >
+            <PlusIcon class="w-3 h-3" />
+            Create new {{ credentialLabel(credType) }}
+          </button>
+        </div>
       </div>
 
       <!-- Parameters Section -->

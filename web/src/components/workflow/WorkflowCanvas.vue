@@ -64,11 +64,33 @@ onEdgesChange((changes) => {
 })
 
 onConnect((params: Connection) => {
-  if (params.source && params.target) {
-    const sourceOutput = parseInt(params.sourceHandle?.replace('output-', '') || '0')
-    const targetInput = parseInt(params.targetHandle?.replace('input-', '') || '0')
-    workflowEditorStore.addConnection(params.source, params.target, sourceOutput, targetInput)
+  if (!params.source || !params.target) return
+  // Vue Flow's Connection params use sourceHandle / targetHandle as the
+  // handle IDs we assigned in BaseNode.vue (`output-0` / `input-0`).
+  // When the user drops on the default handle (no specific handle ID),
+  // sourceHandle / targetHandle can be null — fall back to the first
+  // port of each side.
+  const parseHandle = (
+    raw: string | null | undefined,
+    prefix: 'input' | 'output'
+  ): number => {
+    if (!raw) return 0
+    const stripped = raw.replace(`${prefix}-`, '')
+    const n = parseInt(stripped, 10)
+    return Number.isNaN(n) ? 0 : n
   }
+  const sourceOutput = parseHandle(params.sourceHandle, 'output')
+  const targetInput = parseHandle(params.targetHandle, 'input')
+
+  // Don't allow self-connections
+  if (params.source === params.target) return
+
+  workflowEditorStore.addConnection(
+    params.source,
+    params.target,
+    sourceOutput,
+    targetInput
+  )
 })
 
 const onDrop = (event: DragEvent) => {
@@ -137,10 +159,10 @@ const getMinimapNodeColor = (node: Node) => {
       :connection-radius="30"
       :elevate-edges-on-select="true"
       fit-view-on-init
-      class="bg-slate-50 dark:bg-slate-900"
+      class="bg-[#f5f5f7] dark:bg-slate-900"
     >
       <Background
-        :pattern-color="'var(--color-canvas-grid)'"
+        :pattern-color="'#cbd5e1'"
         :gap="20"
       />
       <Controls

@@ -49,9 +49,13 @@ func (s *APIServer) RegisterRoutes(router *mux.Router) {
 
 	api.HandleFunc("/credentials", s.ListCredentials).Methods("GET", "OPTIONS")
 	api.HandleFunc("/credentials", s.CreateCredential).Methods("POST", "OPTIONS")
+	api.HandleFunc("/credentials/schema/{type}", s.GetCredentialSchema).Methods("GET", "OPTIONS")
 	api.HandleFunc("/credentials/{id}", s.GetCredential).Methods("GET", "OPTIONS")
 	api.HandleFunc("/credentials/{id}", s.UpdateCredential).Methods("PUT", "OPTIONS")
+	api.HandleFunc("/credentials/{id}", s.PatchCredential).Methods("PATCH", "OPTIONS")
 	api.HandleFunc("/credentials/{id}", s.DeleteCredential).Methods("DELETE", "OPTIONS")
+	api.HandleFunc("/credentials/{id}/test", s.TestCredential).Methods("POST", "OPTIONS")
+	api.HandleFunc("/credentials/{id}/transfer", s.TransferCredential).Methods("PUT", "OPTIONS")
 
 	api.HandleFunc("/node-types", s.ListNodeTypes).Methods("GET", "OPTIONS")
 	api.HandleFunc("/node-types/{name}", s.GetNodeType).Methods("GET", "OPTIONS")

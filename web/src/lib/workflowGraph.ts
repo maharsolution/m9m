@@ -298,6 +298,8 @@ export function buildFlowNodes(workflow: Workflow | null): Node[] {
       nodeType: node.type,
       parameters: node.parameters,
       category: getNodeCategory(node.type),
+      // Pass credentials through so BaseNode can render the badge.
+      credentials: node.credentials,
     },
     sourcePosition: Position.Right,
     targetPosition: Position.Left,

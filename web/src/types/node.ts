@@ -136,3 +136,72 @@ export function getNodeCategory(nodeType: string): NodeCategory {
   }
   return 'action'
 }
+
+/**
+ * getNodeCredentialTypes returns the credential-type names a node can be
+ * bound to. If the NodeType metadata exposed by the backend includes a
+ * `credentials` array, use that. Otherwise, fall back to a static map
+ * mirroring n8n's shipped nodes so the UI can render the bind UI without
+ * waiting for the backend to start returning the metadata.
+ *
+ * The map is keyed by the long n8n node-type name (e.g.
+ * `n8n-nodes-base.httpRequest`) but `getNodeCredentialTypes` also accepts
+ * the short name (`httpRequest`) for convenience.
+ */
+const NODE_CREDENTIAL_TYPE_MAP: Record<string, string[]> = {
+  // HTTP
+  'n8n-nodes-base.httpRequest': ['httpBasicAuth', 'httpHeaderAuth', 'oAuth2Api'],
+  // Databases
+  'n8n-nodes-base.postgres': ['postgres'],
+  'n8n-nodes-base.mySql': ['mySql'],
+  'n8n-nodes-base.sqlite': [],
+  'n8n-nodes-base.mongoDb': [],
+  'n8n-nodes-base.redis': [],
+  // AI / LLM
+  '@n8n/n8n-nodes-langchain.openAi': ['openAi'],
+  '@n8n/n8n-nodes-langchain.anthropic': ['anthropic'],
+  // Communication
+  'n8n-nodes-base.slack': ['slackApi', 'oAuth2Api'],
+  'n8n-nodes-base.discord': ['discord'],
+  'n8n-nodes-base.sendEmail': ['smtp'],
+  'n8n-nodes-base.sendGrid': ['sendGrid'],
+  'n8n-nodes-base.twilio': ['twilio'],
+  'n8n-nodes-base.microsoftTeams': ['microsoftTeams'],
+  // Productivity
+  'n8n-nodes-base.notion': ['notion'],
+  'n8n-nodes-base.stripe': ['stripe'],
+  'n8n-nodes-base.googleSheets': ['googleApi', 'oAuth2Api'],
+  // Webhook / trigger nodes
+  'n8n-nodes-base.webhook': ['httpBasicAuth', 'httpHeaderAuth', 'jwtAuth'],
+  // Other
+  'n8n-nodes-base.awsLambda': ['aws'],
+  'n8n-nodes-base.s3': ['aws'],
+  'n8n-nodes-base.gitlab': ['gitlab'],
+  'n8n-nodes-base.github': ['github'],
+  'n8n-nodes-base.elasticsearch': [],
+}
+
+export function getNodeCredentialTypes(nodeType: string): string[] {
+  // 1. Static map (most reliable in m9m since metadata is sparse).
+  if (NODE_CREDENTIAL_TYPE_MAP[nodeType]) {
+    return NODE_CREDENTIAL_TYPE_MAP[nodeType]
+  }
+  // 2. Allow short-name lookup (e.g. `httpRequest` -> `n8n-nodes-base.httpRequest`).
+  const longForm = `n8n-nodes-base.${nodeType}`
+  if (NODE_CREDENTIAL_TYPE_MAP[longForm]) {
+    return NODE_CREDENTIAL_TYPE_MAP[longForm]
+  }
+  return []
+}
+
+/**
+ * Returns the canonical long-form node-type name (e.g. `httpRequest` ->
+ * `n8n-nodes-base.httpRequest`). Used when we need to write back to the
+ * workflow JSON and the user typed a short name in some other tool.
+ */
+export function toLongNodeType(nodeType: string): string {
+  if (nodeType.startsWith('n8n-nodes-base.') || nodeType.startsWith('@n8n/')) {
+    return nodeType
+  }
+  return `n8n-nodes-base.${nodeType}`
+}

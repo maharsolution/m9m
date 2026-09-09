@@ -59,6 +59,11 @@ export interface Credential {
   id: string
   name: string
   type: string
+  isManaged?: boolean
+  isGlobal?: boolean
+  isResolvable?: boolean
+  resolvableAllowFallback?: boolean
+  resolverId?: string
   createdAt: string
   updatedAt: string
 }
@@ -67,6 +72,36 @@ export interface CredentialCreate {
   name: string
   type: string
   data: Record<string, unknown>
+  isGlobal?: boolean
+}
+
+export interface CredentialTestResult {
+  status: 'OK' | 'Error'
+  message: string
+}
+
+export interface CredentialSchemaPropertyOption {
+  name: string
+  value: string | number | boolean
+}
+
+export interface CredentialSchemaProperty {
+  name: string
+  displayName: string
+  type: 'string' | 'password' | 'number' | 'boolean' | 'options' | 'json'
+  required: boolean
+  default?: string | number | boolean | Record<string, unknown>
+  placeholder?: string
+  description?: string
+  options?: CredentialSchemaPropertyOption[]
+}
+
+export interface CredentialSchema {
+  type: string
+  displayName: string
+  properties: CredentialSchemaProperty[]
+  required: string[]
+  displayOptions?: Record<string, boolean>
 }
 
 export interface Tag {

@@ -1,6 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Credential, CredentialCreate } from '@/types/api'
+import type {
+  Credential,
+  CredentialCreate,
+  CredentialSchema,
+  CredentialTestResult,
+} from '@/types/api'
 import * as credentialsApi from '@/api/credentials'
 
 export const useCredentialsStore = defineStore('credentials', () => {
@@ -8,6 +13,10 @@ export const useCredentialsStore = defineStore('credentials', () => {
   const credentials = ref<Credential[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
+
+  // Schema cache keyed by credential type. null = not yet fetched.
+  // Missing key after fetch means the backend returned 404.
+  const schemaCache = ref<Record<string, CredentialSchema | null>>({})
 
   // Getters
   const credentialsByType = computed(() => {
@@ -24,6 +33,8 @@ export const useCredentialsStore = defineStore('credentials', () => {
   const credentialTypes = computed(() => {
     return [...new Set(credentials.value.map((c) => c.type))].sort()
   })
+
+  const count = computed(() => credentials.value.length)
 
   // Actions
   async function fetchCredentials() {
@@ -54,7 +65,10 @@ export const useCredentialsStore = defineStore('credentials', () => {
     }
   }
 
-  async function updateCredential(id: string, updates: Partial<CredentialCreate>) {
+  async function updateCredential(
+    id: string,
+    updates: Partial<CredentialCreate>
+  ) {
     loading.value = true
     error.value = null
     try {
@@ -86,6 +100,25 @@ export const useCredentialsStore = defineStore('credentials', () => {
     }
   }
 
+  async function fetchSchema(type: string): Promise<CredentialSchema | null> {
+    if (type in schemaCache.value) {
+      return schemaCache.value[type]
+    }
+    try {
+      const schema = await credentialsApi.getCredentialSchema(type)
+      schemaCache.value[type] = schema
+      return schema
+    } catch (e) {
+      // Unknown type: cache as null so we don't keep retrying.
+      schemaCache.value[type] = null
+      return null
+    }
+  }
+
+  async function testConnection(id: string): Promise<CredentialTestResult> {
+    return credentialsApi.testCredential(id)
+  }
+
   function getCredential(id: string): Credential | undefined {
     return credentials.value.find((c) => c.id === id)
   }
@@ -99,16 +132,20 @@ export const useCredentialsStore = defineStore('credentials', () => {
     credentials,
     loading,
     error,
+    schemaCache,
 
     // Getters
     credentialsByType,
     credentialTypes,
+    count,
 
     // Actions
     fetchCredentials,
     createCredential,
     updateCredential,
     deleteCredential,
+    fetchSchema,
+    testConnection,
     getCredential,
     getCredentialsByType,
   }

@@ -5,46 +5,69 @@ import {
   BoltIcon,
   PlayIcon,
   CheckCircleIcon,
-  XCircleIcon,
   ClockIcon,
+  KeyIcon,
 } from '@heroicons/vue/24/outline'
-import { useWorkflowStore, useExecutionStore } from '@/stores'
+import { useWorkflowStore, useExecutionStore, useCredentialsStore } from '@/stores'
 
 const router = useRouter()
 const workflowStore = useWorkflowStore()
 const executionStore = useExecutionStore()
+const credentialsStore = useCredentialsStore()
 
 onMounted(async () => {
   await Promise.all([
     workflowStore.fetchWorkflows({ limit: 5 }),
     executionStore.fetchExecutions({ limit: 10 }),
+    credentialsStore.fetchCredentials(),
   ])
+})
+
+// Count executions that started today (midnight-to-now, local time).
+const todayExecutions = computed(() => {
+  const start = new Date()
+  start.setHours(0, 0, 0, 0)
+  const startMs = start.getTime()
+  return executionStore.executions.filter(
+    (e) => new Date(e.startedAt).getTime() >= startMs
+  ).length
+})
+
+const failureRate = computed(() => {
+  const total = executionStore.executions.length
+  if (total === 0) return '0%'
+  const failed = executionStore.executionsByStatus.failed.length
+  return ((failed / total) * 100).toFixed(1) + '%'
 })
 
 const stats = computed(() => [
   {
-    name: 'Total Workflows',
-    value: workflowStore.total,
+    name: 'Active Workflows',
+    value: workflowStore.activeWorkflows.length,
+    subtitle: `${workflowStore.total} total`,
     icon: BoltIcon,
     color: 'bg-blue-500',
   },
   {
-    name: 'Active Workflows',
-    value: workflowStore.activeWorkflows.length,
+    name: 'Executions Today',
+    value: todayExecutions.value,
+    subtitle: `${executionStore.executions.length} total`,
     icon: PlayIcon,
     color: 'bg-green-500',
   },
   {
-    name: 'Successful',
-    value: executionStore.executionsByStatus.completed.length,
+    name: 'Failure Rate',
+    value: failureRate.value,
+    subtitle: `${executionStore.executionsByStatus.completed.length} succeeded`,
     icon: CheckCircleIcon,
     color: 'bg-emerald-500',
   },
   {
-    name: 'Failed',
-    value: executionStore.executionsByStatus.failed.length,
-    icon: XCircleIcon,
-    color: 'bg-red-500',
+    name: 'Credentials',
+    value: credentialsStore.count,
+    subtitle: `${credentialsStore.credentialTypes.length} types in use`,
+    icon: KeyIcon,
+    color: 'bg-amber-500',
   },
 ])
 
@@ -85,12 +108,15 @@ const getStatusColor = (status: string) => {
           <div :class="[stat.color, 'p-3 rounded-lg']">
             <component :is="stat.icon" class="w-6 h-6 text-white" />
           </div>
-          <div>
+          <div class="min-w-0">
             <p class="text-2xl font-bold text-slate-900 dark:text-white">
               {{ stat.value }}
             </p>
-            <p class="text-sm text-slate-500 dark:text-slate-400">
+            <p class="text-sm font-medium text-slate-700 dark:text-slate-300">
               {{ stat.name }}
+            </p>
+            <p v-if="stat.subtitle" class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {{ stat.subtitle }}
             </p>
           </div>
         </div>

@@ -71,9 +71,52 @@ export const useWorkflowEditorStore = defineStore('workflowEditor', () => {
       return
     }
 
+    // Special handling for `credentials`: merge instead of replace, so a
+    // caller can bind one credential type without dropping the others.
+    if (updates.credentials) {
+      const existing = workflow.nodes.find((n) => n.id === nodeId)
+      if (existing) {
+        updates = {
+          ...updates,
+          credentials: {
+            ...(existing.credentials ?? {}),
+            ...updates.credentials,
+          },
+        }
+      }
+    }
+
     if (updateNodeInWorkflow(workflow, nodeId, updates)) {
       isDirty.value = true
     }
+  }
+
+  /**
+   * Bind a credential to a node. Pass `null` for the credential id to
+   * unbind that type. Other credential types already bound to the node
+   * are preserved.
+   */
+  function bindCredential(
+    nodeId: string,
+    credType: string,
+    credential: { id: string; name: string } | null
+  ) {
+    const workflow = workflowStore.currentWorkflow
+    if (!workflow) return
+
+    const node = workflow.nodes.find((n) => n.id === nodeId)
+    if (!node) return
+
+    const next = { ...(node.credentials ?? {}) } as Record<
+      string,
+      { id?: string; name: string }
+    >
+    if (credential === null) {
+      delete next[credType]
+    } else {
+      next[credType] = { id: credential.id, name: credential.name }
+    }
+    updateNode(nodeId, { credentials: next as any })
   }
 
   function removeNode(nodeId: string) {
@@ -153,6 +196,7 @@ export const useWorkflowEditorStore = defineStore('workflowEditor', () => {
     addNode,
     updateNode,
     removeNode,
+    bindCredential,
     addConnection,
     removeConnection,
     selectNode,

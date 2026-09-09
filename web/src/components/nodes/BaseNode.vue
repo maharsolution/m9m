@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
+import { XMarkIcon, KeyIcon } from '@heroicons/vue/24/outline'
+import { useWorkflowEditorStore } from '@/stores'
 import type { NodeCategory } from '@/types'
 
 interface Props {
@@ -10,11 +12,13 @@ interface Props {
     nodeType: string
     category: NodeCategory
     parameters?: Record<string, unknown>
+    credentials?: Record<string, { id: string; name: string }>
   }
   selected?: boolean
 }
 
 const props = defineProps<Props>()
+const editorStore = useWorkflowEditorStore()
 
 const categoryStyles = computed(() => {
   switch (props.data.category) {
@@ -60,6 +64,18 @@ const nodeTypeName = computed(() => {
     .replace(/^./, (str) => str.toUpperCase())
     .trim()
 })
+
+const credentialCount = computed(() => {
+  return props.data.credentials
+    ? Object.keys(props.data.credentials).length
+    : 0
+})
+
+const deleteNode = (event: MouseEvent) => {
+  event.stopPropagation()
+  event.preventDefault()
+  editorStore.removeNode(props.id)
+}
 </script>
 
 <template>
@@ -82,6 +98,16 @@ const nodeTypeName = computed(() => {
       class="connection-handle connection-handle--input"
     />
 
+    <!-- Delete affordance (top-right, hover-reveal) -->
+    <button
+      @click="deleteNode"
+      title="Delete node"
+      class="node-delete-btn"
+      aria-label="Delete node"
+    >
+      <XMarkIcon class="w-3.5 h-3.5" />
+    </button>
+
     <!-- Node Content -->
     <div class="p-3">
       <div class="flex items-center gap-2">
@@ -98,7 +124,16 @@ const nodeTypeName = computed(() => {
         </div>
       </div>
 
-      <!-- Parameters preview (optional) -->
+      <!-- Credential badge -->
+      <div
+        v-if="credentialCount > 0"
+        class="mt-2 pt-2 border-t border-slate-200 dark:border-slate-600 flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300"
+      >
+        <KeyIcon class="w-3 h-3" />
+        <span>{{ credentialCount }} credential{{ credentialCount > 1 ? 's' : '' }}</span>
+      </div>
+
+      <!-- Parameters preview -->
       <div
         v-if="data.parameters && Object.keys(data.parameters).length > 0"
         class="mt-2 pt-2 border-t border-slate-200 dark:border-slate-600"
@@ -143,6 +178,39 @@ const nodeTypeName = computed(() => {
 
 .workflow-node.selected {
   @apply border-primary-500 dark:border-primary-400;
+}
+
+/* Delete button — top-right corner, hidden by default, revealed on hover. */
+.node-delete-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: #ef4444;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 120ms ease, transform 120ms ease;
+  z-index: 5;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  border: 2px solid white;
+}
+
+.workflow-node:hover .node-delete-btn,
+.workflow-node.selected .node-delete-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.node-delete-btn:hover {
+  background: #dc2626;
+  transform: scale(1.1);
 }
 
 /*

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   HomeIcon,
@@ -11,38 +12,60 @@ import {
   ChartBarIcon,
   CalendarDaysIcon,
 } from '@heroicons/vue/24/outline'
+import { useWorkflowStore, useCredentialsStore, useExecutionStore } from '@/stores'
 
 const route = useRoute()
 const router = useRouter()
+const workflowStore = useWorkflowStore()
+const credentialsStore = useCredentialsStore()
+const executionStore = useExecutionStore()
 
 interface NavItem {
   name: string
   path: string
   icon: typeof HomeIcon
-  badge?: string
+  badge?: 'count' | 'static'
+  staticBadge?: string
 }
 
 const navItems: NavItem[] = [
-  { name: 'Dashboard', path: '/', icon: HomeIcon },
-  { name: 'Workflows', path: '/workflows', icon: BoltIcon },
-  { name: 'Templates', path: '/templates', icon: DocumentDuplicateIcon, badge: 'New' },
-  { name: 'Executions', path: '/executions', icon: ClockIcon },
+  { name: 'Overview', path: '/', icon: HomeIcon },
+  { name: 'Workflows', path: '/workflows', icon: BoltIcon, badge: 'count' },
+  { name: 'Credentials', path: '/credentials', icon: KeyIcon, badge: 'count' },
+  { name: 'Executions', path: '/executions', icon: ClockIcon, badge: 'count' },
   { name: 'Schedules', path: '/schedules', icon: CalendarDaysIcon },
+  { name: 'Templates', path: '/templates', icon: DocumentDuplicateIcon, staticBadge: 'New' },
   { name: 'Performance', path: '/performance', icon: ChartBarIcon },
-  { name: 'Credentials', path: '/credentials', icon: KeyIcon },
   { name: 'Settings', path: '/settings', icon: Cog6ToothIcon },
 ]
 
+const counts = computed(() => ({
+  '/workflows': workflowStore.workflows.length,
+  '/credentials': credentialsStore.count,
+  '/executions': executionStore.executions.length,
+} as Record<string, number>))
+
 const isActive = (path: string) => {
-  if (path === '/') {
-    return route.path === '/'
-  }
+  if (path === '/') return route.path === '/'
   return route.path.startsWith(path)
 }
 
 const createNewWorkflow = () => {
   router.push('/workflows/new')
 }
+
+// Fetch counts on mount so the badges appear immediately.
+onMounted(async () => {
+  try {
+    await Promise.all([
+      workflowStore.fetchWorkflows({ limit: 1 }),
+      credentialsStore.fetchCredentials(),
+      executionStore.fetchExecutions({ limit: 1 }),
+    ])
+  } catch {
+    // Badges can render without counts; no error toast needed.
+  }
+})
 </script>
 
 <template>
@@ -86,11 +109,19 @@ const createNewWorkflow = () => {
       >
         <component :is="item.icon" class="w-5 h-5" />
         <span class="flex-1">{{ item.name }}</span>
+        <!-- Live count badge -->
         <span
-          v-if="item.badge"
+          v-if="item.badge === 'count' && counts[item.path] > 0"
+          class="text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded-full min-w-[20px] text-center"
+        >
+          {{ counts[item.path] }}
+        </span>
+        <!-- Static badge (e.g. "New" for templates) -->
+        <span
+          v-else-if="item.staticBadge"
           class="text-[10px] font-medium bg-violet-100 dark:bg-violet-900/50 text-violet-600 dark:text-violet-400 px-1.5 py-0.5 rounded"
         >
-          {{ item.badge }}
+          {{ item.staticBadge }}
         </span>
       </RouterLink>
     </nav>

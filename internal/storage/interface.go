@@ -82,12 +82,17 @@ type ExecutionFilters struct {
 	Limit       int
 }
 
-// Credential represents a stored credential
+// Credential represents a stored credential.
+//
+// IsGlobal is the project-scope flag n8n uses to share a credential
+// across all projects. m9m does not yet have a projects model — when it
+// lands, project_id will be added and IsGlobal will control sharing.
 type Credential struct {
 	ID        string                 `json:"id"`
 	Name      string                 `json:"name"`
 	Type      string                 `json:"type"`
 	Data      map[string]interface{} `json:"data"`
+	IsGlobal  bool                   `json:"isGlobal,omitempty"`
 	CreatedAt time.Time              `json:"createdAt"`
 	UpdatedAt time.Time              `json:"updatedAt"`
 }
