@@ -28,6 +28,7 @@ test-workflows/
 # Build artifacts
 /bin/
 /dist/
+/web/dist/
 *.exe
 *.exe~
 *.dll

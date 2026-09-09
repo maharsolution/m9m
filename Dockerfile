@@ -13,9 +13,12 @@ WORKDIR /web
 COPY web/package.json web/package-lock.json* ./
 RUN npm ci --no-audit --no-fund
 
-# Now copy the rest of the source and build.
+# Now copy the rest of the source and build. Defensively wipe any
+# pre-existing dist/ first — .dockerignore excludes web/dist from the
+# build context but we belt-and-braces it here so a stale dist can
+# never contaminate the freshly-built output.
 COPY web/ ./
-RUN npm run build
+RUN rm -rf dist && npm run build
 
 # Stage 2 — build the Go binary. The dist directory produced above is
 # the one //go:embed captures.
