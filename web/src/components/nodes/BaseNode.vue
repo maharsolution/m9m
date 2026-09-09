@@ -96,7 +96,13 @@ const deleteNode = (event: MouseEvent) => {
       :connectable="true"
       :is-connectable="true"
       class="connection-handle connection-handle--input"
-    />
+    >
+      <!-- Larger transparent hit-area — sits above the visible dot in
+           stacking order but does NOT capture pointer events (pointer-
+           events: none in CSS below). This lets users grab the handle
+           with ~40px of slop on either side without breaking drag. -->
+      <span class="handle-hit-area" aria-hidden="true" />
+    </Handle>
 
     <!-- Delete affordance (top-right, hover-reveal) -->
     <button
@@ -157,7 +163,9 @@ const deleteNode = (event: MouseEvent) => {
       :connectable="true"
       :is-connectable="true"
       class="connection-handle connection-handle--output"
-    />
+    >
+      <span class="handle-hit-area" aria-hidden="true" />
+    </Handle>
   </div>
 </template>
 
@@ -220,7 +228,7 @@ const deleteNode = (event: MouseEvent) => {
  * aim. The hit area does not shift the visual dot.
  */
 .connection-handle {
-  @apply !w-4 !h-4 rounded-full;
+  @apply !w-5 !h-5 rounded-full;
   @apply !bg-slate-400 dark:!bg-slate-500;
   @apply !border-2 !border-white dark:!border-slate-800;
   @apply transition-all duration-150;
@@ -228,33 +236,39 @@ const deleteNode = (event: MouseEvent) => {
   position: absolute;
 }
 
-.connection-handle::before {
-  content: '';
+/* Larger hit-area rendered as a child of <Handle>. By default it is
+ * invisible; on hover or while another handle is being dragged it shows
+ * a faint halo so users see where to drop. pointer-events: none keeps
+ * drag initiation working. */
+.handle-hit-area {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 28px;
-  height: 28px;
+  width: 48px;
+  height: 48px;
   transform: translate(-50%, -50%);
   border-radius: 9999px;
   background: transparent;
-  z-index: 1;
-  /*
-   * CRITICAL: without `pointer-events: none`, this enlarged hit target
-   * swallows the pointerdown event before it reaches the Vue Flow Handle,
-   * so drag-to-connect never starts. The pseudo-element must remain
-   * visually present for the larger hit area but transparent to pointer
-   * events — the parent Handle (which is 14x14) receives them instead.
-   */
   pointer-events: none;
+  transition: background-color 150ms ease;
+  z-index: 1;
+}
+
+.connection-handle:hover .handle-hit-area {
+  background: rgba(99, 102, 241, 0.15);
+}
+
+.vue-flow__handle-connecting .connection-handle .handle-hit-area,
+.connection-handle.vue-flow__handle-hot .handle-hit-area {
+  background: rgba(99, 102, 241, 0.25);
 }
 
 .connection-handle--input {
-  left: -7px !important;
+  left: -10px !important;
 }
 
 .connection-handle--output {
-  right: -7px !important;
+  right: -10px !important;
 }
 
 .connection-handle:hover {
