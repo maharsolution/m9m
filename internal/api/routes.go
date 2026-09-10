@@ -1,6 +1,11 @@
 package api
 
-import "github.com/gorilla/mux"
+import (
+	"net/http"
+
+	"github.com/gorilla/mux"
+	"github.com/neul-labs/m9m/internal/otel"
+)
 
 // RegisterRoutes registers all API routes.
 func (s *APIServer) RegisterRoutes(router *mux.Router) {
@@ -87,4 +92,22 @@ func (s *APIServer) RegisterRoutes(router *mux.Router) {
 	api.HandleFunc("/health/detailed", s.DetailedHealth).Methods("GET", "OPTIONS")
 	api.HandleFunc("/performance", s.GetPerformanceStats).Methods("GET", "OPTIONS")
 	api.HandleFunc("/push", s.HandleWebSocket).Methods("GET")
+
+	// OpenTelemetry config — read and write the OTLP pipeline settings
+	// from the UI. The handler is created lazily so routes can be
+	// registered even when OTEL is disabled; the handler returns 503
+	// in that case.
+	if s.otelStore != nil {
+		otelHandler := otel.NewAPIHandler(s.otelStore, s.otelManager)
+		api.HandleFunc("/otel", otelHandler.Get).Methods("GET", "OPTIONS")
+		api.HandleFunc("/otel", otelHandler.Put).Methods("PUT", "PATCH", "OPTIONS")
+		api.HandleFunc("/otel", otelHandler.Delete).Methods("DELETE", "OPTIONS")
+		api.HandleFunc("/otel/test", otelHandler.TestTrace).Methods("POST", "OPTIONS")
+	} else {
+		api.HandleFunc("/otel", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"error":"otel storage not initialised"}`))
+		}).Methods("GET", "PUT", "PATCH", "DELETE", "OPTIONS")
+	}
 }

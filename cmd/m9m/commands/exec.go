@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -339,7 +340,7 @@ func RegisterAllNodes(eng engine.WorkflowEngine) {
 	eng.RegisterNodeExecutor("n8n-nodes-base.executeWorkflow", core.NewExecuteWorkflowNode(
 		&core.EngineAdapter{
 			ExecuteFn: func(wf *model.Workflow, input []model.DataItem) ([]model.DataItem, error) {
-				result, err := eng.ExecuteWorkflow(wf, input)
+				result, err := engine.ExecuteWorkflowWithContext(context.Background(), eng, wf, input)
 				if err != nil {
 					return nil, err
 				}

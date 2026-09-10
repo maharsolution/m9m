@@ -49,6 +49,22 @@ type Workflow struct {
 	// in those cases. omitempty keeps the n8n-compatible JSON output
 	// unchanged for self-hosted users not using multi-tenancy.
 	WorkspaceID string `json:"workspaceId,omitempty"`
+
+	// ProjectID is the tenant project this workflow belongs to. Like
+	// WorkspaceID it is server-side metadata that n8n does not export,
+	// so omitempty keeps imports from n8n round-trip-clean.
+	//
+	// When set, the OTEL pipeline attaches it to the workflow.execute
+	// span as m9m.project.id (and project-level custom attributes get
+	// the m9m.project.custom.* prefix).
+	ProjectID string `json:"projectId,omitempty"`
+
+	// CustomSpanAttributes are exported onto the workflow.execute span
+	// under the m9m.workflow.custom.* prefix. Values must be strings —
+	// the engine validates them at write time. Empty in single-tenant
+	// deployments and on workflows imported from n8n, which uses
+	// workflow.settings instead.
+	CustomSpanAttributes map[string]string `json:"customSpanAttributes,omitempty"`
 }
 
 // Node represents an individual node in a workflow
@@ -63,6 +79,13 @@ type Node struct {
 	WebhookID   string                 `json:"webhookId,omitempty"`
 	Notes       string                 `json:"notes,omitempty"`
 	Disabled    *bool                  `json:"disabled,omitempty"`
+
+	// CustomSpanAttributes are exported onto the node.execute span
+	// under the m9m.node.custom.* prefix. Values may be expressions
+	// ("={{ $json.environment }}") that the engine evaluates at run
+	// time; primitive values (string / bool / number) are written as
+	// their natural type, anything else is coerced via fmt.Sprintf.
+	CustomSpanAttributes map[string]interface{} `json:"customSpanAttributes,omitempty"`
 }
 
 // Credential represents a credential used by a node

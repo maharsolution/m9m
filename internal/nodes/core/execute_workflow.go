@@ -1,17 +1,22 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 
+	"github.com/neul-labs/m9m/internal/engine"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
 )
 
 // WorkflowExecutor is the subset of engine.WorkflowEngine needed by this node.
+// We accept a context.Context so the sub-workflow.execute span chains
+// off the parent span as a child. The EngineAdapter below wraps the
+// legacy signature for back-compat.
 type WorkflowExecutor interface {
-	ExecuteWorkflow(workflow *model.Workflow, inputData []model.DataItem) (*WorkflowResult, error)
+	ExecuteWorkflowWithContext(ctx context.Context, workflow *model.Workflow, inputData []model.DataItem) (*WorkflowResult, error)
 }
 
 // WorkflowResult mirrors engine.ExecutionResult so we don't import the engine package.
@@ -25,13 +30,32 @@ type EngineAdapter struct {
 	ExecuteFn func(workflow *model.Workflow, inputData []model.DataItem) ([]model.DataItem, error)
 }
 
-// ExecuteWorkflow satisfies WorkflowExecutor.
-func (a *EngineAdapter) ExecuteWorkflow(workflow *model.Workflow, inputData []model.DataItem) (*WorkflowResult, error) {
+// ExecuteWorkflowWithContext satisfies WorkflowExecutor. The supplied
+// context is forwarded as-is, which lets the engine chain the inner
+// workflow.execute span onto the caller's trace.
+func (a *EngineAdapter) ExecuteWorkflowWithContext(ctx context.Context, workflow *model.Workflow, inputData []model.DataItem) (*WorkflowResult, error) {
 	data, err := a.ExecuteFn(workflow, inputData)
 	if err != nil {
 		return nil, err
 	}
 	return &WorkflowResult{Data: data}, nil
+}
+
+// EngineAdapterFromEngine wraps a real engine.WorkflowEngine so legacy
+// callers (registry code) keep working.
+func EngineAdapterFromEngine(eng engine.WorkflowEngine) *EngineAdapter {
+	return &EngineAdapter{
+		ExecuteFn: func(workflow *model.Workflow, inputData []model.DataItem) ([]model.DataItem, error) {
+			res, err := engine.ExecuteWorkflowWithContext(context.Background(), eng, workflow, inputData)
+			if err != nil {
+				return nil, err
+			}
+			if res != nil && res.Error != nil {
+				return res.Data, res.Error
+			}
+			return res.Data, nil
+		},
+	}
 }
 
 // ExecuteWorkflowNode loads and executes a sub-workflow.
@@ -55,8 +79,11 @@ func NewExecuteWorkflowNode(executor WorkflowExecutor) *ExecuteWorkflowNode {
 	}
 }
 
-// Execute loads and runs the sub-workflow.
-func (n *ExecuteWorkflowNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
+// ExecuteWithContext is the context-aware variant. We thread the
+// parent ctx through so the inner workflow.execute span chains onto
+// the outer span as a child. The legacy Execute delegates to
+// ExecuteWithContext with a fresh ctx.
+func (n *ExecuteWorkflowNode) ExecuteWithContext(ctx context.Context, inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
 	if n.executor == nil {
 		return nil, n.CreateError("no workflow engine configured", nil)
 	}
@@ -92,7 +119,7 @@ func (n *ExecuteWorkflowNode) Execute(inputData []model.DataItem, nodeParams map
 		inputData = []model.DataItem{{JSON: map[string]interface{}{}}}
 	}
 
-	result, err := n.executor.ExecuteWorkflow(&workflow, inputData)
+	result, err := n.executor.ExecuteWorkflowWithContext(ctx, &workflow, inputData)
 	if err != nil {
 		return nil, n.CreateError(fmt.Sprintf("sub-workflow execution failed: %v", err), nil)
 	}
@@ -102,6 +129,12 @@ func (n *ExecuteWorkflowNode) Execute(inputData []model.DataItem, nodeParams map
 	}
 
 	return result.Data, nil
+}
+
+// Execute delegates to ExecuteWithContext with a fresh context for
+// back-compat with the legacy NodeExecutor interface.
+func (n *ExecuteWorkflowNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
+	return n.ExecuteWithContext(context.Background(), inputData, nodeParams)
 }
 
 // ValidateParameters validates Execute Workflow parameters.

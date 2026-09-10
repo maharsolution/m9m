@@ -2,6 +2,7 @@ package ai
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,12 +10,20 @@ import (
 
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/otel"
 )
 
 // AnthropicNode interacts with Anthropic (Claude) API
 type AnthropicNode struct {
 	*base.BaseNode
-	httpClient *http.Client
+	httpClient  *http.Client
+	otelManager *otel.Manager
+}
+
+// SetOTelManager wires the OTel Manager into the node so the per-
+// invocation <agent>.generate span can be emitted.
+func (n *AnthropicNode) SetOTelManager(m *otel.Manager) {
+	n.otelManager = m
 }
 
 // NewAnthropicNode creates a new Anthropic node
@@ -31,7 +40,8 @@ func NewAnthropicNode() *AnthropicNode {
 	}
 }
 
-// Execute processes input with Anthropic API
+// Execute processes input with Anthropic API. Spans emitted on the call:
+//   - "anthropic.generate" — the messages/create call
 func (n *AnthropicNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
 	// Get parameters
 	apiKey := n.GetStringParameter(nodeParams, "apiKey", "")
@@ -63,9 +73,9 @@ func (n *AnthropicNode) Execute(inputData []model.DataItem, nodeParams map[strin
 		}
 
 		payload := map[string]interface{}{
-			"model":      modelName,
-			"messages":   messages,
-			"max_tokens": maxTokens,
+			"model":       modelName,
+			"messages":    messages,
+			"max_tokens":  maxTokens,
 			"temperature": temperature,
 		}
 
@@ -74,40 +84,71 @@ func (n *AnthropicNode) Execute(inputData []model.DataItem, nodeParams map[strin
 			return nil, fmt.Errorf("failed to marshal payload: %v", err)
 		}
 
+		// Open a <agent>.generate span per invocation.
+		allowInputs := n.otelManager != nil && n.otelManager.Config().AgentsRecordInputs
+		spanCtx, span := n.otelManager.StartAgentSpan(context.Background(), otel.AgentSpanOptions{
+			AgentName:     "anthropic",
+			ModelID:       "anthropic/" + modelName,
+			Prompt:        prompt,
+			InputsAllowed: allowInputs,
+		})
+
 		// Make API request
-		req, err := http.NewRequest("POST", "https://api.anthropic.com/v1/messages", bytes.NewBuffer(jsonData))
+		req, err := http.NewRequestWithContext(spanCtx, "POST", "https://api.anthropic.com/v1/messages", bytes.NewBuffer(jsonData))
 		if err != nil {
+			endAgentSpan(n.otelManager, span, err)
 			return nil, fmt.Errorf("failed to create request: %v", err)
 		}
 
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("x-api-key", apiKey)
 		req.Header.Set("anthropic-version", "2023-06-01")
+		// Inject trace context so Anthropic-side traces (when their
+		// endpoints expose one) chain onto ours. With a global
+		// no-op propagator this is essentially free.
+		otel.GlobalInject(spanCtx, otel.HeaderCarrier(req.Header))
 
 		resp, err := n.httpClient.Do(req)
 		if err != nil {
+			endAgentSpan(n.otelManager, span, err)
 			return nil, fmt.Errorf("failed to send request: %v", err)
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("anthropic API returned status %d", resp.StatusCode)
+			apiErr := fmt.Errorf("anthropic API returned status %d", resp.StatusCode)
+			endAgentSpan(n.otelManager, span, apiErr)
+			return nil, apiErr
 		}
 
 		// Parse response
 		var result map[string]interface{}
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			endAgentSpan(n.otelManager, span, err)
 			return nil, fmt.Errorf("failed to decode response: %v", err)
 		}
 
 		// Extract the generated text
 		content, ok := result["content"].([]interface{})
 		if !ok || len(content) == 0 {
-			return nil, fmt.Errorf("no content in Anthropic response")
+			noContent := fmt.Errorf("no content in Anthropic response")
+			endAgentSpan(n.otelManager, span, noContent)
+			return nil, noContent
 		}
 
 		firstContent := content[0].(map[string]interface{})
-		text := firstContent["text"].(string)
+		text, _ := firstContent["text"].(string)
+
+		// Stamp usage tokens on the agent span when the API returns
+		// a usage block.
+		if usage, ok := result["usage"].(map[string]interface{}); ok {
+			if it, ok := usage["input_tokens"].(float64); ok {
+				if ot, ok := usage["output_tokens"].(float64); ok {
+					otel.RecordUsage(span, int(it), int(ot))
+				}
+			}
+		}
+		endAgentSpan(n.otelManager, span, nil)
 
 		// Create result item
 		resultItem := model.DataItem{

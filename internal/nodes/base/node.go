@@ -45,6 +45,27 @@ type RunAwareNodeExecutor interface {
 	ExecuteWithRun(workflow *model.Workflow, runData *expressions.RunExecutionData, runIndex, itemIndex int, inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error)
 }
 
+// MetadataAwareNodeExecutor is optionally implemented by nodes that
+// want to expose custom span attributes (programmatic equivalents of
+// the n8n `setMetadata({tracing: {key: value}})` API). The engine
+// checks for the interface right before the node.execute span ends;
+// returning a non-nil map attaches each entry under
+// m9m.node.custom.<key>. Values are coerced to strings / bools / ints
+// at attachment time.
+//
+// The interface is intentionally read-only: nodes cannot modify the
+// span lifecycle (start, end, error), only enrich it. Keys collide with
+// the static customSpanAttributes on model.Node — programmatic values
+// take precedence, matching n8n's documented behaviour.
+type MetadataAwareNodeExecutor interface {
+	NodeExecutor
+	// SpanMetadata returns the per-execution custom span attributes
+	// to attach to the node's span. Returning nil or an empty map is
+	// a no-op. Errors are logged and ignored; nodes should not fail
+	// the execution just because metadata computation failed.
+	SpanMetadata() map[string]interface{}
+}
+
 // NodeDescription provides metadata about a node type
 type NodeDescription struct {
 	Name        string         `json:"name"`

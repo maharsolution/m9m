@@ -191,6 +191,11 @@ func (h *Handler) handleWebhookRequest(w http.ResponseWriter, r *http.Request, i
 		return
 	}
 
+	// Extract the inbound trace context so the workflow.execute span
+	// chains off the caller's trace. The context.Context returned here
+	// is the parent for any async work we kick off below.
+	ctx := h.manager.otelExtract(r)
+
 	// Execute the workflow. n8n's default (and our implicit default for any
 	// legacy webhook that does not explicitly opt in to a blocking mode)
 	// is to acknowledge the caller immediately with
@@ -201,7 +206,7 @@ func (h *Handler) handleWebhookRequest(w http.ResponseWriter, r *http.Request, i
 	// caller can read the workflow output inline.
 	if IsAsyncResponseMode(webhook.ResponseMode) {
 		// Fire-and-forget: kick off the goroutine, ack the caller, done.
-		h.manager.ExecuteWebhookAsync(webhook, webhookRequest)
+		h.manager.ExecuteWebhookAsync(ctx, webhook, webhookRequest)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -214,7 +219,7 @@ func (h *Handler) handleWebhookRequest(w http.ResponseWriter, r *http.Request, i
 	// Blocking response modes (lastNode / responseNode): preserve the
 	// pre-existing behaviour so callers that read the workflow output
 	// inline do not regress.
-	response, err := h.manager.ExecuteWebhook(webhook, webhookRequest)
+	response, err := h.manager.ExecuteWebhook(ctx, webhook, webhookRequest)
 	if err != nil {
 		log.Printf("⚠️  Webhook execution failed: %v", err)
 		http.Error(w, fmt.Sprintf("Webhook execution failed: %v", err), http.StatusInternalServerError)

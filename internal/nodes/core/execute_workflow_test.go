@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -16,7 +17,7 @@ type mockExecutor struct {
 	err    error
 }
 
-func (m *mockExecutor) ExecuteWorkflow(workflow *model.Workflow, inputData []model.DataItem) (*WorkflowResult, error) {
+func (m *mockExecutor) ExecuteWorkflowWithContext(ctx context.Context, workflow *model.Workflow, inputData []model.DataItem) (*WorkflowResult, error) {
 	if m.err != nil {
 		return nil, m.err
 	}

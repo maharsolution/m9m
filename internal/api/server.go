@@ -9,6 +9,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/neul-labs/m9m/internal/engine"
+	"github.com/neul-labs/m9m/internal/otel"
 	"github.com/neul-labs/m9m/internal/queue"
 	"github.com/neul-labs/m9m/internal/scheduler"
 	"github.com/neul-labs/m9m/internal/storage"
@@ -54,6 +55,9 @@ type APIServer struct {
 	wsClients      map[string]*websocket.Conn
 	config         *APIServerConfig
 	webhookManager *webhooks.WebhookManager
+
+	otelManager *otel.Manager
+	otelStore   *otel.ConfigStore
 
 	executionMu      sync.RWMutex
 	executionCancels map[string]context.CancelFunc
@@ -116,4 +120,13 @@ func (s *APIServer) SetJobQueue(jq queue.JobQueue) {
 // return "Webhook not found" even after the workflow is activated.
 func (s *APIServer) SetWebhookManager(wm *webhooks.WebhookManager) {
 	s.webhookManager = wm
+}
+
+// SetOTelManager wires the OpenTelemetry Manager so /api/v1/otel can
+// hot-reload the tracer provider on PUT. Calling this is optional —
+// when the manager is nil, the API still serves GET and PUT but PUT
+// only persists the override without reloading the tracer.
+func (s *APIServer) SetOTelManager(m *otel.Manager, store *otel.ConfigStore) {
+	s.otelManager = m
+	s.otelStore = store
 }

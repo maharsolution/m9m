@@ -1,9 +1,11 @@
 package webhooks
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -13,7 +15,9 @@ import (
 
 	"github.com/neul-labs/m9m/internal/engine"
 	"github.com/neul-labs/m9m/internal/model"
+	"github.com/neul-labs/m9m/internal/otel"
 	"github.com/neul-labs/m9m/internal/storage"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 // jsonUnmarshal is a thin wrapper around json.Unmarshal so the
@@ -167,8 +171,10 @@ func (m *WebhookManager) UnregisterWorkflowWebhooks(workflowID string) error {
 	return nil
 }
 
-// ExecuteWebhook executes a webhook and returns the response
-func (m *WebhookManager) ExecuteWebhook(webhook *Webhook, request *WebhookRequest) (*WebhookResponse, error) {
+// ExecuteWebhook executes a webhook and returns the response. The
+// context carries the inbound traceparent (when present) so the
+// workflow.execute span chains onto the upstream caller's trace.
+func (m *WebhookManager) ExecuteWebhook(ctx context.Context, webhook *Webhook, request *WebhookRequest) (*WebhookResponse, error) {
 	startTime := time.Now()
 
 	// Get workflow
@@ -180,9 +186,15 @@ func (m *WebhookManager) ExecuteWebhook(webhook *Webhook, request *WebhookReques
 	// Prepare execution input from webhook request
 	inputData := m.prepareInputData(request)
 
+	// Stamp the execution context with mode / id so the engine records
+	// them on the workflow.execute span. We override the engine-level
+	// default (which has no mode / id) here.
+	ctx = engine.WithExecutionMode(ctx, "webhook")
+
 	// Execute workflow
 	executionID := generateExecutionID()
-	result, err := m.engine.ExecuteWorkflow(workflow, inputData)
+	ctx = engine.WithExecutionID(ctx, executionID)
+	result, err := engine.ExecuteWorkflowWithContext(ctx, m.engine, workflow, inputData)
 	executionErr := engine.ResolveExecutionError(result, err)
 
 	// Create execution record (webhook-specific view, used by the
@@ -298,7 +310,13 @@ func IsAsyncResponseMode(responseMode string) bool {
 // run are logged but never propagated to the caller (caller is already
 // gone). The goroutine is wrapped in defer recover() so a panic inside
 // the engine or its nodes cannot crash the server.
-func (m *WebhookManager) ExecuteWebhookAsync(webhook *Webhook, request *WebhookRequest) {
+//
+// The supplied context carries the inbound traceparent. We detach from
+// the request context (so cancellation of the HTTP handler does not
+// cancel the workflow) but re-extract the trace context into the new
+// background context so the workflow.execute span still chains off
+// the caller's trace.
+func (m *WebhookManager) ExecuteWebhookAsync(ctx context.Context, webhook *Webhook, request *WebhookRequest) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -307,7 +325,13 @@ func (m *WebhookManager) ExecuteWebhookAsync(webhook *Webhook, request *WebhookR
 			}
 		}()
 
-		if _, err := m.ExecuteWebhook(webhook, request); err != nil {
+		runCtx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		// Re-stamp the trace context onto the detached background ctx.
+		runCtx = otel.GlobalExtract(runCtx, propagation.HeaderCarrier(carrierFromRequest(request)))
+
+		if _, err := m.ExecuteWebhook(runCtx, webhook, request); err != nil {
 			log.Printf("⚠️  Async webhook execution failed (webhook=%s, workflow=%s): %v",
 				webhook.ID, webhook.WorkflowID, err)
 		}
@@ -1266,4 +1290,27 @@ func generateExecutionID() string {
 
 func generateWebhookExecutionID() string {
 	return fmt.Sprintf("wh_exec_%d_%d", time.Now().UnixNano(), generateIDCounter.Add(1))
+}
+
+// carrierFromRequest builds an OTel TextMapCarrier from a WebhookRequest's
+// stored headers. Used by ExecuteWebhookAsync to re-extract the inbound
+// trace context into the detached background ctx, so async webhook runs
+// chain off the caller's trace even when the original request has
+// returned.
+func carrierFromRequest(req *WebhookRequest) http.Header {
+	if req == nil {
+		return http.Header{}
+	}
+	return http.Header(req.Headers)
+}
+
+// otelExtract pulls the inbound traceparent / baggage off the request
+// header and returns a context.Context that carries the upstream
+// SpanContext. The handler calls this right before ExecuteWebhook so
+// the engine can chain workflow.execute onto the caller's trace.
+func (m *WebhookManager) otelExtract(r *http.Request) context.Context {
+	if m == nil || r == nil {
+		return r.Context()
+	}
+	return otel.GlobalExtract(r.Context(), propagation.HeaderCarrier(r.Header))
 }

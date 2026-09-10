@@ -1,6 +1,7 @@
 package webhooks
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -570,7 +571,7 @@ func TestWebhookManager_ExecuteWebhook(t *testing.T) {
 		Query:  map[string][]string{"q": {"1"}},
 	}
 
-	resp, err := mgr.ExecuteWebhook(wh, req)
+	resp, err := mgr.ExecuteWebhook(context.Background(), wh, req)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.Equal(t, 200, resp.StatusCode)
@@ -599,7 +600,7 @@ func TestWebhookManager_ExecuteWebhook_RecordsWorkflowExecution(t *testing.T) {
 	require.NoError(t, mgr.RegisterWebhook(wh))
 
 	req := &WebhookRequest{Method: "POST", Path: "/telemetry", Body: map[string]interface{}{}}
-	_, err := mgr.ExecuteWebhook(wh, req)
+	_, err := mgr.ExecuteWebhook(context.Background(), wh, req)
 	require.NoError(t, err)
 
 	execs, total, err := ws.ListExecutions(storage.ExecutionFilters{WorkflowID: wf.ID})
@@ -625,7 +626,7 @@ func TestWebhookManager_ExecuteWebhook_WorkflowNotFound(t *testing.T) {
 	}
 
 	req := &WebhookRequest{Method: "POST", Path: "/missing"}
-	_, err := mgr.ExecuteWebhook(wh, req)
+	_, err := mgr.ExecuteWebhook(context.Background(), wh, req)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "workflow not found")
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/otel"
 )
 
 // ExecutionResult represents the result of a workflow execution
@@ -89,6 +90,7 @@ type workflowEngineImpl struct {
 	nodeRegistry      NodeRegistry
 	credentialManager *credentials.CredentialManager
 	connectionRouter  connections.ConnectionRouter
+	otelManager       *otel.Manager
 
 	// Per-execution context. Populated at the start of every
 	// ExecuteWorkflow call and read by executeNodeWithContext so the
@@ -107,6 +109,13 @@ func NewWorkflowEngine() WorkflowEngine {
 		nodeRegistry:     make(NodeRegistry),
 		connectionRouter: connections.NewConnectionRouter(),
 	}
+}
+
+// SetOTelManager wires the OpenTelemetry Manager so the engine emits
+// workflow.execute / node.execute spans. Calling this is optional;
+// when manager is nil the engine runs without instrumentation.
+func (e *workflowEngineImpl) SetOTelManager(manager *otel.Manager) {
+	e.otelManager = manager
 }
 
 // RegisterNodeExecutor registers a node executor for a node type
@@ -173,6 +182,59 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 	if ctx == nil {
 		ctx = context.Background()
 	}
+
+	// Open the workflow.execute span. The function-level defer below
+	// records the final status and ends the span; we read mode from
+	// the ctx-injected value the caller set up (set by the webhook
+	// handler for webhook-driven runs, by the scheduler for cron
+	// runs, by the MCP/API layer for manual runs).
+	mode := workflowExecutionMode(ctx)
+	execID := workflowExecutionID(ctx)
+	isRetry := workflowExecutionIsRetry(ctx)
+	retryOf := workflowExecutionRetryOf(ctx)
+
+	wfAttrs := otel.WorkflowAttrs{
+		WorkflowID:        workflow.ID,
+		WorkflowName:      workflow.Name,
+		WorkflowVersionID: workflow.VersionID,
+		NodeCount:         len(workflow.Nodes),
+		ProjectID:         workflow.ProjectID,
+		ExecutionID:       execID,
+		ExecutionMode:     mode,
+		ExecutionStatus:   "running",
+		IsRetry:           isRetry,
+		RetryOf:           retryOf,
+		WorkflowCustom:    workflow.CustomSpanAttributes,
+	}
+
+	// Open the workflow.execute span. The OTel tracer.Start convention
+	// attaches the new span to ctx so any subsequent tracer.Start
+	// (including the per-node spans opened by the loop below) chain
+	// off it automatically.
+	ctx, wfSpan := e.otelManager.StartWorkflowSpan(ctx, wfAttrs)
+
+	// Hook a continuation link if the workflow resumed after a Wait
+	// (the engine attaches the previous SpanContext on ctx before
+	// calling us).
+	if prev := workflowContinuationSpan(ctx); prev.IsValid() {
+		otel.AddSpanLink(wfSpan, prev, otel.AttrContinuationReason.String("after_wait"))
+	}
+
+	// Keep a handle on the workflow span so the deferred cleanup can
+	// record the final status. The same span is also reachable via
+	// trace.SpanFromContext for downstream code.
+	ctx = withWorkflowSpan(ctx, wfSpan)
+	wfSpanFinal := wfSpan
+
+	defer func() {
+		if wfSpanFinal != nil {
+			// The status was set to "running" at start; if the
+			// engine reports an error result, replace it. The
+			// engine itself updates status to "completed" /
+			// "failed" / "cancelled" via the helper below.
+			otel.EndWorkflowSpan(wfSpanFinal, "completed", nil)
+		}
+	}()
 
 	// Set run context on the engine so that RunAwareNodeExecutor
 	// implementations (e.g. Code) can pull sibling node outputs from
@@ -416,8 +478,41 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 			}
 		}
 
-		// Execute the node, passing the input data and node parameters
-		outputData, err := e.executeNodeWithContext(ctx, executor, inputDataForNode, finalNodeParams)
+		// Execute the node, passing the input data and node parameters.
+		// Wrap the call in a node.execute span so the trace tree mirrors
+		// the workflow DAG. Custom attributes from model.Node and from
+		// the (optional) MetadataAwareNodeExecutor interface are attached
+		// before EndNodeSpan so the failure-path recording picks them up.
+		nodeCtx, nodeSpan := e.otelManager.StartNodeSpan(ctx, otel.NodeAttrs{
+			NodeID:          node.ID,
+			NodeName:        node.Name,
+			NodeType:        node.Type,
+			NodeTypeVersion: node.TypeVersion,
+			ItemsInput:      len(inputDataForNode),
+			Custom:          mergeNodeCustomAttrs(node),
+		})
+		// Always attach programmatic metadata on the span right after
+		// the node finishes — SetAttributes is cheaper than a second
+		// SetAttributes call.
+		outputData, err := e.executeNodeWithContext(nodeCtx, executor, inputDataForNode, finalNodeParams)
+		// Re-attach input/output counts now that we know the output.
+		if nodeSpan != nil && nodeSpan.SpanContext().IsValid() {
+			nodeSpan.SetAttributes(
+				otel.AttrNodeItemsOutput.Int(len(outputData)),
+			)
+			// Programmatic metadata from the executor (n8n's setMetadata
+			// analogue). Programmatic values override the static config
+			// attributes to match the documented n8n behaviour.
+			if md, ok := executor.(base.MetadataAwareNodeExecutor); ok {
+				if progMD := md.SpanMetadata(); len(progMD) > 0 {
+					merged := mergeProgrammaticNodeAttrs(node.CustomSpanAttributes, progMD)
+					for k, v := range merged {
+						nodeSpan.SetAttributes(attributeFromValue("m9m.node.custom."+k, v))
+					}
+				}
+			}
+		}
+		otel.EndNodeSpan(nodeSpan, err)
 		if err != nil {
 			return &ExecutionResult{
 				Data:  nil,
@@ -801,7 +896,19 @@ func (e *workflowEngineImpl) runLoopBodyChain(
 		// resolve against the same iteration slot.
 		prevRunIndex := e.runIndex
 		e.runIndex = iterRunIndex
-		outputData, err := e.executeNodeWithContext(ctx, executor, input, finalParams)
+		nodeCtx, nodeSpan := e.otelManager.StartNodeSpan(ctx, otel.NodeAttrs{
+			NodeID:          bodyNode.ID,
+			NodeName:        bodyNode.Name,
+			NodeType:        bodyNode.Type,
+			NodeTypeVersion: bodyNode.TypeVersion,
+			ItemsInput:      len(input),
+			Custom:          mergeNodeCustomAttrs(bodyNode),
+		})
+		outputData, err := e.executeNodeWithContext(nodeCtx, executor, input, finalParams)
+		if nodeSpan != nil && nodeSpan.SpanContext().IsValid() {
+			nodeSpan.SetAttributes(otel.AttrNodeItemsOutput.Int(len(outputData)))
+		}
+		otel.EndNodeSpan(nodeSpan, err)
 		e.runIndex = prevRunIndex
 		if err != nil {
 			return nil, fmt.Errorf("body node %q: %w", name, err)
@@ -930,7 +1037,19 @@ func (e *workflowEngineImpl) runLoopDoneChain(
 			continue
 		}
 
-		outputData, err := e.executeNodeWithContext(ctx, executor, input, finalParams)
+		nodeCtx, nodeSpan := e.otelManager.StartNodeSpan(ctx, otel.NodeAttrs{
+			NodeID:          doneNode.ID,
+			NodeName:        doneNode.Name,
+			NodeType:        doneNode.Type,
+			NodeTypeVersion: doneNode.TypeVersion,
+			ItemsInput:      len(input),
+			Custom:          mergeNodeCustomAttrs(doneNode),
+		})
+		outputData, err := e.executeNodeWithContext(nodeCtx, executor, input, finalParams)
+		if nodeSpan != nil && nodeSpan.SpanContext().IsValid() {
+			nodeSpan.SetAttributes(otel.AttrNodeItemsOutput.Int(len(outputData)))
+		}
+		otel.EndNodeSpan(nodeSpan, err)
 		if err != nil {
 			return nil, fmt.Errorf("done node %q: %w", name, err)
 		}

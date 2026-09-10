@@ -19,6 +19,8 @@ import (
 	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 // SSRF protection: blocked IP ranges and hosts
@@ -280,6 +282,15 @@ func (h *HTTPRequestNode) ValidateParameters(params map[string]interface{}) erro
 
 // Execute processes the HTTP Request node operation
 func (h *HTTPRequestNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
+	return h.ExecuteWithContext(context.Background(), inputData, nodeParams)
+}
+
+// ExecuteWithContext is the context-aware variant. The parent ctx
+// carries the active OTel SpanContext; we inject its traceparent onto
+// the outbound HTTP request when the OTel pipeline is enabled. When
+// tracing is disabled the global propagator is a no-op so this call is
+// free.
+func (h *HTTPRequestNode) ExecuteWithContext(ctx context.Context, inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
 	if len(inputData) == 0 {
 		return []model.DataItem{}, nil
 	}
@@ -392,12 +403,24 @@ func (h *HTTPRequestNode) Execute(inputData []model.DataItem, nodeParams map[str
 		if req.Header.Get("User-Agent") == "" {
 			req.Header.Set("User-Agent", "m9m/1.0")
 		}
-		
-		// Execute request
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+
+		// Inject the active traceparent into the outbound request
+		// header so downstream services can continue the trace. The
+		// global propagator is initialised to a no-op by the OTel SDK
+		// when tracing is disabled, so this call is free.
+		otel.GlobalInject(ctx, propagation.HeaderCarrier(req.Header))
+
+		// Execute request. Derive the timeout from the parent ctx so
+		// node cancellation propagates; fall back to a fresh ctx when
+		// the parent is nil (legacy callers that still use Execute).
+		parent := ctx
+		if parent == nil {
+			parent = context.Background()
+		}
+		callCtx, cancel := context.WithTimeout(parent, 30*time.Second)
 		defer cancel()
-		
-		req = req.WithContext(ctx)
+
+		req = req.WithContext(callCtx)
 		
 		resp, err := h.client.Do(req)
 		if err != nil {

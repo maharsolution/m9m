@@ -18,6 +18,8 @@ import (
 	"github.com/neul-labs/m9m/internal/api"
 	"github.com/neul-labs/m9m/internal/credentials"
 	"github.com/neul-labs/m9m/internal/engine"
+	"github.com/neul-labs/m9m/internal/nodes/ai"
+	"github.com/neul-labs/m9m/internal/otel"
 	"github.com/neul-labs/m9m/internal/queue"
 	"github.com/neul-labs/m9m/internal/scheduler"
 	"github.com/neul-labs/m9m/internal/storage"
@@ -141,6 +143,57 @@ func runServe(cmd *cobra.Command, args []string) {
 	eng := engine.NewWorkflowEngine()
 	RegisterAllNodes(eng)
 
+	// Bootstrap OpenTelemetry. The manager is shared across the engine,
+	// the AI agent nodes, and the API server. Config layers env defaults
+	// with any DB-stored override. When tracing is disabled (which is
+	// the default) every helper on *Manager returns a no-op span, so
+	// downstream code stays branch-free.
+	otelStore := otel.NewConfigStore(store)
+	otelOverride, err := otelStore.LoadOrZero()
+	if err != nil {
+		logger.Printf("Warning: failed to load OTEL override: %v (falling back to env defaults)", err)
+	}
+	otelCfg := otel.EffectiveConfig(otelOverride)
+	otelManager, err := otel.NewManager(context.Background(), otelCfg)
+	if err != nil {
+		logger.Printf("Warning: failed to initialise OTEL pipeline: %v (continuing with no tracing)", err)
+		otelManager = nil
+	} else {
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := otelManager.Shutdown(shutdownCtx); err != nil {
+				logger.Printf("OTEL shutdown error: %v", err)
+			}
+		}()
+		logger.Printf("OpenTelemetry initialised: enabled=%t protocol=%s endpoint=%s", otelCfg.Enabled, otelCfg.Protocol, otelCfg.Endpoint)
+	}
+
+	// Hand the OTEL manager to the engine and the AI agent nodes so
+	// workflow.execute / node.execute / <agent>.generate spans all
+	// chain onto the same tree.
+	if otelManager != nil {
+		if mw, ok := eng.(interface {
+			SetOTelManager(*otel.Manager)
+		}); ok {
+			mw.SetOTelManager(otelManager)
+		}
+		// AI agent nodes: ask the engine registry for the executor
+		// and inject the manager. We tolerate missing executors
+		// (e.g. when a build excludes OpenAI) so the test harnesses
+		// can still run.
+		if node, err := eng.GetNodeExecutor("n8n-nodes-base.openAi"); err == nil {
+			if aiNode, ok := node.(*ai.OpenAINode); ok {
+				aiNode.SetOTelManager(otelManager)
+			}
+		}
+		if node, err := eng.GetNodeExecutor("n8n-nodes-base.anthropic"); err == nil {
+			if aiNode, ok := node.(*ai.AnthropicNode); ok {
+				aiNode.SetOTelManager(otelManager)
+			}
+		}
+	}
+
 	// Initialize credential manager
 	credMgr, err := credentials.NewCredentialManager()
 	if err != nil {
@@ -201,6 +254,14 @@ func runServe(cmd *cobra.Command, args []string) {
 
 	apiServer := api.NewAPIServerWithConfig(eng, sched, store, apiConfig)
 	apiServer.SetJobQueue(jobQueue)
+	if otelManager != nil {
+		apiServer.SetOTelManager(otelManager, otelStore)
+	} else {
+		// Even when tracing is disabled, we still mount the OTEL API
+		// endpoints so the UI can edit settings; the handler will
+		// persist without triggering a tracer reload.
+		apiServer.SetOTelManager(nil, otelStore)
+	}
 
 	// Setup router
 	router := mux.NewRouter()

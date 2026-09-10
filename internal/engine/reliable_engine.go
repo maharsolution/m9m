@@ -14,6 +14,7 @@ import (
 	"github.com/neul-labs/m9m/internal/credentials"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/otel"
 	"github.com/neul-labs/m9m/internal/reliability"
 )
 
@@ -165,6 +166,31 @@ func (e *ReliableWorkflowEngine) ExecuteWorkflowWithContext(
 	e.executionMetrics.TotalExecutions++
 	e.executionMetrics.mu.Unlock()
 
+	// Open a workflow.execute span at the same level as the base engine
+	// so trace consumers see a single workflow span regardless of which
+	// engine path runs.
+	wfAttrs := otel.WorkflowAttrs{
+		WorkflowID:        workflow.ID,
+		WorkflowName:      workflow.Name,
+		WorkflowVersionID: workflow.VersionID,
+		NodeCount:         len(workflow.Nodes),
+		ProjectID:         workflow.ProjectID,
+		ExecutionID:       workflowExecutionID(ctx),
+		ExecutionMode:     workflowExecutionMode(ctx),
+		ExecutionStatus:   "running",
+		IsRetry:           workflowExecutionIsRetry(ctx),
+		RetryOf:           workflowExecutionRetryOf(ctx),
+		WorkflowCustom:    workflow.CustomSpanAttributes,
+	}
+	ctx, wfSpan := e.baseEngine.otelManager.StartWorkflowSpan(ctx, wfAttrs)
+	if prev := workflowContinuationSpan(ctx); prev.IsValid() {
+		otel.AddSpanLink(wfSpan, prev, otel.AttrContinuationReason.String("after_wait"))
+	}
+	wfSpanFinal := wfSpan
+	defer func() {
+		otel.EndWorkflowSpan(wfSpanFinal, "completed", nil)
+	}()
+
 	// Handle empty workflow
 	if len(workflow.Nodes) == 0 {
 		return &ExecutionResult{Data: inputData}, nil
@@ -247,8 +273,35 @@ func (e *ReliableWorkflowEngine) ExecuteWorkflowWithContext(
 			}
 		}
 
-		// Execute with reliability features
-		outputData, err := e.executeNodeWithReliability(ctx, node, executor, inputDataForNode, finalNodeParams)
+		// Execute with reliability features. We open a node.execute
+		// span at the same level as the base engine so the trace
+		// tree is identical regardless of which engine path runs.
+		// The reliable engine does not currently wrap retry attempts
+		// as child spans — those would explode span volume without
+		// adding debugging value — but the per-attempt errors are
+		// still surfaced via the OnNodeRetry callback (and any
+		// attached logger).
+		nodeCtx, nodeSpan := e.baseEngine.otelManager.StartNodeSpan(ctx, otel.NodeAttrs{
+			NodeID:          node.ID,
+			NodeName:        node.Name,
+			NodeType:        node.Type,
+			NodeTypeVersion: node.TypeVersion,
+			ItemsInput:      len(inputDataForNode),
+			Custom:          mergeNodeCustomAttrs(node),
+		})
+		outputData, err := e.executeNodeWithReliability(nodeCtx, node, executor, inputDataForNode, finalNodeParams)
+		if nodeSpan != nil && nodeSpan.SpanContext().IsValid() {
+			nodeSpan.SetAttributes(otel.AttrNodeItemsOutput.Int(len(outputData)))
+			if md, ok := executor.(base.MetadataAwareNodeExecutor); ok {
+				if progMD := md.SpanMetadata(); len(progMD) > 0 {
+					merged := mergeProgrammaticNodeAttrs(node.CustomSpanAttributes, progMD)
+					for k, v := range merged {
+						nodeSpan.SetAttributes(attributeFromValue("m9m.node.custom."+k, v))
+					}
+				}
+			}
+		}
+		otel.EndNodeSpan(nodeSpan, err)
 		if err != nil {
 			e.executionMetrics.mu.Lock()
 			e.executionMetrics.FailedNodes++
