@@ -240,7 +240,7 @@ func (m *WebhookManager) ExecuteWebhook(ctx context.Context, webhook *Webhook, r
 	// Without this, webhook executions only appear in the
 	// webhook-specific dashboards, which broke the parity-suite
 	// telemetry contract from 2026-09-05.
-	m.recordWorkflowExecution(workflow, executionID, request, "success", startTime, result.Data, nil)
+	m.recordWorkflowExecution(workflow, executionID, request, "success", startTime, result, nil)
 
 	return response, nil
 }
@@ -251,6 +251,13 @@ func (m *WebhookManager) ExecuteWebhook(ctx context.Context, webhook *Webhook, r
 // "trigger" because the call originated from a registered webhook,
 // not a manual button click ("manual") or an editor test ("test").
 //
+// result is the engine's full execution result (not just `result.Data`)
+// so the per-node I/O snapshot can be persisted as `NodeData` —
+// otherwise the NDV's Input/Output tabs would render empty even on
+// the start and last nodes, and the user wouldn't be able to see
+// what payload the webhook delivered. Pass nil on the failure path
+// where the engine never produced output.
+//
 // Storage errors are logged but never propagated — webhook responses
 // must stay correct even when the GUI's executions table is briefly
 // unavailable (e.g. the MySQL backend is restarting).
@@ -260,7 +267,7 @@ func (m *WebhookManager) recordWorkflowExecution(
 	request *WebhookRequest,
 	status string,
 	startTime time.Time,
-	data []model.DataItem,
+	result *engine.ExecutionResult,
 	runErr error,
 ) {
 	now := time.Now()
@@ -271,7 +278,14 @@ func (m *WebhookManager) recordWorkflowExecution(
 		Mode:       "trigger",
 		StartedAt:  startTime,
 		FinishedAt: &now,
-		Data:       data,
+	}
+	if result != nil {
+		wfExec.Data = result.Data
+		// Mirror the per-node I/O snapshot for the NDV. Same
+		// Debug gate as the manual / retry paths in
+		// internal/api (production mode keeps only the start
+		// and last nodes; Debug=true keeps everything).
+		wfExec.NodeData = engine.BuildExecutionNodeData(workflow, result)
 	}
 	if runErr != nil {
 		wfExec.Error = runErr

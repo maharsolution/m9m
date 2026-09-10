@@ -7,6 +7,8 @@ import (
 
 	"github.com/neul-labs/m9m/internal/engine"
 	"github.com/neul-labs/m9m/internal/model"
+	"github.com/neul-labs/m9m/internal/nodes/transform"
+	"github.com/neul-labs/m9m/internal/nodes/trigger"
 	"github.com/neul-labs/m9m/internal/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -612,6 +614,75 @@ func TestWebhookManager_ExecuteWebhook_RecordsWorkflowExecution(t *testing.T) {
 	assert.Equal(t, "success", execs[0].Status)
 	assert.False(t, execs[0].StartedAt.IsZero(), "StartedAt must be set for telemetry consumers")
 	require.NotNil(t, execs[0].FinishedAt, "FinishedAt must be set so duration is observable")
+}
+
+// TestWebhookManager_ExecuteWebhook_PersistsNodeData pins the fix for
+// the user-reported NDV bug: webhook-triggered executions previously
+// had no `nodeData` field at all because recordWorkflowExecution
+// only forwarded `result.Data` to the storage layer, dropping the
+// per-node I/O snapshot. As a result the NDV's Input / Output tabs
+// rendered empty even on the start / last nodes, leaving the user
+// unable to see what payload the webhook delivered. Now the full
+// engine result flows through and engine.BuildExecutionNodeData
+// filters it according to workflow.Debug.
+func TestWebhookManager_ExecuteWebhook_PersistsNodeData(t *testing.T) {
+	mgr, _, ws := newTestManager()
+
+	// Register the executors this workflow needs. The shared
+	// newTestManager returns a bare engine so other tests can
+	// opt into whatever subset of nodes they exercise.
+	mgr.engine.RegisterNodeExecutor("n8n-nodes-base.webhook", trigger.NewWebhookNode())
+	mgr.engine.RegisterNodeExecutor("n8n-nodes-base.set", transform.NewSetNode())
+
+	// Linear webhook → set, no sticky notes. The chain is
+	// realistic for the user's `webhook_code` workflow shape.
+	wf := &model.Workflow{
+		ID: "wf-nodedata", Name: "nodedata", Active: true,
+		Nodes: []model.Node{
+			{Name: "Webhook", Type: "n8n-nodes-base.webhook", Parameters: map[string]interface{}{"path": "test"}},
+			{Name: "Set", Type: "n8n-nodes-base.set", Parameters: map[string]interface{}{
+				"assignments": map[string]interface{}{"assignments": []interface{}{}},
+			}},
+		},
+		Connections: map[string]model.Connections{
+			"Webhook": {Main: [][]model.Connection{{{Node: "Set", Type: "main", Index: 0}}}},
+		},
+	}
+	require.NoError(t, ws.SaveWorkflow(wf))
+
+	wh := &Webhook{
+		ID: "wh-nodedata", WorkflowID: wf.ID, Path: "/nodedata",
+		Method: "POST", Active: true, ResponseData: "firstEntryJson",
+	}
+	require.NoError(t, mgr.RegisterWebhook(wh))
+
+	req := &WebhookRequest{Method: "POST", Path: "/nodedata", Body: map[string]interface{}{}}
+	_, err := mgr.ExecuteWebhook(context.Background(), wh, req)
+	require.NoError(t, err)
+
+	execs, total, err := ws.ListExecutions(storage.ExecutionFilters{WorkflowID: wf.ID})
+	require.NoError(t, err)
+	require.Equal(t, 1, total)
+	require.Len(t, execs, 1)
+
+	nodeData := execs[0].NodeData
+	require.NotEmpty(t, nodeData,
+		"NodeData must be populated for webhook-triggered executions "+
+			"so the NDV's Input / Output tabs can render real data "+
+			"(was previously empty for trigger runs)")
+
+	// Debug defaults to OFF, so only start + last data-flow
+	// nodes are captured. The Webhook trigger is the start, Set
+	// is the last data-flow leaf (no outgoing edges). Both must
+	// appear in NodeData; the start must carry the inbound
+	// payload (so the NDV Input tab on the first node shows the
+	// user's request).
+	whData, ok := nodeData["Webhook"]
+	require.True(t, ok, "start node 'Webhook' must appear in NodeData")
+	require.NotEmpty(t, whData, "start node must have data so NDV Input tab shows the payload")
+	setData, ok := nodeData["Set"]
+	require.True(t, ok, "last node 'Set' must appear in NodeData")
+	require.NotEmpty(t, setData, "last node must have data so NDV Output tab shows the result")
 }
 
 func TestWebhookManager_ExecuteWebhook_WorkflowNotFound(t *testing.T) {

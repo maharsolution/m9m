@@ -87,7 +87,7 @@ func (s *APIServer) ExecuteWorkflow(w http.ResponseWriter, r *http.Request) {
 		// node's input and the last node's output, so production
 		// executions don't pay the storage cost of every
 		// intermediate item.
-		execution.NodeData = buildExecutionNodeData(workflow, result)
+		execution.NodeData = engine.BuildExecutionNodeData(workflow, result)
 	}
 
 	if err := s.storage.SaveExecution(execution); err != nil {
@@ -96,213 +96,6 @@ func (s *APIServer) ExecuteWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.sendJSON(w, http.StatusOK, execution)
-}
-
-// buildExecutionNodeData copies the engine's per-node output snapshot
-// into execution.NodeData, optionally filtered down to the workflow's
-// debug preferences.
-//
-// When workflow.Debug is true, every entry in result.NodeOutputs is
-// preserved so the n8n-style ExecutionDetail view shows full per-node
-// I/O for every step of the run.
-//
-// When workflow.Debug is false (the default for production), only two
-// entries are kept:
-//
-//   - The start node (a node with no incoming edges) — its output is
-//     the closest proxy for "what came in" since the engine only
-//     records node output, not node input. n8n's NDV Input tab for a
-//     start / trigger node shows the trigger payload, which is
-//     exactly this entry.
-//   - The last node in execution order (a leaf in the connection
-//     graph) — its output is the canonical workflow.Data, but we
-//     fall back to recording the engine's `result.Data` here when
-//     the topology leaf was skipped (e.g. an IF routed every item
-//     down a sibling branch). Without this fallback the user would
-//     see an empty Output tab on the rightmost node even though the
-//     workflow clearly produced output.
-//
-// Mirroring n8n's "Save production executions" / "Save manual
-// executions" toggle, which keeps only the workflow-level result for
-// scheduled runs but full per-node data when the user is iterating.
-//
-// Returns an empty map when result is nil or no nodes produced data.
-func buildExecutionNodeData(workflow *model.Workflow, result *engine.ExecutionResult) map[string][]model.DataItem {
-	out := make(map[string][]model.DataItem)
-	if result == nil {
-		return out
-	}
-
-	if workflow != nil && workflow.Debug {
-		// Debug mode: copy everything. Same as the previous
-		// behaviour, just centralised so retry-node and the
-		// ad-hoc execute path share it.
-		for nodeName, items := range result.NodeOutputs {
-			if len(items) == 0 {
-				out[nodeName] = []model.DataItem{}
-				continue
-			}
-			out[nodeName] = items
-		}
-		return out
-	}
-
-	// Production mode: keep only start-node + last-node.
-	startName := findStartNodeName(workflow)
-	endName := findLastNodeName(workflow)
-
-	if startName != "" {
-		if items, ok := result.NodeOutputs[startName]; ok {
-			if len(items) == 0 {
-				out[startName] = []model.DataItem{}
-			} else {
-				out[startName] = items
-			}
-		}
-	}
-	if endName != "" && endName != startName {
-		if items, ok := result.NodeOutputs[endName]; ok && len(items) > 0 {
-			out[endName] = items
-		} else if len(result.Data) > 0 {
-			// The "last node" topology heuristic doesn't always
-			// match the actual data-flow leaf of the workflow.
-			// Common cases:
-			//
-			//   - Branching workflows: an IF routes the item down
-			//     one path, so the topological last node (which
-			//     sits on the OTHER branch) ends up empty even
-			//     though the workflow clearly produced output.
-			//   - Decorated terminal nodes (Respond to Webhook
-			//     with responseMode: responseNode, debug branches,
-			//     etc): the engine's `finalResult` picks the last
-			//     node in execution order with non-empty output,
-			//     which may not be the workflow's last-declared
-			//     leaf.
-			//
-			// n8n's NDV shows the workflow-level result on the
-			// "last node" the user sees in the canvas regardless
-			// of which branch actually carried the item. To match
-			// that, when the topology-derived last node has no
-			// per-node snapshot but the engine still produced a
-			// workflow-level `result.Data`, surface that data
-			// under the last-node key. The user clicks the
-			// rightmost node in the canvas and gets the data
-			// the workflow emitted.
-			out[endName] = result.Data
-		} else {
-			// Both last-node snapshot AND result.Data are empty
-			// (e.g. the workflow didn't reach its declared leaf
-			// at all). Surface this so the UI can render
-			// "no output" rather than silently dropping the
-			// key.
-			out[endName] = []model.DataItem{}
-		}
-	}
-	if len(out) == 0 && len(result.Data) > 0 {
-		// Topology fallback: if we couldn't identify a start or
-		// end node at all (cycle-only workflow, etc.), record
-		// the workflow-level final output under the conventional
-		// "__end__" key so the NDV still has something to
-		// render.
-		out["__end__"] = result.Data
-	}
-	return out
-}
-
-// isDecorativeNodeType is duplicated from internal/engine here so the
-// api package can skip Sticky Notes / Canvas Notes when picking the
-// "first" / "last" data-flow node for the Debug=OFF view. Decorative
-// nodes have no executor, are skipped by the engine, and never
-// produce real data — they would otherwise hijack the topology walk
-// and surface as the NDV's last node with an empty payload.
-func isDecorativeNodeType(nodeType string) bool {
-	switch nodeType {
-	case "n8n-nodes-base.stickyNote",
-		"n8n-nodes-base.note",
-		"@n8n/n8n-nodes-langchain.note":
-		return true
-	}
-	return false
-}
-
-// findStartNodeName returns the name of the first node that has no
-// incoming connections. The convention matches the engine's
-// `findStartingNodes` (a node is a "start" if nothing routes INTO
-// it), so we agree with the engine on which node gets the trigger
-// payload.
-//
-// Returns "" when the graph has no obvious start (e.g. a loop-only
-// workflow where every node has at least one incoming edge).
-func findStartNodeName(workflow *model.Workflow) string {
-	if workflow == nil || len(workflow.Nodes) == 0 {
-		return ""
-	}
-	hasIncoming := make(map[string]bool, len(workflow.Nodes))
-	for _, conns := range workflow.Connections {
-		if conns.Main == nil {
-			continue
-		}
-		for _, outputs := range conns.Main {
-			for _, c := range outputs {
-				hasIncoming[c.Node] = true
-			}
-		}
-	}
-	for _, n := range workflow.Nodes {
-		// Decorative nodes (Sticky Notes, Canvas Notes) have no
-		// executor and never carry data. They're also typically
-		// declared with no incoming connections (they're floating
-		// canvas annotations), so without this guard they'd hijack
-		// the "first node" slot — the NDV would then claim the
-		// Sticky Note's empty payload is the trigger's input.
-		if isDecorativeNodeType(n.Type) {
-			continue
-		}
-		if !hasIncoming[n.Name] {
-			return n.Name
-		}
-	}
-	return ""
-}
-
-// findLastNodeName returns the name of the last node in execution
-// order. The engine returns `result.Data` as the last node's
-// output, so we approximate by walking connections in reverse
-// (a node with no outgoing edges is a leaf). When multiple leaves
-// exist (branching workflows), we return the first one found —
-// the same heuristic the engine uses for `responseMode: lastNode`.
-//
-// Returns "" when the workflow has no nodes.
-func findLastNodeName(workflow *model.Workflow) string {
-	if workflow == nil || len(workflow.Nodes) == 0 {
-		return ""
-	}
-	hasOutgoing := make(map[string]bool, len(workflow.Nodes))
-	for source, conns := range workflow.Connections {
-		if conns.Main == nil {
-			continue
-		}
-		for _, outputs := range conns.Main {
-			if len(outputs) > 0 {
-				hasOutgoing[source] = true
-			}
-		}
-	}
-	// Iterate from the end so the last-declared leaf wins (matches
-	// the engine's "last node in execution order" tie-break).
-	// Decorative nodes (Sticky Notes, Canvas Notes) are skipped —
-	// they have no executor, never carry data, and would otherwise
-	// hijack the slot with an empty payload.
-	for i := len(workflow.Nodes) - 1; i >= 0; i-- {
-		n := workflow.Nodes[i]
-		if isDecorativeNodeType(n.Type) {
-			continue
-		}
-		if !hasOutgoing[n.Name] {
-			return n.Name
-		}
-	}
-	return ""
 }
 
 // ExecuteWorkflowByDefinition executes an inline workflow definition payload.
@@ -574,7 +367,7 @@ func (s *APIServer) RetryExecution(w http.ResponseWriter, r *http.Request) {
 	// workflow.Debug gate applies here (see
 	// buildExecutionNodeData in ExecuteWorkflow).
 	if result != nil && len(result.NodeOutputs) > 0 {
-		newExecution.NodeData = buildExecutionNodeData(workflow, result)
+		newExecution.NodeData = engine.BuildExecutionNodeData(workflow, result)
 	}
 
 	if err := s.storage.SaveExecution(newExecution); err != nil {
@@ -845,7 +638,7 @@ func (s *APIServer) RetryNode(w http.ResponseWriter, r *http.Request) {
 	// reuses buildExecutionNodeData so a per-node retry honours
 	// the same workflow.Debug preference as a fresh run.
 	if result != nil && len(result.NodeOutputs) > 0 {
-		newExecution.NodeData = buildExecutionNodeData(subWorkflow, result)
+		newExecution.NodeData = engine.BuildExecutionNodeData(subWorkflow, result)
 	}
 
 	if err := s.storage.SaveExecution(newExecution); err != nil {

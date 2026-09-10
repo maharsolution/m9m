@@ -1,9 +1,8 @@
-package api
+package engine
 
 import (
 	"testing"
 
-	"github.com/neul-labs/m9m/internal/engine"
 	"github.com/neul-labs/m9m/internal/model"
 )
 
@@ -36,7 +35,7 @@ func TestBuildExecutionNodeData_ProductionMode_FallbackToResultData(t *testing.T
 	// is empty — but result.Data still carries the workflow-level
 	// final output (whatever the engine picked as the last node with
 	// data).
-	result := &engine.ExecutionResult{
+	result := &ExecutionResult{
 		NodeOutputs: map[string][]model.DataItem{
 			"Webhook":            {{JSON: map[string]interface{}{"body": "req"}}},
 			"Edit Fields":        {{JSON: map[string]interface{}{"=response": "test"}}},
@@ -46,7 +45,7 @@ func TestBuildExecutionNodeData_ProductionMode_FallbackToResultData(t *testing.T
 		Data: []model.DataItem{{JSON: map[string]interface{}{"=response": "test"}}}, // canonical workflow result
 	}
 
-	out := buildExecutionNodeData(workflow, result)
+	out := BuildExecutionNodeData(workflow, result)
 
 	startKey, _ := findStartNodeName(workflow), ""
 	lastKey := findLastNodeName(workflow)
@@ -104,7 +103,7 @@ func TestBuildExecutionNodeData_ProductionMode_EmptyLastNodeAndEmptyResult(t *te
 		Debug: false,
 	}
 
-	result := &engine.ExecutionResult{
+	result := &ExecutionResult{
 		NodeOutputs: map[string][]model.DataItem{
 			"Webhook": {{JSON: map[string]interface{}{"body": "req"}}},
 			"End":     {}, // ran but produced no output
@@ -112,7 +111,7 @@ func TestBuildExecutionNodeData_ProductionMode_EmptyLastNodeAndEmptyResult(t *te
 		Data: nil, // engine found no node with output either
 	}
 
-	out := buildExecutionNodeData(workflow, result)
+	out := BuildExecutionNodeData(workflow, result)
 
 	endKey := findLastNodeName(workflow)
 	if _, ok := out[endKey]; !ok {
@@ -142,7 +141,7 @@ func TestBuildExecutionNodeData_ProductionMode_SkipsDecorativeNodes(t *testing.T
 		Debug: false,
 	}
 
-	result := &engine.ExecutionResult{
+	result := &ExecutionResult{
 		NodeOutputs: map[string][]model.DataItem{
 			"Webhook":            {{JSON: map[string]interface{}{"body": "req"}}},
 			"Edit Fields":        {{JSON: map[string]interface{}{"=response": "test"}}},
@@ -151,7 +150,7 @@ func TestBuildExecutionNodeData_ProductionMode_SkipsDecorativeNodes(t *testing.T
 		Data: []model.DataItem{{JSON: map[string]interface{}{"=response": "test"}}},
 	}
 
-	out := buildExecutionNodeData(workflow, result)
+	out := BuildExecutionNodeData(workflow, result)
 
 	// The Sticky Note must NOT be the recorded "last node" — the
 	// topology walk skips it and picks Edit Fields instead.
@@ -191,7 +190,7 @@ func TestBuildExecutionNodeData_DebugMode_RetainsAllNodes(t *testing.T) {
 		Debug: true,
 	}
 
-	result := &engine.ExecutionResult{
+	result := &ExecutionResult{
 		NodeOutputs: map[string][]model.DataItem{
 			"A": {{JSON: map[string]interface{}{"a": 1}}},
 			"B": {{JSON: map[string]interface{}{"b": 2}}},
@@ -200,7 +199,7 @@ func TestBuildExecutionNodeData_DebugMode_RetainsAllNodes(t *testing.T) {
 		Data: []model.DataItem{{JSON: map[string]interface{}{"c": 3}}},
 	}
 
-	out := buildExecutionNodeData(workflow, result)
+	out := BuildExecutionNodeData(workflow, result)
 
 	for _, name := range []string{"A", "B", "C"} {
 		if _, ok := out[name]; !ok {
