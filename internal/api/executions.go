@@ -115,7 +115,12 @@ func (s *APIServer) ExecuteWorkflow(w http.ResponseWriter, r *http.Request) {
 //     start / trigger node shows the trigger payload, which is
 //     exactly this entry.
 //   - The last node in execution order (a leaf in the connection
-//     graph) — its output is the canonical workflow.Data.
+//     graph) — its output is the canonical workflow.Data, but we
+//     fall back to recording the engine's `result.Data` here when
+//     the topology leaf was skipped (e.g. an IF routed every item
+//     down a sibling branch). Without this fallback the user would
+//     see an empty Output tab on the rightmost node even though the
+//     workflow clearly produced output.
 //
 // Mirroring n8n's "Save production executions" / "Save manual
 // executions" toggle, which keeps only the workflow-level result for
@@ -156,20 +161,49 @@ func buildExecutionNodeData(workflow *model.Workflow, result *engine.ExecutionRe
 		}
 	}
 	if endName != "" && endName != startName {
-		if items, ok := result.NodeOutputs[endName]; ok {
-			if len(items) == 0 {
-				out[endName] = []model.DataItem{}
-			} else {
-				out[endName] = items
-			}
+		if items, ok := result.NodeOutputs[endName]; ok && len(items) > 0 {
+			out[endName] = items
+		} else if len(result.Data) > 0 {
+			// The "last node" topology heuristic doesn't always
+			// match the actual leaf of the workflow that produced
+			// data. Common cases:
+			//
+			//   - Branching workflows: an IF routes the item down
+			//     one path, so the topological last node (which
+			//     sits on the OTHER branch) ends up empty even
+			//     though the workflow clearly produced output.
+			//   - Decorated terminal nodes (Respond to Webhook
+			//     with responseMode: responseNode, debug branches,
+			//     etc): the engine's `finalResult` picks the last
+			//     node in execution order with non-empty output,
+			//     which may not be the workflow's last-declared
+			//     leaf.
+			//
+			// n8n's NDV shows the workflow-level result on the
+			// "last node" the user sees in the canvas regardless
+			// of which branch actually carried the item. To match
+			// that, when the topology-derived last node has no
+			// per-node snapshot but the engine still produced a
+			// workflow-level `result.Data`, surface that data
+			// under the last-node key. The user clicks the
+			// rightmost node in the canvas and gets the data
+			// the workflow emitted.
+			out[endName] = result.Data
+		} else {
+			// Both last-node snapshot AND result.Data are empty
+			// (e.g. the workflow didn't reach its declared leaf
+			// at all). Surface this so the UI can render
+			// "no output" rather than silently dropping the
+			// key.
+			out[endName] = []model.DataItem{}
 		}
 	}
 	if len(out) == 0 && len(result.Data) > 0 {
-		// Fallback: record the workflow-level final output under
-		// the conventional "__end__" key so the NDV still has
-		// something to render even when the graph topology
-		// can't be classified (cycle-only workflows, error
-		// paths, etc.).
+		// Topology fallback: if we couldn't identify a start or
+		// end node at all (cycle-only workflow, etc.), record
+		// the workflow-level final output under the conventional
+		// "__end__" key so the NDV still has something to
+		// render.
 		out["__end__"] = result.Data
 	}
 	return out
