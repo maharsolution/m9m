@@ -33,19 +33,27 @@ when the API server starts.
 
 ### 1.1 Environment variables
 
+m9m accepts both its own `M9M_OTEL_*` names and the **bare OpenTelemetry
+SDK names** (`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, etc.)
+so operators can reuse an existing OTel-SDK-style config block without
+copying values across. When both are set, the `M9M_OTEL_*` value wins,
+allowing per-process overrides of a host-wide OTEL config.
+
 | Variable | Default | Description |
 | --- | --- | --- |
 | `M9M_OTEL_ENABLED` | `false` | Master switch. When `false`, every helper on the OTel Manager returns a no-op span, so downstream code stays branch-free. |
-| `M9M_OTEL_PROTOCOL` | `grpc` | `grpc` (OTLP gRPC) or `http/protobuf` (OTLP/HTTP). |
-| `M9M_OTEL_ENDPOINT` | `localhost:4317` | OTLP collector URL. For HTTP use `http://host:4318/v1/traces`. For gRPC, `host:4317`. |
-| `M9M_OTEL_HEADERS` | (unset) | Comma-separated `key=value` pairs added to every export request (e.g. `Authorization=Bearer <token>`). |
-| `M9M_OTEL_HEADERS_FILE` | (unset) | Path to a JSON file with header dict (e.g. `{"x-honeycomb-team":"..."}`). Preferred for secret values. |
-| `M9M_OTEL_SAMPLE_RATE` | `1.0` | `TraceIDRatioBased` ratio, `0.0 .. 1.0`. |
-| `M9M_OTEL_PRODUCTION_ONLY` | `false` | When `true`, dev/test execution modes are dropped at sampling time even if their trace IDs are rolled in. |
-| `M9M_OTEL_INCLUDE_NODE_SPANS` | `true` | Emit per-node `node.execute` spans. Disable to reduce span volume. |
-| `M9M_OTEL_INJECT_OUTBOUND` | `true` | Inject the active traceparent into outbound HTTP requests emitted by the HTTP Request node. |
-| `M9M_OTEL_SERVICE_NAME` | `m9m` | Replaces `service.name` in the resource. |
-| `M9M_OTEL_SERVICE_VERSION` | (unset) | `service.version` attribute. |
+| `M9M_OTEL_EXPORTER_OTLP_PROTOCOL` (or `OTEL_EXPORTER_OTLP_PROTOCOL`) | `grpc` | `grpc` (OTLP gRPC) or `http/protobuf` (OTLP/HTTP). |
+| `M9M_OTEL_EXPORTER_OTLP_ENDPOINT` (or `OTEL_EXPORTER_OTLP_ENDPOINT`) | `http://localhost:4317` | OTLP collector URL. For HTTP use `http://host:4318/v1/traces`. For gRPC, `host:4317` (no scheme). |
+| `M9M_OTEL_EXPORTER_OTLP_HEADERS` (or `OTEL_EXPORTER_OTLP_HEADERS`) | (unset) | Comma-separated `key=value` pairs added to every export request (e.g. `Authorization=Bearer <token>`). |
+| `M9M_OTEL_EXPORTER_OTLP_HEADERS_FILE` (or `OTEL_EXPORTER_OTLP_HEADERS_FILE`) | (unset) | Path to a JSON file with header dict (e.g. `{"x-honeycomb-team":"..."}`). Preferred for secret values. |
+| `M9M_OTEL_TRACES_SAMPLE_RATE` (or `OTEL_TRACES_SAMPLER_ARG`) | `1.0` | `TraceIDRatioBased` ratio, `0.0 .. 1.0`. |
+| `M9M_OTEL_TRACES_PRODUCTION_ONLY` | `true` | When `true`, dev/test execution modes are dropped at sampling time even if their trace IDs are rolled in. |
+| `M9M_OTEL_TRACES_INCLUDE_NODE_SPANS` | `true` | Emit per-node `node.execute` spans. Disable to reduce span volume. |
+| `M9M_OTEL_TRACES_INJECT_OUTBOUND` | `true` | Inject the active traceparent into outbound HTTP requests emitted by the HTTP Request node. |
+| `M9M_OTEL_SERVICE_NAME` (or `OTEL_SERVICE_NAME`) | `m9m` | Replaces `service.name` in the resource. |
+| `M9M_OTEL_SERVICE_VERSION` (or `OTEL_SERVICE_VERSION`) | (unset) | `service.version` attribute. |
+| `OTEL_TRACES_SAMPLER` | (unset) | Standard OTel-SDK shortcut: `always_on`, `always_off`, or `traceidratio` (paired with `OTEL_TRACES_SAMPLER_ARG`). |
+| `M9M_OTEL_INSTANCE_ID` | `<host>:<pid>` | Replaces `service.instance.id`. Override when running multiple m9m replicas on the same host. |
 
 ### 1.2 Agent-specific settings
 

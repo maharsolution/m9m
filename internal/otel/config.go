@@ -18,15 +18,17 @@ type ConfigOverride struct {
 	// the env default.
 	Enabled *bool `json:"enabled,omitempty"`
 
-	Endpoint          *string  `json:"endpoint,omitempty"`
-	Protocol          *string  `json:"protocol,omitempty"`
-	Headers           *string  `json:"headers,omitempty"`
-	HeadersFile       *string  `json:"headersFile,omitempty"`
-	SampleRate        *float64 `json:"sampleRate,omitempty"`
-	ProductionOnly    *bool    `json:"productionOnly,omitempty"`
-	IncludeNodeSpans  *bool    `json:"includeNodeSpans,omitempty"`
-	InjectOutbound    *bool    `json:"injectOutbound,omitempty"`
-	AgentsEnabled     *bool    `json:"agentsEnabled,omitempty"`
+	Endpoint         *string  `json:"endpoint,omitempty"`
+	Protocol         *string  `json:"protocol,omitempty"`
+	Headers          *string  `json:"headers,omitempty"`
+	HeadersFile      *string  `json:"headersFile,omitempty"`
+	SampleRate       *float64 `json:"sampleRate,omitempty"`
+	ServiceName      *string  `json:"serviceName,omitempty"`
+	ServiceVersion   *string  `json:"serviceVersion,omitempty"`
+	ProductionOnly   *bool    `json:"productionOnly,omitempty"`
+	IncludeNodeSpans *bool    `json:"includeNodeSpans,omitempty"`
+	InjectOutbound   *bool    `json:"injectOutbound,omitempty"`
+	AgentsEnabled    *bool    `json:"agentsEnabled,omitempty"`
 	AgentsRecordInputs  *bool `json:"agentsRecordInputs,omitempty"`
 	AgentsRecordOutputs *bool `json:"agentsRecordOutputs,omitempty"`
 
@@ -58,6 +60,7 @@ func (o ConfigOverride) Validate() error {
 func (o ConfigOverride) IsEmpty() bool {
 	return o.Enabled == nil && o.Endpoint == nil && o.Protocol == nil &&
 		o.Headers == nil && o.HeadersFile == nil && o.SampleRate == nil &&
+		o.ServiceName == nil && o.ServiceVersion == nil &&
 		o.ProductionOnly == nil && o.IncludeNodeSpans == nil &&
 		o.InjectOutbound == nil && o.AgentsEnabled == nil &&
 		o.AgentsRecordInputs == nil && o.AgentsRecordOutputs == nil
@@ -111,6 +114,12 @@ func MergeConfig(env Config, override ConfigOverride) Config {
 	}
 	if override.SampleRate != nil {
 		out.SampleRate = *override.SampleRate
+	}
+	if override.ServiceName != nil {
+		out.ServiceName = strings.TrimSpace(*override.ServiceName)
+	}
+	if override.ServiceVersion != nil {
+		out.ServiceVersion = strings.TrimSpace(*override.ServiceVersion)
 	}
 	if override.ProductionOnly != nil {
 		out.ProductionOnly = *override.ProductionOnly
