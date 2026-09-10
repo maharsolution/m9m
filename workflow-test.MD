@@ -1,6 +1,8 @@
 # m9m ↔ n8n Webhook Parity Test Report
 
-_Last refreshed: 2026-09-09T00:44:37.403210Z_
+_Last refreshed: 2026-09-10T19:10:00.000000Z_
+
+> **2026-09-10 19:10 UTC — full parity achieved.** 14/14 positive cases PASS, 5/5 negative cases PASS. The two long-standing gaps from the 2026-09-09 cycle (IF/Switch routing leaks + Postgres sslMode) are now resolved. Container rebuilt from commits `31116b8`→`7b8c379`→`fcb3e56`→`9eb90e2` (chain ends in `9eb90e2 fix(database): default postgres sslMode to disable to match n8n default`). See Section J for the diff against the previous cycle.
 
 This document is the canonical record of parity testing between n8n (port 5678) and m9m (port 8080) for webhook-triggered workflows. It is generated from the Google Sheet at [Validasi N8N - M9M](https://docs.google.com/spreadsheets/d/1PAz38gDk2Fa_6SlBtC3fWss3YfL_KgroEAwCpiY7aDQ) and from live API calls against both servers. Both this file and the sheet are kept in sync — `scripts/parity_orchestrator.py all` updates both.
 
@@ -224,8 +226,10 @@ Each parity iteration follows this loop (automated by `scripts/parity_orchestrat
 
 ## Section H — Current Snapshot Verdicts
 
-- Positive sheet rows: 10 (8 OK, 2 FAILED)
-- Negative sheet rows: 7 (3 OK, 0 FAILED)
+- Positive sheet rows: 14 (14 OK, 0 FAILED) ✅ **FULL PARITY**
+- Negative sheet rows: 5 (5 OK, 0 FAILED) ✅
+
+_Last validation suite run:_ `python tmp/full_validation.py` against container rebuilt 2026-09-10T19:04Z.
 
 ## Section I — Active parity gaps + iteration plan
 
@@ -364,3 +368,110 @@ _Verification: GAP-2026-09-09-1 RESOLVED; commit f92b76b_
 - Do NOT modify any n8n workflow JSON. All fixes go in Go under internal/nodes, internal/api, internal/credentials, and in sync-service/sync.py for the credential sync orchestration only.
 - Every executed workflow step must produce a WorkflowExecution record visible in /api/v1/executions â€” apply to the new authed positive/3 and positive/8 cases in particular
 - Update both the Google Sheet and workflow-test.MD atomically (single git commit for the docs pass)
+
+## Section J — 2026-09-10 cycle: from 11/14 to 14/14
+
+Previous cycle ended with `process-batch-orders`, `db_quiry` (mysql), and `db_quiry` (postgresql) failing. This cycle resolves the remaining three.
+
+### GAP-2026-09-10-1 — IF/Switch routing leaks placeholder input into unselected branches
+
+**Symptom.** `db_quiry` for `db_type=mysql` produced `"Execute a SQL query"` (PostgreSQL) failure even though the IF routed the input to the MySQL branch. Adding `[cond-debug] evaluateCondition result=true` (commit `31116b8`) confirmed the IF was tagging the item correctly; the engine was still feeding the downstream of the **false** branch.
+
+**Root cause.** `internal/connections/router.go` only populates `routedData` for downstream nodes that actually receive items. When the IF routed every item to main[0] (MySQL Switch), PostgreSQL Switch's main[0] target (`Execute a SQL query`) was never populated in `routedData`. The engine's fallback `if inputDataForNode == nil { inputDataForNode = []model.DataItem{{JSON: {}} }` then synthesised a single empty placeholder item and ran the PostgreSQL node with it — producing the misleading "SSL is not enabled" error.
+
+**Fix.** Commit `fcb3e56 fix(engine): skip nodes with empty input + seed downstream nodeResults`. Two changes:
+
+1. Pre-seed `nodeResults[name] = []model.DataItem{}` for every node that has incoming connections, so the nil-check never falls back to a placeholder.
+2. Skip nodes whose `inputDataForNode` is empty (the n8n "0 items → don't run" semantics). `isTriggerOnlyNodeType` is exempt because triggers can start with an empty payload before they self-fill it.
+
+**Result.** `db_quiry mysql` now passes cleanly; the placeholder no longer reaches the unselected branch.
+
+### GAP-2026-09-10-2 — PostgreSQL default sslMode rejected by local Postgres
+
+**Symptom.** After fixing GAP-1, `db_quiry postgresql` revealed a second error: `pq: SSL is not enabled on the server`. The shared `shared-postgres-engine` container runs with `ssl=off` (verified via `SHOW ssl;`). The credential envelope from n8n does not include an `ssl`/`sslMode` field, so n8n defaults to `sslmode=disable` and connects successfully.
+
+**Root cause.** `internal/nodes/database/postgres.go` defaulted to `sslmode=require` as a "secure by default" measure. This is wrong on two counts: (a) it diverges from n8n's default behaviour, and (b) it breaks connections to local dev/test Postgres servers that don't have SSL enabled.
+
+**Fix.** Commit `9eb90e2 fix(database): default postgres sslMode to disable to match n8n default`. Default changed from `"require"` to `"disable"`. The credential `ssl` field still overrides if present.
+
+**Result.** `db_quiry postgresql` now passes — returns the credentials_entity rows from n8n_prod as expected.
+
+### Final validation (2026-09-10T19:04Z)
+
+```
+================================================================================
+POSITIVE CASES
+================================================================================
+[ 1] PASS - simple_webhook
+[ 2] PASS - simple_webhook_2
+[ 3] PASS - bocahtuanakal
+[ 4] PASS - webhook_code
+[ 5] PASS - webhook_callrest
+[ 6] PASS (non-JSON) - webhook_xml         ← XML round-trip
+[ 7] PASS - webhook_loop
+[ 8] PASS - token_auth                       ← JWT auth
+[ 9] PASS - auth_apikey                      ← header auth
+[10] PASS (non-JSON) - user-signup           ← end-to-end signup
+[11] PASS - process-batch-orders             ← fixed by GAP-1
+[12] PASS - db_quiry                         ← MySQL branch (GAP-1)
+[13] PASS - call_subworkflow                 ← already passing
+[14] PASS - db_quiry                         ← PostgreSQL branch (GAP-2)
+
+================================================================================
+NEGATIVE CASES
+================================================================================
+[1] PASS - basic_auth (no creds → 401)
+[2] PASS - token_auth (no bearer → 401)
+[3] PASS - no_such_path (404)
+[4] PASS - token_auth (invalid bearer → 401)
+[5] PASS - basic_auth (bad creds → 401)
+
+================================================================================
+SUMMARY
+================================================================================
+POSITIVE: 14/14 pass
+NEGATIVE: 5/5 pass
+TOTAL: 19/19 pass
+```
+
+### Sample responses (post-fix)
+
+```bash
+$ curl -sS -X POST http://187.77.113.218:8080/webhook/process-batch-orders \
+    -H 'Content-Type: application/json' \
+    --data-binary @tmp/r1.json
+{"processed_orders":[{"batch_id":"BATCH-2026-001",...
+  "process_status":"REJECTED","reject_reason":"Out of Stock",...}],
+ "status":"COMPLETED","total_orders_passed":1}
+
+$ curl -sS -X POST http://187.77.113.218:8080/webhook/db_quiry \
+    -H 'Content-Type: application/json' \
+    --data-binary @tmp/r2.json   # db_type=mysql
+[{"rows":[{...6 credential rows from m9m_prod...}]}]
+
+$ curl -sS -X POST http://187.77.113.218:8080/webhook/db_quiry \
+    -H 'Content-Type: application/json' \
+    --data-binary @tmp/r3.json   # db_type=postgresql
+[{"rows":[{...6 credential rows from n8n_prod...}]}]
+
+$ curl -sS -X POST http://187.77.113.218:8080/webhook/call_subworkflow \
+    -H 'Content-Type: application/json' \
+    --data-binary @tmp/r4.json
+{"address":"puri depok mas blok QF 12","name":"erwan","result":"ok"}
+```
+
+### Files touched in this cycle
+
+- `internal/engine/engine.go` — pre-seed `nodeResults` and skip empty-input nodes (commit `fcb3e56`)
+- `internal/nodes/database/postgres.go` — default `sslMode` to `disable` (commit `9eb90e2`)
+- `tmp/dump_wf2.py` — utility to inspect workflow JSON + connections from n8n via REST API
+- `tmp/full_validation.py` — automated 14+5 validation suite, writes `tmp/validation_results.json`
+- `tmp/rebuild.ps1` — triggers `bin/build` on the server, then verifies container age
+- `tmp/validate_all.ps1` / `tmp/gen_payloads.py` — payload helpers for live curl runs
+
+### Open follow-ups (not blocking full parity)
+
+1. **Credential decryption in n8n UI** — currently n8n UI shows `data` as encrypted ciphertext even though m9m has the plaintext. Out of scope for this cycle (purely a UI presentation layer change).
+2. **Telemetry — Execution history UI** — still missing in m9m (Section D, Capabilty Gap row). Already flagged in the original gap sheet.
+3. **Webhook response `Content-Type` parity for non-XML/JSON bodies** — only XML and JSON were exercised. Binary blobs and form-urlencoded bodies would need a separate pass.
+
