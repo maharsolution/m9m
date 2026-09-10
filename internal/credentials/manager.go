@@ -2,10 +2,10 @@ package credentials
 
 import (
 	"fmt"
-	"os"
 	"sync"
 
 	"github.com/neul-labs/m9m/internal/model"
+	"github.com/neul-labs/m9m/internal/storage"
 )
 
 // CredentialManager manages credentials for workflow nodes
@@ -90,8 +90,6 @@ func (cm *CredentialManager) ResolveWorkflowCredentials(workflow *model.Workflow
 	for _, node := range workflow.Nodes {
 		if len(node.Credentials) > 0 {
 			for credType, credRef := range node.Credentials {
-				fmt.Fprintf(os.Stderr, "[cred-debug-resolve] node=%s id=%s credType=%s credRef.ID=%q credRef.Name=%q credRef.Type=%q\n",
-					node.Name, node.ID, credType, credRef.ID, credRef.Name, credRef.Type)
 				if credRef.ID != "" {
 					cm.RegisterNodeCredentials(node.ID, credType, credRef.ID)
 				}
@@ -129,7 +127,6 @@ func (cm *CredentialManager) GetNodeCredentials(nodeID string) (map[string]strin
 
 	// Get the credential mappings for this node
 	mappings, exists := cm.nodeMappings[nodeID]
-	fmt.Fprintf(os.Stderr, "[cred-debug-get] nodeID=%s exists=%v mappings=%v\n", nodeID, exists, mappings)
 	if !exists {
 		// No credentials registered for this node
 		return make(map[string]string), nil
@@ -144,11 +141,8 @@ func (cm *CredentialManager) GetNodeCredentials(nodeID string) (map[string]strin
 			// If credential not found, continue with empty value
 			// This allows for graceful handling of missing credentials
 			resolvedCredentials[paramName] = ""
-			fmt.Fprintf(os.Stderr, "[cred-debug-get]   credID=%s NOT FOUND err=%v\n", credentialID, err)
 			continue
 		}
-
-		fmt.Fprintf(os.Stderr, "[cred-debug-get]   credID=%s found type=%q dataLen=%d data=%v\n", credentialID, cred.Type, len(cred.Data), cred.Data)
 
 		// Resolve credential values, handling environment variables
 		for key, value := range cred.Data {
@@ -163,4 +157,31 @@ func (cm *CredentialManager) GetNodeCredentials(nodeID string) (map[string]strin
 	}
 
 	return resolvedCredentials, nil
+}
+
+// LoadFromStorage pulls all credentials from the persistent storage backend
+// (MySQL/Postgres/SQLite) and seeds them into the in-memory store used at
+// execution time.
+//
+// Why this exists: the API layer persists credentials via
+// storage.SaveCredential, while the engine reads them via the in-memory
+// CredentialStore map. Without this seed, credentials written by the sync
+// bridge (or any other API caller) after server startup are invisible to
+// the workflow engine, so credential-injected node parameters stay empty
+// and node validation rejects the workflow with messages like
+// "either connectionUrl or host is required".
+func (cm *CredentialManager) LoadFromStorage(store storage.WorkflowStorage) error {
+	creds, err := store.ListCredentials()
+	if err != nil {
+		return fmt.Errorf("list credentials: %w", err)
+	}
+	for _, c := range creds {
+		cm.store.credentials[c.ID] = &Credential{
+			ID:    c.ID,
+			Name:  c.Name,
+			Type:  c.Type,
+			Data:  c.Data,
+		}
+	}
+	return nil
 }

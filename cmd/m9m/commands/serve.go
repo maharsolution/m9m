@@ -203,6 +203,17 @@ func runServe(cmd *cobra.Command, args []string) {
 	if err != nil {
 		logger.Printf("Warning: Failed to initialize credential manager: %v", err)
 	} else {
+		// Seed the in-memory credential cache from persistent storage so
+		// credentials written by the API (and the n8n sync bridge) after
+		// server startup are visible to the workflow engine. Without this
+		// seed, GetCredential returns "not found" for synced credentials
+		// and credential-injected node params stay empty at validation
+		// time.
+		if loadErr := credMgr.LoadFromStorage(store); loadErr != nil {
+			logger.Printf("Warning: Failed to seed credential cache from storage: %v", loadErr)
+		} else {
+			logger.Println("Credential cache seeded from storage")
+		}
 		eng.SetCredentialManager(credMgr)
 	}
 
