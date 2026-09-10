@@ -39,6 +39,7 @@ func (s *APIServer) RegisterRoutes(router *mux.Router) {
 	api.HandleFunc("/executions/{id}", s.GetExecution).Methods("GET", "OPTIONS")
 	api.HandleFunc("/executions/{id}", s.DeleteExecution).Methods("DELETE", "OPTIONS")
 	api.HandleFunc("/executions/{id}/retry", s.RetryExecution).Methods("POST", "OPTIONS")
+	api.HandleFunc("/executions/{id}/retry-node", s.RetryNode).Methods("POST", "OPTIONS")
 	api.HandleFunc("/executions/{id}/cancel", s.CancelExecution).Methods("POST", "OPTIONS")
 
 	api.HandleFunc("/schedules", s.ListSchedules).Methods("GET", "OPTIONS")

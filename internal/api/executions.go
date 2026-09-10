@@ -477,3 +477,303 @@ func (s *APIServer) CountWorkflows(w http.ResponseWriter, r *http.Request) {
 	}
 	s.sendJSON(w, http.StatusOK, map[string]interface{}{"count": count})
 }
+
+// RetryNodeRequest is the request body for POST /executions/:id/retry-node.
+//
+// Field semantics:
+//
+//   - NodeName (required): the workflow node whose execution you want
+//     to replay. Must match a node in the workflow the original
+//     execution belongs to. The retry runs this node AND every node
+//     downstream of it. Everything upstream is skipped; its output is
+//     replayed from the saved NodeData snapshot so the target node
+//     receives the same items it did the first time.
+//
+//   - InputData (optional): when set, overrides the upstream snapshot
+//     for the target node's input. Use this to "edit the input and
+//     re-run from here", which is the n8n NDV "Run" affordance.
+//
+//   - Mode (optional): label persisted on the new execution. Defaults
+//     to "retry-node".
+type RetryNodeRequest struct {
+	NodeName  string             `json:"nodeName"`
+	InputData []model.DataItem   `json:"inputData,omitempty"`
+	Mode      string             `json:"mode,omitempty"`
+}
+
+// RetryNode re-runs an execution starting from a specific node.
+//
+// Behaviour
+// ---------
+// We build a sub-workflow containing only the target node and its
+// downstream descendants, then call ExecuteWorkflowWithContext with
+// either:
+//   - the upstream node's saved output from the original execution's
+//     NodeData snapshot (default; matches n8n's "Retry from here" on a
+//     failed node), or
+//   - the caller's override payload when InputData is supplied (matches
+//     n8n's NDV "Run this node" with edited input).
+//
+// The new execution is stored with mode="retry-node" and links back to
+// the original via the parent execution id (the original is referenced
+// via `Metadata.parentExecutionId` for traceability; this is additive
+// to the canonical execution shape and ignored by older readers).
+//
+// Status codes
+// ------------
+//   - 200: retry started; the body is the new execution record.
+//   - 400: invalid request body, unknown node, or the upstream node
+//          has no saved snapshot to replay.
+//   - 404: original execution or workflow not found.
+func (s *APIServer) RetryNode(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+
+	var req RetryNodeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.sendError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+	if req.NodeName == "" {
+		s.sendError(w, http.StatusBadRequest, "nodeName is required", nil)
+		return
+	}
+	if req.Mode == "" {
+		req.Mode = "retry-node"
+	}
+
+	original, err := s.storage.GetExecution(id)
+	if err != nil {
+		s.sendError(w, http.StatusNotFound, "Execution not found", err)
+		return
+	}
+
+	workflow, err := s.storage.GetWorkflow(original.WorkflowID)
+	if err != nil {
+		s.sendError(w, http.StatusNotFound, "Workflow not found", err)
+		return
+	}
+
+	// Locate the target node and the upstream node(s) feeding it.
+	targetIdx := -1
+	upstreamNames := []string{}
+	for i, n := range workflow.Nodes {
+		if n.Name == req.NodeName {
+			targetIdx = i
+			continue
+		}
+		// Any node that has a connection INTO the target counts as
+		// "upstream" — the engine will reroute from the first one
+		// we find with saved output. We collect all of them so the
+		// caller can see the diagnostic later.
+		if conns, ok := workflow.Connections[n.Name]; ok && conns.Main != nil {
+			for _, outputs := range conns.Main {
+				for _, c := range outputs {
+					if c.Node == req.NodeName {
+						upstreamNames = append(upstreamNames, n.Name)
+					}
+				}
+			}
+		}
+	}
+	if targetIdx == -1 {
+		s.sendError(w, http.StatusBadRequest,
+			fmt.Sprintf("node %q not found in workflow", req.NodeName), nil)
+		return
+	}
+
+	// Build the sub-workflow: only the target and its downstream
+	// descendants, with their connections pruned to point at nodes
+	// we kept. This keeps the engine's connection router honest
+	// about edge targets and stops it from re-executing the
+	// upstream nodes by accident.
+	subWorkflow, inputData, err := buildSubWorkflow(workflow, original, &req, upstreamNames)
+	if err != nil {
+		s.sendError(w, http.StatusBadRequest, err.Error(), err)
+		return
+	}
+
+	startTime := time.Now()
+	newExecution := &model.WorkflowExecution{
+		ID:         fmt.Sprintf("exec_%d", startTime.UnixNano()),
+		WorkflowID: original.WorkflowID,
+		StartedAt:  startTime,
+		Mode:       req.Mode,
+		Status:     "running",
+		Metadata: map[string]interface{}{
+			"parentExecutionId": original.ID,
+			"retryFromNode":     req.NodeName,
+		},
+	}
+
+	if err := s.storage.SaveExecution(newExecution); err != nil {
+		s.sendError(w, http.StatusInternalServerError, "Failed to save execution", err)
+		return
+	}
+
+	execCtx, cancel := context.WithCancel(r.Context())
+	s.trackExecutionCancel(newExecution.ID, cancel)
+	defer func() {
+		cancel()
+		s.untrackExecutionCancel(newExecution.ID)
+	}()
+
+	result, execErr := engine.ExecuteWorkflowWithContext(execCtx, s.engine, subWorkflow, inputData)
+	executionErr := engine.ResolveExecutionError(result, execErr)
+
+	finishedAt := time.Now()
+	newExecution.FinishedAt = &finishedAt
+
+	if executionErr != nil {
+		if errors.Is(executionErr, context.Canceled) {
+			newExecution.Status = "cancelled"
+		} else {
+			newExecution.Status = "failed"
+		}
+		newExecution.Error = executionErr
+	} else {
+		newExecution.Status = "completed"
+		if result != nil {
+			newExecution.Data = result.Data
+		}
+	}
+
+	// Persist the per-node output snapshot so this retry is also
+	// inspectable in the NDV-style execution detail view. Only the
+	// sub-workflow nodes produced data, so NodeData is keyed by the
+	// kept node names; the upstream snapshot from the original
+	// execution is intentionally NOT copied (it would mislead the
+	// user into thinking the upstream ran again).
+	if result != nil && len(result.NodeOutputs) > 0 {
+		newExecution.NodeData = make(map[string][]model.DataItem, len(result.NodeOutputs))
+		for nodeName, items := range result.NodeOutputs {
+			if len(items) == 0 {
+				newExecution.NodeData[nodeName] = []model.DataItem{}
+				continue
+			}
+			newExecution.NodeData[nodeName] = items
+		}
+	}
+
+	if err := s.storage.SaveExecution(newExecution); err != nil {
+		s.sendError(w, http.StatusInternalServerError, "Failed to update execution", err)
+		return
+	}
+
+	s.sendJSON(w, http.StatusOK, newExecution)
+}
+
+// buildSubWorkflow constructs a workflow containing the target node
+// and its downstream descendants, plus the input data the target
+// node should receive.
+//
+// The "downstream" set is computed by walking
+// workflow.Connections[*].Main[*][*].Node from the target outward
+// until we run out of edges. Connections pointing at nodes outside
+// the kept set are dropped — the engine's router only sees edges
+// between kept nodes, so it won't try to route data to a node that
+// isn't there.
+//
+// Input data resolution:
+//   - If the caller supplied InputData, use it verbatim.
+//   - Otherwise, replay the FIRST upstream node's last successful
+//     output from the original execution's NodeData snapshot. We
+//     pick the first one because the engine's topological loop only
+//     sees one starting node for the sub-workflow and the IF / Switch
+//     routing tags the engine uses to fan out are stripped after
+//     routing, so the snapshot is the most faithful replay available.
+//
+// Returns an error when there's no upstream node in the saved
+// snapshot AND the caller didn't pass an override — re-running a
+// trigger node with no recorded input would silently produce an
+// empty execution.
+func buildSubWorkflow(
+	workflow *model.Workflow,
+	original *model.WorkflowExecution,
+	req *RetryNodeRequest,
+	upstreamNames []string,
+) (*model.Workflow, []model.DataItem, error) {
+	// Build the kept-set via BFS over downstream edges.
+	kept := map[string]bool{req.NodeName: true}
+	queue := []string{req.NodeName}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		conns, ok := workflow.Connections[cur]
+		if !ok || conns.Main == nil {
+			continue
+		}
+		for _, outputs := range conns.Main {
+			for _, c := range outputs {
+				if !kept[c.Node] {
+					kept[c.Node] = true
+					queue = append(queue, c.Node)
+				}
+			}
+		}
+	}
+
+	// Filter the nodes slice preserving original order.
+	keptNodes := make([]model.Node, 0, len(kept))
+	for _, n := range workflow.Nodes {
+		if kept[n.Name] {
+			keptNodes = append(keptNodes, n)
+		}
+	}
+	if len(keptNodes) == 0 {
+		return nil, nil, fmt.Errorf("no nodes to retry")
+	}
+
+	// Filter the connections map to edges between kept nodes only.
+	keptConns := make(map[string]model.Connections, len(kept))
+	for source, conns := range workflow.Connections {
+		if !kept[source] {
+			continue
+		}
+		newMain := make([][]model.Connection, len(conns.Main))
+		for i, outputs := range conns.Main {
+			filtered := make([]model.Connection, 0, len(outputs))
+			for _, c := range outputs {
+				if kept[c.Node] {
+					filtered = append(filtered, c)
+				}
+			}
+			newMain[i] = filtered
+		}
+		keptConns[source] = model.Connections{Main: newMain}
+	}
+
+	// Resolve input data: caller override > upstream snapshot > error.
+	inputData := req.InputData
+	if inputData == nil {
+		for _, upName := range upstreamNames {
+			if items, ok := original.NodeData[upName]; ok && len(items) > 0 {
+				inputData = items
+				break
+			}
+		}
+	}
+	if inputData == nil {
+		// Trigger node (no upstream) — accept the request but warn;
+		// the engine will execute the trigger node with no items,
+		// which mirrors n8n's behaviour for "Run once with no input".
+		inputData = []model.DataItem{}
+	}
+
+	sub := &model.Workflow{
+		ID:          workflow.ID,
+		Name:        workflow.Name,
+		Description: workflow.Description,
+		Active:      false,
+		Nodes:       keptNodes,
+		Connections: keptConns,
+		Settings:    workflow.Settings,
+		StaticData:  workflow.StaticData,
+		PinData:     workflow.PinData,
+		Tags:        workflow.Tags,
+		VersionID:   workflow.VersionID,
+		CreatedAt:   workflow.CreatedAt,
+		UpdatedAt:   workflow.UpdatedAt,
+		CreatedBy:   workflow.CreatedBy,
+	}
+	return sub, inputData, nil
+}

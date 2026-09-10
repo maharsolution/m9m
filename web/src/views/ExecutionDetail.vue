@@ -558,6 +558,27 @@ const retryExecution = async () => {
   }
 }
 
+// `retryingNode` flips the spinner on the "Retry from here"
+// button so the user gets feedback while the backend builds the
+// sub-workflow and runs it. We don't disable the whole canvas
+// because the request is fast in practice; a per-button spinner
+// is enough.
+const retryingNode = ref(false)
+const retryFromSelected = async () => {
+  if (!execution.value || !selectedNodeName.value || retryingNode.value) return
+  retryingNode.value = true
+  try {
+    const newExecution = await executionStore.retryNode(execution.value.id, {
+      nodeName: selectedNodeName.value,
+    })
+    router.push(`/executions/${newExecution.id}`)
+  } catch (e) {
+    console.error('Failed to retry from node:', e)
+  } finally {
+    retryingNode.value = false
+  }
+}
+
 const goBack = () => router.push('/executions')
 
 const onNodeClick = (event: { node: { id: string } }) => {
@@ -710,6 +731,22 @@ function downloadData() {
           <div class="flex items-center gap-1">
             <span class="w-3 h-3 rounded-full bg-slate-300"></span>
             <span class="text-slate-600 dark:text-slate-300">Pending / Skipped</span>
+          </div>
+          <!-- Per-node retry. Disabled until the user selects a
+               node; clicking re-runs the workflow starting from
+               that node and navigates to the new execution. Mirrors
+               n8n's "Retry from here" affordance on the failed
+               node. -->
+          <div class="ml-2 pl-2 border-l border-slate-200 dark:border-slate-600">
+            <button
+              :disabled="!selectedNodeName || retryingNode"
+              @click="retryFromSelected"
+              class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/30 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Re-run the workflow starting from the selected node"
+            >
+              <ArrowPathIcon :class="['w-3.5 h-3.5', retryingNode ? 'animate-spin' : '']" />
+              {{ retryingNode ? 'Retrying…' : 'Retry from here' }}
+            </button>
           </div>
         </div>
       </div>

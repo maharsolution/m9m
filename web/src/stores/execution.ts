@@ -101,6 +101,30 @@ export const useExecutionStore = defineStore('execution', () => {
     }
   }
 
+  // retryNode — re-run an execution starting from a specific node.
+  //
+  // The store treats this as a sibling of retryExecution so the
+  // history list always reflects the new execution immediately.
+  // Callers (ExecutionDetail.vue) typically navigate the user to
+  // the new execution's URL via router.push after this resolves.
+  async function retryNode(
+    id: string,
+    req: { nodeName: string; inputData?: import('@/types').DataItem[]; mode?: string }
+  ) {
+    loading.value = true
+    error.value = null
+    try {
+      const execution = await executionApi.retryNode(id, req)
+      executions.value.unshift(execution)
+      return execution
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to retry node'
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function cancelExecution(id: string) {
     loading.value = true
     error.value = null
@@ -182,6 +206,7 @@ export const useExecutionStore = defineStore('execution', () => {
     fetchExecution,
     deleteExecution,
     retryExecution,
+    retryNode,
     cancelExecution,
     setupWebSocketHandlers,
   }
