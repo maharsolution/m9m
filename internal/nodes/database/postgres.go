@@ -207,6 +207,17 @@ func (p *PostgresNode) Execute(inputData []model.DataItem, nodeParams map[string
 func (p *PostgresNode) executeQuery(db *sql.DB, nodeParams map[string]interface{}, item model.DataItem) (model.DataItem, error) {
 	query := p.GetStringParameter(nodeParams, "query", "")
 
+	// Resolve `{{ ... }}` expressions against the inbound data item so
+	// parameterised queries like
+	// `select * from {{ $json.body.table_name }}` resolve before the
+	// driver sees them. Without this, PostgreSQL receives the raw
+	// template and returns a syntax error.
+	resolved, err := resolveQueryTemplate(query, item)
+	if err != nil {
+		return model.DataItem{}, err
+	}
+	query = resolved
+
 	// SECURITY: Basic validation - reject obviously dangerous patterns
 	// Note: This is defense-in-depth, not a complete SQL injection prevention
 	dangerousPatterns := []string{

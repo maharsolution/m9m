@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/neul-labs/m9m/internal/engine"
+	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
 )
@@ -135,12 +137,24 @@ func (n *ExecuteWorkflowNode) ExecuteWithContext(ctx context.Context, inputData 
 		return nil, err
 	}
 
-	// Provide input data
-	if len(inputData) == 0 {
-		inputData = []model.DataItem{{JSON: map[string]interface{}{}}}
+	// Apply the workflowInputs mapping so the sub-workflow sees the
+	// same payload n8n would deliver. n8n parents express the mapping
+	// either as a free-form value map (`{name: "={{ $json.body.name }}"}`)
+	// or as an auto-passthrough (the entire item, unchanged). Without
+	// this step the sub-workflow's downstream `$json.*` references
+	// resolve to the parent's raw body, which usually doesn't have
+	// the expected top-level fields (e.g. a webhook body lives at
+	// `$json.body`, not `$json.name`), so Set/Code nodes end up with
+	// empty values and parity breaks.
+	subInputs, err := n.mapWorkflowInputs(inputData, nodeParams)
+	if err != nil {
+		return nil, err
+	}
+	if len(subInputs) == 0 {
+		subInputs = []model.DataItem{{JSON: map[string]interface{}{}}}
 	}
 
-	result, err := n.executor.ExecuteWorkflowWithContext(ctx, workflow, inputData)
+	result, err := n.executor.ExecuteWorkflowWithContext(ctx, workflow, subInputs)
 	if err != nil {
 		return nil, n.CreateError(fmt.Sprintf("sub-workflow execution failed: %v", err), nil)
 	}
@@ -248,4 +262,96 @@ func (n *ExecuteWorkflowNode) ValidateParameters(params map[string]interface{}) 
 		return nil
 	}
 	return n.CreateError("workflowId is required (or workflowPath for local file)", nil)
+}
+
+// mapWorkflowInputs applies the parent workflow's `workflowInputs`
+// configuration to the inbound data items so the child workflow
+// receives the same payload n8n would produce.
+//
+// n8n's `workflowInputs` block on the Execute Workflow node looks like:
+//
+//	{
+//	  "mappingMode": "defineBelow" | "auto",  // "auto" = pass through
+//	  "value": {                             // map of name → expression
+//	    "name":    "={{ $json.body.name }}",
+//	    "address": "={{ $json.body.address }}"
+//	  }
+//	}
+//
+// When mappingMode is "auto" we forward the parent's items unchanged.
+// In "defineBelow" mode (the only other documented mode), we build a
+// fresh item whose top-level fields are the `value` map's keys, with
+// each value evaluated against the inbound item via the Goja expression
+// engine. The result is the canonical $json the sub-workflow's
+// Execute Workflow Trigger sees — and downstream Set/Code nodes can
+// read `$json.name` etc. directly.
+func (n *ExecuteWorkflowNode) mapWorkflowInputs(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
+	inputs, ok := nodeParams["workflowInputs"].(map[string]interface{})
+	if !ok {
+		// No mapping specified — pass through unchanged so historic
+		// callers (and any future n8n shape we haven't taught yet)
+		// keep behaving the way they did before this code existed.
+		return inputData, nil
+	}
+
+	mode, _ := inputs["mappingMode"].(string)
+	if mode == "" {
+		mode = "defineBelow"
+	}
+	if mode != "defineBelow" && mode != "auto" {
+		return nil, n.CreateError(fmt.Sprintf("unsupported workflowInputs.mappingMode: %s", mode), nil)
+	}
+
+	if mode == "auto" {
+		return inputData, nil
+	}
+
+	valueMap, ok := inputs["value"].(map[string]interface{})
+	if !ok || len(valueMap) == 0 {
+		// No explicit value mapping either — fall through with the
+		// raw payload so empty-mapping configurations don't crash.
+		return inputData, nil
+	}
+
+	// Evaluate the parent's expression map against each input item.
+	// n8n produces one output item per inbound item, mirroring the
+	// downstream array shape.
+	evaluator := expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig())
+	out := make([]model.DataItem, 0, len(inputData))
+	for _, item := range inputData {
+		ctx := &expressions.ExpressionContext{
+			ActiveNodeName:      "Execute Workflow",
+			RunIndex:            0,
+			ItemIndex:           0,
+			Mode:                expressions.ModeManual,
+			ConnectionInputData: []model.DataItem{item},
+			Workflow: &model.Workflow{Name: "ExecuteWorkflow"},
+		}
+		mapped := make(map[string]interface{})
+		for key, raw := range valueMap {
+			s, ok := raw.(string)
+			if !ok {
+				// Non-string defaults (rare in real workflows) are
+				// passed through verbatim — n8n only really expects
+				// string expressions in `value`.
+				mapped[key] = raw
+				continue
+			}
+			// n8n expression mode: `={{ expr }}`; template fragment:
+			// `{{ expr }}`. Strip the leading `=` so the evaluator
+			// runs the inner expression, mirroring how the Set node
+			// handles `=`-prefixed values.
+			expr := s
+			if strings.HasPrefix(s, "=") {
+				expr = strings.TrimPrefix(s, "=")
+			}
+			resolved, err := evaluator.EvaluateExpression(expr, ctx)
+			if err != nil {
+				return nil, n.CreateError(fmt.Sprintf("workflowInputs value %q: failed to evaluate %q: %v", key, s, err), nil)
+			}
+			mapped[key] = resolved
+		}
+		out = append(out, model.DataItem{JSON: mapped})
+	}
+	return out, nil
 }
