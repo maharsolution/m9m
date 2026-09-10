@@ -2,6 +2,7 @@ package credentials
 
 import (
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/neul-labs/m9m/internal/model"
@@ -89,6 +90,8 @@ func (cm *CredentialManager) ResolveWorkflowCredentials(workflow *model.Workflow
 	for _, node := range workflow.Nodes {
 		if len(node.Credentials) > 0 {
 			for credType, credRef := range node.Credentials {
+				fmt.Fprintf(os.Stderr, "[cred-debug-resolve] node=%s id=%s credType=%s credRef.ID=%q credRef.Name=%q credRef.Type=%q\n",
+					node.Name, node.ID, credType, credRef.ID, credRef.Name, credRef.Type)
 				if credRef.ID != "" {
 					cm.RegisterNodeCredentials(node.ID, credType, credRef.ID)
 				}
