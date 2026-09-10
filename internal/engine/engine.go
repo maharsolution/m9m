@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -472,6 +473,10 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 				}, nil // Return as result.Error, not as function error
 			}
 		}
+		// [DEBUG] dump cred-injected params for db node debugging
+		fmt.Fprintf(os.Stderr, "[cred-debug] node=%s id=%s credMgr=%v hasMySqlHost=%v hasHost=%v\n",
+			node.Name, node.ID, e.credentialManager != nil,
+			finalNodeParams["mySql_host"] != nil, finalNodeParams["host"] != nil)
 
 		// Validate the post-injection parameters so credential-only
 		// nodes (e.g. an n8n MySQL node whose connection settings live
