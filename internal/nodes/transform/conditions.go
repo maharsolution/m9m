@@ -2,6 +2,7 @@ package transform
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -315,8 +316,10 @@ func resolveValue(data map[string]interface{}, value interface{}, eval Expressio
 		// Preserve prior observable behaviour for broken expressions:
 		// fall back to the literal string so downstream comparison
 		// proceeds against the unevaluated text rather than panicking.
+		os.Stderr.WriteString(fmt.Sprintf("[cond-debug] expr=%q resolved=%v (fallback) err=%v\n", expr, resolved, err))
 		return value
 	}
+	os.Stderr.WriteString(fmt.Sprintf("[cond-debug] expr=%q resolved=%v (%T)\n", expr, resolved, resolved))
 	return resolved
 }
 
