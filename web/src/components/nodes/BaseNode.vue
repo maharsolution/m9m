@@ -13,6 +13,14 @@ interface Props {
     category: NodeCategory
     parameters?: Record<string, unknown>
     credentials?: Record<string, { id: string; name: string }>
+    // 'compact' (default) is the editor-friendly 200/260px wide
+    // card. 'comfortable' widens the card and grows the icon /
+    // label for screens where the user reads the canvas (e.g.
+    // the execution detail view), making each node easier to
+    // click. The Canvas (editor / execution) sets this when it
+    // builds the Vue Flow nodes — see `buildFlowNodes` /
+    // ExecutionDetail.vue.
+    density?: 'compact' | 'comfortable'
   }
   selected?: boolean
 }
@@ -81,7 +89,14 @@ const deleteNode = (event: MouseEvent) => {
 <template>
   <div
     :class="[
-      'workflow-node min-w-[200px] max-w-[260px] min-h-[80px]',
+      // Width and minimum height vary with density. The compact
+      // (default) size keeps the editor canvas dense; comfortable
+      // widens the card and bumps the min-height so the execution
+      // canvas reads more like an inspector and is easier to click
+      // (user feedback Sep 2026 — execution nodes were too small).
+      data.density === 'comfortable'
+        ? 'workflow-node workflow-node--comfortable min-w-[280px] max-w-[340px] min-h-[110px]'
+        : 'workflow-node min-w-[200px] max-w-[260px] min-h-[80px]',
       categoryStyles.border,
       'border-l-4',
       selected ? 'selected' : ''
@@ -121,17 +136,28 @@ const deleteNode = (event: MouseEvent) => {
       <XMarkIcon class="w-3.5 h-3.5" />
     </button>
 
-    <!-- Node Content -->
-    <div class="p-3">
+    <!-- Node Content. Padding, icon size, and font size all
+         scale with density so the "comfortable" card doesn't end
+         up with cramped content. We keep the editor's compact
+         defaults by NOT touching the inner classes when density
+         is compact. -->
+    <div :class="data.density === 'comfortable' ? 'p-4' : 'p-3'">
       <div class="flex items-center gap-2">
-        <div :class="[categoryStyles.icon, 'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0']">
-          <span class="text-white text-sm">{{ categoryStyles.iconText }}</span>
+        <div
+          :class="[
+            categoryStyles.icon,
+            data.density === 'comfortable'
+              ? 'w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0'
+              : 'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
+          ]"
+        >
+          <span :class="data.density === 'comfortable' ? 'text-white text-base' : 'text-white text-sm'">{{ categoryStyles.iconText }}</span>
         </div>
         <div class="min-w-0 flex-1">
-          <h4 class="text-sm font-semibold text-slate-900 dark:text-white truncate">
+          <h4 :class="data.density === 'comfortable' ? 'text-base font-semibold text-slate-900 dark:text-white truncate' : 'text-sm font-semibold text-slate-900 dark:text-white truncate'">
             {{ data.label }}
           </h4>
-          <p class="text-xs text-slate-500 dark:text-slate-400 truncate">
+          <p :class="data.density === 'comfortable' ? 'text-sm text-slate-500 dark:text-slate-400 truncate' : 'text-xs text-slate-500 dark:text-slate-400 truncate'">
             {{ nodeTypeName }}
           </p>
         </div>
@@ -140,9 +166,14 @@ const deleteNode = (event: MouseEvent) => {
       <!-- Credential badge -->
       <div
         v-if="credentialCount > 0"
-        class="mt-2 pt-2 border-t border-slate-200 dark:border-slate-600 flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300"
+        :class="[
+          'mt-2 pt-2 border-t border-slate-200 dark:border-slate-600 flex items-center gap-1',
+          data.density === 'comfortable'
+            ? 'text-sm text-slate-600 dark:text-slate-300'
+            : 'text-xs text-slate-600 dark:text-slate-300',
+        ]"
       >
-        <KeyIcon class="w-3 h-3" />
+        <KeyIcon :class="data.density === 'comfortable' ? 'w-3.5 h-3.5' : 'w-3 h-3'" />
         <span>{{ credentialCount }} credential{{ credentialCount > 1 ? 's' : '' }}</span>
       </div>
 
@@ -154,7 +185,11 @@ const deleteNode = (event: MouseEvent) => {
         <div
           v-for="(value, key) in data.parameters"
           :key="key"
-          class="text-xs text-slate-500 dark:text-slate-400 truncate"
+          :class="[
+            data.density === 'comfortable'
+              ? 'text-sm text-slate-500 dark:text-slate-400 truncate'
+              : 'text-xs text-slate-500 dark:text-slate-400 truncate',
+          ]"
         >
           <span class="font-medium">{{ key }}:</span>
           {{ typeof value === 'object' ? '...' : value }}

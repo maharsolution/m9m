@@ -45,6 +45,27 @@ type ExecutionResult struct {
 	// engine) the map is nil and consumers must fall back to the
 	// legacy `Data` field (the last-node output).
 	NodeOutputs map[string][]model.DataItem `json:"nodeOutputs,omitempty"`
+
+	// EdgesTaken records which connections in the workflow actually
+	// carried at least one item during this execution. The key format
+	// is "<sourceNodeID>:<outputIndex>:<targetNodeID>:<inputIndex>"
+	// — the same shape used by the frontend's
+	// `buildEdgeId(sourceNodeId, sourceOutput, targetNodeId,
+	// targetInput)` helper, minus the leading "workflow-edge:"
+	// prefix and URL-encoding (those are presentation concerns owned
+	// by the UI; the engine emits the raw tuple).
+	//
+	// Why this exists: a user reading an execution should be able to
+	// tell which branches of an IF/Switch actually carried items
+	// versus which were skipped, without us having to persist every
+	// node's full I/O snapshot. Storing one bool per edge is O(E)
+	// (typically < 10 even for branching workflows), which is two
+	// orders of magnitude smaller than the per-node snapshots the
+	// Debug=OFF helper otherwise records.
+	//
+	// Populated by the engine's execution loop as it routes data
+	// from node to node. Empty for workflows without branching.
+	EdgesTaken map[string]bool `json:"edgesTaken,omitempty"`
 }
 
 // NodeRegistry maps node types to their executors
@@ -102,6 +123,16 @@ type workflowEngineImpl struct {
 	runExecutionData *expressions.RunExecutionData
 	runIndex         int
 	itemIndex        int
+
+	// edgesTaken is the accumulator the engine populates as it
+	// routes items between nodes. Each entry is keyed by
+	// `<sourceNodeID>:<outputIndex>:<targetNodeID>:<inputIndex>`
+	// (matching the frontend's edge ID minus the
+	// "workflow-edge:" prefix and URL-encoding) and the value is
+	// true when at least one item flowed across that connection.
+	// Reset to a fresh map at the start of every ExecuteWorkflow
+	// call so the previous run's data never leaks across runs.
+	edgesTaken map[string]bool
 }
 
 // NewWorkflowEngine creates a new workflow engine
@@ -242,6 +273,11 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 	// the live runExecutionData. Both fields are cleared at the end
 	// to keep the engine re-entrant across concurrent workflows.
 	e.workflow = workflow
+	// Reset the EdgesTaken accumulator before every run so a
+	// re-used engine (long-lived process) never leaks edges from
+	// the previous workflow into the current one. The map is
+	// small (O(E)) and the allocation cost is negligible.
+	e.edgesTaken = make(map[string]bool)
 	e.runExecutionData = &expressions.RunExecutionData{
 		ExecutionData: &expressions.ExecutionData{},
 		ResultData: &expressions.RunData{
@@ -628,6 +664,24 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 				nodeResults[targetNode] = append(nodeResults[targetNode], data...)
 			}
 		}
+
+		// Record which connections actually carried items in this
+		// routing step. We walk workflow.Connections[source] instead
+		// of using routedData alone because the latter is collapsed
+		// to (target → items) — the branch (outputIndex) and
+		// inputIndex are lost. For non-routing nodes (the common
+		// case), every connection in the source's connections map
+		// gets the full output, so we mark every edge as taken.
+		//
+		// For routing nodes (IF, Switch), partitionByRoutingMetadata
+		// inside the router partitioned items per branch. A target
+		// in branch k that received >0 items means that specific
+		// edge was taken; other edges in the same source are not.
+		// We approximate this by re-running the partition logic
+		// against the raw outputData: branchable nodes tag items
+		// with _ifResult / _switchRuleIndex, non-routing nodes
+		// don't, in which case every edge is marked taken.
+		recordEdgesTaken(e.edgesTaken, node, outputData, workflow)
 	}
 
 	// Return the result from the last node in execution order that
@@ -657,6 +711,15 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		// last-node output and is the wrong shape for responseNode
 		// workflows.
 		NodeOutputs: nodeResults,
+		// Publish the EdgesTaken accumulator so the API and
+		// webhook manager can persist a per-edge "did this branch
+		// carry items?" signal back to the execution record.
+		// Without this the UI can colour edges green/grey only when
+		// Debug=ON (because the per-node snapshots let it infer the
+		// path); with this set the same colouring works under
+		// Debug=OFF, satisfying the "different colour per edge"
+		// requirement without bloating the DB.
+		EdgesTaken: e.edgesTaken,
 	}, nil
 }
 
@@ -1361,4 +1424,172 @@ func stripRoutingMetadata(items []model.DataItem) []model.DataItem {
 		}
 	}
 	return out
+}
+
+// routingKind returns a coarse classification of the source node's
+// per-item routing metadata so the EdgesTaken accumulator can decide
+// which branches were actually exercised.
+//
+// The detection mirrors the partitionByRoutingMetadata helper in
+// internal/connections/router.go — we don't import that helper because
+// it lives in a sibling package and the cost of re-implementing the
+// check is one switch over known tags.
+//
+// Returned values:
+//
+//	"if"     — every emitted item carries `_ifResult`; the engine
+//	           routes true items to main[0], false items to main[1].
+//	"switch" — every emitted item carries `_switchRuleIndex`; the
+//	           engine routes items with tag k to main[k], with
+//	           unmatched items falling through to main[last].
+//	""       — no routing tags found; the engine forwards every
+//	           emitted item to every downstream target on every
+//	           branch.
+func routingKind(items []model.DataItem) string {
+	for _, item := range items {
+		if _, ok := item.JSON["_ifResult"]; ok {
+			return "if"
+		}
+		if _, ok := item.JSON["_switchRuleIndex"]; ok {
+			return "switch"
+		}
+	}
+	return ""
+}
+
+// recordEdgesTaken marks every connection leaving `sourceNode` that
+// carried at least one item from `outputData` into the accumulator
+// `taken`. The key format matches the frontend's `buildEdgeId` minus
+// the "workflow-edge:" prefix and URL-encoding — see ExecutionResult
+// .EdgesTaken.
+//
+// For non-routing nodes (no `_ifResult` / `_switchRuleIndex` tags)
+// every connection leaving the source is recorded as taken: that's
+// the historic behaviour the engine already implements and matches
+// n8n's "every branch forwards every item" model for plain pass-
+// through nodes.
+//
+// For routing nodes, only the branches that received at least one
+// matching item are recorded. The function uses the source node's
+// own `Connections` map as the source of truth for which (outputIndex,
+// targetNode, inputIndex) tuples exist — the router has already
+// collapsed this into per-target slices in `routedData`, which we
+// intentionally do NOT consult here because the per-branch breakdown
+// is gone by then.
+//
+// This function is a no-op when the workflow has no connections
+// leaving the source node (a terminal node, or a workflow with no
+// edges at all).
+func recordEdgesTaken(taken map[string]bool, sourceNode *model.Node, outputData []model.DataItem, workflow *model.Workflow) {
+	if workflow == nil || sourceNode == nil || workflow.Connections == nil {
+		return
+	}
+	conns, ok := workflow.Connections[sourceNode.Name]
+	if !ok || conns.Main == nil {
+		return
+	}
+
+	// Build the set of branches that received at least one item, so
+	// we can decide per-edge whether to mark it taken. For
+	// non-routing sources the set is "all branches" — every
+	// emitted item was forwarded to every branch.
+	branchWithItems := make(map[int]bool, len(conns.Main))
+	kind := routingKind(outputData)
+	switch kind {
+	case "if":
+		for _, item := range outputData {
+			v, ok := item.JSON["_ifResult"]
+			if !ok {
+				continue
+			}
+			b, ok := v.(bool)
+			if !ok {
+				continue
+			}
+			// main[0] = true, main[1] = false.
+			if b {
+				branchWithItems[0] = true
+			} else {
+				branchWithItems[1] = true
+			}
+		}
+	case "switch":
+		for _, item := range outputData {
+			v, ok := item.JSON["_switchRuleIndex"]
+			if !ok {
+				continue
+			}
+			n, ok := toInt(v)
+			if !ok {
+				continue
+			}
+			branchWithItems[n] = true
+		}
+		// Unmatched items fall through to main[last] — the
+		// router's `fallbackToLast` behaviour. Mirror it here.
+		branchWithItems[len(conns.Main)-1] = true
+	default:
+		for i := range conns.Main {
+			branchWithItems[i] = true
+		}
+	}
+
+	// Resolve sourceID → nodeID for the key. node.ID is the
+	// Vue Flow node ID assigned by the editor; the frontend's
+	// buildEdgeId uses the same field, so matching is direct.
+	// Resolve targetName → targetID by linear scan; for typical
+	// workflows (< 100 nodes) this is far cheaper than maintaining
+	// a per-run name index.
+	nameToID := make(map[string]string, len(workflow.Nodes))
+	for i := range workflow.Nodes {
+		nameToID[workflow.Nodes[i].Name] = workflow.Nodes[i].ID
+	}
+
+	sourceID := nameToID[sourceNode.Name]
+
+	for outputIndex, outputs := range conns.Main {
+		if !branchWithItems[outputIndex] {
+			continue
+		}
+		for _, c := range outputs {
+			targetID := nameToID[c.Node]
+			if targetID == "" {
+				// The target was renamed out from under us or
+				// doesn't exist; skip rather than write a key
+				// the UI can't resolve.
+				continue
+			}
+			taken[edgeKey(sourceID, outputIndex, targetID, c.Index)] = true
+		}
+	}
+}
+
+// edgeKey builds the `<sourceID>:<outputIndex>:<targetID>:<inputIndex>`
+// tuple the engine and frontend share. Centralised here so the
+// accumulator (above) and any future consumer (e.g. a metrics
+// publisher) speak the same dialect.
+func edgeKey(sourceID string, outputIndex int, targetID string, inputIndex int) string {
+	return fmt.Sprintf("%s:%d:%s:%d", sourceID, outputIndex, targetID, inputIndex)
+}
+
+// toInt coerces arbitrary JSON-decoded numerics into an int. n8n's
+// Switch node writes the rule index as a number; depending on the
+// decode path it can arrive as int, int64, float64, or json.Number.
+// Centralising the coercion avoids subtle off-by-one branch bugs in
+// the EdgesTaken accumulator when one path emits `_switchRuleIndex`
+// as float64(2) but another emits int64(2).
+func toInt(v interface{}) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, true
+	case int32:
+		return int(n), true
+	case int64:
+		return int(n), true
+	case float64:
+		return int(n), true
+	case float32:
+		return int(n), true
+	}
+	return 0, false
 }

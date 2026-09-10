@@ -223,6 +223,14 @@ type WorkflowExecution struct {
 	Data        []DataItem             `json:"data,omitempty"`
 	Error       error                  `json:"error,omitempty"`
 	NodeData    map[string][]DataItem  `json:"nodeData,omitempty"`
+	// EdgesTaken records which connections in the workflow actually
+	// carried items during this execution. The map is keyed by
+	// `<sourceNodeID>:<outputIndex>:<targetNodeID>:<inputIndex>` and
+	// the value is always true (the map exists as a set). Used by
+	// the UI to colour-code execution edges green for the path
+	// that ran, grey for the path that didn't — without bloating
+	// the DB with per-node I/O snapshots when Debug=OFF.
+	EdgesTaken  map[string]bool        `json:"edgesTaken,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 	CreatedAt   time.Time              `json:"createdAt"`
 	UpdatedAt   time.Time              `json:"updatedAt"`

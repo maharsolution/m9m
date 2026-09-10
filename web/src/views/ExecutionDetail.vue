@@ -51,7 +51,7 @@ import {
   useNodesStore,
   useWorkflowStore,
 } from '@/stores'
-import { buildFlowNodes, buildFlowEdges } from '@/lib/workflowGraph'
+import { buildFlowNodes, buildFlowEdges, parseEdgeId } from '@/lib/workflowGraph'
 import type { Workflow, WorkflowNode, DataItem } from '@/types'
 import type { NodeType, NodeProperty } from '@/types/node'
 import ExecutionDataView from '@/components/execution/ExecutionDataView.vue'
@@ -293,8 +293,13 @@ const flowNodes = computed(() => {
       running: 'ring-2 ring-blue-500 animate-pulse',
       skipped: 'ring-1 ring-slate-300 dark:ring-slate-600 opacity-50',
     }
+    // Execution canvas reads more like a debugger than an editor,
+    // so render every node at 'comfortable' density — bigger hit
+    // target, bigger icon, easier to scan at a glance. Editor
+    // canvas (WorkflowCanvas) keeps the compact default.
     return {
       ...n,
+      data: { ...(n.data as Record<string, unknown>), density: 'comfortable' },
       selected: n.id === selectedNodeId.value,
       class: stateRing[state],
     }
@@ -303,14 +308,52 @@ const flowNodes = computed(() => {
 
 const flowEdges = computed(() => {
   const base = buildFlowEdges(workflow.value as Workflow | null)
+  // The engine publishes a per-edge "did this connection carry
+  // items?" map keyed by `<sourceID>:<outputIndex>:<targetID>:
+  // <inputIndex>` — the same tuple the frontend uses to build
+  // its own edge IDs, minus the leading `workflow-edge:` prefix
+  // and the URL-encoding the frontend adds for safety. Look up
+  // by the raw tuple (no prefix, no encoding) so a green line
+  // for a connection that actually carried data is preserved
+  // even when Debug=OFF (and per-node snapshots are absent).
+  const edgesTaken = execution.value?.edgesTaken ?? {}
   return base.map((e) => {
     const sourceName = workflow.value?.nodes.find((n) => n.id === e.source)?.name
     const targetName = workflow.value?.nodes.find((n) => n.id === e.target)?.name
     const sourceState = sourceName ? nodeStates.value.get(sourceName) : undefined
     const targetState = targetName ? nodeStates.value.get(targetName) : undefined
+    // `parseEdgeId` re-exports the URL-decoded source/target IDs
+    // and the integer indices; that's the same tuple shape the
+    // engine emits, so we can index into edgesTaken directly.
+    const parsed = parseEdgeId(e.id)
+    const edgeTaken = parsed
+      ? edgesTaken[`${parsed.sourceNodeId}:${parsed.sourceOutput}:${parsed.targetNodeId}:${parsed.targetInput}`]
+      : false
     let stroke = '#94a3b8' // neutral slate-400 for pending/default
     let animated = false
-    if (sourceState === 'success' && targetState !== 'skipped') {
+    // Per-edge branch colouring has priority over per-node state
+    // colouring. When the engine recorded that this specific
+    // connection didn't carry items (e.g. the IF routed everything
+    // down main[0] and main[1] is empty), paint it grey regardless
+    // of whether both endpoints are 'success' — the user is asking
+    // to see "which path ran", not "which nodes are healthy". The
+    // per-node state colour is still the fallback for runs where
+    // edgesTaken is missing (older executions) or undefined for
+    // this specific edge.
+    if (execution.value && Object.keys(edgesTaken).length > 0) {
+      if (edgeTaken) {
+        if (sourceState === 'failed' || targetState === 'failed') {
+          stroke = '#ef4444' // red-500 — taken but failed upstream/downstream
+        } else if (sourceState === 'running' || targetState === 'running') {
+          stroke = '#3b82f6' // blue-500 — taken and currently running
+          animated = true
+        } else {
+          stroke = '#22c55e' // green-500 — taken, healthy
+        }
+      } else {
+        stroke = '#cbd5e1' // slate-300 — not taken, branch didn't run
+      }
+    } else if (sourceState === 'success' && targetState !== 'skipped') {
       stroke = '#22c55e' // green-500
     } else if (sourceState === 'failed' || targetState === 'failed') {
       stroke = '#ef4444' // red-500
@@ -882,19 +925,35 @@ function downloadData() {
         <div class="absolute bottom-3 left-3 bg-white/95 dark:bg-slate-800/95 backdrop-blur rounded-lg shadow p-2 flex items-center gap-3 text-xs">
           <div class="flex items-center gap-1">
             <span class="w-3 h-3 rounded-full bg-green-500"></span>
-            <span class="text-slate-600 dark:text-slate-300">Success</span>
+            <span class="text-slate-600 dark:text-slate-300">Node: Success</span>
           </div>
           <div class="flex items-center gap-1">
             <span class="w-3 h-3 rounded-full bg-red-500"></span>
-            <span class="text-slate-600 dark:text-slate-300">Failed</span>
+            <span class="text-slate-600 dark:text-slate-300">Node: Failed</span>
           </div>
           <div class="flex items-center gap-1">
             <span class="w-3 h-3 rounded-full bg-blue-500"></span>
-            <span class="text-slate-600 dark:text-slate-300">Running</span>
+            <span class="text-slate-600 dark:text-slate-300">Node: Running</span>
           </div>
           <div class="flex items-center gap-1">
             <span class="w-3 h-3 rounded-full bg-slate-300"></span>
-            <span class="text-slate-600 dark:text-slate-300">Pending / Skipped</span>
+            <span class="text-slate-600 dark:text-slate-300">Node: Pending / Skipped</span>
+          </div>
+          <!-- Edge colouring legend. Edges on the path that ran
+               are green; edges on branches that didn't carry
+               items (e.g. the false side of an IF) are grey.
+               Requires the engine to have published
+               `edgesTaken`; otherwise the colour falls back to
+               the per-node state. -->
+          <div class="ml-2 pl-2 border-l border-slate-200 dark:border-slate-600 flex items-center gap-3">
+            <div class="flex items-center gap-1">
+              <span class="w-4 h-0.5 bg-green-500"></span>
+              <span class="text-slate-600 dark:text-slate-300">Path: ran</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="w-4 h-0.5 bg-slate-300"></span>
+              <span class="text-slate-600 dark:text-slate-300">Path: skipped</span>
+            </div>
           </div>
           <!-- Per-node retry. Disabled until the user selects a
                node; clicking re-runs the workflow starting from

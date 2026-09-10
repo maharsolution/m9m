@@ -73,6 +73,7 @@ func (s *SQLiteStorage) initSchema() error {
 			finished_at DATETIME,
 			data TEXT,
 			node_data TEXT,
+			edges_taken TEXT,
 			error TEXT,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
@@ -136,6 +137,14 @@ func (s *SQLiteStorage) initSchema() error {
 	// matches SQLite's convention for booleans everywhere else
 	// (workflows.active uses INTEGER too).
 	if err := ensureColumn(s.db, "workflows", "debug", "INTEGER DEFAULT 0"); err != nil {
+		return err
+	}
+	// edges_taken: per-execution map of which connections actually
+	// carried items. Stored as JSON-encoded
+	// map[string]bool (same shape as the model struct). Used by
+	// the execution detail view to colour edges green/grey
+	// without bloating the DB with per-node I/O snapshots.
+	if err := ensureColumn(s.db, "executions", "edges_taken", "TEXT"); err != nil {
 		return err
 	}
 	return nil
@@ -370,6 +379,17 @@ func (s *SQLiteStorage) SaveExecution(execution *model.WorkflowExecution) error 
 	} else {
 		nodeDataJSON = []byte("{}")
 	}
+	// Per-edge "did this connection carry items?" map. Same JSON
+	// shape as the model field. Empty when the engine didn't
+	// populate EdgesTaken (older runs, or workflows with no
+	// connections at all — for those the UI infers all edges as
+	// taken because there's no branching to distinguish).
+	var edgesTakenJSON []byte
+	if execution.EdgesTaken != nil {
+		edgesTakenJSON, _ = json.Marshal(execution.EdgesTaken)
+	} else {
+		edgesTakenJSON = []byte("{}")
+	}
 	errorText := ""
 	if execution.Error != nil {
 		errorText = execution.Error.Error()
@@ -377,8 +397,8 @@ func (s *SQLiteStorage) SaveExecution(execution *model.WorkflowExecution) error 
 	createdAt := time.Now()
 
 	query := `
-		INSERT INTO executions (id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO executions (id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, edges_taken, error, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			workflow_id = excluded.workflow_id,
 			workspace_id = excluded.workspace_id,
@@ -388,30 +408,32 @@ func (s *SQLiteStorage) SaveExecution(execution *model.WorkflowExecution) error 
 			finished_at = excluded.finished_at,
 			data = excluded.data,
 			node_data = excluded.node_data,
+			edges_taken = excluded.edges_taken,
 			error = excluded.error
 	`
 
 	_, err := s.db.Exec(query, execution.ID, execution.WorkflowID, execution.WorkspaceID, execution.Status,
-		execution.Mode, execution.StartedAt, execution.FinishedAt, string(dataJSON), string(nodeDataJSON), errorText, createdAt)
+		execution.Mode, execution.StartedAt, execution.FinishedAt, string(dataJSON), string(nodeDataJSON), string(edgesTakenJSON), errorText, createdAt)
 
 	return err
 }
 
 func (s *SQLiteStorage) GetExecution(id string) (*model.WorkflowExecution, error) {
 	query := `
-		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error
+		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, edges_taken, error
 		FROM executions WHERE id = ?
 	`
 
 	var execution model.WorkflowExecution
 	var dataJSON string
 	var nodeDataJSON sql.NullString
+	var edgesTakenJSON sql.NullString
 	var errorText sql.NullString
 	var finishedAt sql.NullTime
 
 	err := s.db.QueryRow(query, id).Scan(
 		&execution.ID, &execution.WorkflowID, &execution.WorkspaceID, &execution.Status, &execution.Mode,
-		&execution.StartedAt, &finishedAt, &dataJSON, &nodeDataJSON, &errorText,
+		&execution.StartedAt, &finishedAt, &dataJSON, &nodeDataJSON, &edgesTakenJSON, &errorText,
 	)
 
 	if err == sql.ErrNoRows {
@@ -431,6 +453,12 @@ func (s *SQLiteStorage) GetExecution(id string) (*model.WorkflowExecution, error
 	// — older executions simply lack the column entirely.
 	if nodeDataJSON.Valid && nodeDataJSON.String != "" && nodeDataJSON.String != "{}" {
 		_ = json.Unmarshal([]byte(nodeDataJSON.String), &execution.NodeData)
+	}
+	// edges_taken is JSON-encoded map[string]bool. Same lenient
+	// decode as node_data: NULL/empty means the engine didn't
+	// produce it (older runs), not corruption.
+	if edgesTakenJSON.Valid && edgesTakenJSON.String != "" && edgesTakenJSON.String != "{}" {
+		_ = json.Unmarshal([]byte(edgesTakenJSON.String), &execution.EdgesTaken)
 	}
 
 	if errorText.Valid && errorText.String != "" {
@@ -474,7 +502,7 @@ func (s *SQLiteStorage) ListExecutions(filters ExecutionFilters) ([]*model.Workf
 
 	// Get executions with pagination
 	query := fmt.Sprintf(`
-		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error
+		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, edges_taken, error
 		FROM executions %s
 		ORDER BY started_at DESC
 		LIMIT ? OFFSET ?
@@ -493,12 +521,13 @@ func (s *SQLiteStorage) ListExecutions(filters ExecutionFilters) ([]*model.Workf
 		var execution model.WorkflowExecution
 		var dataJSON string
 		var nodeDataJSON sql.NullString
+		var edgesTakenJSON sql.NullString
 		var errorText sql.NullString
 		var finishedAt sql.NullTime
 
 		err := rows.Scan(
 			&execution.ID, &execution.WorkflowID, &execution.WorkspaceID, &execution.Status, &execution.Mode,
-			&execution.StartedAt, &finishedAt, &dataJSON, &nodeDataJSON, &errorText,
+			&execution.StartedAt, &finishedAt, &dataJSON, &nodeDataJSON, &edgesTakenJSON, &errorText,
 		)
 		if err != nil {
 			continue
@@ -511,6 +540,9 @@ func (s *SQLiteStorage) ListExecutions(filters ExecutionFilters) ([]*model.Workf
 		_ = json.Unmarshal([]byte(dataJSON), &execution.Data)
 		if nodeDataJSON.Valid && nodeDataJSON.String != "" && nodeDataJSON.String != "{}" {
 			_ = json.Unmarshal([]byte(nodeDataJSON.String), &execution.NodeData)
+		}
+		if edgesTakenJSON.Valid && edgesTakenJSON.String != "" && edgesTakenJSON.String != "{}" {
+			_ = json.Unmarshal([]byte(edgesTakenJSON.String), &execution.EdgesTaken)
 		}
 
 		if errorText.Valid && errorText.String != "" {

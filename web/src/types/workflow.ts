@@ -87,6 +87,14 @@ export interface WorkflowExecution {
   data?: DataItem[]
   error?: string
   nodeData?: Record<string, DataItem[]>
+  // EdgesTaken records which connections actually carried items
+  // during this execution. The keys are the engine's
+  // `<sourceNodeID>:<outputIndex>:<targetNodeID>:<inputIndex>`
+  // tuples; the value is always true (it's a set, not a count).
+  // Used by ExecutionDetail to colour edges green for the path
+  // that ran and grey for the path that didn't — without
+  // requiring per-node I/O snapshots to be persisted.
+  edgesTaken?: Record<string, true>
   metadata?: Record<string, unknown>
   createdAt: string
   updatedAt: string

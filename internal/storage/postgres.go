@@ -74,6 +74,7 @@ func (s *PostgresStorage) initSchema() error {
 			finished_at TIMESTAMP,
 			data JSONB,
 			node_data JSONB,
+			edges_taken JSONB,
 			error TEXT,
 			created_at TIMESTAMP NOT NULL DEFAULT NOW()
 		);
@@ -138,6 +139,14 @@ func (s *PostgresStorage) initSchema() error {
 	// execution detail view. JSONB gives indexed access in case the
 	// Performance page wants to query specific node states later.
 	if err := ensureColumn(s.db, "executions", "node_data", "JSONB"); err != nil {
+		return err
+	}
+	// edges_taken: per-execution map of which connections actually
+	// carried items. JSONB keeps the same indexed-access story as
+	// node_data and matches the storage layout everywhere else.
+	// Used by the execution detail view to colour edges green/grey
+	// without bloating the DB with per-node I/O snapshots.
+	if err := ensureColumn(s.db, "executions", "edges_taken", "JSONB"); err != nil {
 		return err
 	}
 	// debug: per-workflow boolean that gates how much per-node
@@ -373,9 +382,16 @@ func (s *PostgresStorage) SaveExecution(execution *model.WorkflowExecution) erro
 		nodeDataJSON = []byte("{}")
 	}
 
+	var edgesTakenJSON []byte
+	if execution.EdgesTaken != nil {
+		edgesTakenJSON, _ = json.Marshal(execution.EdgesTaken)
+	} else {
+		edgesTakenJSON = []byte("{}")
+	}
+
 	query := `
-		INSERT INTO executions (id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO executions (id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, edges_taken, error, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		ON CONFLICT (id) DO UPDATE SET
 			workflow_id = EXCLUDED.workflow_id,
 			workspace_id = EXCLUDED.workspace_id,
@@ -385,30 +401,32 @@ func (s *PostgresStorage) SaveExecution(execution *model.WorkflowExecution) erro
 			finished_at = EXCLUDED.finished_at,
 			data = EXCLUDED.data,
 			node_data = EXCLUDED.node_data,
+			edges_taken = EXCLUDED.edges_taken,
 			error = EXCLUDED.error
 	`
 
 	_, err := s.db.Exec(query, execution.ID, execution.WorkflowID, execution.WorkspaceID, execution.Status,
-		execution.Mode, execution.StartedAt, execution.FinishedAt, dataJSON, nodeDataJSON, errorText, createdAt)
+		execution.Mode, execution.StartedAt, execution.FinishedAt, dataJSON, nodeDataJSON, edgesTakenJSON, errorText, createdAt)
 
 	return err
 }
 
 func (s *PostgresStorage) GetExecution(id string) (*model.WorkflowExecution, error) {
 	query := `
-		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error
+		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, edges_taken, error
 		FROM executions WHERE id = $1
 	`
 
 	var execution model.WorkflowExecution
 	var dataJSON []byte
 	var nodeDataJSON []byte
+	var edgesTakenJSON []byte
 	var errorText sql.NullString
 	var finishedAt sql.NullTime
 
 	err := s.db.QueryRow(query, id).Scan(
 		&execution.ID, &execution.WorkflowID, &execution.WorkspaceID, &execution.Status, &execution.Mode,
-		&execution.StartedAt, &finishedAt, &dataJSON, &nodeDataJSON, &errorText,
+		&execution.StartedAt, &finishedAt, &dataJSON, &nodeDataJSON, &edgesTakenJSON, &errorText,
 	)
 
 	if err == sql.ErrNoRows {
@@ -428,6 +446,12 @@ func (s *PostgresStorage) GetExecution(id string) (*model.WorkflowExecution, err
 	// simply lack the column entirely.
 	if len(nodeDataJSON) > 0 && string(nodeDataJSON) != "{}" {
 		_ = json.Unmarshal(nodeDataJSON, &execution.NodeData)
+	}
+	// edges_taken is JSONB. Same lenient decode: NULL/empty
+	// means the engine didn't produce it (older runs), not
+	// corruption.
+	if len(edgesTakenJSON) > 0 && string(edgesTakenJSON) != "{}" {
+		_ = json.Unmarshal(edgesTakenJSON, &execution.EdgesTaken)
 	}
 
 	if errorText.Valid && errorText.String != "" {
@@ -475,7 +499,7 @@ func (s *PostgresStorage) ListExecutions(filters ExecutionFilters) ([]*model.Wor
 
 	// Get executions with pagination
 	query := fmt.Sprintf(`
-		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error
+		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, edges_taken, error
 		FROM executions %s
 		ORDER BY started_at DESC
 		LIMIT $%d OFFSET $%d
@@ -494,12 +518,13 @@ func (s *PostgresStorage) ListExecutions(filters ExecutionFilters) ([]*model.Wor
 		var execution model.WorkflowExecution
 		var dataJSON []byte
 		var nodeDataJSON []byte
+		var edgesTakenJSON []byte
 		var errorText sql.NullString
 		var finishedAt sql.NullTime
 
 		err := rows.Scan(
 			&execution.ID, &execution.WorkflowID, &execution.WorkspaceID, &execution.Status, &execution.Mode,
-			&execution.StartedAt, &finishedAt, &dataJSON, &nodeDataJSON, &errorText,
+			&execution.StartedAt, &finishedAt, &dataJSON, &nodeDataJSON, &edgesTakenJSON, &errorText,
 		)
 		if err != nil {
 			continue
@@ -512,6 +537,9 @@ func (s *PostgresStorage) ListExecutions(filters ExecutionFilters) ([]*model.Wor
 		_ = json.Unmarshal(dataJSON, &execution.Data)
 		if len(nodeDataJSON) > 0 && string(nodeDataJSON) != "{}" {
 			_ = json.Unmarshal(nodeDataJSON, &execution.NodeData)
+		}
+		if len(edgesTakenJSON) > 0 && string(edgesTakenJSON) != "{}" {
+			_ = json.Unmarshal(edgesTakenJSON, &execution.EdgesTaken)
 		}
 
 		if errorText.Valid && errorText.String != "" {
@@ -631,7 +659,7 @@ func (s *PostgresStorage) RecentExecutions(filters ExecutionFilters, limit int) 
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error
+		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, edges_taken, error
 		FROM executions %s
 		ORDER BY started_at DESC
 		LIMIT $1
@@ -649,13 +677,14 @@ func (s *PostgresStorage) RecentExecutions(filters ExecutionFilters, limit int) 
 		var execution model.WorkflowExecution
 		var dataJSON []byte
 		var nodeDataJSON []byte
+		var edgesTakenJSON []byte
 		var errorText sql.NullString
 		var finishedAt sql.NullTime
 
 		if err := rows.Scan(
 			&execution.ID, &execution.WorkflowID, &execution.WorkspaceID,
 			&execution.Status, &execution.Mode, &execution.StartedAt,
-			&finishedAt, &dataJSON, &nodeDataJSON, &errorText,
+			&finishedAt, &dataJSON, &nodeDataJSON, &edgesTakenJSON, &errorText,
 		); err != nil {
 			continue
 		}
@@ -665,6 +694,9 @@ func (s *PostgresStorage) RecentExecutions(filters ExecutionFilters, limit int) 
 		_ = json.Unmarshal(dataJSON, &execution.Data)
 		if len(nodeDataJSON) > 0 && string(nodeDataJSON) != "{}" {
 			_ = json.Unmarshal(nodeDataJSON, &execution.NodeData)
+		}
+		if len(edgesTakenJSON) > 0 && string(edgesTakenJSON) != "{}" {
+			_ = json.Unmarshal(edgesTakenJSON, &execution.EdgesTaken)
 		}
 		if errorText.Valid && errorText.String != "" {
 			execution.Error = fmt.Errorf("%s", errorText.String)

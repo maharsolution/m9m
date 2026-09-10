@@ -286,6 +286,14 @@ func (m *WebhookManager) recordWorkflowExecution(
 		// internal/api (production mode keeps only the start
 		// and last nodes; Debug=true keeps everything).
 		wfExec.NodeData = engine.BuildExecutionNodeData(workflow, result)
+		// Forward the engine's EdgesTaken accumulator. Same
+		// rationale as the NodeData line above: webhook
+		// executions need to participate in branch colouring
+		// so the UI doesn't fall back to "everything ran" when
+		// a webhook triggers an IF/Switch branch.
+		if len(result.EdgesTaken) > 0 {
+			wfExec.EdgesTaken = result.EdgesTaken
+		}
 	}
 	if runErr != nil {
 		wfExec.Error = runErr

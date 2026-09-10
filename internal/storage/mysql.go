@@ -101,6 +101,7 @@ func (s *MySQLStorage) initSchema() error {
 			finished_at TIMESTAMP NULL,
 			data JSON,
 			node_data JSON,
+			edges_taken JSON,
 			error TEXT,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
@@ -170,6 +171,15 @@ func (s *MySQLStorage) initSchema() error {
 	// execution detail view. Stored as JSON so it survives across engine
 	// upgrades without altering the column type.
 	if err := ensureColumn(s.db, "executions", "node_data", "JSON"); err != nil {
+		return err
+	}
+	// edges_taken: per-execution map of which connections actually
+	// carried items. Stored as JSON so it survives across engine
+	// upgrades and so MySQL can index it if we ever want to query
+	// "which executions branched at node X". Used by the execution
+	// detail view to colour edges green/grey without bloating the
+	// DB with per-node I/O snapshots.
+	if err := ensureColumn(s.db, "executions", "edges_taken", "JSON"); err != nil {
 		return err
 	}
 	// debug: per-workflow boolean that gates how much per-node
@@ -408,6 +418,12 @@ func (s *MySQLStorage) SaveExecution(execution *model.WorkflowExecution) error {
 	} else {
 		nodeDataJSON = []byte("{}")
 	}
+	var edgesTakenJSON []byte
+	if execution.EdgesTaken != nil {
+		edgesTakenJSON, _ = json.Marshal(execution.EdgesTaken)
+	} else {
+		edgesTakenJSON = []byte("{}")
+	}
 	errorText := ""
 	if execution.Error != nil {
 		errorText = execution.Error.Error()
@@ -415,8 +431,8 @@ func (s *MySQLStorage) SaveExecution(execution *model.WorkflowExecution) error {
 	createdAt := time.Now()
 
 	query := `
-		INSERT INTO executions (id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO executions (id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, edges_taken, error, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			workflow_id = VALUES(workflow_id),
 			workspace_id = VALUES(workspace_id),
@@ -426,6 +442,7 @@ func (s *MySQLStorage) SaveExecution(execution *model.WorkflowExecution) error {
 			finished_at = VALUES(finished_at),
 			data = VALUES(data),
 			node_data = VALUES(node_data),
+			edges_taken = VALUES(edges_taken),
 			error = VALUES(error)
 	`
 
@@ -436,26 +453,27 @@ func (s *MySQLStorage) SaveExecution(execution *model.WorkflowExecution) error {
 
 	_, err := s.db.Exec(query,
 		execution.ID, execution.WorkflowID, execution.WorkspaceID, execution.Status,
-		execution.Mode, execution.StartedAt, finishedAt, string(dataJSON), string(nodeDataJSON), errorText, createdAt)
+		execution.Mode, execution.StartedAt, finishedAt, string(dataJSON), string(nodeDataJSON), string(edgesTakenJSON), errorText, createdAt)
 
 	return err
 }
 
 func (s *MySQLStorage) GetExecution(id string) (*model.WorkflowExecution, error) {
 	query := `
-		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error
+		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, edges_taken, error
 		FROM executions WHERE id = ?
 	`
 
 	var execution model.WorkflowExecution
 	var dataJSON sql.NullString
 	var nodeDataJSON sql.NullString
+	var edgesTakenJSON sql.NullString
 	var errorText sql.NullString
 	var finishedAt sql.NullTime
 
 	err := s.db.QueryRow(query, id).Scan(
 		&execution.ID, &execution.WorkflowID, &execution.WorkspaceID, &execution.Status, &execution.Mode,
-		&execution.StartedAt, &finishedAt, &dataJSON, &nodeDataJSON, &errorText,
+		&execution.StartedAt, &finishedAt, &dataJSON, &nodeDataJSON, &edgesTakenJSON, &errorText,
 	)
 
 	if err == sql.ErrNoRows {
@@ -473,6 +491,9 @@ func (s *MySQLStorage) GetExecution(id string) (*model.WorkflowExecution, error)
 	}
 	if nodeDataJSON.Valid && nodeDataJSON.String != "" && nodeDataJSON.String != "{}" {
 		_ = json.Unmarshal([]byte(nodeDataJSON.String), &execution.NodeData)
+	}
+	if edgesTakenJSON.Valid && edgesTakenJSON.String != "" && edgesTakenJSON.String != "{}" {
+		_ = json.Unmarshal([]byte(edgesTakenJSON.String), &execution.EdgesTaken)
 	}
 	if errorText.Valid && errorText.String != "" {
 		execution.Error = fmt.Errorf("%s", errorText.String)
@@ -510,7 +531,7 @@ func (s *MySQLStorage) ListExecutions(filters ExecutionFilters) ([]*model.Workfl
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error
+		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, edges_taken, error
 		FROM executions %s
 		ORDER BY started_at DESC
 		LIMIT ? OFFSET ?
@@ -529,12 +550,13 @@ func (s *MySQLStorage) ListExecutions(filters ExecutionFilters) ([]*model.Workfl
 		var execution model.WorkflowExecution
 		var dataJSON sql.NullString
 		var nodeDataJSON sql.NullString
+		var edgesTakenJSON sql.NullString
 		var errorText sql.NullString
 		var finishedAt sql.NullTime
 
 		err := rows.Scan(
 			&execution.ID, &execution.WorkflowID, &execution.WorkspaceID, &execution.Status, &execution.Mode,
-			&execution.StartedAt, &finishedAt, &dataJSON, &nodeDataJSON, &errorText,
+			&execution.StartedAt, &finishedAt, &dataJSON, &nodeDataJSON, &edgesTakenJSON, &errorText,
 		)
 		if err != nil {
 			continue
@@ -548,6 +570,9 @@ func (s *MySQLStorage) ListExecutions(filters ExecutionFilters) ([]*model.Workfl
 		}
 		if nodeDataJSON.Valid && nodeDataJSON.String != "" && nodeDataJSON.String != "{}" {
 			_ = json.Unmarshal([]byte(nodeDataJSON.String), &execution.NodeData)
+		}
+		if edgesTakenJSON.Valid && edgesTakenJSON.String != "" && edgesTakenJSON.String != "{}" {
+			_ = json.Unmarshal([]byte(edgesTakenJSON.String), &execution.EdgesTaken)
 		}
 		if errorText.Valid && errorText.String != "" {
 			execution.Error = fmt.Errorf("%s", errorText.String)
@@ -663,7 +688,7 @@ func (s *MySQLStorage) RecentExecutions(filters ExecutionFilters, limit int) ([]
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, error
+		SELECT id, workflow_id, workspace_id, status, mode, started_at, finished_at, data, node_data, edges_taken, error
 		FROM executions %s
 		ORDER BY started_at DESC
 		LIMIT ?
@@ -681,13 +706,14 @@ func (s *MySQLStorage) RecentExecutions(filters ExecutionFilters, limit int) ([]
 		var execution model.WorkflowExecution
 		var dataJSON []byte
 		var nodeDataJSON []byte
+		var edgesTakenJSON []byte
 		var errorText sql.NullString
 		var finishedAt sql.NullTime
 
 		if err := rows.Scan(
 			&execution.ID, &execution.WorkflowID, &execution.WorkspaceID,
 			&execution.Status, &execution.Mode, &execution.StartedAt,
-			&finishedAt, &dataJSON, &nodeDataJSON, &errorText,
+			&finishedAt, &dataJSON, &nodeDataJSON, &edgesTakenJSON, &errorText,
 		); err != nil {
 			continue
 		}
@@ -697,6 +723,9 @@ func (s *MySQLStorage) RecentExecutions(filters ExecutionFilters, limit int) ([]
 		_ = json.Unmarshal(dataJSON, &execution.Data)
 		if len(nodeDataJSON) > 0 && string(nodeDataJSON) != "{}" {
 			_ = json.Unmarshal(nodeDataJSON, &execution.NodeData)
+		}
+		if len(edgesTakenJSON) > 0 && string(edgesTakenJSON) != "{}" {
+			_ = json.Unmarshal(edgesTakenJSON, &execution.EdgesTaken)
 		}
 		if errorText.Valid && errorText.String != "" {
 			execution.Error = fmt.Errorf("%s", errorText.String)

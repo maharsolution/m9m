@@ -90,6 +90,17 @@ func (s *APIServer) ExecuteWorkflow(w http.ResponseWriter, r *http.Request) {
 		execution.NodeData = engine.BuildExecutionNodeData(workflow, result)
 	}
 
+	// Forward the engine's EdgesTaken accumulator. This is the
+	// per-edge "did this connection carry items?" map that lets
+	// the UI colour execution edges green/grey without needing
+	// the full per-node snapshot (Debug=OFF stays cheap). The
+	// engine always populates it (or returns nil for runs that
+	// had no connections to walk), and we forward whatever
+	// arrives — the storage layer treats nil as "absent".
+	if result != nil && len(result.EdgesTaken) > 0 {
+		execution.EdgesTaken = result.EdgesTaken
+	}
+
 	if err := s.storage.SaveExecution(execution); err != nil {
 		s.sendError(w, http.StatusInternalServerError, "Failed to update execution", err)
 		return
@@ -369,6 +380,12 @@ func (s *APIServer) RetryExecution(w http.ResponseWriter, r *http.Request) {
 	if result != nil && len(result.NodeOutputs) > 0 {
 		newExecution.NodeData = engine.BuildExecutionNodeData(workflow, result)
 	}
+	// Forward EdgesTaken so retried executions show the same
+	// branch colouring as a fresh run. Same nil-tolerance as the
+	// non-retry path above.
+	if result != nil && len(result.EdgesTaken) > 0 {
+		newExecution.EdgesTaken = result.EdgesTaken
+	}
 
 	if err := s.storage.SaveExecution(newExecution); err != nil {
 		s.sendError(w, http.StatusInternalServerError, "Failed to update execution", err)
@@ -639,6 +656,12 @@ func (s *APIServer) RetryNode(w http.ResponseWriter, r *http.Request) {
 	// the same workflow.Debug preference as a fresh run.
 	if result != nil && len(result.NodeOutputs) > 0 {
 		newExecution.NodeData = engine.BuildExecutionNodeData(subWorkflow, result)
+	}
+	// Forward the EdgesTaken accumulator for the sub-workflow so
+	// the per-node retry's branch colouring stays consistent
+	// with the rest of the API.
+	if result != nil && len(result.EdgesTaken) > 0 {
+		newExecution.EdgesTaken = result.EdgesTaken
 	}
 
 	if err := s.storage.SaveExecution(newExecution); err != nil {
