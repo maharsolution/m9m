@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -404,6 +405,7 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 			// No specific input data, use empty input
 			inputDataForNode = []model.DataItem{{JSON: make(map[string]interface{})}}
 		}
+		os.Stderr.WriteString(fmt.Sprintf("[exec-trace] node=%s inputLen=%d\n", node.Name, len(inputDataForNode)))
 
 		// splitInBatches is n8n's loop construct. The connection
 		// graph contains a back-edge from the body chain back to
