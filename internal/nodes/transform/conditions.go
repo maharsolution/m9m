@@ -169,6 +169,7 @@ func EvaluateConditions(item model.DataItem, conditions []interface{}, combiner 
 		}
 
 		result := evaluateCondition(item, conditionMap, eval)
+		os.Stderr.WriteString(fmt.Sprintf("[cond-debug] evaluateCondition result=%v\n", result))
 
 		if combiner == "and" && !result {
 			return false
