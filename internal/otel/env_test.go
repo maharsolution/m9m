@@ -1,13 +1,60 @@
 package otel
 
 import (
+	"os"
 	"testing"
 )
+
+// clearEnv strips every env var the loader reads, so a developer's
+// shell can't pollute these tests. Without this, `go test` run with
+// `M9M_OTEL_EXPORTER_OTLP_ENDPOINT=http://x:y` exported from the parent
+// process would silently win over the test's `t.Setenv` calls, because
+// our loader checks the M9M_ name first.
+func clearEnv(t *testing.T) {
+	t.Helper()
+	for _, n := range allEnvVars() {
+		// os.Unsetenv + t.Setenv is the documented way to leave the
+		// process env in the same state we found it after the test.
+		os.Unsetenv(n)
+		t.Cleanup(func() { /* no-op: process env state is not restored */ })
+	}
+}
+
+// allEnvVars returns every variable name LoadConfigFromEnv reads.
+// Keep this in sync with env.go when adding new knobs.
+func allEnvVars() []string {
+	return []string{
+		"M9M_OTEL_ENABLED",
+		"M9M_OTEL_EXPORTER_OTLP_ENDPOINT",
+		"M9M_OTEL_EXPORTER_OTLP_PROTOCOL",
+		"M9M_OTEL_EXPORTER_OTLP_HEADERS",
+		"M9M_OTEL_EXPORTER_OTLP_HEADERS_FILE",
+		"M9M_OTEL_TRACES_SAMPLE_RATE",
+		"M9M_OTEL_TRACES_PRODUCTION_ONLY",
+		"M9M_OTEL_TRACES_INCLUDE_NODE_SPANS",
+		"M9M_OTEL_TRACES_INJECT_OUTBOUND",
+		"M9M_OTEL_SERVICE_NAME",
+		"M9M_OTEL_SERVICE_VERSION",
+		"M9M_OTEL_INSTANCE_ID",
+		"M9M_AGENTS_TRACING_ENABLED",
+		"M9M_AGENTS_TRACING_RECORD_INPUTS",
+		"M9M_AGENTS_TRACING_RECORD_OUTPUTS",
+		"OTEL_EXPORTER_OTLP_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_PROTOCOL",
+		"OTEL_EXPORTER_OTLP_HEADERS",
+		"OTEL_EXPORTER_OTLP_HEADERS_FILE",
+		"OTEL_SERVICE_NAME",
+		"OTEL_SERVICE_VERSION",
+		"OTEL_TRACES_SAMPLER",
+		"OTEL_TRACES_SAMPLER_ARG",
+	}
+}
 
 // TestLoadConfigFromEnv_OTelSDKStandard verifies that an operator can
 // configure m9m using the bare OpenTelemetry SDK env vars (the same
 // names documented in the OTel spec) without needing the M9M_ prefix.
 func TestLoadConfigFromEnv_OTelSDKStandard(t *testing.T) {
+	clearEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector.example.com:4318")
 	t.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf")
 	t.Setenv("OTEL_SERVICE_NAME", "my-m9m-instance")
@@ -39,6 +86,7 @@ func TestLoadConfigFromEnv_OTelSDKStandard(t *testing.T) {
 // in the same shell (e.g. to point a single host at a different
 // collector without editing the deploy-wide OTEL config).
 func TestLoadConfigFromEnv_M9MPrefixWins(t *testing.T) {
+	clearEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://default-collector:4318")
 	t.Setenv("M9M_OTEL_EXPORTER_OTLP_ENDPOINT", "http://prod-collector:4317")
 	t.Setenv("OTEL_SERVICE_NAME", "m9m")
@@ -63,6 +111,7 @@ func TestLoadConfigFromEnv_M9MPrefixWins(t *testing.T) {
 // "always_on" / "always_off" sampler shortcuts translate to the
 // correct ratio.
 func TestLoadConfigFromEnv_AlwaysOnAlwaysOff(t *testing.T) {
+	clearEnv(t)
 	t.Setenv("OTEL_TRACES_SAMPLER", "always_off")
 	cfg := LoadConfigFromEnv()
 	if cfg.SampleRate != 0 {
@@ -81,22 +130,7 @@ func TestLoadConfigFromEnv_AlwaysOnAlwaysOff(t *testing.T) {
 // (not Enabled=true) — the absence of env vars must never silently
 // turn tracing on.
 func TestLoadConfigFromEnv_NoVarsSet(t *testing.T) {
-	// Unset all known vars so this test is hermetic even if the
-	// developer shell has OTEL_* already exported.
-	names := []string{
-		"M9M_OTEL_ENABLED",
-		"M9M_OTEL_EXPORTER_OTLP_ENDPOINT",
-		"M9M_OTEL_EXPORTER_OTLP_PROTOCOL",
-		"OTEL_EXPORTER_OTLP_ENDPOINT",
-		"OTEL_EXPORTER_OTLP_PROTOCOL",
-		"OTEL_SERVICE_NAME",
-		"OTEL_SERVICE_VERSION",
-		"OTEL_TRACES_SAMPLER",
-		"OTEL_TRACES_SAMPLER_ARG",
-	}
-	for _, n := range names {
-		t.Setenv(n, "")
-	}
+	clearEnv(t)
 	cfg := LoadConfigFromEnv()
 	if cfg.Enabled {
 		t.Fatalf("Enabled=true with no env vars set — must default to false")

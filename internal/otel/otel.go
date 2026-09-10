@@ -165,8 +165,27 @@ type Manager struct {
 func NewManager(ctx context.Context, cfg Config) (*Manager, error) {
 	cfg.ApplyDefaults()
 
+	// We always construct a Manager — even when cfg.Enabled is false.
+	// Returning nil here breaks the runtime hot-reload flow: callers
+	// that wire the Manager into the API server (so the UI can flip
+	// the switch live) would have no place to attach the override.
+	// A disabled manager is just a Manager whose tp is nil and whose
+	// tracer is the OTel no-op tracer. Reload(enabled=true) can later
+	// build a real TracerProvider in place.
+	prop := propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	)
+	m := &Manager{
+		cfg:        cfg,
+		propagator: prop,
+		tracer:     oteltrace.NewNoopTracerProvider().Tracer(cfg.ServiceName),
+	}
+	otel.SetTracerProvider(oteltrace.NewNoopTracerProvider())
+	otel.SetTextMapPropagator(prop)
+
 	if !cfg.Enabled {
-		return nil, nil
+		return m, nil
 	}
 
 	res, err := buildResource(ctx, cfg)
@@ -186,22 +205,10 @@ func NewManager(ctx context.Context, cfg Config) (*Manager, error) {
 		sdktrace.WithResource(res),
 		sdktrace.WithSampler(sampler),
 	)
-
-	prop := propagation.NewCompositeTextMapPropagator(
-		propagation.TraceContext{},
-		propagation.Baggage{},
-	)
-
+	m.tp = tp
+	m.resource = res
+	m.tracer = tp.Tracer(cfg.ServiceName, oteltrace.WithInstrumentationAttributes(attribute.String("m9m.instance.id", cfg.InstanceID)))
 	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(prop)
-
-	m := &Manager{
-		cfg:        cfg,
-		tp:         tp,
-		propagator: prop,
-		tracer:     tp.Tracer(cfg.ServiceName, oteltrace.WithInstrumentationAttributes(attribute.String("m9m.instance.id", cfg.InstanceID))),
-		resource:   res,
-	}
 	return m, nil
 }
 

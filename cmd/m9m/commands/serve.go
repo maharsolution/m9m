@@ -158,7 +158,11 @@ func runServe(cmd *cobra.Command, args []string) {
 	if err != nil {
 		logger.Printf("Warning: failed to initialise OTEL pipeline: %v (continuing with no tracing)", err)
 		otelManager = nil
-	} else {
+	}
+	// otelManager may legitimately be nil here (build error); it is
+	// also allowed to be non-nil with Enabled=false, which is the
+	// normal "tracing off at boot" case the UI can flip on later.
+	if otelManager != nil {
 		defer func() {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -254,13 +258,12 @@ func runServe(cmd *cobra.Command, args []string) {
 
 	apiServer := api.NewAPIServerWithConfig(eng, sched, store, apiConfig)
 	apiServer.SetJobQueue(jobQueue)
+	// Wire the OTEL manager into the API server so PUT /api/v1/otel
+	// can hot-reload the tracer provider without a restart. The
+	// manager is non-nil in both "enabled" and "disabled at boot"
+	// cases — only a build error above leaves it nil.
 	if otelManager != nil {
 		apiServer.SetOTelManager(otelManager, otelStore)
-	} else {
-		// Even when tracing is disabled, we still mount the OTEL API
-		// endpoints so the UI can edit settings; the handler will
-		// persist without triggering a tracer reload.
-		apiServer.SetOTelManager(nil, otelStore)
 	}
 
 	// Setup router
