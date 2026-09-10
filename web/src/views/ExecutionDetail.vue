@@ -58,7 +58,7 @@ import ExecutionDataView from '@/components/execution/ExecutionDataView.vue'
 import PropertyEditor from '@/components/execution/PropertyEditor.vue'
 
 type NodeState = 'pending' | 'success' | 'failed' | 'running' | 'skipped'
-type DataTab = 'input' | 'output'
+type DataTab = 'input' | 'output' | 'settings'
 type ViewMode = 'schema' | 'table' | 'json'
 
 const route = useRoute()
@@ -74,6 +74,28 @@ const workflow = computed(() => workflowStore.currentWorkflow)
 const selectedNodeName = ref<string | null>(null)
 const dataTab = ref<DataTab>('input')
 const viewMode = ref<ViewMode>('schema')
+
+// Top-level tabs rendered in the NDV header. Mirrors n8n's
+// `Input | Output | Settings` tab row. The Settings tab is only
+// included when the selected node exposes a `properties`
+// descriptor (i.e. has parameters / engine settings to display);
+// otherwise the tab list is just Input/Output so the user always
+// has the data tabs front-and-center.
+const dataTabs = computed<Array<{ id: DataTab; label: string; icon?: any; title?: string }>>(() => {
+  const tabs: Array<{ id: DataTab; label: string; icon?: any; title?: string }> = [
+    { id: 'input', label: 'Input' },
+    { id: 'output', label: 'Output' },
+  ]
+  if (hasSettingsTab.value) {
+    tabs.push({
+      id: 'settings',
+      label: `Settings (${settingsProperties.value.length + parameterProperties.value.length})`,
+      icon: Cog6ToothIcon,
+      title: 'Node parameters and engine settings',
+    })
+  }
+  return tabs
+})
 
 onMounted(async () => {
   // Fire the type-catalog fetch in parallel with the execution /
@@ -198,6 +220,16 @@ const workflowDebug = computed(() => workflow.value?.debug === true)
 // startNodeName / lastNodeName mirror buildExecutionNodeData's
 // helpers on the JS side so we can decide, for a given selected
 // node, whether per-node data is expected to be present.
+//
+// Sticky Notes (and other decorative nodes) are skipped: they
+// have no executor, never carry data, and would otherwise hijack
+// the slot with an empty payload.
+const DECORATIVE_NODE_TYPES = new Set([
+  'n8n-nodes-base.stickyNote',
+  'n8n-nodes-base.note',
+  '@n8n/n8n-nodes-langchain.note',
+])
+
 const startNodeName = computed<string | null>(() => {
   if (!workflow.value?.nodes?.length) return null
   const hasIncoming = new Set<string>()
@@ -207,6 +239,7 @@ const startNodeName = computed<string | null>(() => {
     }
   }
   for (const n of workflow.value.nodes) {
+    if (DECORATIVE_NODE_TYPES.has(n.type)) continue
     if (!hasIncoming.has(n.name)) return n.name
   }
   return null
@@ -221,8 +254,9 @@ const lastNodeName = computed<string | null>(() => {
     }
   }
   for (let i = workflow.value.nodes.length - 1; i >= 0; i--) {
-    const name = workflow.value.nodes[i].name
-    if (!hasOutgoing.has(name)) return name
+    const n = workflow.value.nodes[i]
+    if (DECORATIVE_NODE_TYPES.has(n.type)) continue
+    if (!hasOutgoing.has(n.name)) return n.name
   }
   return null
 })
@@ -390,9 +424,18 @@ const selectedNodeInput = computed<DataItem[] | undefined>(() => {
     }
   }
   if (incoming.length === 0) {
-    // Trigger node / first node — no upstream. Return undefined
-    // so the panel renders "no upstream" rather than an empty
-    // list (which would look like "this node dropped everything").
+    // Trigger node / start node — no upstream. n8n's NDV Input
+    // tab shows the trigger payload on a trigger node, so
+    // mirror that: render the node's own output (which IS the
+    // trigger payload for a Webhook, Cron, etc.). Falls through
+    // to undefined only when there's genuinely no data anywhere
+    // for this node, so the panel renders "no upstream" rather
+    // than an empty list (which would look like "this node
+    // dropped everything").
+    const own = execution.value.nodeData?.[selectedNodeName.value]
+    if (own && own.length > 0) {
+      return own
+    }
     return undefined
   }
   // Flatten: one array of items, prefixing each with the source
@@ -679,7 +722,15 @@ const goBack = () => router.push('/executions')
 
 const onNodeClick = (event: { node: { id: string } }) => {
   const n = workflow.value?.nodes.find((node) => node.id === event.node.id)
-  if (n) selectedNodeName.value = n.name
+  if (n) {
+    selectedNodeName.value = n.name
+    // Always land on the Input tab when the user clicks a new
+    // node so the first thing they see is real data, not the
+    // Parameters pane (which was the prior "only parameter"
+    // confusion).
+    dataTab.value = 'input'
+    viewMode.value = 'schema'
+  }
 }
 
 watch(executionId, () => {
@@ -897,29 +948,22 @@ function downloadData() {
           <!-- Top tab row: Input · Output · Settings -->
           <div class="flex border-b border-slate-200 dark:border-slate-700">
             <button
-              v-for="tab in (['input', 'output'] as DataTab[])"
-              :key="tab"
-              @click="dataTab = tab"
+              v-for="tab in (dataTabs)"
+              :key="tab.id"
+              @click="dataTab = tab.id"
               :class="[
-                'flex-1 px-3 py-2 text-xs font-medium uppercase tracking-wide transition-colors',
-                dataTab === tab
+                'flex-1 px-3 py-2 text-xs font-medium uppercase tracking-wide transition-colors flex items-center justify-center gap-1.5',
+                dataTab === tab.id
                   ? 'text-primary-600 dark:text-primary-400 border-b-2 border-primary-500 bg-primary-50/40 dark:bg-primary-900/20'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
               ]"
+              :title="tab.title"
             >
-              {{ tab }}
+              <component v-if="tab.icon" :is="tab.icon" class="w-3.5 h-3.5" />
+              {{ tab.label }}
             </button>
             <button
-              v-if="hasSettingsTab"
-              @click="dataTab = 'output'"
-              class="flex-1 px-3 py-2 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 flex items-center justify-center gap-1.5"
-              :title="dataTab === 'input' ? 'Settings tab is part of the right pane — open the workflow editor to edit' : 'This node exposes ' + settingsProperties.length + ' settings'"
-            >
-              <Cog6ToothIcon class="w-3.5 h-3.5" />
-              Settings ({{ settingsProperties.length }})
-            </button>
-            <button
-              v-if="dataTab !== 'input' || selectedNodeInput"
+              v-if="dataTab === 'input' || dataTab === 'output'"
               @click="downloadData"
               class="px-3 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
               title="Download as JSON"
@@ -940,8 +984,9 @@ function downloadData() {
             <pre class="text-xs text-red-700 dark:text-red-300 whitespace-pre-wrap font-mono">{{ selectedNodeError }}</pre>
           </div>
 
-          <!-- View-mode row: Schema · Table · JSON -->
-          <div class="flex border-b border-slate-200 dark:border-slate-700 px-4">
+          <!-- View-mode row: Schema · Table · JSON (only for
+               the data tabs; the Settings tab has no view modes) -->
+          <div v-if="dataTab === 'input' || dataTab === 'output'" class="flex border-b border-slate-200 dark:border-slate-700 px-4">
             <button
               v-for="m in (['schema', 'table', 'json'] as ViewMode[])"
               :key="m"
@@ -967,7 +1012,7 @@ function downloadData() {
                  points at the workflow editor's Debug toggle so
                  the user can flip it on and re-run. -->
             <div
-              v-if="perNodeDataAvailable === 'unavailable'"
+              v-if="perNodeDataAvailable === 'unavailable' && (dataTab === 'input' || dataTab === 'output')"
               class="m-4 p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900"
             >
               <div class="flex items-center gap-2 mb-1">
@@ -989,6 +1034,62 @@ function downloadData() {
               :mode="viewMode"
               empty-label="No upstream items — this is a trigger node."
             />
+            <!-- Settings tab body: parameters + engine settings +
+                 credentials. Rendered when the user clicks the
+                 Settings tab. Mirroring n8n's NDV, parameters
+                 now live behind their own tab so the data tabs
+                 are pure data (was the user complaint:
+                 "currently only parameter is shown"). -->
+            <div
+              v-else-if="dataTab === 'settings'"
+              class="p-4 space-y-6"
+            >
+              <div v-if="parameterProperties.length > 0">
+                <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">
+                  Parameters
+                </h3>
+                <div class="space-y-3">
+                  <div v-for="prop in parameterProperties" :key="prop.name">
+                    <PropertyEditor
+                      :property="prop"
+                      :value="resolveParamValue(prop.name)"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div v-if="settingsProperties.length > 0">
+                <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">
+                  Engine Settings
+                </h3>
+                <div class="space-y-3">
+                  <div v-for="prop in settingsProperties" :key="prop.name">
+                    <PropertyEditor
+                      :property="prop"
+                      :value="resolveParamValue(prop.name)"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div v-if="selectedNode.credentials && Object.keys(selectedNode.credentials).length > 0">
+                <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">
+                  Credentials
+                </h3>
+                <div class="space-y-1">
+                  <div
+                    v-for="(cred, type) in selectedNode.credentials"
+                    :key="type"
+                    class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400"
+                  >
+                    <span class="font-mono px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded">{{ type }}</span>
+                    <span>→</span>
+                    <span>{{ cred.name }}</span>
+                  </div>
+                </div>
+              </div>
+              <div v-if="parameterProperties.length === 0 && settingsProperties.length === 0 && (!selectedNode.credentials || Object.keys(selectedNode.credentials).length === 0)" class="text-xs text-slate-400 italic">
+                This node does not expose any parameters or settings.
+              </div>
+            </div>
             <!-- Multi-branch output (IF / Switch): render one
                  collapsible section per branch so the operator can
                  tell which items went to the true vs false
@@ -1014,107 +1115,47 @@ function downloadData() {
               </details>
             </div>
             <ExecutionDataView
-              v-else
+              v-else-if="dataTab === 'output'"
               :data="stripRoutingTags(selectedNodeOutput ?? [])"
               :mode="viewMode"
               empty-label="No output for this node."
             />
+          </div>
 
-            <!-- Binary data: shown after the JSON/Schema/Table
-                 views when an item carries `binary` keys
-                 (HTTP Request with `binaryData: true`,
-                 Read Binary File, Write Binary File, etc). -->
-            <div
-              v-if="dataTab === 'output' && selectedNodeBinaryEntries.length > 0"
-              class="border-t border-slate-200 dark:border-slate-700"
-            >
-              <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 px-4 pt-4 pb-2">
-                Binary
-              </h3>
-              <div class="px-4 pb-4 space-y-2">
-                <div
-                  v-for="entry in selectedNodeBinaryEntries"
-                  :key="entry.key"
-                  class="flex items-center justify-between text-xs p-2 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
-                >
-                  <div class="min-w-0">
-                    <div class="font-mono text-slate-700 dark:text-slate-300 truncate">
-                      {{ entry.key }}
-                    </div>
-                    <div class="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                      {{ entry.mimeType || 'application/octet-stream' }}
-                      <span v-if="entry.fileSize"> · {{ entry.fileSize }}</span>
-                      <span v-if="entry.fileName"> · {{ entry.fileName }}</span>
-                    </div>
+          <!-- Binary data: shown as a separate block below the
+               data tabs (always visible when the Output tab has
+               binary items, regardless of view mode). -->
+          <div
+            v-if="dataTab === 'output' && selectedNodeBinaryEntries.length > 0"
+            class="border-t border-slate-200 dark:border-slate-700"
+          >
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 px-4 pt-4 pb-2">
+              Binary
+            </h3>
+            <div class="px-4 pb-4 space-y-2">
+              <div
+                v-for="entry in selectedNodeBinaryEntries"
+                :key="entry.key"
+                class="flex items-center justify-between text-xs p-2 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
+              >
+                <div class="min-w-0">
+                  <div class="font-mono text-slate-700 dark:text-slate-300 truncate">
+                    {{ entry.key }}
                   </div>
-                  <a
-                    v-if="entry.dataUrl"
-                    :href="entry.dataUrl"
-                    :download="entry.fileName || entry.key"
-                    class="text-primary-600 dark:text-primary-400 text-xs hover:underline"
-                  >
-                    Download
-                  </a>
+                  <div class="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                    {{ entry.mimeType || 'application/octet-stream' }}
+                    <span v-if="entry.fileSize"> · {{ entry.fileSize }}</span>
+                    <span v-if="entry.fileName"> · {{ entry.fileName }}</span>
+                  </div>
                 </div>
-              </div>
-            </div>
-
-            <!-- Per-node-type parameter rendering (Parameters section) -->
-            <div
-              v-if="parameterProperties.length > 0 && dataTab === 'output'"
-              class="border-t border-slate-200 dark:border-slate-700 p-4"
-            >
-              <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">
-                Parameters
-              </h3>
-              <div
-                v-for="prop in parameterProperties"
-                :key="prop.name"
-              >
-                <PropertyEditor
-                  :property="prop"
-                  :value="resolveParamValue(prop.name)"
-                />
-              </div>
-            </div>
-
-            <!-- Settings section (retry / continueOnFail / etc) -->
-            <div
-              v-if="settingsProperties.length > 0 && dataTab === 'output'"
-              class="border-t border-slate-200 dark:border-slate-700 p-4"
-            >
-              <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">
-                Settings
-              </h3>
-              <div
-                v-for="prop in settingsProperties"
-                :key="prop.name"
-              >
-                <PropertyEditor
-                  :property="prop"
-                  :value="resolveParamValue(prop.name)"
-                />
-              </div>
-            </div>
-
-            <!-- Credentials section -->
-            <div
-              v-if="selectedNode.credentials && Object.keys(selectedNode.credentials).length > 0"
-              class="border-t border-slate-200 dark:border-slate-700 p-4"
-            >
-              <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">
-                Credentials
-              </h3>
-              <div class="space-y-1">
-                <div
-                  v-for="(cred, type) in selectedNode.credentials"
-                  :key="type"
-                  class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400"
+                <a
+                  v-if="entry.dataUrl"
+                  :href="entry.dataUrl"
+                  :download="entry.fileName || entry.key"
+                  class="text-primary-600 dark:text-primary-400 text-xs hover:underline"
                 >
-                  <span class="font-mono px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded">{{ type }}</span>
-                  <span>→</span>
-                  <span>{{ cred.name }}</span>
-                </div>
+                  Download
+                </a>
               </div>
             </div>
           </div>

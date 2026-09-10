@@ -165,8 +165,8 @@ func buildExecutionNodeData(workflow *model.Workflow, result *engine.ExecutionRe
 			out[endName] = items
 		} else if len(result.Data) > 0 {
 			// The "last node" topology heuristic doesn't always
-			// match the actual leaf of the workflow that produced
-			// data. Common cases:
+			// match the actual data-flow leaf of the workflow.
+			// Common cases:
 			//
 			//   - Branching workflows: an IF routes the item down
 			//     one path, so the topological last node (which
@@ -209,6 +209,22 @@ func buildExecutionNodeData(workflow *model.Workflow, result *engine.ExecutionRe
 	return out
 }
 
+// isDecorativeNodeType is duplicated from internal/engine here so the
+// api package can skip Sticky Notes / Canvas Notes when picking the
+// "first" / "last" data-flow node for the Debug=OFF view. Decorative
+// nodes have no executor, are skipped by the engine, and never
+// produce real data — they would otherwise hijack the topology walk
+// and surface as the NDV's last node with an empty payload.
+func isDecorativeNodeType(nodeType string) bool {
+	switch nodeType {
+	case "n8n-nodes-base.stickyNote",
+		"n8n-nodes-base.note",
+		"@n8n/n8n-nodes-langchain.note":
+		return true
+	}
+	return false
+}
+
 // findStartNodeName returns the name of the first node that has no
 // incoming connections. The convention matches the engine's
 // `findStartingNodes` (a node is a "start" if nothing routes INTO
@@ -233,6 +249,15 @@ func findStartNodeName(workflow *model.Workflow) string {
 		}
 	}
 	for _, n := range workflow.Nodes {
+		// Decorative nodes (Sticky Notes, Canvas Notes) have no
+		// executor and never carry data. They're also typically
+		// declared with no incoming connections (they're floating
+		// canvas annotations), so without this guard they'd hijack
+		// the "first node" slot — the NDV would then claim the
+		// Sticky Note's empty payload is the trigger's input.
+		if isDecorativeNodeType(n.Type) {
+			continue
+		}
 		if !hasIncoming[n.Name] {
 			return n.Name
 		}
@@ -265,9 +290,16 @@ func findLastNodeName(workflow *model.Workflow) string {
 	}
 	// Iterate from the end so the last-declared leaf wins (matches
 	// the engine's "last node in execution order" tie-break).
+	// Decorative nodes (Sticky Notes, Canvas Notes) are skipped —
+	// they have no executor, never carry data, and would otherwise
+	// hijack the slot with an empty payload.
 	for i := len(workflow.Nodes) - 1; i >= 0; i-- {
-		if !hasOutgoing[workflow.Nodes[i].Name] {
-			return workflow.Nodes[i].Name
+		n := workflow.Nodes[i]
+		if isDecorativeNodeType(n.Type) {
+			continue
+		}
+		if !hasOutgoing[n.Name] {
+			return n.Name
 		}
 	}
 	return ""

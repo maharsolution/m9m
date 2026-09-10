@@ -120,6 +120,61 @@ func TestBuildExecutionNodeData_ProductionMode_EmptyLastNodeAndEmptyResult(t *te
 	}
 }
 
+// TestBuildExecutionNodeData_ProductionMode_SkipsDecorativeNodes verifies
+// that Sticky Notes (and other decorative nodes) don't hijack the start /
+// last slot in the Debug=OFF view. Without this guard a workflow with a
+// floating Sticky Note ends up showing the Sticky Note's empty payload
+// as "the workflow's output", masking whatever the real last node
+// produced.
+func TestBuildExecutionNodeData_ProductionMode_SkipsDecorativeNodes(t *testing.T) {
+	workflow := &model.Workflow{
+		Name: "Webhook-Set-StickyNote",
+		Nodes: []model.Node{
+			{Name: "Webhook", Type: "n8n-nodes-base.webhook"},
+			{Name: "Edit Fields", Type: "n8n-nodes-base.set"},
+			{Name: "Sticky Note", Type: "n8n-nodes-base.stickyNote"},
+		},
+		Connections: map[string]model.Connections{
+			"Webhook":     {Main: [][]model.Connection{{{Node: "Edit Fields", Type: "main", Index: 0}}}},
+			"Edit Fields": {}, // no outgoing connections — declared last
+			"Sticky Note": {}, // decorative, also no outgoing
+		},
+		Debug: false,
+	}
+
+	result := &engine.ExecutionResult{
+		NodeOutputs: map[string][]model.DataItem{
+			"Webhook":            {{JSON: map[string]interface{}{"body": "req"}}},
+			"Edit Fields":        {{JSON: map[string]interface{}{"=response": "test"}}},
+			"Sticky Note":        {}, // engine sets empty slice for decorative nodes
+		},
+		Data: []model.DataItem{{JSON: map[string]interface{}{"=response": "test"}}},
+	}
+
+	out := buildExecutionNodeData(workflow, result)
+
+	// The Sticky Note must NOT be the recorded "last node" — the
+	// topology walk skips it and picks Edit Fields instead.
+	got := out["Sticky Note"]
+	if len(got) > 0 {
+		t.Errorf("Sticky Note should not appear with real data in production-mode NodeData; got %+v", got)
+	}
+	if last := findLastNodeName(workflow); last != "Edit Fields" {
+		t.Errorf("findLastNodeName = %q, want Edit Fields (Sticky Note should be skipped)", last)
+	}
+	if last := findLastNodeName(workflow); last == "" {
+		t.Fatal("findLastNodeName returned empty for a workflow with a real last node")
+	}
+
+	// Edit Fields (the real last data-flow node) should carry the
+	// engine's final output.
+	if data, ok := out["Edit Fields"]; !ok {
+		t.Errorf("real last node Edit Fields missing from NodeData")
+	} else if len(data) == 0 || data[0].JSON["=response"] != "test" {
+		t.Errorf("Edit Fields output wrong: %+v", data)
+	}
+}
+
 // TestBuildExecutionNodeData_DebugMode_RetainsAllNodes verifies the
 // complementary case: when Debug=ON, every node's per-node snapshot is
 // preserved (no filtering).
