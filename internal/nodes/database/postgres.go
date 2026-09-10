@@ -58,14 +58,24 @@ func (p *PostgresNode) ValidateParameters(params map[string]interface{}) error {
 	// Check required parameters
 	connectionURL := p.GetStringParameter(params, "connectionUrl", "")
 	if connectionURL == "" {
-		// Check individual connection parameters if connectionUrl is not provided
+		// Accept explicit node-level keys OR credential-injected
+		// `postgres_<key>` values (the engine's CredentialManager
+		// flattens the credential envelope at execution time, so a
+		// node with no in-place connection settings can still
+		// resolve via the synced credential).
 		host := p.GetStringParameter(params, "host", "")
+		if host == "" {
+			host = p.GetStringParameter(params, "postgres_host", "")
+		}
 		database := p.GetStringParameter(params, "database", "")
-		
+		if database == "" {
+			database = p.GetStringParameter(params, "postgres_database", "")
+		}
+
 		if host == "" {
 			return p.CreateError("either connectionUrl or host is required", nil)
 		}
-		
+
 		if database == "" {
 			return p.CreateError("database is required", nil)
 		}
@@ -108,13 +118,15 @@ func (p *PostgresNode) Execute(inputData []model.DataItem, nodeParams map[string
 	// Get connection parameters
 	connectionURL := p.GetStringParameter(nodeParams, "connectionUrl", "")
 
-	// If connection URL is not provided, build it from individual parameters
+	// If connection URL is not provided, build it from individual
+	// parameters. The credPrefix "postgres" matches n8n's credential
+	// type for this node — the engine's CredentialManager flattens
+	// the credential envelope into `postgres_host`, `postgres_user`,
+	// etc. on nodeParams at execution time, so a node with no
+	// explicit connection settings can still resolve them via the
+	// synced credential.
 	if connectionURL == "" {
-		host := p.GetStringParameter(nodeParams, "host", "localhost")
-		port := p.GetIntParameter(nodeParams, "port", 5432)
-		database := p.GetStringParameter(nodeParams, "database", "")
-		user := p.GetStringParameter(nodeParams, "user", "")
-		password := p.GetStringParameter(nodeParams, "password", "")
+		host, port, database, user, password, _ := resolveConnectionParams(p.BaseNode, nodeParams, "postgres", 5432)
 
 		// SECURITY: Get SSL mode from parameters, default to "require" for encrypted connections
 		sslMode := p.GetStringParameter(nodeParams, "sslMode", "require")

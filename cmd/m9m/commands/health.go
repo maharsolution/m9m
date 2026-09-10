@@ -51,7 +51,7 @@ func runHealth(cmd *cobra.Command, args []string) {
 
 	// 2. Node registration
 	eng := engine.NewWorkflowEngine()
-	RegisterAllNodes(eng)
+	RegisterAllNodes(eng, nil)
 	nodeTypes := eng.GetRegisteredNodeTypes()
 	checks = append(checks, healthCheck{
 		Name:   "Node Registry",

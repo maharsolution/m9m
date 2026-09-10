@@ -34,7 +34,7 @@ type NodeCategory struct {
 // getNodeCatalog returns the live node catalog from the engine registry.
 func getNodeCatalog() []NodeTypeInfo {
 	eng := engine.NewWorkflowEngine()
-	RegisterAllNodes(eng)
+	RegisterAllNodes(eng, nil)
 
 	registered := eng.GetRegisteredNodeTypes()
 	catalog := make([]NodeTypeInfo, 0, len(registered))
@@ -374,7 +374,7 @@ func runNodeTest(cmd *cobra.Command, args []string) {
 
 	// Create engine and register nodes
 	eng := engine.NewWorkflowEngine()
-	RegisterAllNodes(eng)
+	RegisterAllNodes(eng, nil)
 
 	// Verify node exists in registry
 	executor, err := eng.GetNodeExecutor(nodeType)

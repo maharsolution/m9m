@@ -120,7 +120,7 @@ func runExec(cmd *cobra.Command, args []string) {
 
 	// Create engine and register nodes
 	eng := engine.NewWorkflowEngine()
-	RegisterAllNodes(eng)
+	RegisterAllNodes(eng, nil)
 
 	// Dry-run mode: validate and show plan
 	if execDryRun {
@@ -264,7 +264,14 @@ func outputJSON(v interface{}) {
 
 // RegisterAllNodes registers all available node types on an engine.
 // This is the shared registration function used by exec, benchmark, and demo.
-func RegisterAllNodes(eng engine.WorkflowEngine) {
+//
+// `wfLookup` is an optional workflow lookup used by the Execute Workflow
+// node to resolve `workflowId: {"value": "<id>"}` references by ID.
+// When nil, the Execute Workflow node only honours the legacy
+// `workflowPath` parameter (a JSON file on disk). The serve command
+// passes the active storage backend here; CLI-only subcommands
+// (benchmark/demo/health) leave it nil.
+func RegisterAllNodes(eng engine.WorkflowEngine, wfLookup core.WorkflowLookup) {
 	// Transform nodes
 	eng.RegisterNodeExecutor("n8n-nodes-base.set", transform.NewSetNode())
 	eng.RegisterNodeExecutor("n8n-nodes-base.filter", transform.NewFilterNode())
@@ -337,20 +344,26 @@ func RegisterAllNodes(eng engine.WorkflowEngine) {
 	// Additional core nodes
 	eng.RegisterNodeExecutor("n8n-nodes-base.noOp", core.NewNoOpNode())
 	eng.RegisterNodeExecutor("n8n-nodes-base.wait", core.NewWaitNode())
-	eng.RegisterNodeExecutor("n8n-nodes-base.executeWorkflow", core.NewExecuteWorkflowNode(
-		&core.EngineAdapter{
-			ExecuteFn: func(wf *model.Workflow, input []model.DataItem) ([]model.DataItem, error) {
-				result, err := engine.ExecuteWorkflowWithContext(context.Background(), eng, wf, input)
-				if err != nil {
-					return nil, err
-				}
-				if result.Error != nil {
-					return nil, result.Error
-				}
-				return result.Data, nil
-			},
+	// Execute Workflow uses the same MySQL/Postgres storage as the parent
+	// workflow so `workflowId: {"value": "<id>"}` resolves correctly. The
+	// adapter's LookupFn closes over `store` from the outer scope when
+	// one is wired (see serve.go's RegisterAllNodes call).
+	execAdapter := &core.EngineAdapter{
+		ExecuteFn: func(wf *model.Workflow, input []model.DataItem) ([]model.DataItem, error) {
+			result, err := engine.ExecuteWorkflowWithContext(context.Background(), eng, wf, input)
+			if err != nil {
+				return nil, err
+			}
+			if result.Error != nil {
+				return nil, result.Error
+			}
+			return result.Data, nil
 		},
-	))
+	}
+	if wfLookup != nil {
+		execAdapter.LookupFn = wfLookup.GetWorkflow
+	}
+	eng.RegisterNodeExecutor("n8n-nodes-base.executeWorkflow", core.NewExecuteWorkflowNode(execAdapter, wfLookup))
 
 	// Additional transform nodes
 	eng.RegisterNodeExecutor("n8n-nodes-base.if", transform.NewIfNode())

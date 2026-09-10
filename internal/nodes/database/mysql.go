@@ -51,14 +51,24 @@ func (m *MySQLNode) ValidateParameters(params map[string]interface{}) error {
 	// Check required parameters
 	connectionURL := m.GetStringParameter(params, "connectionUrl", "")
 	if connectionURL == "" {
-		// Check individual connection parameters if connectionUrl is not provided
+		// Accept explicit node-level keys OR credential-injected
+		// `mySql_<key>` values (the engine's CredentialManager
+		// flattens the credential envelope at execution time, so a
+		// node with no in-place connection settings can still
+		// resolve via the synced credential).
 		host := m.GetStringParameter(params, "host", "")
+		if host == "" {
+			host = m.GetStringParameter(params, "mySql_host", "")
+		}
 		database := m.GetStringParameter(params, "database", "")
-		
+		if database == "" {
+			database = m.GetStringParameter(params, "mySql_database", "")
+		}
+
 		if host == "" {
 			return m.CreateError("either connectionUrl or host is required", nil)
 		}
-		
+
 		if database == "" {
 			return m.CreateError("database is required", nil)
 		}
@@ -101,16 +111,21 @@ func (m *MySQLNode) Execute(inputData []model.DataItem, nodeParams map[string]in
 	// Get connection parameters
 	connectionURL := m.GetStringParameter(nodeParams, "connectionUrl", "")
 
-	// If connection URL is not provided, build it from individual parameters
+	// If connection URL is not provided, build it from individual
+	// parameters. The credPrefix "mySql" matches n8n's credential
+	// type for this node — the engine's CredentialManager flattens
+	// the credential envelope into `mySql_host`, `mySql_user`, etc.
+	// on nodeParams at execution time, so a node with no explicit
+	// connection settings can still resolve them via the synced
+	// credential.
 	if connectionURL == "" {
-		host := m.GetStringParameter(nodeParams, "host", "localhost")
-		port := m.GetIntParameter(nodeParams, "port", 3306)
-		database := m.GetStringParameter(nodeParams, "database", "")
-		user := m.GetStringParameter(nodeParams, "user", "")
-		password := m.GetStringParameter(nodeParams, "password", "")
+		host, port, database, user, password, tlsFromCred := resolveConnectionParams(m.BaseNode, nodeParams, "mySql", 3306)
 
 		// SECURITY: Get TLS mode from parameters, default to "preferred" for encrypted connections
 		tlsMode := m.GetStringParameter(nodeParams, "tls", "preferred")
+		if tlsMode == "preferred" && tlsFromCred != "" {
+			tlsMode = tlsFromCred
+		}
 
 		// SECURITY: Validate TLS mode
 		validTLSModes := map[string]bool{

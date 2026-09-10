@@ -141,7 +141,7 @@ func runServe(cmd *cobra.Command, args []string) {
 
 	// Initialize engine
 	eng := engine.NewWorkflowEngine()
-	RegisterAllNodes(eng)
+	RegisterAllNodes(eng, store)
 
 	// Bootstrap OpenTelemetry. The manager is shared across the engine,
 	// the AI agent nodes, and the API server. Config layers env defaults

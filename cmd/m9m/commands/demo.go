@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/neul-labs/m9m/internal/engine"
 	"github.com/neul-labs/m9m/internal/showcase"
 )
 
@@ -51,7 +52,7 @@ func runDemo(cmd *cobra.Command, args []string) {
 		ListOnly: demoList,
 	}
 
-	results := showcase.RunDemos(opts, RegisterAllNodes)
+	results := showcase.RunDemos(opts, func(eng engine.WorkflowEngine) { RegisterAllNodes(eng, nil) })
 
 	if demoJSON {
 		_ = showcase.PrintDemoJSON(os.Stdout, results)

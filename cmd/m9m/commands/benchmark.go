@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/neul-labs/m9m/internal/engine"
 	"github.com/neul-labs/m9m/internal/showcase"
 )
 
@@ -47,7 +48,7 @@ func runBenchmark(cmd *cobra.Command, args []string) {
 		Category: benchCategory,
 	}
 
-	report := showcase.RunBenchmark(opts, RegisterAllNodes)
+	report := showcase.RunBenchmark(opts, func(eng engine.WorkflowEngine) { RegisterAllNodes(eng, nil) })
 
 	if benchJSON {
 		_ = report.PrintJSON(os.Stdout)
