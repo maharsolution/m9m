@@ -129,6 +129,7 @@ func (cm *CredentialManager) GetNodeCredentials(nodeID string) (map[string]strin
 
 	// Get the credential mappings for this node
 	mappings, exists := cm.nodeMappings[nodeID]
+	fmt.Fprintf(os.Stderr, "[cred-debug-get] nodeID=%s exists=%v mappings=%v\n", nodeID, exists, mappings)
 	if !exists {
 		// No credentials registered for this node
 		return make(map[string]string), nil
@@ -143,8 +144,11 @@ func (cm *CredentialManager) GetNodeCredentials(nodeID string) (map[string]strin
 			// If credential not found, continue with empty value
 			// This allows for graceful handling of missing credentials
 			resolvedCredentials[paramName] = ""
+			fmt.Fprintf(os.Stderr, "[cred-debug-get]   credID=%s NOT FOUND err=%v\n", credentialID, err)
 			continue
 		}
+
+		fmt.Fprintf(os.Stderr, "[cred-debug-get]   credID=%s found type=%q dataLen=%d data=%v\n", credentialID, cred.Type, len(cred.Data), cred.Data)
 
 		// Resolve credential values, handling environment variables
 		for key, value := range cred.Data {
