@@ -128,8 +128,13 @@ func (p *PostgresNode) Execute(inputData []model.DataItem, nodeParams map[string
 	if connectionURL == "" {
 		host, port, database, user, password, _ := resolveConnectionParams(p.BaseNode, nodeParams, "postgres", 5432)
 
-		// SECURITY: Get SSL mode from parameters, default to "require" for encrypted connections
-		sslMode := p.GetStringParameter(nodeParams, "sslMode", "require")
+		// SECURITY: Get SSL mode from parameters, default to "disable" to
+		// match n8n's default behaviour. n8n's Postgres node has SSL off
+		// by default; only upgrades to "require" when the credential or
+		// workflow parameters explicitly enable it. Defaulting to
+		// "require" breaks connections to local Postgres servers that
+		// don't have SSL enabled (the most common dev/test setup).
+		sslMode := p.GetStringParameter(nodeParams, "sslMode", "disable")
 
 		// SECURITY: Validate SSL mode
 		validSSLModes := map[string]bool{
