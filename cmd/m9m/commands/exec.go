@@ -372,6 +372,12 @@ func RegisterAllNodes(eng engine.WorkflowEngine, wfLookup core.WorkflowLookup) {
 	// Additional trigger nodes
 	eng.RegisterNodeExecutor("n8n-nodes-base.errorTrigger", trigger.NewErrorTriggerNode())
 	eng.RegisterNodeExecutor("n8n-nodes-base.respondToWebhook", trigger.NewRespondToWebhookNode())
+	// executeWorkflowTrigger is the entry-point any workflow that is
+	// called from another workflow's `Execute Workflow` node. n8n
+	// adds it automatically when the workflow becomes a target;
+	// m9m needs the executor registered so the engine doesn't abort
+	// with "failed to get executor for node ..." at trigger time.
+	eng.RegisterNodeExecutor("n8n-nodes-base.executeWorkflowTrigger", trigger.NewExecuteWorkflowTriggerNode())
 
 	// Additional messaging nodes
 	eng.RegisterNodeExecutor("n8n-nodes-base.twilio", messaging.NewTwilioNode())

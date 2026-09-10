@@ -254,15 +254,20 @@ func (e *ReliableWorkflowEngine) ExecuteWorkflowWithContext(
 			return nil, fmt.Errorf("failed to get executor for node %s: %w", node.Name, err)
 		}
 
-		if err := executor.ValidateParameters(node.Parameters); err != nil {
-			return nil, fmt.Errorf("invalid parameters for node %s: %w", node.Name, err)
-		}
-
 		inputDataForNode := nodeResults[nodeName]
 		if inputDataForNode == nil {
 			inputDataForNode = []model.DataItem{{JSON: make(map[string]interface{})}}
 		}
 
+		// Inject credentials BEFORE validation so credential-only
+		// nodes (e.g. an n8n MySQL node whose connection settings
+		// live entirely on the synced credential envelope, not on the
+		// node's own parameter map) don't trip the "host is
+		// required" check. The engine's CredentialManager flattens
+		// the envelope into `<credType>_<key>` on the params; without
+		// injecting first, ValidateParameters sees an empty map and
+		// rejects the workflow even though the credentials would have
+		// satisfied the requirement at Execute time.
 		finalNodeParams := node.Parameters
 		if e.baseEngine.credentialManager != nil {
 			finalNodeParams, err = e.baseEngine.credentialManager.InjectCredentialsIntoNodeParameters(node.ID, node.Parameters)
@@ -271,6 +276,14 @@ func (e *ReliableWorkflowEngine) ExecuteWorkflowWithContext(
 					Error: fmt.Errorf("error injecting credentials for node %s: %w", node.Name, err),
 				}, nil
 			}
+		}
+
+		// Validate AFTER credential injection so the check sees the
+		// final parameters the node will actually use at Execute
+		// time. This matches what the engine.go base path does and
+		// keeps both engines in sync.
+		if err := executor.ValidateParameters(finalNodeParams); err != nil {
+			return nil, fmt.Errorf("invalid parameters for node %s: %w", node.Name, err)
 		}
 
 		// Execute with reliability features. We open a node.execute

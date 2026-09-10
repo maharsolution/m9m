@@ -398,11 +398,6 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 			return nil, fmt.Errorf("failed to get executor for node %s: %w", node.Name, err)
 		}
 
-		// Validate parameters
-		if err := executor.ValidateParameters(node.Parameters); err != nil {
-			return nil, fmt.Errorf("invalid parameters for node %s: %w", node.Name, err)
-		}
-
 		// Get input data for this node
 		inputDataForNode := nodeResults[nodeName]
 		if inputDataForNode == nil {
@@ -476,6 +471,16 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 					Error: fmt.Errorf("error injecting credentials for node %s: %w", node.Name, err),
 				}, nil // Return as result.Error, not as function error
 			}
+		}
+
+		// Validate the post-injection parameters so credential-only
+		// nodes (e.g. an n8n MySQL node whose connection settings live
+		// entirely on the synced credential envelope) don't trip the
+		// "host is required" check at validate time. The original
+		// `node.Parameters` validation ran before injection and
+		// rejected every synced credential-only workflow.
+		if err := executor.ValidateParameters(finalNodeParams); err != nil {
+			return nil, fmt.Errorf("invalid parameters for node %s: %w", node.Name, err)
 		}
 
 		// Execute the node, passing the input data and node parameters.
@@ -870,17 +875,19 @@ func (e *workflowEngineImpl) runLoopBodyChain(
 		if err != nil {
 			return nil, fmt.Errorf("body node %q: %w", name, err)
 		}
-		if err := executor.ValidateParameters(bodyNode.Parameters); err != nil {
-			return nil, fmt.Errorf("body node %q invalid parameters: %w", name, err)
-		}
 
-		// Resolve credentials (same as top-level path).
+		// Resolve credentials (same as top-level path) BEFORE
+		// validation so credential-only nodes don't fail the
+		// pre-execution check.
 		finalParams := bodyNode.Parameters
 		if e.credentialManager != nil {
 			finalParams, err = e.credentialManager.InjectCredentialsIntoNodeParameters(bodyNode.ID, bodyNode.Parameters)
 			if err != nil {
 				return nil, fmt.Errorf("body node %q credential injection: %w", name, err)
 			}
+		}
+		if err := executor.ValidateParameters(finalParams); err != nil {
+			return nil, fmt.Errorf("body node %q invalid parameters: %w", name, err)
 		}
 
 		// Skip body nodes that received no items (matches the
@@ -1019,9 +1026,6 @@ func (e *workflowEngineImpl) runLoopDoneChain(
 		if err != nil {
 			return nil, fmt.Errorf("done node %q: %w", name, err)
 		}
-		if err := executor.ValidateParameters(doneNode.Parameters); err != nil {
-			return nil, fmt.Errorf("done node %q invalid parameters: %w", name, err)
-		}
 
 		finalParams := doneNode.Parameters
 		if e.credentialManager != nil {
@@ -1029,6 +1033,9 @@ func (e *workflowEngineImpl) runLoopDoneChain(
 			if err != nil {
 				return nil, fmt.Errorf("done node %q credential injection: %w", name, err)
 			}
+		}
+		if err := executor.ValidateParameters(finalParams); err != nil {
+			return nil, fmt.Errorf("done node %q invalid parameters: %w", name, err)
 		}
 
 		input := nodeResults[name]
