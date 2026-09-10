@@ -131,6 +131,13 @@ func (s *SQLiteStorage) initSchema() error {
 	if err := ensureColumn(s.db, "executions", "node_data", "TEXT"); err != nil {
 		return err
 	}
+	// debug: per-workflow boolean that gates how much per-node
+	// data the engine captures. Stored as INTEGER (0/1) so it
+	// matches SQLite's convention for booleans everywhere else
+	// (workflows.active uses INTEGER too).
+	if err := ensureColumn(s.db, "workflows", "debug", "INTEGER DEFAULT 0"); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -155,8 +162,8 @@ func (s *SQLiteStorage) SaveWorkflow(workflow *model.Workflow) error {
 
 	query := `
 		INSERT OR REPLACE INTO workflows
-		(id, workspace_id, name, description, nodes, connections, settings, active, tags, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(id, workspace_id, name, description, nodes, connections, settings, active, tags, debug, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	activeInt := 0
@@ -164,27 +171,32 @@ func (s *SQLiteStorage) SaveWorkflow(workflow *model.Workflow) error {
 		activeInt = 1
 	}
 
+	debugInt := 0
+	if workflow.Debug {
+		debugInt = 1
+	}
+
 	_, err := s.db.Exec(query, workflow.ID, workflow.WorkspaceID, workflow.Name, workflow.Description,
 		string(nodesJSON), string(connectionsJSON), string(settingsJSON), activeInt,
-		string(tagsJSON), workflow.CreatedAt, workflow.UpdatedAt)
+		string(tagsJSON), debugInt, workflow.CreatedAt, workflow.UpdatedAt)
 
 	return err
 }
 
 func (s *SQLiteStorage) GetWorkflow(id string) (*model.Workflow, error) {
 	query := `
-		SELECT id, workspace_id, name, description, nodes, connections, settings, active, tags, created_at, updated_at
+		SELECT id, workspace_id, name, description, nodes, connections, settings, active, tags, debug, created_at, updated_at
 		FROM workflows WHERE id = ?
 	`
 
 	var workflow model.Workflow
 	var nodesJSON, connectionsJSON, settingsJSON, tagsJSON string
-	var activeInt int
+	var activeInt, debugInt int
 
 	err := s.db.QueryRow(query, id).Scan(
 		&workflow.ID, &workflow.WorkspaceID, &workflow.Name, &workflow.Description,
 		&nodesJSON, &connectionsJSON, &settingsJSON,
-		&activeInt, &tagsJSON, &workflow.CreatedAt, &workflow.UpdatedAt,
+		&activeInt, &tagsJSON, &debugInt, &workflow.CreatedAt, &workflow.UpdatedAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -195,6 +207,7 @@ func (s *SQLiteStorage) GetWorkflow(id string) (*model.Workflow, error) {
 	}
 
 	workflow.Active = activeInt == 1
+	workflow.Debug = debugInt == 1
 
 	_ = json.Unmarshal([]byte(nodesJSON), &workflow.Nodes)
 	_ = json.Unmarshal([]byte(connectionsJSON), &workflow.Connections)
@@ -242,7 +255,7 @@ func (s *SQLiteStorage) ListWorkflows(filters WorkflowFilters) ([]*model.Workflo
 
 	// Get workflows with pagination
 	query := fmt.Sprintf(`
-		SELECT id, workspace_id, name, description, nodes, connections, settings, active, tags, created_at, updated_at
+		SELECT id, workspace_id, name, description, nodes, connections, settings, active, tags, debug, created_at, updated_at
 		FROM workflows %s
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?
@@ -260,18 +273,19 @@ func (s *SQLiteStorage) ListWorkflows(filters WorkflowFilters) ([]*model.Workflo
 	for rows.Next() {
 		var workflow model.Workflow
 		var nodesJSON, connectionsJSON, settingsJSON, tagsJSON string
-		var activeInt int
+		var activeInt, debugInt int
 
 		err := rows.Scan(
 			&workflow.ID, &workflow.WorkspaceID, &workflow.Name, &workflow.Description,
 			&nodesJSON, &connectionsJSON, &settingsJSON,
-			&activeInt, &tagsJSON, &workflow.CreatedAt, &workflow.UpdatedAt,
+			&activeInt, &tagsJSON, &debugInt, &workflow.CreatedAt, &workflow.UpdatedAt,
 		)
 		if err != nil {
 			continue
 		}
 
 		workflow.Active = activeInt == 1
+		workflow.Debug = debugInt == 1
 
 		_ = json.Unmarshal([]byte(nodesJSON), &workflow.Nodes)
 		_ = json.Unmarshal([]byte(connectionsJSON), &workflow.Connections)

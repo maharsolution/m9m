@@ -100,20 +100,56 @@ const nodeStates = computed(() => {
   if (!workflow.value || !execution.value) return map
   const nodeData = execution.value.nodeData ?? {}
 
+  // `nodeData` is gated by workflow.Debug (see model.Workflow.Debug
+  // and buildExecutionNodeData in the API). When Debug is OFF the
+  // backend keeps only the start node and last node — every other
+  // node has no entry and the loop below would mark them all
+  // 'pending'. We want the canvas to still show them as 'success'
+  // (or 'failed' when status==='failed') based on the workflow's
+  // final status, because the engine DID execute them; we just
+  // didn't capture the snapshot.
+  //
+  // We therefore resolve a "did this node run?" signal that doesn't
+  // depend on the per-node snapshot:
+  //   - status==='completed' : every node ran successfully
+  //   - status==='failed'    : nodes UPSTREAM of the failed
+  //                            branch ran; downstream didn't. The
+  //                            walk below paints the cascade.
+  //   - status==='running'   : every node is in-flight until proven
+  //                            otherwise; mark all 'running' so the
+  //                            canvas reflects the live state.
+
   for (const node of workflow.value.nodes) {
     if (execution.value.status === 'failed') {
       const data = nodeData[node.name]
-      if (data === undefined) {
-        map.set(node.name, 'pending')
-      } else if (
-        Array.isArray(data) &&
-        data.some((d) => d && (d as any).error !== undefined)
-      ) {
-        map.set(node.name, 'failed')
+      if (data !== undefined) {
+        // Per-node snapshot exists — use it.
+        if (
+          Array.isArray(data) &&
+          data.some((d) => d && (d as any).error !== undefined)
+        ) {
+          map.set(node.name, 'failed')
+        } else {
+          map.set(node.name, 'success')
+        }
       } else {
-        map.set(node.name, 'success')
+        // No snapshot. Two possibilities:
+        //   1. Debug=OFF: this isn't a start/end node, so backend
+        //      didn't record it. Mark 'pending' so the user knows
+        //      there's no per-node detail.
+        //   2. Debug=ON: backend always records, so absence means
+        //      the engine didn't get to this node yet.
+        // We can't tell those apart without the snapshot, so
+        // default to 'pending' and let the cascade-fail walk
+        // below promote failed nodes correctly.
+        map.set(node.name, 'pending')
       }
+    } else if (execution.value.status === 'running') {
+      map.set(node.name, 'running')
     } else {
+      // completed / cancelled — every node that the engine ran is
+      // either 'success' (snapshot present) or 'pending' (no
+      // snapshot — Debug=OFF).
       map.set(node.name, nodeData[node.name] !== undefined ? 'success' : 'pending')
     }
   }
@@ -149,6 +185,66 @@ const nodeStates = computed(() => {
     }
   }
   return map
+})
+
+// workflowDebug mirrors model.Workflow.Debug on the JS side.
+// When false, the backend only stores the start node's input
+// and the last node's output, so the per-node Input/Output tabs
+// for any OTHER node in this execution will be empty. The hint
+// in the NDV explains that and points the user at the workflow
+// editor's "Debug" toggle so they can re-run with full capture.
+const workflowDebug = computed(() => workflow.value?.debug === true)
+
+// startNodeName / lastNodeName mirror buildExecutionNodeData's
+// helpers on the JS side so we can decide, for a given selected
+// node, whether per-node data is expected to be present.
+const startNodeName = computed<string | null>(() => {
+  if (!workflow.value?.nodes?.length) return null
+  const hasIncoming = new Set<string>()
+  for (const conns of Object.values(workflow.value.connections ?? {})) {
+    for (const outputs of (conns as any).main ?? []) {
+      for (const c of outputs) hasIncoming.add(c.node)
+    }
+  }
+  for (const n of workflow.value.nodes) {
+    if (!hasIncoming.has(n.name)) return n.name
+  }
+  return null
+})
+
+const lastNodeName = computed<string | null>(() => {
+  if (!workflow.value?.nodes?.length) return null
+  const hasOutgoing = new Set<string>()
+  for (const [source, conns] of Object.entries(workflow.value.connections ?? {})) {
+    for (const outputs of (conns as any).main ?? []) {
+      if (outputs.length > 0) hasOutgoing.add(source)
+    }
+  }
+  for (let i = workflow.value.nodes.length - 1; i >= 0; i--) {
+    const name = workflow.value.nodes[i].name
+    if (!hasOutgoing.has(name)) return name
+  }
+  return null
+})
+
+// perNodeDataAvailable tells the NDV whether to show the data
+// tabs for the currently-selected node, or render a hint that
+// the per-node snapshot wasn't captured (Debug=OFF).
+//
+// Returns one of:
+//   - 'available'  — the node is in nodeData; show the tabs
+//   - 'unavailable' — Debug=OFF AND this node isn't start/end
+//   - 'empty'      — Debug=ON but no data; node ran with no items
+const perNodeDataAvailable = computed(() => {
+  if (!workflowDebug.value) {
+    const sel = selectedNodeName.value
+    if (sel && sel !== startNodeName.value && sel !== lastNodeName.value) {
+      return 'unavailable'
+    }
+  }
+  const out = selectedNodeOutput.value
+  if (out && Array.isArray(out) && out.length > 0) return 'available'
+  return 'empty'
 })
 
 const flowNodes = computed(() => {
@@ -642,9 +738,26 @@ function downloadData() {
           <h1 class="text-xl font-bold text-slate-900 dark:text-white truncate">
             {{ workflow?.name || 'Execution' }}
           </h1>
-          <p class="text-sm text-slate-500 dark:text-slate-400">
+          <p class="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
             <code class="text-xs">{{ execution?.id?.slice(0, 8) }}</code>
             · started {{ execution ? formatDate(execution.startedAt) : '—' }}
+            <!-- Debug badge mirrors the workflow's debug flag so
+                 the user knows whether intermediate-node data
+                 will be present in this run. -->
+            <span
+              v-if="workflow"
+              :class="[
+                'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wide',
+                workflowDebug
+                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                  : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
+              ]"
+              :title="workflowDebug
+                ? 'Debug ON — per-node I/O captured for every step'
+                : 'Debug OFF — only start and end nodes have per-node data'"
+            >
+              Debug: {{ workflowDebug ? 'ON' : 'OFF' }}
+            </span>
           </p>
         </div>
         <div v-if="execution" class="flex items-center gap-3">
@@ -846,8 +959,32 @@ function downloadData() {
 
           <!-- Data content -->
           <div class="flex-1 overflow-y-auto">
+            <!-- Per-node data unavailable hint. Shown when the
+                 workflow's Debug flag is OFF and the user selected
+                 a node that isn't the start or end node — the
+                 backend didn't capture a snapshot for this node in
+                 the latest run. The hint explains the cause and
+                 points at the workflow editor's Debug toggle so
+                 the user can flip it on and re-run. -->
+            <div
+              v-if="perNodeDataAvailable === 'unavailable'"
+              class="m-4 p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900"
+            >
+              <div class="flex items-center gap-2 mb-1">
+                <ExclamationTriangleIcon class="w-5 h-5 text-amber-500" />
+                <h3 class="font-semibold text-amber-700 dark:text-amber-300 text-sm">
+                  Debug capture is OFF for this workflow
+                </h3>
+              </div>
+              <p class="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
+                Per-node input/output is only recorded for the start and last node
+                when Debug is OFF. Open this workflow in the editor and flip
+                <span class="font-semibold">Debug ON</span>, save, and re-run to see
+                full per-node data for every step.
+              </p>
+            </div>
             <ExecutionDataView
-              v-if="dataTab === 'input'"
+              v-else-if="dataTab === 'input'"
               :data="selectedNodeInput"
               :mode="viewMode"
               empty-label="No upstream items — this is a trigger node."

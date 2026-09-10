@@ -7,11 +7,13 @@ import {
   CloudArrowUpIcon,
   PencilIcon,
   SparklesIcon,
+  BugAntIcon,
 } from '@heroicons/vue/24/outline'
 
 const props = defineProps<{
   workflowName?: string
   workflowActive?: boolean
+  workflowDebug?: boolean
   isNewWorkflow: boolean
   isDirty: boolean
   isLoading: boolean
@@ -26,6 +28,7 @@ const emit = defineEmits<{
   togglePalette: []
   toggleCopilot: []
   toggleActive: []
+  toggleDebug: []
   execute: []
   save: []
 }>()
@@ -138,6 +141,30 @@ function cancelEditingName() {
       >
         <component :is="props.workflowActive ? StopIcon : PlayIcon" class="w-4 h-4" />
         {{ props.workflowActive ? 'Active' : 'Inactive' }}
+      </button>
+
+      <!-- Debug toggle. Controls whether the engine captures full
+           per-node I/O on every run (Debug=ON) or only the start
+           + end nodes (Debug=OFF, the production default). When
+           ON, the ExecutionDetail view shows full per-node
+           debug data; when OFF, only the start/end nodes show
+           payload data and intermediate nodes appear as
+           "ran, but no per-node snapshot captured". -->
+      <button
+        v-if="!props.isNewWorkflow"
+        @click="emit('toggleDebug')"
+        :class="[
+          'flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors',
+          props.workflowDebug
+            ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+        ]"
+        :title="props.workflowDebug
+          ? 'Debug ON — execution detail shows full per-node input/output'
+          : 'Debug OFF — execution detail only captures start and end nodes'"
+      >
+        <BugAntIcon class="w-4 h-4" />
+        {{ props.workflowDebug ? 'Debug ON' : 'Debug OFF' }}
       </button>
 
       <button

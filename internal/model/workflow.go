@@ -29,6 +29,20 @@ type Workflow struct {
 	UpdatedAt   time.Time              `json:"updatedAt"`
 	CreatedBy   string                 `json:"createdBy,omitempty"`
 
+	// Debug toggles the per-node input/output snapshot captured at
+	// execution time. When true, the engine populates
+	// execution.NodeData for every node, and the n8n-style
+	// ExecutionDetail view shows full per-node I/O the way it does
+	// during development. When false (the default), only the start
+	// node's input and the last-run node's output are captured so
+	// production workflows don't pay the storage / serialization
+	// cost of every intermediate item.
+	//
+	// This is a server-side convenience field. n8n's wire format
+	// doesn't include it, so omitempty keeps the JSON shape
+	// compatible with workflows imported from n8n.
+	Debug bool `json:"debug,omitempty"`
+
 	// WorkspaceID is the server-side tenant identity that owns this
 	// workflow. Empty on read from older payloads or single-tenant
 	// deployments; the storage layer substitutes tenancy.DefaultID

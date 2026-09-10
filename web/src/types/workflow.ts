@@ -14,6 +14,13 @@ export interface Workflow {
   createdAt: string
   updatedAt: string
   createdBy?: string
+  // Debug flag (server-side m9m extension). When true, the engine
+  // captures per-node input/output for every step and the
+  // n8n-style ExecutionDetail view shows full per-node I/O. When
+  // false (default for production), only the start node's input
+  // and the last node's output are captured. Not part of n8n's
+  // wire format, so we mark it optional.
+  debug?: boolean
 }
 
 export interface WorkflowNode {

@@ -87,6 +87,28 @@ const toggleActive = async () => {
   await workflowStore.toggleWorkflowActive(workflow.value.id)
 }
 
+// toggleDebug flips workflow.Debug locally + immediately persists
+// it through the regular save path. The button in the toolbar
+// stays in sync because the toolbar reads `workflow?.debug`
+// directly from the store, so a save → refetch is unnecessary.
+const toggleDebug = async () => {
+  if (!workflow.value) return
+  // Mutate the workflow object in-place so Vue's reactivity picks
+  // it up. We don't need to await anything before the visual
+  // state changes — the toolbar re-reads on the next tick.
+  workflow.value.debug = !workflow.value.debug
+  workflowEditorStore.markDirty()
+  // Persist straight away so a navigation away from the editor
+  // doesn't lose the toggle. If this fails the user can still
+  // hit the Save button to retry.
+  try {
+    await workflowStore.saveWorkflow()
+    workflowEditorStore.markClean()
+  } catch (e) {
+    console.error('Failed to persist debug flag:', e)
+  }
+}
+
 const renameWorkflow = (name: string) => {
   workflowEditorStore.setWorkflowName(name)
 }
@@ -97,6 +119,7 @@ const renameWorkflow = (name: string) => {
     <WorkflowEditorToolbar
       :workflow-name="workflow?.name"
       :workflow-active="workflow?.active"
+      :workflow-debug="workflow?.debug"
       :is-new-workflow="isNewWorkflow"
       :is-dirty="workflowEditorStore.isDirty"
       :is-loading="workflowStore.loading"
@@ -108,6 +131,7 @@ const renameWorkflow = (name: string) => {
       @toggle-palette="showNodePalette = !showNodePalette"
       @toggle-copilot="showCopilot = !showCopilot"
       @toggle-active="toggleActive"
+      @toggle-debug="toggleDebug"
       @execute="executeWorkflow"
       @save="saveWorkflow"
     />

@@ -79,17 +79,15 @@ func (s *APIServer) ExecuteWorkflow(w http.ResponseWriter, r *http.Request) {
 	// `execution.Data` field (the workflow-level last-node output)
 	// is left intact.
 	if result != nil && len(result.NodeOutputs) > 0 {
-		execution.NodeData = make(map[string][]model.DataItem, len(result.NodeOutputs))
-		for nodeName, items := range result.NodeOutputs {
-			if len(items) == 0 {
-				// Still record the node so the UI can show
-				// "ran but produced no items" instead of
-				// silently treating it as never-run.
-				execution.NodeData[nodeName] = []model.DataItem{}
-				continue
-			}
-			execution.NodeData[nodeName] = items
-		}
+		// Per-node snapshot size is gated by the workflow's Debug
+		// flag (see model.Workflow.Debug). When Debug=true we copy
+		// every entry so the n8n-style NDV shows full per-node
+		// I/O for the whole run. When Debug=false (the default
+		// for production workflows) we keep only the start
+		// node's input and the last node's output, so production
+		// executions don't pay the storage cost of every
+		// intermediate item.
+		execution.NodeData = buildExecutionNodeData(workflow, result)
 	}
 
 	if err := s.storage.SaveExecution(execution); err != nil {
@@ -98,6 +96,147 @@ func (s *APIServer) ExecuteWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.sendJSON(w, http.StatusOK, execution)
+}
+
+// buildExecutionNodeData copies the engine's per-node output snapshot
+// into execution.NodeData, optionally filtered down to the workflow's
+// debug preferences.
+//
+// When workflow.Debug is true, every entry in result.NodeOutputs is
+// preserved so the n8n-style ExecutionDetail view shows full per-node
+// I/O for every step of the run.
+//
+// When workflow.Debug is false (the default for production), only two
+// entries are kept:
+//
+//   - The start node (a node with no incoming edges) — its output is
+//     the closest proxy for "what came in" since the engine only
+//     records node output, not node input. n8n's NDV Input tab for a
+//     start / trigger node shows the trigger payload, which is
+//     exactly this entry.
+//   - The last node in execution order (a leaf in the connection
+//     graph) — its output is the canonical workflow.Data.
+//
+// Mirroring n8n's "Save production executions" / "Save manual
+// executions" toggle, which keeps only the workflow-level result for
+// scheduled runs but full per-node data when the user is iterating.
+//
+// Returns an empty map when result is nil or no nodes produced data.
+func buildExecutionNodeData(workflow *model.Workflow, result *engine.ExecutionResult) map[string][]model.DataItem {
+	out := make(map[string][]model.DataItem)
+	if result == nil {
+		return out
+	}
+
+	if workflow != nil && workflow.Debug {
+		// Debug mode: copy everything. Same as the previous
+		// behaviour, just centralised so retry-node and the
+		// ad-hoc execute path share it.
+		for nodeName, items := range result.NodeOutputs {
+			if len(items) == 0 {
+				out[nodeName] = []model.DataItem{}
+				continue
+			}
+			out[nodeName] = items
+		}
+		return out
+	}
+
+	// Production mode: keep only start-node + last-node.
+	startName := findStartNodeName(workflow)
+	endName := findLastNodeName(workflow)
+
+	if startName != "" {
+		if items, ok := result.NodeOutputs[startName]; ok {
+			if len(items) == 0 {
+				out[startName] = []model.DataItem{}
+			} else {
+				out[startName] = items
+			}
+		}
+	}
+	if endName != "" && endName != startName {
+		if items, ok := result.NodeOutputs[endName]; ok {
+			if len(items) == 0 {
+				out[endName] = []model.DataItem{}
+			} else {
+				out[endName] = items
+			}
+		}
+	}
+	if len(out) == 0 && len(result.Data) > 0 {
+		// Fallback: record the workflow-level final output under
+		// the conventional "__end__" key so the NDV still has
+		// something to render even when the graph topology
+		// can't be classified (cycle-only workflows, error
+		// paths, etc.).
+		out["__end__"] = result.Data
+	}
+	return out
+}
+
+// findStartNodeName returns the name of the first node that has no
+// incoming connections. The convention matches the engine's
+// `findStartingNodes` (a node is a "start" if nothing routes INTO
+// it), so we agree with the engine on which node gets the trigger
+// payload.
+//
+// Returns "" when the graph has no obvious start (e.g. a loop-only
+// workflow where every node has at least one incoming edge).
+func findStartNodeName(workflow *model.Workflow) string {
+	if workflow == nil || len(workflow.Nodes) == 0 {
+		return ""
+	}
+	hasIncoming := make(map[string]bool, len(workflow.Nodes))
+	for _, conns := range workflow.Connections {
+		if conns.Main == nil {
+			continue
+		}
+		for _, outputs := range conns.Main {
+			for _, c := range outputs {
+				hasIncoming[c.Node] = true
+			}
+		}
+	}
+	for _, n := range workflow.Nodes {
+		if !hasIncoming[n.Name] {
+			return n.Name
+		}
+	}
+	return ""
+}
+
+// findLastNodeName returns the name of the last node in execution
+// order. The engine returns `result.Data` as the last node's
+// output, so we approximate by walking connections in reverse
+// (a node with no outgoing edges is a leaf). When multiple leaves
+// exist (branching workflows), we return the first one found —
+// the same heuristic the engine uses for `responseMode: lastNode`.
+//
+// Returns "" when the workflow has no nodes.
+func findLastNodeName(workflow *model.Workflow) string {
+	if workflow == nil || len(workflow.Nodes) == 0 {
+		return ""
+	}
+	hasOutgoing := make(map[string]bool, len(workflow.Nodes))
+	for source, conns := range workflow.Connections {
+		if conns.Main == nil {
+			continue
+		}
+		for _, outputs := range conns.Main {
+			if len(outputs) > 0 {
+				hasOutgoing[source] = true
+			}
+		}
+	}
+	// Iterate from the end so the last-declared leaf wins (matches
+	// the engine's "last node in execution order" tie-break).
+	for i := len(workflow.Nodes) - 1; i >= 0; i-- {
+		if !hasOutgoing[workflow.Nodes[i].Name] {
+			return workflow.Nodes[i].Name
+		}
+	}
+	return ""
 }
 
 // ExecuteWorkflowByDefinition executes an inline workflow definition payload.
@@ -365,17 +504,11 @@ func (s *APIServer) RetryExecution(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Mirror the per-node output snapshot so retries preserve the
-	// same execution detail that a fresh run would. See the
-	// matching block in ExecuteWorkflow for context.
+	// same execution detail that a fresh run would. The same
+	// workflow.Debug gate applies here (see
+	// buildExecutionNodeData in ExecuteWorkflow).
 	if result != nil && len(result.NodeOutputs) > 0 {
-		newExecution.NodeData = make(map[string][]model.DataItem, len(result.NodeOutputs))
-		for nodeName, items := range result.NodeOutputs {
-			if len(items) == 0 {
-				newExecution.NodeData[nodeName] = []model.DataItem{}
-				continue
-			}
-			newExecution.NodeData[nodeName] = items
-		}
+		newExecution.NodeData = buildExecutionNodeData(workflow, result)
 	}
 
 	if err := s.storage.SaveExecution(newExecution); err != nil {
@@ -642,16 +775,11 @@ func (s *APIServer) RetryNode(w http.ResponseWriter, r *http.Request) {
 	// sub-workflow nodes produced data, so NodeData is keyed by the
 	// kept node names; the upstream snapshot from the original
 	// execution is intentionally NOT copied (it would mislead the
-	// user into thinking the upstream ran again).
+	// user into thinking the upstream ran again). Debug gating
+	// reuses buildExecutionNodeData so a per-node retry honours
+	// the same workflow.Debug preference as a fresh run.
 	if result != nil && len(result.NodeOutputs) > 0 {
-		newExecution.NodeData = make(map[string][]model.DataItem, len(result.NodeOutputs))
-		for nodeName, items := range result.NodeOutputs {
-			if len(items) == 0 {
-				newExecution.NodeData[nodeName] = []model.DataItem{}
-				continue
-			}
-			newExecution.NodeData[nodeName] = items
-		}
+		newExecution.NodeData = buildExecutionNodeData(subWorkflow, result)
 	}
 
 	if err := s.storage.SaveExecution(newExecution); err != nil {

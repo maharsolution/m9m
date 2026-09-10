@@ -85,6 +85,7 @@ func (s *MySQLStorage) initSchema() error {
 			settings JSON,
 			active TINYINT(1) DEFAULT 0,
 			tags JSON,
+			debug TINYINT(1) DEFAULT 0,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			created_by VARCHAR(255)
@@ -171,6 +172,12 @@ func (s *MySQLStorage) initSchema() error {
 	if err := ensureColumn(s.db, "executions", "node_data", "JSON"); err != nil {
 		return err
 	}
+	// debug: per-workflow boolean that gates how much per-node
+	// data the engine captures (see model.Workflow.Debug for the
+	// semantics). Stored as TINYINT(1) to match the `active` flag.
+	if err := ensureColumn(s.db, "workflows", "debug", "TINYINT(1) DEFAULT 0"); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -194,8 +201,8 @@ func (s *MySQLStorage) SaveWorkflow(workflow *model.Workflow) error {
 	tagsJSON, _ := json.Marshal(workflow.Tags)
 
 	query := `
-		INSERT INTO workflows (id, workspace_id, name, description, nodes, connections, settings, active, tags, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO workflows (id, workspace_id, name, description, nodes, connections, settings, active, tags, debug, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			workspace_id = VALUES(workspace_id),
 			name = VALUES(name),
@@ -205,31 +212,32 @@ func (s *MySQLStorage) SaveWorkflow(workflow *model.Workflow) error {
 			settings = VALUES(settings),
 			active = VALUES(active),
 			tags = VALUES(tags),
+			debug = VALUES(debug),
 			updated_at = VALUES(updated_at)
 	`
 
 	_, err := s.db.Exec(query,
 		workflow.ID, workflow.WorkspaceID, workflow.Name, workflow.Description,
-		string(nodesJSON), string(connectionsJSON), string(settingsJSON), workflow.Active, string(tagsJSON),
-		workflow.CreatedAt, workflow.UpdatedAt)
+		string(nodesJSON), string(connectionsJSON), string(settingsJSON), boolToInt(workflow.Active), string(tagsJSON),
+		boolToInt(workflow.Debug), workflow.CreatedAt, workflow.UpdatedAt)
 
 	return err
 }
 
 func (s *MySQLStorage) GetWorkflow(id string) (*model.Workflow, error) {
 	query := `
-		SELECT id, workspace_id, name, description, nodes, connections, settings, active, tags, created_at, updated_at
+		SELECT id, workspace_id, name, description, nodes, connections, settings, active, tags, debug, created_at, updated_at
 		FROM workflows WHERE id = ?
 	`
 
 	var workflow model.Workflow
 	var nodesJSON, connectionsJSON, settingsJSON, tagsJSON sql.NullString
-	var activeInt int
+	var activeInt, debugInt int
 
 	err := s.db.QueryRow(query, id).Scan(
 		&workflow.ID, &workflow.WorkspaceID, &workflow.Name, &workflow.Description,
 		&nodesJSON, &connectionsJSON, &settingsJSON,
-		&activeInt, &tagsJSON, &workflow.CreatedAt, &workflow.UpdatedAt,
+		&activeInt, &tagsJSON, &debugInt, &workflow.CreatedAt, &workflow.UpdatedAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -240,6 +248,7 @@ func (s *MySQLStorage) GetWorkflow(id string) (*model.Workflow, error) {
 	}
 
 	workflow.Active = activeInt == 1
+	workflow.Debug = debugInt == 1
 
 	if nodesJSON.Valid {
 		_ = json.Unmarshal([]byte(nodesJSON.String), &workflow.Nodes)
@@ -288,7 +297,7 @@ func (s *MySQLStorage) ListWorkflows(filters WorkflowFilters) ([]*model.Workflow
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, workspace_id, name, description, nodes, connections, settings, active, tags, created_at, updated_at
+		SELECT id, workspace_id, name, description, nodes, connections, settings, active, tags, debug, created_at, updated_at
 		FROM workflows %s
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?
@@ -306,18 +315,19 @@ func (s *MySQLStorage) ListWorkflows(filters WorkflowFilters) ([]*model.Workflow
 	for rows.Next() {
 		var workflow model.Workflow
 		var nodesJSON, connectionsJSON, settingsJSON, tagsJSON sql.NullString
-		var activeInt int
+		var activeInt, debugInt int
 
 		err := rows.Scan(
 			&workflow.ID, &workflow.WorkspaceID, &workflow.Name, &workflow.Description,
 			&nodesJSON, &connectionsJSON, &settingsJSON,
-			&activeInt, &tagsJSON, &workflow.CreatedAt, &workflow.UpdatedAt,
+			&activeInt, &tagsJSON, &debugInt, &workflow.CreatedAt, &workflow.UpdatedAt,
 		)
 		if err != nil {
 			continue
 		}
 
 		workflow.Active = activeInt == 1
+		workflow.Debug = debugInt == 1
 
 		if nodesJSON.Valid {
 			_ = json.Unmarshal([]byte(nodesJSON.String), &workflow.Nodes)
