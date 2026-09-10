@@ -314,6 +314,43 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		nodeResults[nodeName] = inputData
 	}
 
+	// Pre-seed downstream nodes (those with incoming connections) with
+	// an empty input slice so the engine's "no routed data → fallback
+	// to a single empty item" path doesn't accidentally fire for
+	// nodes that sit on the unselected branch of an IF/Switch.
+	//
+	// Background: ConnectionRouter.RouteData only populates routedData
+	// for targets that actually receive items. If the upstream is an
+	// IF/Switch and the routing tag diverts every item to a sibling
+	// branch, the unselected branch's downstream nodes are NEVER
+	// present in routedData — so nodeResults[name] remains nil, and
+	// the engine's nil-check (`if inputDataForNode == nil`) substitutes
+	// a single placeholder item. That placeholder then flows through
+	// the unselected branch (e.g. into a database query that
+	// shouldn't run at all for this input), which is exactly what
+	// was happening with the db_quiry workflow: db_type=mysql routed
+	// through the IF's main[0] (MySQL Switch → MySQL node) AND the
+	// database query node on the PostgreSQL branch was still being
+	// invoked once with the placeholder item, triggering an SSL
+	// connection failure.
+	//
+	// Seeding nodeResults with [] for every node that has incoming
+	// connections fixes this: when routing returns 0 items, the node
+	// sees len(inputDataForNode) == 0 and the engine skips it (same
+	// behaviour as if upstream routed an empty payload).
+	for _, conn := range workflow.Connections {
+		for _, branches := range conn.Main {
+			for _, c := range branches {
+				if c.Node == "" {
+					continue
+				}
+				if _, already := nodeResults[c.Node]; !already {
+					nodeResults[c.Node] = []model.DataItem{}
+				}
+			}
+		}
+	}
+
 	// Pre-compute the body-chain and done-chain orderings for every
 	// splitInBatches node in the workflow. The engine drives
 	// iteration for these nodes itself (instead of calling
@@ -402,10 +439,37 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		// Get input data for this node
 		inputDataForNode := nodeResults[nodeName]
 		if inputDataForNode == nil {
-			// No specific input data, use empty input
-			inputDataForNode = []model.DataItem{{JSON: make(map[string]interface{})}}
+			// No specific input data. Historically we substituted a
+			// single empty placeholder item here; that broke IF/Switch
+			// routing because nodes downstream of an unselected branch
+			// would still execute with that placeholder (e.g. a
+			// PostgreSQL query running for an input that the IF routed
+			// to the MySQL branch). Now we seed every downstream node
+			// with []model.DataItem{} up front (see the pre-seed loop
+			// above), so reaching this nil-check means the workflow
+			// definition has a node with no incoming connections AND
+			// the trigger didn't seed it. Fall back to the webhook
+			// input data in that single case.
+			inputDataForNode = inputData
 		}
 		os.Stderr.WriteString(fmt.Sprintf("[exec-trace] node=%s inputLen=%d\n", node.Name, len(inputDataForNode)))
+
+		// Skip nodes that received no input. This mirrors n8n's
+		// "0 items → node doesn't run" behaviour and is the only
+		// thing that prevents the unselected IF/Switch branch from
+		// firing (e.g. running the PostgreSQL query for a
+		// db_type=mysql input just because we synthesised an empty
+		// placeholder item for it).
+		//
+		// Trigger-style nodes (webhook, schedule, etc.) are an
+		// exception — they get their data from outside the
+		// connection graph and start the workflow even when their
+		// nodeResults entry happens to be empty at this point.
+		if len(inputDataForNode) == 0 && !isTriggerOnlyNodeType(node.Type) {
+			os.Stderr.WriteString(fmt.Sprintf("[exec-trace] SKIP empty input node=%s\n", node.Name))
+			nodeResults[nodeName] = []model.DataItem{}
+			continue
+		}
 
 		// splitInBatches is n8n's loop construct. The connection
 		// graph contains a back-edge from the body chain back to
