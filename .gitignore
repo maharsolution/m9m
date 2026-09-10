@@ -6,6 +6,8 @@ n8n-go
 *.exe
 *.exe~
 .env
+# Common typo / Windows-created sibling of .env — never stage.
+,env
 # Python (repo-root) — bindings/* and packages/* already override these per-subdir
 __pycache__/
 *.pyc
