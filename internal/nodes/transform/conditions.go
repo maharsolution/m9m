@@ -204,6 +204,7 @@ func evaluateCondition(item model.DataItem, condition map[string]interface{}, ev
 
 	leftResolved := resolveValue(item.JSON, leftValue, eval)
 	rightResolved := resolveValue(item.JSON, rightValue, eval)
+	os.Stderr.WriteString(fmt.Sprintf("[cond-debug] operator=%q leftResolved=%v (%T) rightResolved=%v (%T)\n", operator, leftResolved, leftResolved, rightResolved, rightResolved))
 
 	switch operator {
 	case "exists":
