@@ -407,7 +407,7 @@ docker run --rm -v m9m-data:/data -v $(pwd):/backup alpine tar czf /backup/m9m-b
 docker exec m9m m9m backup /data/backup.sql
 ```
 
-## Image registry (Harbor + GitHub Actions)
+## Image registry (Harbor + GitHub Actions) + auto-deploy
 
 Starting with the 2026-09 cycle, the m9m Docker image is **built by a GitHub
 Action and pushed to the project's Harbor registry**, instead of being
@@ -429,11 +429,18 @@ git push origin main
 │     --push                                  │
 └─────────────────────────────────────────────┘
      │
-     ▼
-harbor.solutiontech.id/m9m/m9m-core:latest
+     ▼  (needs: build-and-push)
+┌─────────────────────────────────────────────┐
+│ deploy job (same workflow, ssh-action)      │
+│                                             │
+│   ssh root@<server> -p 2212                 │
+│     bash /root/bin/pull-compose.sh          │
+│       # docker compose pull m9m-backend     │
+│       # docker compose up -d m9m-backend    │
+└─────────────────────────────────────────────┘
      │
-     ▼  (operator or webhook)
-ssh root@<server> "bash /root/bin/pull-compose.sh"
+     ▼
+m9m-backend running the new image
 ```
 
 ### Tag strategy — `latest` only
@@ -467,9 +474,52 @@ Configure these once under
 |---|---|---|
 | `REGISTRY_USERNAME` | `m9m` | Harbor robot account or personal username |
 | `REGISTRY_PASSWORD` | `Abcd.12345!` | Matching password |
+| `SSH_HOST` | `187.77.113.218` | m9m-server host (port 22 is firewalled) |
+| `SSH_PORT` | `2212` | SSH port (port 22 is firewalled on the deploy box) |
+| `SSH_USER` | `root` | SSH user |
+| `SSH_PRIVATE_KEY` | (full PEM content) | Private half of a key whose public half is in `~/.ssh/authorized_keys` on the server. Currently the operator's existing `id_rsa`. |
 
-The workflow is otherwise self-contained — it does not shell out to the
-deploy server, so a leaked runner cannot overwrite `/root/gabungan`.
+### Automatic deploy after build
+
+`harbor-image.yml` defines **two jobs** chained by `needs:`:
+
+```
+push to main ──► build-and-push ──► deploy ──► server: pull + restart
+                (linux/amd64)   (ssh via      (m9m-backend)
+                               appleboy/ssh)
+```
+
+The `deploy` job uses the `appleboy/ssh-action@v1` Marketplace action to
+SSH into the deploy server (port 2212) and execute:
+
+```bash
+bash /root/bin/pull-compose.sh
+```
+
+The host key for `[187.77.113.218]:2212` is pinned in the workflow so a
+man-in-the-middle cannot silently redirect the SSH session.
+
+#### Skipping the auto-deploy
+
+If you push a commit that should not trigger a redeploy (e.g. a
+doc-only change), include `[no-deploy]` anywhere in the commit message:
+
+```
+docs(readme): refresh install instructions [no-deploy]
+```
+
+The `deploy` job's `if:` condition short-circuits and the server is
+left untouched. The build, on the other hand, still runs so the
+Harbor `:latest` is refreshed even if you decide the server should not
+restart yet.
+
+#### Troubleshooting the SSH step
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `Permission denied (publickey)` | `SSH_PRIVATE_KEY` not set, or doesn't match an entry in `~/.ssh/authorized_keys` on the server | Compare the public half of the secret against `ssh -p 2212 root@$SSH_HOST 'cat ~/.ssh/authorized_keys'` |
+| `Host key verification failed` | The `known_hosts` pin in the workflow is outdated (server was rebuilt) | Re-read the new fingerprint with `ssh-keyscan -p 2212 $SSH_HOST` and paste it into the workflow |
+| `bash: /root/bin/pull-compose.sh: No such file or directory` | Script was deleted on the server | Recreate it (see "Replacing the legacy `/root/bin/build` pipeline" below) |
 
 ### Switching the bundled docker-compose.yml to the registry
 

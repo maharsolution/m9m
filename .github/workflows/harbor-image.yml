@@ -21,11 +21,27 @@ name: harbor-image
 # Required GitHub Secrets (Settings → Secrets and variables → Actions):
 #   REGISTRY_USERNAME   — Harbor robot or personal account, e.g. `m9m`
 #   REGISTRY_PASSWORD   — matching password for that account
+#   SSH_HOST            — m9m-server host, e.g. `187.77.113.218`
+#   SSH_PORT            — SSH port, `2212` (port 22 is firewalled on the
+#                         deploy box; only 2212 is open)
+#   SSH_USER            — SSH user, `root`
+#   SSH_PRIVATE_KEY     — Private half of an SSH key whose public
+#                         counterpart is in
+#                         `~/.ssh/authorized_keys` on the server.
+#                         Currently the operator's existing id_rsa.
 #
-# The workflow intentionally does NOT shell out to the deploy server.
-# Pull + restart is handled by the operator (or, in production, a
-# separate "deploy" workflow that reacts to new tags via Harbor webhooks).
-# This keeps the workflow idempotent and safe to re-run.
+# Two jobs chained by `needs:`:
+#   1. build-and-push — produce the :latest image in Harbor
+#   2. deploy          — SSH to the production server and run
+#                        `/root/bin/pull-compose.sh` to pull :latest
+#                        and restart the m9m-backend service.
+#
+# The deploy job is gated on the build succeeding. If the build fails
+# or the registry push is rejected, the server is left untouched.
+#
+# The SSH key is the operator's existing key (id_rsa, no passphrase);
+# the matching public half is already in the server's
+# ~/.ssh/authorized_keys so no server-side change is required.
 
 on:
   push:
@@ -91,3 +107,32 @@ jobs:
           # ~/.docker/config.json. Revoke them at the end of the job so
           # a leaked runner image doesn't carry the Harbor token.
           docker logout "${{ env.REGISTRY_HOST }}" || true
+
+  deploy:
+    name: Deploy via SSH to m9m-server
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    # Skip auto-deploy when triggered by another workflow or when the
+    # commit message says so. Useful when merging a doc-only commit.
+    if: |
+      github.event_name != 'push' ||
+      !contains(github.event.head_commit.message, '[no-deploy]')
+    steps:
+      - name: Trigger /root/bin/pull-compose.sh on ${{ secrets.SSH_HOST }}
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          # Pin the server's host key so a MITM can't silently
+          # redirect the SSH session. The line below is the
+          # ED25519 entry from `~/.ssh/known_hosts` for port 2212.
+          known_hosts: |
+            [187.77.113.218]:2212 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHyaqc/JgysEX4KYD1dhDZ0VwFhiZJ/sGQvJaAckfZM4
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            echo "=== deploy triggered by ${{ github.repository }}@${{ github.sha }} ==="
+            bash /root/bin/pull-compose.sh
+            echo "=== deploy complete ==="
