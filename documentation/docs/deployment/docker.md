@@ -420,31 +420,43 @@ git push origin main
      ▼
 ┌─────────────────────────────────────────────┐
 │ .github/workflows/harbor-image.yml          │
-│   (ubuntu-latest, buildx, multi-arch)       │
+│   (ubuntu-latest, buildx, single-arch)      │
 │                                             │
 │   docker buildx build                       │
-│     --platform linux/amd64,linux/arm64      │
+│     --platform linux/amd64                  │
 │     --tag harbor.solutiontech.id/           │
-│          m9m/m9m-core:main-<sha>,main,latest│
+│          m9m/m9m-core:latest                │
 │     --push                                  │
 └─────────────────────────────────────────────┘
      │
      ▼
-harbor.solutiontech.id/m9m/m9m-core:*
+harbor.solutiontech.id/m9m/m9m-core:latest
      │
      ▼  (operator or webhook)
-ssh root@<server> "cd /root/gabungan && \
-  docker compose pull m9m-backend && \
-  docker compose up -d"
+ssh root@<server> "bash /root/bin/pull-compose.sh"
 ```
 
-The image is published under the following tag matrix:
+### Tag strategy — `latest` only
 
-| Trigger | Tags applied |
-|---|---|
-| `git push origin main` | `main-<sha>`, `main`, `latest` |
-| `git push origin v1.2.3` | `v1.2.3`, `1.2`, `1`, `latest` |
-| Manual **Run workflow** | `dispatch-<sha>`, `latest`, `dispatch-<sha>-<suffix>` (suffix optional) |
+Every push to `main` (or every manual **Run workflow**) overwrites the
+single `harbor.solutiontech.id/m9m/m9m-core:latest` tag. There is no
+`main-<sha>`, no version matrix, no per-commit reference. This keeps
+the registry catalog minimal and the deploy server's
+`docker-compose.yaml` declarative (it already pins `:latest`).
+
+**Why not per-commit tags?** GitHub-hosted runners preserve the build
+context (including the GHA cache) for ~7 days. To roll back to a
+specific commit you can re-checkout that commit and push it (which
+re-runs the same workflow) — that is simpler than maintaining a tag
+catalog nobody queries.
+
+**Why only `linux/amd64`?** The production deploy target
+(`187.77.113.218`) is amd64. Dropping arm64 removes the qemu-emulated
+cross-build of `go build` (which alone takes ~20 minutes on GH-hosted
+runners) and cuts the end-to-end job time in half. Re-introduce
+multi-arch by changing `platforms:` in the workflow back to
+`linux/amd64,linux/arm64` and adding back the `docker/setup-qemu-action`
+step.
 
 ### Required secrets
 

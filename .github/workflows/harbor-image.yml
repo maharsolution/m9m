@@ -1,16 +1,22 @@
 name: harbor-image
 
 # Replace the on-server `/root/bin/build` pipeline. Every push to
-# `main` triggers a fresh multi-arch build of the m9m Docker image and
-# pushes it to Harbor. The remote box no longer runs `bin/build`;
-# instead its `/root/gabungan/docker-compose.yaml` pulls the same
-# image via `docker compose pull m9m-backend && docker compose up -d`.
+# `main` triggers a fresh `linux/amd64` build of the m9m Docker image
+# and pushes it to Harbor under the `latest` tag. The remote box no
+# longer runs `bin/build`; instead its `/root/gabungan/docker-compose.yaml`
+# pulls the same image via `docker compose pull m9m-backend &&
+# docker compose up -d`.
+#
+# Why single-arch + single tag: the production deploy target
+# (`187.77.113.218`) is amd64 and the server references
+# `harbor.solutiontech.id/m9m/m9m-core:latest`. Dropping arm64 removes
+# the qemu-emulated cross-build (~20 min saved) and trimming extra
+# tags keeps the registry catalog minimal — every push simply
+# overwrites :latest.
 #
 # Triggers:
 #   * push to `main`
 #   * manual dispatch (workflow_dispatch) for emergency rebuilds
-#   * tag push v* (same shape as release.yml — keeps tag→image flow
-#     in lock-step with the GHCR release pipeline)
 #
 # Required GitHub Secrets (Settings → Secrets and variables → Actions):
 #   REGISTRY_USERNAME   — Harbor robot or personal account, e.g. `m9m`
@@ -25,14 +31,7 @@ on:
   push:
     branches:
       - main
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
-    inputs:
-      tag_suffix:
-        description: 'Optional suffix appended to branch-based tags (e.g. -rc1). Leave empty for default tags.'
-        required: false
-        default: ''
 
 env:
   REGISTRY_HOST: harbor.solutiontech.id
@@ -52,53 +51,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Resolve image tags
-        id: meta
-        run: |
-          set -euo pipefail
-
-          # Short SHA — always present, identifies this exact commit.
-          COMMIT_SHORT="${GITHUB_SHA::7}"
-
-          # Image references vary by trigger:
-          #   * push to main           : main-<sha>, main, latest
-          #   * tag v1.2.3             : v1.2.3, 1.2, 1, latest
-          #   * workflow_dispatch      : dispatch-<sha>, latest (with optional -suffix on the latter)
-          TAGS=()
-
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-            TAGS+=(
-              "${VERSION}"
-              "${VERSION%.*}"
-              "${VERSION%%.*}"
-              "latest"
-            )
-          elif [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
-            TAGS+=(
-              "main-${COMMIT_SHORT}"
-              "main"
-              "latest"
-            )
-          else
-            # workflow_dispatch or any other branch — keep the SHA-tied
-            # tag and a :latest pointer so a manual rebuild never
-            # silently shadows a known release.
-            TAGS+=(
-              "dispatch-${COMMIT_SHORT}"
-              "latest"
-            )
-            if [[ -n "${{ inputs.tag_suffix }}" ]]; then
-              TAGS+=("dispatch-${COMMIT_SHORT}-${{ inputs.tag_suffix }}")
-            fi
-          fi
-
-          # Join the array into a newline-separated list for $GITHUB_OUTPUT.
-          printf 'tags<<EOF\n%s\nEOF\n' "$(printf '%s\n' "${TAGS[@]}")" >> "$GITHUB_OUTPUT"
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -113,15 +65,14 @@ jobs:
         id: build_date
         run: echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
-      - name: Build & push multi-arch image
+      - name: Build & push image (linux/amd64, tag = latest)
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
-          tags: |
-            ${{ env.REGISTRY_HOST }}/m9m/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tags }}
+          tags: ${{ env.REGISTRY_HOST }}/m9m/${{ env.IMAGE_NAME }}:latest
           labels: |
             org.opencontainers.image.title=m9m-core
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
