@@ -518,7 +518,7 @@ restart yet.
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | `Permission denied (publickey)` | `SSH_PRIVATE_KEY` not set, or doesn't match an entry in `~/.ssh/authorized_keys` on the server | Compare the public half of the secret against `ssh -p 2212 root@$SSH_HOST 'cat ~/.ssh/authorized_keys'` |
-| `Host key verification failed` | The `known_hosts` pin in the workflow is outdated (server was rebuilt) | Re-read the new fingerprint with `ssh-keyscan -p 2212 $SSH_HOST` and paste it into the workflow |
+| `Host key verification failed` | The `fingerprint` pin in the workflow is outdated (server was rebuilt) | Re-read the new fingerprint with `ssh-keyscan -p 2212 $SSH_HOST \| ssh-keygen -lf -` (OpenSSH base64 form, no `SHA256:` prefix) and paste it into the workflow |
 | `bash: /root/bin/pull-compose.sh: Permission denied` or `No such file or directory` | Script lives at `/home/mhr/bin/pull-compose.sh` since the operator move on 2026-09-11 | Update the `script:` body in the workflow to `bash /home/mhr/bin/pull-compose.sh` |
 
 ### Switching the bundled docker-compose.yml to the registry

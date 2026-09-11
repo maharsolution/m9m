@@ -119,7 +119,7 @@ jobs:
       github.event_name != 'push' ||
       !contains(github.event.head_commit.message, '[no-deploy]')
     steps:
-      - name: Trigger /root/bin/pull-compose.sh on ${{ secrets.SSH_HOST }}
+      - name: Trigger /home/mhr/bin/pull-compose.sh on ${{ secrets.SSH_HOST }}
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -127,10 +127,13 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           # Pin the server's host key so a MITM can't silently
-          # redirect the SSH session. The line below is the
-          # ED25519 entry from `~/.ssh/known_hosts` for port 2212.
-          known_hosts: |
-            [187.77.113.218]:2212 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHyaqc/JgysEX4KYD1dhDZ0VwFhiZJ/sGQvJaAckfZM4
+          # redirect the SSH session. `fingerprint` is the SHA256
+          # hash (OpenSSH base64, no `SHA256:` prefix) of the
+          # ED25519 host key from `~/.ssh/known_hosts` for port 2212.
+          # Regenerate with:
+          #   ssh-keyscan -p 2212 -t ed25519 $SSH_HOST \
+          #     | ssh-keygen -lf -
+          fingerprint: qpzc1fAqFdm8SXifS1bIppAIw0h0tA9yFBKrcOlhFJI
           command_timeout: 10m
           script: |
             set -euo pipefail
