@@ -223,12 +223,101 @@ Discord supports Markdown:
 |------|------|-------------|
 | Slack | `n8n-nodes-base.slack` | Webhook URL or API Token |
 | Discord | `n8n-nodes-base.discord` | Webhook URL |
+| Twilio | `n8n-nodes-base.twilio` | Account SID + Auth Token |
+| Microsoft Teams | `n8n-nodes-base.microsoftTeams` | Incoming Webhook URL or OAuth |
 
 ### When to Use Each
 
 | Scenario | Recommended |
 |----------|-------------|
 | Simple notifications | Webhook URL |
-| Channel selection | API Token (Slack) |
-| Rich formatting | Both support Markdown |
+| Channel selection | API Token (Slack |
+| Rich formatting | All support Markdown |
 | File attachments | API Token (requires additional setup) |
+| SMS / voice alerts | Twilio |
+| Office 365 alerts | Microsoft Teams |
+
+---
+
+## Twilio Node
+
+Send SMS messages or trigger Twilio Programmable Voice calls.
+
+### Type
+
+```
+n8n-nodes-base.twilio
+```
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `accountSid` | string | Yes | Twilio account SID |
+| `authToken` | string | Yes | Twilio auth token |
+| `from` | string | Yes | Sender phone number (E.164 format) |
+| `to` | string | Yes | Destination phone number |
+| `body` | string | Yes | SMS message body |
+| `operation` | string | No | `sms` (default) or `call` |
+
+### Example
+
+```json
+{
+  "type": "n8n-nodes-base.twilio",
+  "parameters": {
+    "accountSid": "={{ $credentials.twilio.accountSid }}",
+    "authToken": "={{ $credentials.twilio.authToken }}",
+    "from": "+15551234567",
+    "to": "={{ $json.recipientPhone }}",
+    "body": "Alert: {{ $json.message }}"
+  }
+}
+```
+
+---
+
+## MicrosoftTeams Node
+
+Post adaptive cards or text messages to a Teams channel.
+
+### Type
+
+```
+n8n-nodes-base.microsoftTeams
+```
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `webhookUrl` | string | Yes* | Incoming webhook URL for the channel |
+| `messageType` | string | Yes | `text` or `adaptiveCard` |
+| `message` | string | When `messageType=text` | Plain-text body |
+| `card` | object | When `messageType=adaptiveCard` | Adaptive card payload |
+
+### Example — text
+
+```json
+{
+  "type": "n8n-nodes-base.microsoftTeams",
+  "parameters": {
+    "webhookUrl": "={{ $credentials.teamsIncomingWebhook.url }}",
+    "messageType": "text",
+    "message": "Build finished: {{ $json.status }}"
+  }
+}
+```
+
+### Example — adaptive card
+
+```json
+{
+  "type": "n8n-nodes-base.microsoftTeams",
+  "parameters": {
+    "webhookUrl": "={{ $credentials.teamsIncomingWebhook.url }}",
+    "messageType": "adaptiveCard",
+    "card": "={{ { type: 'AdaptiveCard', version: '1.4', body: [{ type: 'TextBlock', text: $json.title, weight: 'Bolder' }] } }}"
+  }
+}
+```

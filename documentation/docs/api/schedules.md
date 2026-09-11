@@ -236,11 +236,13 @@ curl -X POST http://localhost:8080/api/v1/schedules/sched-123/enable \
 }
 ```
 
+> A schedule that targets an inactive workflow (`active: false`) will not fire even when `enabled: true`. Activate the workflow first via `POST /api/v1/workflows/{id}/activate`, then enable the schedule.
+
 ---
 
 ## Disable Schedule
 
-Disable a schedule.
+Disable a schedule without deleting it.
 
 ```http
 POST /api/v1/schedules/{id}/disable
@@ -262,6 +264,8 @@ curl -X POST http://localhost:8080/api/v1/schedules/sched-123/disable \
   "nextRun": null
 }
 ```
+
+> Disabling does not cancel an in-flight execution that was already started by this schedule. Use `POST /api/v1/executions/{id}/cancel` for that.
 
 ---
 

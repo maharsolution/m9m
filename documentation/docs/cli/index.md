@@ -11,7 +11,7 @@ The m9m command-line interface provides full control over workflows, executions,
 ## Installation
 
 ```bash
-go install github.com/neul-labs/m9m/cmd/m9m@latest
+go install github.com/maharsolution/m9m/cmd/m9m@latest
 ```
 
 ## Global Flags

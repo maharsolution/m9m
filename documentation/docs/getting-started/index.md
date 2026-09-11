@@ -23,7 +23,7 @@ m9m is a high-performance workflow automation platform that provides:
 
 ```bash
 # Install with Go
-go install github.com/neul-labs/m9m/cmd/m9m@latest
+go install github.com/maharsolution/m9m/cmd/m9m@latest
 
 # Start the server
 m9m serve
@@ -33,14 +33,14 @@ m9m serve
 
 ```bash
 # Run with Docker
-docker run -p 8080:8080 ghcr.io/neul-labs/m9m:latest
+docker run -p 8080:8080 ghcr.io/maharsolution/m9m:latest
 ```
 
 ### Option 3: From Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/neul-labs/m9m.git
+git clone https://github.com/maharsolution/m9m.git
 cd m9m
 
 # Build

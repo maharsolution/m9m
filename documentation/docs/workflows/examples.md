@@ -350,3 +350,173 @@ EOF
 # Run the workflow
 m9m run example.json
 ```
+
+---
+
+## Conditional routing with IF
+
+Branch on a boolean expression; downstream nodes pick up only the items that match.
+
+```json
+{
+  "name": "Amount threshold",
+  "nodes": [
+    { "id": "s",     "name": "Start",       "type": "n8n-nodes-base.start",     "position": [250, 300], "parameters": {} },
+    { "id": "fetch", "name": "Fetch Order", "type": "n8n-nodes-base.httpRequest", "position": [450, 300],
+      "parameters": { "url": "={{ $json.orderUrl }}", "method": "GET" } },
+    { "id": "if",    "name": "Big order?",  "type": "n8n-nodes-base.if",        "position": [650, 300],
+      "parameters": {
+        "conditions": [
+          { "leftValue": "={{ $json.amount }}", "operator": "greaterThan", "rightValue": 1000 }
+        ]
+      } },
+    { "id": "high",  "name": "Notify Sales","type": "n8n-nodes-base.slack",      "position": [850, 200],
+      "parameters": { "channel": "#sales", "text": "Big order: {{ $json.amount }}" } },
+    { "id": "low",   "name": "Log Only",    "type": "n8n-nodes-base.set",        "position": [850, 400],
+      "parameters": { "assignments": [{ "name": "logged", "value": true }] } }
+  ],
+  "connections": {
+    "Start":         { "main": [[{ "node": "Fetch Order", "type": "main", "index": 0 }]] },
+    "Fetch Order":   { "main": [[{ "node": "Big order?",  "type": "main", "index": 0 }]] },
+    "Big order?":    { "main": [
+      [{ "node": "Notify Sales", "type": "main", "index": 0 }],
+      [{ "node": "Log Only",    "type": "main", "index": 0 }]
+    ] }
+  }
+}
+```
+
+Operators (`equals`, `notEquals`, `contains`, `greaterThan`, `lessThan`, `startsWith`, `endsWith`, `exists`, `notExists`) are coerced to a common type before comparison. Combine multiple conditions with `combineOperation: "and"` (default) or `"or"`.
+
+Full reference: [IF node](../nodes/transform.md#if-node).
+
+---
+
+## Loop and batch
+
+Iterate one item at a time (with a Wait between iterations if you need to throttle), or process in fixed-size batches.
+
+```json
+{
+  "name": "Throttled email blast",
+  "nodes": [
+    { "id": "s",     "name": "Start",       "type": "n8n-nodes-base.start",     "position": [250, 300], "parameters": {} },
+    { "id": "list",  "name": "Get Recipients", "type": "n8n-nodes-base.postgres", "position": [450, 300],
+      "parameters": { "operation": "executeQuery", "query": "SELECT email FROM recipients WHERE active = true" } },
+    { "id": "loop",  "name": "Loop",        "type": "n8n-nodes-base.loop",      "position": [650, 300],
+      "parameters": { "loopOver": "items", "batchSize": 1 } },
+    { "id": "send",  "name": "Send",        "type": "n8n-nodes-base.sendGrid",   "position": [850, 300],
+      "parameters": {
+        "apiKey": "={{ $credentials.sendgrid.apiKey }}",
+        "from":   { "email": "alerts@example.com" },
+        "to":     [{ "email": "={{ $json.email }}" }],
+        "subject": "Hello",
+        "text":   "Welcome."
+      } },
+    { "id": "wait",  "name": "Throttle",    "type": "n9m-nodes-base.wait",      "position": [1050, 300],
+      "parameters": { "resume": "time", "amount": 1, "unit": "seconds" } }
+  ],
+  "connections": {
+    "Start":          { "main": [[{ "node": "Get Recipients", "type": "main", "index": 0 }]] },
+    "Get Recipients": { "main": [[{ "node": "Loop", "type": "main", "index": 0 }]] },
+    "Loop":           { "main": [[{ "node": "Send", "type": "main", "index": 0 }]] },
+    "Send":           { "main": [[{ "node": "Throttle", "type": "main", "index": 0 }]] },
+    "Throttle":       { "main": [[{ "node": "Loop", "type": "main", "index": 0 }]] }
+  }
+}
+```
+
+The self-loop on `Throttle → Loop` (re-connecting to the loop's main[0]) is what makes the iteration continuous; without it the loop runs once.
+
+Alternative: [SplitInBatches](../nodes/transform.md#splitinbatches-node) for batch processing.
+
+---
+
+## Sub-workflow
+
+A workflow invokes another workflow by id, passes inputs, and continues from the sub-workflow's output.
+
+### Parent (`wf-parent`)
+
+```json
+{
+  "name": "Per-user report",
+  "nodes": [
+    { "id": "s",     "name": "Start",        "type": "n9m-nodes-base.start",            "position": [250, 300], "parameters": {} },
+    { "id": "each",  "name": "For Each User", "type": "n8n-nodes-base.splitInBatches", "position": [450, 300],
+      "parameters": { "batchSize": 1 } },
+    { "id": "call",  "name": "Render Report", "type": "n8n-nodes-base.executeWorkflow","position": [650, 300],
+      "parameters": {
+        "workflowId": "wf-child-render",
+        "workflowInputs": { "userId": "={{ $json.userId }}", "feature": "report" }
+      } },
+    { "id": "mail",  "name": "Email",        "type": "n8n-nodes-base.sendGrid",         "position": [850, 300],
+      "parameters": {
+        "apiKey": "={{ $credentials.sendgrid.apiKey }}",
+        "from":   { "email": "reports@example.com" },
+        "to":     [{ "email": "={{ $json.email }}" }],
+        "subject": "Your report",
+        "text":   "={{ $json.reportUrl }}"
+      } }
+  ],
+  "connections": {
+    "Start":           { "main": [[{ "node": "For Each User", "type": "main", "index": 0 }]] },
+    "For Each User":   { "main": [[{ "node": "Render Report", "type": "main", "index": 0 }], [{ "node": "Render Report", "type": "main", "index": 0 }]] },
+    "Render Report":   { "main": [[{ "node": "Email", "type": "main", "index": 0 }]] }
+  }
+}
+```
+
+### Child (`wf-child-render`)
+
+```json
+{
+  "name": "Render report",
+  "nodes": [
+    { "id": "t",     "name": "Called From Parent", "type": "n8n-nodes-base.executeWorkflowTrigger", "position": [250, 300], "parameters": {} },
+    { "id": "render", "name": "Render", "type": "n8n-nodes-base.code", "position": [450, 300],
+      "parameters": {
+        "language": "python",
+        "code": "user_id = data[0]['json']['userId']\nfeature = data[0]['json']['feature']\n# ...render...\nreturn [{ 'json': { 'reportUrl': f'https://reports.example.com/{user_id}-{feature}.pdf' } }]"
+      } }
+  ],
+  "connections": {
+    "Called From Parent": { "main": [[{ "node": "Render", "type": "main", "index": 0 }]] }
+  }
+}
+```
+
+Sub-workflow edges are recorded separately from the parent's; see [execution-edges](execution-edges.md#sub-workflow-edge-preservation) for the trace shape.
+
+---
+
+## Error workflow
+
+A workflow that catches failures from any other workflow and posts to Slack.
+
+```json
+{
+  "name": "On Failure",
+  "nodes": [
+    { "id": "t",     "name": "Error Trigger",   "type": "n8n-nodes-base.errorTrigger",  "position": [250, 300], "parameters": {} },
+    { "id": "log",   "name": "Format Error",    "type": "n8n-nodes-base.set",           "position": [450, 300],
+      "parameters": { "assignments": [
+        { "name": "text", "value": "={{ $json.execution.workflowName }} failed at {{ $json.error.node.name }}: {{ $json.error.message }}" }
+      ] } },
+    { "id": "alert", "name": "Slack Alert",     "type": "n8n-nodes-base.slack",         "position": [650, 300],
+      "parameters": { "channel": "#alerts", "text": "={{ $json.text }}" } }
+  ],
+  "connections": {
+    "Error Trigger": { "main": [[{ "node": "Format Error", "type": "main", "index": 0 }]] },
+    "Format Error":  { "main": [[{ "node": "Slack Alert",  "type": "main", "index": 0 }]] }
+  }
+}
+```
+
+Set the error workflow for any other workflow via:
+
+```bash
+curl -X PATCH http://localhost:8080/api/v1/workflows/{id} \
+  -H "Content-Type: application/json" \
+  -d '{"settings": {"errorWorkflow": "wf-error-handler-id"}}'
+```

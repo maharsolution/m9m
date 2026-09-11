@@ -322,4 +322,161 @@ Schedules run in the server's timezone by default. Configure timezone in the sch
 | Node | Type | Trigger |
 |------|------|---------|
 | Webhook | `n8n-nodes-base.webhook` | HTTP request |
+| Cron | `n8n-nodes-base.cron` | Schedule (cron) |
+| Error Trigger | `n8n-nodes-base.errorTrigger` | Failed execution in another workflow |
+| Respond to Webhook | `n8n-nodes-base.respondToWebhook` | Reply to the calling webhook |
+| Execute Workflow Trigger | `n8n-nodes-base.executeWorkflowTrigger` | Called by an `executeWorkflow` node |
+
+---
+
+## ErrorTrigger Node
+
+Triggers the current workflow whenever a different workflow fails. The payload includes the failed execution's id, workflow name, error message, and the node that failed.
+
+### Type
+
+```
+n8n-nodes-base.errorTrigger
+```
+
+### Description
+
+- Pair with a workflow's "Error Workflow" property to receive its failures.
+- A workflow that contains an `errorTrigger` cannot be executed manually — it only runs in response to failures.
+- The payload structure matches n8n's `WorkflowExecuteAfter` shape.
+
+### Payload
+
+```json
+{
+  "execution": {
+    "id": "exec-abc-123",
+    "workflowId": "wf-xyz-789",
+    "workflowName": "Daily Report"
+  },
+  "error": {
+    "node": {
+      "name": "SendGrid",
+      "type": "n8n-nodes-base.sendGrid"
+    },
+    "message": "401 Unauthorized"
+  }
+}
+```
+
+### Example workflow
+
+```json
+{
+  "nodes": [
+    {
+      "id": "et",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "position": [250, 300],
+      "parameters": {}
+    },
+    {
+      "id": "slack",
+      "name": "Notify Slack",
+      "type": "n8n-nodes-base.slack",
+      "position": [450, 300],
+      "parameters": {
+        "channel": "#alerts",
+        "text": "={{ $json.execution.workflowName }} failed at {{ $json.error.node.name }}: {{ $json.error.message }}"
+      }
+    }
+  ]
+}
+```
+
+---
+
+## RespondToWebhook Node
+
+Returns a custom HTTP response back to the caller of the webhook that triggered the workflow. Without this node, the caller receives the workflow's last node output as the response body.
+
+### Type
+
+```
+n8n-nodes-base.respondToWebhook
+```
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `respondWith` | string | Yes | `json` | `json`, `text`, `binary`, or `allIncomingItems` |
+| `responseBody` | string | When `respondWith=json` | — | JSON body |
+| `headers` | object | No | — | Response headers |
+| `statusCode` | integer | No | `200` | HTTP status |
+
+### Example — JSON response
+
+```json
+{
+  "type": "n8n-nodes-base.respondToWebhook",
+  "parameters": {
+    "respondWith": "json",
+    "responseBody": "{\"ok\": true, \"requestId\": \"{{ $json.requestId }}\"}",
+    "headers": { "X-Request-Id": "={{ $json.requestId }}" }
+  }
+}
+```
+
+### Example — pass-through
+
+```json
+{
+  "type": "n8n-nodes-base.respondToWebhook",
+  "parameters": {
+    "respondWith": "allIncomingItems"
+  }
+}
+```
+
+---
+
+## ExecuteWorkflowTrigger Node
+
+Marks the workflow as callable from an [`executeWorkflow`](core.md#executeworkflow-node) node in another workflow. Replaces the need for a `Start` node in sub-workflows.
+
+### Type
+
+```
+n8n-nodes-base.executeWorkflowTrigger
+```
+
+### Description
+
+- Receives the `workflowInputs` map from the calling `executeWorkflow` node as `$json`.
+- A workflow can have **either** an `executeWorkflowTrigger` **or** a `Start` node, not both.
+- Recommended pattern for any workflow you intend to invoke from another workflow.
+
+### Example
+
+```json
+{
+  "nodes": [
+    {
+      "id": "ewt",
+      "name": "Called From Parent",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [250, 300],
+      "parameters": {}
+    },
+    {
+      "id": "set",
+      "name": "Set Output",
+      "type": "n8n-nodes-base.set",
+      "position": [450, 300],
+      "parameters": {
+        "assignments": [
+          { "name": "echo", "value": "={{ $json.userId }}" }
+        ]
+      }
+    }
+  ]
+}
+```
 | Cron | `n8n-nodes-base.cron` | Time schedule |

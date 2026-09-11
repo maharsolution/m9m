@@ -14,7 +14,7 @@ This page lays out the case: what's faster, what's more reliable, and what stays
 
 ## Performance: m9m vs n8n
 
-All numbers are from [`docs/performance-report.md`](https://github.com/neul-labs/m9m/blob/main/docs/performance-report.md) and reproducible on your hardware with `m9m benchmark`.
+All numbers are from [`docs/performance-report.md`](https://github.com/maharsolution/m9m/blob/main/docs/performance-report.md) and reproducible on your hardware with `m9m benchmark`.
 
 | Metric | m9m | n8n | Improvement |
 |---|---|---|---|
@@ -63,7 +63,7 @@ For workflows that need custom JavaScript or Python, m9m runs that code in a san
 
 ### What about bugs in m9m itself?
 
-m9m is open-source, MIT-licensed, ~80K LoC of Go, with 90%+ test coverage on the core engine and ~46 internal packages all passing tests on every commit. Bug reports go to [GitHub Issues](https://github.com/neul-labs/m9m/issues). The trade-off we're making is *fewer surprises in production*, not *zero defects ever* — which would be a claim no software project can honestly make.
+m9m is open-source, MIT-licensed, ~80K LoC of Go, with 90%+ test coverage on the core engine and ~46 internal packages all passing tests on every commit. Bug reports go to [GitHub Issues](https://github.com/maharsolution/m9m/issues). The trade-off we're making is *fewer surprises in production*, not *zero defects ever* — which would be a claim no software project can honestly make.
 
 ## Compatibility: what runs unchanged
 
@@ -86,11 +86,11 @@ m9m targets *95% backend feature parity* with n8n. The practical translation: mo
 - Live database sharing with an existing n8n instance
 - The n8n web UI (m9m ships its own UI)
 
-Full feature matrix: [N8N_FEATURE_COMPARISON.md](https://github.com/neul-labs/m9m/blob/main/docs/N8N_FEATURE_COMPARISON.md). Migration walkthrough: [Migrate from n8n](migrate-from-n8n.md).
+Full feature matrix: [N8N_FEATURE_COMPARISON.md](https://github.com/maharsolution/m9m/blob/main/docs/N8N_FEATURE_COMPARISON.md). Migration walkthrough: [Migrate from n8n](migrate-from-n8n.md).
 
 ## What m9m has that n8n doesn't
 
-- **Native MCP server** — 37 tools for Claude Code, Cursor, and other Model Context Protocol clients. AI agents can list, create, execute, and inspect workflows directly. ([docs/mcp/README.md](https://github.com/neul-labs/m9m/blob/main/docs/mcp/README.md))
+- **Native MCP server** — 37 tools for Claude Code, Cursor, and other Model Context Protocol clients. AI agents can list, create, execute, and inspect workflows directly. ([docs/mcp/README.md](https://github.com/maharsolution/m9m/blob/main/docs/mcp/README.md))
 - **CLI agent sandboxing** — bubblewrap-based isolation for running Claude Code, Codex, or Aider as workflow steps.
 - **First-class Go SDK** — embed the engine in any Go application.
 - **MIT license** — no Sustainable Use License caveats, no commercial-use carveouts.
@@ -104,7 +104,7 @@ Honest answer:
 - **You rely on community n8n nodes.** If your workflows depend on `n8n-nodes-someprovider` from npm, m9m doesn't have them. File an issue or contribute the node.
 - **You need the n8n web UI's visual editor.** m9m ships its own UI; it's not pixel-identical to n8n's.
 - **You're paying for n8n Cloud and that's working.** m9m is self-hosted. If managed n8n meets your needs, the migration ROI is low.
-- **You don't have a Linux/macOS/Windows target.** m9m runs everywhere Go runs, but if you're on an exotic platform, check the [release matrix](https://github.com/neul-labs/m9m/releases) first.
+- **You don't have a Linux/macOS/Windows target.** m9m runs everywhere Go runs, but if you're on an exotic platform, check the [release matrix](https://github.com/maharsolution/m9m/releases) first.
 
 ## How to evaluate m9m for your workflows
 
@@ -117,6 +117,6 @@ Honest answer:
 ## See also
 
 - [Migrate from n8n](migrate-from-n8n.md) — step-by-step
-- [Performance report](https://github.com/neul-labs/m9m/blob/main/docs/performance-report.md) — full methodology
-- [Feature comparison](https://github.com/neul-labs/m9m/blob/main/docs/N8N_FEATURE_COMPARISON.md) — node-by-node matrix
+- [Performance report](https://github.com/maharsolution/m9m/blob/main/docs/performance-report.md) — full methodology
+- [Feature comparison](https://github.com/maharsolution/m9m/blob/main/docs/N8N_FEATURE_COMPARISON.md) — node-by-node matrix
 - [FAQ](faq.md) — common questions

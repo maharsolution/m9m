@@ -169,7 +169,7 @@ Example:
   }
 
 See also:
-  - Documentation: https://docs.neullabs.com/m9m/nodes/http
+  - Documentation: https://github.com/maharsolution/m9m/tree/main/docs/nodes/http
 ```
 
 ---

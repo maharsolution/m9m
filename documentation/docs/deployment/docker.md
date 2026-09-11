@@ -14,16 +14,16 @@ Deploy m9m using Docker.
 docker run -d \
   --name m9m \
   -p 8080:8080 \
-  neul-labs/m9m:latest
+  maharsolution/m9m:latest
 ```
 
 ## Docker Images
 
 | Image | Description |
 |-------|-------------|
-| `neul-labs/m9m:latest` | Latest stable release |
-| `neul-labs/m9m:1.0.0` | Specific version |
-| `neul-labs/m9m:alpine` | Minimal Alpine-based |
+| `maharsolution/m9m:latest` | Latest stable release |
+| `maharsolution/m9m:1.0.0` | Specific version |
+| `maharsolution/m9m:alpine` | Minimal Alpine-based |
 
 ## Basic Configuration
 
@@ -35,7 +35,7 @@ docker run -d \
   -p 8080:8080 \
   -e M9M_LOG_LEVEL=info \
   -e M9M_JWT_SECRET=your-secret \
-  neul-labs/m9m:latest
+  maharsolution/m9m:latest
 ```
 
 ### With Persistent Storage
@@ -45,7 +45,7 @@ docker run -d \
   --name m9m \
   -p 8080:8080 \
   -v m9m-data:/data \
-  neul-labs/m9m:latest
+  maharsolution/m9m:latest
 ```
 
 ### With Config File
@@ -55,7 +55,7 @@ docker run -d \
   --name m9m \
   -p 8080:8080 \
   -v $(pwd)/config.yaml:/etc/m9m/config.yaml \
-  neul-labs/m9m:latest
+  maharsolution/m9m:latest
 ```
 
 ## Docker Compose
@@ -68,7 +68,7 @@ version: '3.8'
 
 services:
   m9m:
-    image: neul-labs/m9m:latest
+    image: maharsolution/m9m:latest
     ports:
       - "8080:8080"
     volumes:
@@ -93,7 +93,7 @@ version: '3.8'
 
 services:
   m9m:
-    image: neul-labs/m9m:latest
+    image: maharsolution/m9m:latest
     ports:
       - "8080:8080"
     environment:
@@ -129,7 +129,7 @@ version: '3.8'
 
 services:
   m9m:
-    image: neul-labs/m9m:latest
+    image: maharsolution/m9m:latest
     ports:
       - "8080:8080"
     environment:
@@ -168,7 +168,7 @@ version: '3.8'
 
 services:
   m9m:
-    image: neul-labs/m9m:latest
+    image: maharsolution/m9m:latest
     deploy:
       replicas: 2
       resources:
@@ -337,7 +337,7 @@ services:
 ### Dockerfile
 
 ```dockerfile
-FROM neul-labs/m9m:latest
+FROM maharsolution/m9m:latest
 
 # Add custom config
 COPY config.yaml /etc/m9m/config.yaml
@@ -387,7 +387,7 @@ docker restart m9m
 ### Pull New Image
 
 ```bash
-docker pull neul-labs/m9m:latest
+docker pull maharsolution/m9m:latest
 ```
 
 ### Upgrade with Docker Compose

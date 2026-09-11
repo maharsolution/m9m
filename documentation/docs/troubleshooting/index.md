@@ -375,7 +375,7 @@ m9m execution get exec-123
 ### Community Resources
 
 - GitHub Issues: Report bugs and feature requests
-- Documentation: https://docs.neullabs.com/m9m
+- Documentation: https://github.com/maharsolution/m9m/tree/main/docs
 
 ## Next Steps
 

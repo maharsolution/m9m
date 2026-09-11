@@ -256,3 +256,59 @@ Send email on workflow error:
 | Authentication failed | Verify credentials, check app password |
 | TLS error | Ensure correct port (587 for STARTTLS) |
 | Email not delivered | Check spam folder, verify sender |
+
+---
+
+## SendGrid Node
+
+Send transactional email via the SendGrid v3 API. Preferable to the generic SMTP Send Email node for high-volume or template-driven workflows.
+
+### Type
+
+```
+n8n-nodes-base.sendGrid
+```
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `apiKey` | string | Yes | SendGrid API key |
+| `from` | object | Yes | `{ email, name }` of sender |
+| `to` | array | Yes | Array of `{ email, name }` recipients |
+| `subject` | string | Yes | Email subject |
+| `text` | string | No | Plain-text body |
+| `html` | string | No | HTML body |
+| `templateId` | string | No | SendGrid dynamic-template id (overrides `text`/`html`) |
+| `dynamicTemplateData` | object | No | Variables substituted into the template |
+
+### Example — plain text
+
+```json
+{
+  "type": "n8n-nodes-base.sendGrid",
+  "parameters": {
+    "apiKey": "={{ $credentials.sendgrid.apiKey }}",
+    "from": { "email": "alerts@company.com", "name": "Alerts" },
+    "to": [{ "email": "={{ $json.recipient }}" }],
+    "subject": "Welcome",
+    "text": "Hello {{ $json.name }}, welcome aboard."
+  }
+}
+```
+
+### Example — dynamic template
+
+```json
+{
+  "type": "n8n-nodes-base.sendGrid",
+  "parameters": {
+    "apiKey": "={{ $credentials.sendgrid.apiKey }}",
+    "from": { "email": "alerts@company.com" },
+    "to": [{ "email": "={{ $json.email }}" }],
+    "subject": "Order {{ $json.orderId }} shipped",
+    "templateId": "d-1234567890abcdef",
+    "dynamicTemplateData": "={{ { name: $json.name, trackingUrl: $json.trackingUrl } }}"
+  }
+}
+```

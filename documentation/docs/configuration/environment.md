@@ -119,7 +119,7 @@ ENV M9M_DB_PATH=/data/m9m.db
 # docker-compose.yml
 services:
   m9m:
-    image: ghcr.io/neul-labs/m9m:latest
+    image: ghcr.io/maharsolution/m9m:latest
     environment:
       M9M_PORT: 8080
       M9M_DB_TYPE: postgres
@@ -241,3 +241,104 @@ m9m config get database.type
 
 - Use `M9M_LOG_LEVEL=info` (not debug)
 - Sensitive values are redacted in logs
+
+---
+
+## AI assistant
+
+The in-app AI assistant (formerly "Copilot") reads `M9M_AI_*` env vars at boot. Any value set here can be overridden at runtime through **Settings → AI** or `PUT /api/v1/ai`.
+
+| Variable | Default | Description |
+|---|---|---|
+| `M9M_AI_ENABLED` | `false` | Master on/off for the AI assistant |
+| `M9M_AI_PROVIDER` | `openai` | `openai`, `anthropic`, `minimax`, `ollama` |
+| `M9M_AI_MODEL` | provider-specific | Model name (e.g. `gpt-4o`, `claude-3-5-sonnet-latest`, `MiniMax-Plus`) |
+| `M9M_AI_API_KEY` | — | Provider API key |
+| `M9M_AI_BASE_URL` | provider-specific | Override the default API endpoint |
+
+Example — Anthropic:
+
+```bash
+export M9M_AI_ENABLED=true
+export M9M_AI_PROVIDER=anthropic
+export M9M_AI_MODEL=claude-3-5-sonnet-latest
+export M9M_AI_API_KEY=sk-ant-...
+m9m serve
+```
+
+Example — MiniMax (OpenAI-compatible):
+
+```bash
+export M9M_AI_ENABLED=true
+export M9M_AI_PROVIDER=minimax
+export M9M_AI_MODEL=MiniMax-Plus
+export M9M_AI_API_KEY=...
+export M9M_AI_BASE_URL=https://api.minimax.chat/v1
+m9m serve
+```
+
+### Legacy aliases (deprecated)
+
+The legacy `M9M_COPILOT_*` env vars remain honoured as aliases of `M9M_AI_*`:
+
+| Legacy | Current |
+|---|---|
+| `M9M_COPILOT_ENABLED` | `M9M_AI_ENABLED` |
+| `M9M_COPILOT_PROVIDER` | `M9M_AI_PROVIDER` |
+| `M9M_COPILOT_MODEL` | `M9M_AI_MODEL` |
+| `M9M_COPILOT_API_KEY` | `M9M_AI_API_KEY` |
+| `M9M_COPILOT_BASE_URL` | `M9M_AI_BASE_URL` |
+
+These will be removed in a future major release. Migrate to the `M9M_AI_*` names.
+
+---
+
+## Telemetry
+
+OpenTelemetry tracing configuration. Mirrors `OTEL_SDK_*` from the upstream SDK with m9m-specific overrides.
+
+| Variable | Default | Description |
+|---|---|---|
+| `M9M_OTEL_ENABLED` | `false` | Master on/off |
+| `M9M_OTEL_PROTOCOL` | `grpc` | `grpc` or `http` |
+| `M9M_OTEL_ENDPOINT` | `localhost:4317` | OTLP endpoint (host:port for gRPC, full URL for HTTP) |
+| `M9M_OTEL_HEADERS` | — | Comma-separated `key=value` pairs (e.g. `x-api-key=abc,foo=bar`) |
+| `M9M_OTEL_SAMPLE_RATIO` | `1.0` (when enabled) | 0.0–1.0 |
+
+If both `M9M_OTEL_*` and the standard `OTEL_SDK_*` variables are set, `M9M_OTEL_*` wins.
+
+A DB-stored override layer (set via `PUT /api/v1/otel`) wins over env. See [Observability](../observability/index.md) and [Telemetry API](../api/telemetry.md).
+
+---
+
+## Sync service (n8n ↔ m9m)
+
+The bundled `sync-service/sync.py` reads these env vars. They are usually set in `docker-compose.yml`, not the host shell.
+
+| Variable | Default | Description |
+|---|---|---|
+| `N8N_BASE_URL` | `http://n8n-designer-frontend:5678` | n8n REST API base URL |
+| `N8N_API_KEY` | — | n8n API key |
+| `M9M_BASE_URL` | `http://m9m-backend:8080` | m9m REST API base URL |
+| `POLL_INTERVAL_SECONDS` | `30` | Background poll cadence |
+| `SYNC_ONLY_ACTIVE` | `true` | Only push `active: true` workflows |
+| `SYNC_PORT` | `8001` | Bridge's HTTP API listen port |
+| `N8N_ENCRYPTION_KEY` | — | n8n's encryption key (also reads `GEN_ENCRYPTION_KEY`) |
+| `N8N_PG_HOST` | `postgres-db` | n8n Postgres host |
+| `N8N_PG_PORT` | `5432` | n8n Postgres port |
+| `N8N_PG_USER` | `database_admin` | n8n Postgres user |
+| `N8N_PG_PASSWORD` | `Secure_Db_Pass_2026` | n8n Postgres password (change in production) |
+| `N8N_PG_DATABASE` | `n8n_prod` | n8n Postgres database |
+
+Full reference: [n8n ↔ m9m sync bridge](../integrations/n8n-sync.md).
+
+---
+
+## See also
+
+- [Configuration → Database](database.md)
+- [Configuration → Queue](queue.md)
+- [Configuration → Server](server.md)
+- [Configuration → Security](security.md)
+- [Observability](../observability/index.md)
+- [AI Assistant](../nodes/ai.md#in-app-ai-assistant-settings--ai)

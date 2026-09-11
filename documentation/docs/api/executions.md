@@ -403,3 +403,158 @@ curl "http://localhost:8080/api/v1/executions/stats?since=2024-01-01" \
   "code": 400
 }
 ```
+
+---
+
+## Per-Node Retry
+
+Re-run a single node from a previous execution, then continue the rest of the workflow from that point. The original execution is left intact; a new execution is created with `mode: "retry-node"`.
+
+```http
+POST /api/v1/executions/{id}/retry-node
+```
+
+### Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `nodeId` | string | Yes | The node id (from the original execution's `nodeExecutions`) to re-run |
+| `data` | array | No | Override input data for the retried node. Defaults to the captured input from the original execution. |
+
+### Example Request
+
+```bash
+curl -X POST http://localhost:8080/api/v1/executions/exec-789/retry-node \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nodeId": "http-1",
+    "data": [{"json": {"userId": 42}}]
+  }'
+```
+
+### Response
+
+```json
+{
+  "id": "exec-791",
+  "workflowId": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "running",
+  "mode": "retry-node",
+  "startedAt": "2024-01-26T16:00:00Z",
+  "retriedFrom": {
+    "executionId": "exec-789",
+    "nodeId": "http-1"
+  }
+}
+```
+
+### Use case
+
+Workflow failed at the `SendGrid` node. Fix the upstream data, hit `/retry-node` on the SendGrid node, and the rest of the workflow runs with the new output.
+
+---
+
+## Recent Executions
+
+Lightweight "what just ran" feed for the dashboard. Returns the last 20 executions ordered by `startedAt` descending. Lighter than `GET /executions` because it skips `nodeExecutions`.
+
+```http
+GET /api/v1/executions/recent
+```
+
+### Query Parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `limit` | integer | `20` | Max items (max 100) |
+| `workflowId` | string | — | Filter by workflow |
+
+### Example Request
+
+```bash
+curl "http://localhost:8080/api/v1/executions/recent?limit=5" \
+  -H "Authorization: Bearer <token>"
+```
+
+### Response
+
+```json
+{
+  "data": [
+    {
+      "id": "exec-790",
+      "workflowId": "wf-123",
+      "workflowName": "Daily Report",
+      "status": "completed",
+      "mode": "manual",
+      "startedAt": "2024-01-26T16:00:00Z",
+      "duration": 1234
+    }
+  ]
+}
+```
+
+---
+
+## Count Executions
+
+Total count, optionally filtered. Cheaper than `GET /executions` because no documents are read.
+
+```http
+GET /api/v1/executions/count
+```
+
+### Query Parameters
+
+Same as [`GET /executions`](#list-executions).
+
+### Example Request
+
+```bash
+curl "http://localhost:8080/api/v1/executions/count?status=failed" \
+  -H "Authorization: Bearer <token>"
+```
+
+### Response
+
+```json
+{ "count": 42 }
+```
+
+---
+
+## Debug Mode
+
+Each workflow has a `debug` boolean (see `GET /workflows/{id}`). When `debug: true`:
+
+- Every node's full input and output data is captured and surfaced in `nodeExecutions[*].inputData` / `outputData`.
+- The NDV Input/Output/Settings tabs show the captured payload.
+
+When `debug: false` (default):
+
+- Only the **most recent executed node** retains its full payload.
+- Earlier nodes retain only their summary (status, duration, error message). NDV falls back to the most recent node's output.
+- Sticky-note nodes (`type: n8n-nodes-base.stickyNote`) are skipped entirely from `nodeExecutions` since they don't actually run.
+
+Toggle via `PATCH /api/v1/workflows/{id}` with `"debug": true`.
+
+See [workflows/debug-and-retry](../workflows/debug-and-retry.md) for the user-facing guide.
+
+---
+
+## Edges Taken
+
+Each execution record carries an `edgesTaken` array — the list of connection ids the engine actually traversed. The UI uses this to colour edges per state (taken / skipped / errored). Sub-workflow invocations preserve the parent's `edgesTaken` accumulator.
+
+See [workflows/execution-edges](../workflows/execution-edges.md).
+
+```json
+{
+  "id": "exec-790",
+  "edgesTaken": [
+    "Start → Fetch Data",
+    "Fetch Data → SendGrid"
+  ]
+}
+```

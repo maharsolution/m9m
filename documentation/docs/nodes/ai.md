@@ -283,3 +283,78 @@ Parse JSON from AI response:
 | Analysis | Anthropic | Opus |
 | Quick responses | Either | Haiku/GPT-3.5 |
 | Data extraction | Either | Sonnet/GPT-4 |
+
+---
+
+## In-app AI assistant (Settings → AI)
+
+The AI assistant is a separate, in-app surface from the OpenAI / Anthropic *workflow* nodes. It powers "Ask AI to fix this", "Suggest next node", and the chat panel inside the workflow editor.
+
+The assistant's provider, model, API key, and base URL are all configurable from **Settings → AI** in the web UI. The configuration is layered:
+
+1. **Env defaults** — `M9M_AI_*` (or legacy `M9M_COPILOT_*`) read at boot.
+2. **DB-stored override** — what you save in Settings; persists across restarts.
+3. **Live UI toggle** — the on/off switch in Settings.
+
+> The Settings value wins over env. Env wins over zero. See [`api/ai.md`](../api/ai.md) for the underlying `/api/v1/ai` endpoints.
+
+### Supported providers
+
+| Provider | Default `baseURL` | Default models |
+|---|---|---|
+| OpenAI | `https://api.openai.com/v1` | `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`, `gpt-3.5-turbo` |
+| Anthropic | `https://api.anthropic.com` | `claude-3-5-sonnet-latest`, `claude-3-5-haiku-latest`, `claude-3-opus-20240229` |
+| MiniMax | `https://api.minimax.chat/v1` | `MiniMax-Plus`, `MiniMax-Pro`, `MiniMax` |
+| Ollama (local) | `http://localhost:11434/v1` | Anything your local Ollama has pulled |
+
+Override `baseURL` if you run an OpenAI-compatible gateway, a self-hosted Anthropic proxy, or a regional Anthropic endpoint.
+
+### MiniMax
+
+MiniMax exposes an OpenAI-compatible chat-completions endpoint. m9m detects a MiniMax base URL by lowercased substring (`minimax.chat` or `minimax.`) and routes the call accordingly, so the assistant and the Anthropic workflow node can talk to MiniMax without code changes.
+
+Configuration:
+
+| Env var | Purpose |
+|---|---|
+| `M9M_AI_PROVIDER=minimax` | Selects the MiniMax provider preset |
+| `M9M_AI_BASE_URL=https://api.minimax.chat/v1` | Override the default |
+| `M9M_AI_API_KEY=...` | MiniMax API key |
+| `M9M_AI_MODEL=MiniMax-Plus` | Model name from MiniMax's catalog |
+
+Or in Settings → AI: choose the **MiniMax** provider preset, paste the key, pick a model.
+
+### Curl — read effective config
+
+```bash
+curl http://localhost:8080/api/v1/ai
+```
+
+### Curl — update config
+
+```bash
+curl -X PUT http://localhost:8080/api/v1/ai \
+  -H "Content-Type: application/json" \
+  -d '{
+    "provider": "minimax",
+    "apiKey":  "sk-...",
+    "model":   "MiniMax-Plus",
+    "baseUrl": "https://api.minimax.chat/v1",
+    "enabled": true
+  }'
+```
+
+### Curl — test chat
+
+```bash
+curl -X POST http://localhost:8080/api/v1/ai/test \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Reply with the word OK."}'
+```
+
+> Legacy `M9M_COPILOT_*` env vars (`M9M_COPILOT_PROVIDER`, `M9M_COPILOT_API_KEY`, etc.) remain honoured as aliases of `M9M_AI_*` so existing deployments continue to work. They will be removed in a future major release.
+
+### Related
+
+- [API reference for `/api/v1/ai/*`](../api/ai.md)
+- [Environment variables](../configuration/environment.md#ai-assistant)

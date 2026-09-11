@@ -31,7 +31,7 @@ m9m is an open-source workflow automation platform written in Go. It runs n8n wo
 
 ```bash
 # 1. Install
-curl -fsSL https://raw.githubusercontent.com/neul-labs/m9m/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/maharsolution/m9m/main/install.sh | bash
 
 # 2. Start the server
 m9m serve
@@ -91,7 +91,7 @@ m9m exec hello-world.json
 
 - **Drop-in n8n compatibility** — runs n8n workflow JSON, expression syntax, and credentials unchanged.
 - **40+ built-in nodes** — HTTP, databases, AI/LLM, cloud storage, messaging, CLI execution, scheduling, more.
-- **MCP server for AI agents** — 37 tools for Claude Code, Cursor, and other MCP clients. [Learn more](https://github.com/neul-labs/m9m/blob/main/docs/mcp/README.md).
+- **MCP server for AI agents** — 37 tools for Claude Code, Cursor, and other MCP clients. [Learn more](https://github.com/maharsolution/m9m/blob/main/docs/mcp/README.md).
 - **CLI agent sandboxing** — run Claude Code, Codex, Aider in bubblewrap-isolated environments.
 - **Expression engine** — full n8n expression syntax (`{{ $json.field }}`, `{{ $node["x"].data }}`).
 - **Storage backends** — SQLite, PostgreSQL, or in-memory.
@@ -161,10 +161,10 @@ m9m exec hello-world.json
 
 ## License
 
-m9m is open source software licensed under the [MIT License](https://github.com/neul-labs/m9m/blob/main/LICENSE).
+m9m is open source software licensed under the [MIT License](https://github.com/maharsolution/m9m/blob/main/LICENSE).
 
 ## Community
 
-- **GitHub Issues** — [report bugs, request features](https://github.com/neul-labs/m9m/issues)
-- **GitHub Discussions** — [questions, design proposals](https://github.com/neul-labs/m9m/discussions)
-- **Release Notes** — [changelog](https://github.com/neul-labs/m9m/releases)
+- **GitHub Issues** — [report bugs, request features](https://github.com/maharsolution/m9m/issues)
+- **GitHub Discussions** — [questions, design proposals](https://github.com/maharsolution/m9m/discussions)
+- **Release Notes** — [changelog](https://github.com/maharsolution/m9m/releases)

@@ -20,7 +20,7 @@ m9m ships as a single statically-linked Go binary. Pick whichever install path f
 ### Installer script (any platform) — recommended
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/neul-labs/m9m/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/maharsolution/m9m/main/install.sh | bash
 ```
 
 Auto-detects OS and architecture, downloads the right binary, places it on your `$PATH`. Falls back to a local Go build if no prebuilt is available for your platform.
@@ -35,7 +35,7 @@ brew install m9m
 ### Go
 
 ```bash
-go install github.com/neul-labs/m9m/cmd/m9m@latest
+go install github.com/maharsolution/m9m/cmd/m9m@latest
 ```
 
 Installs `m9m` to `$GOPATH/bin`. Requires Go 1.21+.
@@ -43,7 +43,7 @@ Installs `m9m` to `$GOPATH/bin`. Requires Go 1.21+.
 ### Docker — GitHub Container Registry (releases)
 
 ```bash
-docker run -p 8080:8080 ghcr.io/neul-labs/m9m:latest
+docker run -p 8080:8080 ghcr.io/maharsolution/m9m:latest
 ```
 
 With persistent data:
@@ -51,7 +51,7 @@ With persistent data:
 ```bash
 docker run -p 8080:8080 \
   -v m9m-data:/app/data \
-  ghcr.io/neul-labs/m9m:latest
+  ghcr.io/maharsolution/m9m:latest
 ```
 
 With custom configuration:
@@ -60,13 +60,13 @@ With custom configuration:
 docker run -p 8080:8080 \
   -v ./config.yaml:/app/config/config.yaml \
   -v m9m-data:/app/data \
-  ghcr.io/neul-labs/m9m:latest
+  ghcr.io/maharsolution/m9m:latest
 ```
 
 ### Docker — Docker Hub (CI builds)
 
 ```bash
-docker run -p 8080:8080 neul-labs/m9m:latest
+docker run -p 8080:8080 maharsolution/m9m:latest
 ```
 
 ### Docker Compose
@@ -75,7 +75,7 @@ docker run -p 8080:8080 neul-labs/m9m:latest
 version: '3.8'
 services:
   m9m:
-    image: ghcr.io/neul-labs/m9m:latest
+    image: ghcr.io/maharsolution/m9m:latest
     ports:
       - "8080:8080"
     volumes:
@@ -118,7 +118,7 @@ The `m9m-cli` package downloads the binary on `npm install`. See the [npm page](
 ### Build from source
 
 ```bash
-git clone https://github.com/neul-labs/m9m.git
+git clone https://github.com/maharsolution/m9m.git
 cd m9m
 make deps
 make build
@@ -127,12 +127,12 @@ make build
 
 ### Prebuilt binaries
 
-Download directly from [GitHub Releases](https://github.com/neul-labs/m9m/releases).
+Download directly from [GitHub Releases](https://github.com/maharsolution/m9m/releases).
 
 === "Linux AMD64"
 
     ```bash
-    curl -LO https://github.com/neul-labs/m9m/releases/latest/download/m9m-linux-amd64
+    curl -LO https://github.com/maharsolution/m9m/releases/latest/download/m9m-linux-amd64
     chmod +x m9m-linux-amd64
     sudo mv m9m-linux-amd64 /usr/local/bin/m9m
     ```
@@ -140,7 +140,7 @@ Download directly from [GitHub Releases](https://github.com/neul-labs/m9m/releas
 === "Linux ARM64"
 
     ```bash
-    curl -LO https://github.com/neul-labs/m9m/releases/latest/download/m9m-linux-arm64
+    curl -LO https://github.com/maharsolution/m9m/releases/latest/download/m9m-linux-arm64
     chmod +x m9m-linux-arm64
     sudo mv m9m-linux-arm64 /usr/local/bin/m9m
     ```
@@ -148,7 +148,7 @@ Download directly from [GitHub Releases](https://github.com/neul-labs/m9m/releas
 === "macOS AMD64 (Intel)"
 
     ```bash
-    curl -LO https://github.com/neul-labs/m9m/releases/latest/download/m9m-darwin-amd64
+    curl -LO https://github.com/maharsolution/m9m/releases/latest/download/m9m-darwin-amd64
     chmod +x m9m-darwin-amd64
     sudo mv m9m-darwin-amd64 /usr/local/bin/m9m
     ```
@@ -156,7 +156,7 @@ Download directly from [GitHub Releases](https://github.com/neul-labs/m9m/releas
 === "macOS ARM64 (Apple Silicon)"
 
     ```bash
-    curl -LO https://github.com/neul-labs/m9m/releases/latest/download/m9m-darwin-arm64
+    curl -LO https://github.com/maharsolution/m9m/releases/latest/download/m9m-darwin-arm64
     chmod +x m9m-darwin-arm64
     sudo mv m9m-darwin-arm64 /usr/local/bin/m9m
     ```
@@ -165,7 +165,7 @@ Download directly from [GitHub Releases](https://github.com/neul-labs/m9m/releas
 
     ```powershell
     Invoke-WebRequest `
-      -Uri https://github.com/neul-labs/m9m/releases/latest/download/m9m-windows-amd64.exe `
+      -Uri https://github.com/maharsolution/m9m/releases/latest/download/m9m-windows-amd64.exe `
       -OutFile m9m.exe
     ```
 

@@ -39,7 +39,7 @@ spec:
     spec:
       containers:
       - name: m9m
-        image: neul-labs/m9m:latest
+        image: maharsolution/m9m:latest
         ports:
         - containerPort: 8080
         env:
@@ -139,7 +139,7 @@ spec:
       serviceAccountName: m9m
       containers:
       - name: m9m
-        image: neul-labs/m9m:latest
+        image: maharsolution/m9m:latest
         ports:
         - name: http
           containerPort: 8080
@@ -400,7 +400,7 @@ helm install m9m m9m/m9m -n m9m --create-namespace
 replicaCount: 3
 
 image:
-  repository: neul-labs/m9m
+  repository: maharsolution/m9m
   tag: latest
 
 resources:
@@ -536,7 +536,7 @@ kubectl get events -n m9m --sort-by=.metadata.creationTimestamp
 
 ```bash
 # Update image
-kubectl set image deployment/m9m m9m=neul-labs/m9m:1.1.0 -n m9m
+kubectl set image deployment/m9m m9m=maharsolution/m9m:1.1.0 -n m9m
 
 # Or with Helm
 helm upgrade m9m m9m/m9m --set image.tag=1.1.0 -n m9m

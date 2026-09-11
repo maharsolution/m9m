@@ -5,6 +5,59 @@ All notable changes to m9m will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-09-11
+
+Cumulative changes since `0.1.0-beta.1`. The 2026-09-10 webhook-parity cycle is documented under `[0.2.0-parity] - 2026-09-10` further down. Items below are platform work that landed after the parity cycle.
+
+### Added
+
+#### Engine and execution
+- **Per-workflow debug flag** — when enabled (UI toggle), every node's full input/output is captured and exposed via NDV; when disabled, only the most recent node's data is retained for cheaper execution.
+- **Per-node retry** — `POST /api/v1/executions/{id}/retry-node` re-runs a single node and continues the rest of the workflow from there; UI button "Retry from here" on the execution graph.
+- **Branch-coloured execution edges (`EdgesTaken`)** — each execution now records which branches were taken so the UI can colour edges per state (taken, skipped, errored).
+- **Sub-workflow edge preservation** — when a parent workflow invokes a sub-workflow, the parent's `EdgesTaken` accumulator is preserved across the recursion, so the execution graph stays correct.
+- **NDV Settings tab** — the node detail view now shows a Settings tab with sticky-note skipping and per-node retry controls.
+- **XML node** (`n8n-nodes-base.xml`) — parse, stringify, and transform XML payloads with XPath support.
+
+#### AI assistant
+- **In-app AI Settings card** — provider (OpenAI, Anthropic, MiniMax, Ollama) + model selector, base URL override, API key, and live Enable toggle, layered over `M9M_AI_*` env defaults with DB-stored overrides.
+- **MiniMax support** — the Anthropic node (and the in-app assistant) accept a MiniMax-compatible `base_url`, so the same Anthropic SDK call routes to MiniMax when configured.
+- **Renamed Copilot → AI** — the `internal/copilot` package has been renamed to `internal/ai`. The `/api/v1/copilot/*` routes are now `/api/v1/ai/*`. Legacy `M9M_COPILOT_*` env vars remain honoured as aliases of `M9M_AI_*`.
+
+#### Telemetry
+- **OpenTelemetry tracing** — full OTLP gRPC and OTLP HTTP/protobuf exporters, three-layer config (UI toggle → DB-stored override → env vars), sampling (always-on, always-off, ratio, parent-based), standard resource attributes (`service.name=m9m`, `service.version=<git-sha>`), and a live `/api/v1/otel` config API.
+- **`M9M_OTEL_*` env vars** — `M9M_OTEL_ENABLED`, `M9M_OTEL_ENDPOINT`, `M9M_OTEL_PROTOCOL`, `M9M_OTEL_HEADERS`, `M9M_OTEL_SAMPLE_RATIO`. Standard `OTEL_SDK_*` env vars are also accepted; `M9M_OTEL_*` wins when both are set.
+- **Span tree shape** — `workflow.execute` → `node.execute` → (optional) `agent.generate` / `db.query` / `http.request`, with attributes for workflow id, node name, node type, attempt number, and duration.
+
+#### Sync bridge (n8n ↔ m9m)
+- **`sync-service/sync.py`** — Python FastAPI bridge that polls n8n for workflow and credential changes and pushes them into m9m. Decrypts n8n's AES-256-CBC + EVP_BytesToKey credentials using `N8N_ENCRYPTION_KEY` and re-encrypts them with m9m's envelope format.
+- **Endpoints** — `POST /sync` (run one cycle on demand), `GET /status` (last-cycle summary), `GET /health` (liveness). Runs as a process inside the `m9m-backend` container via `supervisord`.
+- **Idempotent create-or-update** — POST then PUT-on-409 fallback, so re-runs are safe.
+
+#### Database nodes
+- **Postgres `sslMode=disable` default** — the Postgres node now defaults to `sslmode=disable` to match n8n's behaviour, eliminating a surprise TLS handshake against local Postgres instances.
+- **MySQL, SQLite, Redis, MongoDB, Elasticsearch** — additional database nodes now ship out of the box.
+
+### Changed
+- **Repo ownership** — moved from `neul-labs/m9m` to `maharsolution/m9m`. Documentation, install scripts, Docker images, and CI references updated.
+- **Architecture diagram** in `documentation/docs/architecture/index.md` now includes AI runtime, OTel pipeline, sync bridge, DLQ, and MCP server.
+
+### Deprecated
+- **`M9M_COPILOT_*` env vars** — aliases of `M9M_AI_*`. Will be removed in a future major release.
+
+## [0.2.0-parity] - 2026-09-10
+
+Webhook parity cycle — all 19 parity test cases (14 positive + 5 negative) pass against a live n8n reference run.
+
+### Fixed
+- **Webhook trigger persistence** — `NodeData` is now persisted for trigger executions so NDV and execution graphs see the same payload that n8n would have delivered.
+- **Database node SQL expression resolution** — `={{ ... }}` expressions in the SQL `query` field are now resolved before the DB call, matching n8n's pre-execution expansion.
+- **Credential seeding at startup** — the in-memory credential store is now seeded from persistent storage at boot, so previously-saved credentials are usable immediately.
+- **Credential injection ordering** — nodes are validated *after* credentials are injected into their parameters, fixing a class of false-positive validation errors.
+- **Workflow lookup by id** — `executeWorkflow` and `executeWorkflowTrigger` now resolve by stable id, not by name.
+- **Empty-input node skip** — nodes that receive zero input items are skipped rather than throwing, mirroring n8n's behaviour.
+- **`IF` v2 boolean operators** — `equals`, `notEquals`, `contains`, `greaterThan`, `lessThan`, and friends now coerce both sides to a common type before comparing, matching n8n's behaviour.
+
 ## [0.1.0-beta.1] - 2024-01-22
 
 ### Added

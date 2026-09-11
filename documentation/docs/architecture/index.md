@@ -13,7 +13,7 @@ Understanding m9m's architecture and design.
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                         Clients                             │
-│  (CLI, API, Webhooks, Scheduled Triggers)                   │
+│  (CLI, REST API, Webhooks, Schedules, MCP, n8n sync bridge) │
 └─────────────────────┬───────────────────────────────────────┘
                       │
                       ▼
@@ -23,31 +23,49 @@ Understanding m9m's architecture and design.
 │  │Auth     │  │Workflows │  │Executions│  │Webhooks     │  │
 │  │Middleware│ │Handlers  │  │Handlers  │  │Handlers     │  │
 │  └─────────┘  └──────────┘  └──────────┘  └─────────────┘  │
+│  ┌─────────┐  ┌──────────┐  ┌──────────┐  ┌─────────────┐  │
+│  │AI       │  │DLQ       │  │Telemetry │  │NodeTypes    │  │
+│  │Assistant│  │Inspect   │  │Config    │  │Introspection│  │
+│  └─────────┘  └──────────┘  └──────────┘  └─────────────┘  │
 └─────────────────────┬───────────────────────────────────────┘
                       │
-                      ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Workflow Engine                          │
-│  ┌──────────────┐  ┌─────────────┐  ┌──────────────────┐   │
-│  │ Orchestrator │  │ Expression  │  │ Credential       │   │
-│  │              │  │ Evaluator   │  │ Manager          │   │
-│  └──────────────┘  └─────────────┘  └──────────────────┘   │
-│  ┌──────────────┐  ┌─────────────┐  ┌──────────────────┐   │
-│  │ Node         │  │ Data        │  │ Error            │   │
-│  │ Registry     │  │ Transformer │  │ Handler          │   │
-│  └──────────────┘  └─────────────┘  └──────────────────┘   │
-└─────────────────────┬───────────────────────────────────────┘
-                      │
-          ┌───────────┴───────────┐
-          ▼                       ▼
+        ┌─────────────┼─────────────────────┐
+        ▼             ▼                     ▼
+┌────────────────┐ ┌─────────────────────────┐ ┌──────────────┐
+│  Workflow      │ │  Cross-cutting services │ │  MCP server  │
+│  Engine        │ │  ┌──────────────────┐  │ │  (AI agents) │
+│  (orchestrator,│ │  │ AI Runtime       │  │ │  37 tools    │
+│   expression,  │ │  │ (OpenAI/         │  │ └──────────────┘
+│   credentials, │ │  │  Anthropic/      │  │
+│   node         │ │  │  MiniMax/        │  │
+│   registry,    │ │  │  Ollama)         │  │
+│   data flow)   │ │  └──────────────────┘  │
+│                │ │  ┌──────────────────┐  │
+│                │ │  │ OpenTelemetry    │  │
+│                │ │  │ pipeline         │  │
+│                │ │  └──────────────────┘  │
+│                │ │  ┌──────────────────┐  │
+│                │ │  │ DLQ              │  │
+│                │ │  │ (terminal-fail   │  │
+│                │ │  │  holding pen)    │  │
+│                │ │  └──────────────────┘  │
+└───────┬────────┘ └─────────────────────────┘
+        │
+        ▼
 ┌─────────────────┐     ┌─────────────────┐
 │   Job Queue     │     │   Storage       │
 │  ┌───────────┐  │     │  ┌───────────┐  │
 │  │  Memory   │  │     │  │  SQLite   │  │
-│  │  Redis    │  │     │  │  Postgres │  │
+│  │  SQLite   │  │     │  │  Postgres │  │
+│  │  Redis    │  │     │  │  Memory   │  │
 │  │  RabbitMQ │  │     │  └───────────┘  │
 │  └───────────┘  │     └─────────────────┘
 └─────────────────┘
+
+  Sidecar: sync-service/sync.py (n8n ↔ m9m bridge)
+    - polls N8N_BASE_URL on POLL_INTERVAL_SECONDS
+    - decrypts credentials from N8N_PG_*
+    - pushes workflows + credentials into M9M_BASE_URL
 ```
 
 ## Core Components
@@ -183,20 +201,53 @@ m9m/
 ├── cmd/
 │   └── m9m/           # Application entry point
 ├── internal/
-│   ├── api/           # REST API handlers
-│   ├── engine/        # Workflow execution engine
+│   ├── api/           # REST API handlers (workflows, executions, AI, DLQ, telemetry, …)
+│   ├── engine/        # Workflow execution engine (orchestrator, EdgesTaken, recursion)
 │   ├── nodes/         # Node implementations
 │   │   ├── base/      # Base interfaces
 │   │   ├── transform/ # Data transformation
 │   │   ├── http/      # HTTP requests
-│   │   ├── database/  # Database operations
-│   │   ├── messaging/ # Slack, Discord, etc.
-│   │   └── ai/        # OpenAI, Anthropic
-│   ├── queue/         # Job queue implementations
-│   ├── storage/       # Data persistence
-│   ├── credentials/   # Credential management
-│   ├── expressions/   # Expression evaluation
-│   └── monitoring/    # Metrics and tracing
+│   │   ├── database/  # Postgres, MySQL, SQLite, Mongo, Redis, ES
+│   │   ├── messaging/ # Slack, Discord, Twilio, Teams
+│   │   ├── ai/        # OpenAI, Anthropic workflow nodes
+│   │   ├── trigger/   # Webhook, cron, error, respondToWebhook
+│   │   ├── core/      # Start, noOp, wait, executeWorkflow
+│   │   ├── code/      # Python sandbox
+│   │   ├── cli/       # Execute Command (bubblewrap)
+│   │   ├── cloud/     # AWS, Azure, GCP
+│   │   ├── email/     # SMTP, SendGrid
+│   │   ├── file/      # Read/write binary
+│   │   ├── productivity/  # Google Sheets, Notion, Stripe
+│   │   ├── timer/     # Cron
+│   │   └── vcs/       # GitHub, GitLab
+│   ├── ai/            # In-app AI assistant runtime (OpenAI/Anthropic/MiniMax/Ollama)
+│   ├── otel/          # OpenTelemetry pipeline (env-default + DB-override + UI)
+│   ├── dlq/           # Dead-letter queue (terminal-failure holding pen)
+│   ├── mcp/           # MCP server for AI agents (37 tools)
+│   ├── queue/         # Job queue implementations (memory/sqlite/redis/rabbitmq)
+│   ├── storage/       # Data persistence (memory/sqlite/postgres)
+│   ├── credentials/   # Credential management (AES-256-GCM at rest)
+│   ├── expressions/   # Expression evaluation (Goja)
+│   ├── monitoring/    # Prometheus metrics
+│   ├── scheduler/     # Distributed cron-like scheduler
+│   ├── audit/         # Audit log
+│   ├── reliability/   # Circuit breakers, retry policies
+│   ├── sandbox/       # bubblewrap wrappers for code/CLI/AI agents
+│   ├── variables/     # Workflow variables
+│   ├── versioning/    # Git-based workflow versioning
+│   ├── workspaces/    # Multi-tenant workspace isolation
+│   ├── plugins/       # Out-of-tree plugin loader
+│   ├── consensus/     # Distributed leader election (Raft-backed)
+│   ├── connections/   # Connection multiplexing
+│   ├── service/       # Long-running service supervisor
+│   ├── tags/          # Workflow tags
+│   ├── templates/     # Workflow templates
+│   ├── tenancy/       # Multi-tenancy primitives
+│   ├── web/           # Web UI handler
+│   ├── webhooks/      # Webhook ingress
+│   ├── worker/        # Worker pool coordinator
+│   └── showtime/      # Reference data for the UI
+├── sync-service/      # n8n ↔ m9m bridge (FastAPI/uvicorn)
 └── docs/              # Documentation
 ```
 

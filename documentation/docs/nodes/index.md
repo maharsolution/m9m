@@ -12,19 +12,23 @@ Nodes are the building blocks of m9m workflows. Each node performs a specific op
 
 | Category | Nodes | Description |
 |----------|-------|-------------|
-| [Core](core.md) | 1 | Workflow control nodes |
-| [Transform](transform.md) | 9 | Data transformation |
+| [Core](core.md) | 6 | Workflow control, sub-workflows, no-ops |
+| [Transform](transform.md) | 9 | Data transformation, conditionals, loops |
 | [HTTP](http.md) | 1 | Web requests |
-| [Triggers](triggers.md) | 2 | Workflow triggers |
-| [Database](database.md) | 3 | Database operations |
-| [Messaging](messaging.md) | 2 | Chat platforms |
-| [AI & LLM](ai.md) | 2 | AI services |
+| [Triggers](triggers.md) | 5 | Workflow, error, and sub-workflow triggers |
+| [Database](database.md) | 8 | SQL, NoSQL, search, cache |
+| [Messaging](messaging.md) | 4 | Slack, Discord, Twilio, Microsoft Teams |
+| [AI & LLM](ai.md) | 2 | OpenAI, Anthropic (also powers the in-app AI) |
+| [Code](code.md) | 1 | Python execution |
 | [CLI Execution](cli.md) | 1 | Sandboxed CLI commands & AI agents |
-| [Cloud Storage](cloud.md) | 4 | Cloud providers |
-| [Version Control](vcs.md) | 2 | Git platforms |
-| [Email](email.md) | 1 | Email operations |
-| [File Operations](file.md) | 2 | File system |
-| **Total** | **30+** | |
+| [Cloud Storage](cloud.md) | 4 | AWS, Azure, GCP |
+| [Productivity](productivity.md) | 3 | Google Sheets, Notion, Stripe |
+| [Version Control](vcs.md) | 2 | GitHub, GitLab |
+| [Email](email.md) | 2 | SMTP, SendGrid |
+| [File Operations](file.md) | 2 | Read/write binary files |
+| **Total** | **42** | |
+
+> Numbers reflect the executor count returned by `m9m node list` (sourced from `cmd/m9m/commands/exec.go::RegisterAllNodes`).
 
 ## Node Structure
 

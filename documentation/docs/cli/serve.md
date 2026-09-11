@@ -164,7 +164,7 @@ curl http://localhost:9090/metrics
 ```bash
 docker run -p 8080:8080 \
   -v m9m-data:/app/data \
-  ghcr.io/neul-labs/m9m:latest \
+  ghcr.io/maharsolution/m9m:latest \
   serve --port 8080
 ```
 

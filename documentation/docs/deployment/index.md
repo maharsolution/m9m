@@ -28,14 +28,14 @@ docker run -d \
   --name m9m \
   -p 8080:8080 \
   -v m9m-data:/data \
-  neul-labs/m9m:latest
+  maharsolution/m9m:latest
 ```
 
 ### Binary (Recommended)
 
 ```bash
 # Install latest binary
-curl -fsSL https://raw.githubusercontent.com/neul-labs/m9m/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/maharsolution/m9m/main/install.sh | bash
 
 # Run
 m9m serve --port 8080

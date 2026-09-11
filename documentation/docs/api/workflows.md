@@ -277,6 +277,8 @@ curl -X POST http://localhost:8080/api/v1/workflows/550e8400-e29b-41d4-a716-4466
 }
 ```
 
+> Activation validates the workflow graph first. If any node type is unknown or any credential reference is unresolvable, the call returns 400 with a `details` payload listing the offending nodes.
+
 ---
 
 ## Deactivate Workflow
@@ -499,3 +501,57 @@ POST /api/v1/workflows/{id}/duplicate
   "code": "CONFLICT"
 }
 ```
+
+---
+
+## Count Workflows
+
+Cheap count, optionally filtered. Useful for dashboards.
+
+```http
+GET /api/v1/workflows/count
+```
+
+### Query Parameters
+
+Same as [`GET /workflows`](#list-workflows): `active`, `search`, `tag`.
+
+### Example Request
+
+```bash
+curl "http://localhost:8080/api/v1/workflows/count?active=true" \
+  -H "Authorization: Bearer <token>"
+```
+
+### Response
+
+```json
+{ "count": 18 }
+```
+
+---
+
+## Debug flag
+
+Each workflow carries a `debug` boolean. Toggle it via `PATCH /api/v1/workflows/{id}`:
+
+```bash
+curl -X PATCH http://localhost:8080/api/v1/workflows/wf-123 \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"debug": true}'
+```
+
+When `debug: true`, every node's full input/output is captured in the execution record (heavier; useful for diagnosing a failing workflow). When `false`, only the most recent executed node retains its full payload (cheaper default). See [workflows/debug-and-retry](../workflows/debug-and-retry.md).
+
+---
+
+## Available node types
+
+To drive a schema-from-API renderer or pre-validate a workflow, list the node executors the running binary exposes:
+
+```http
+GET /api/v1/node-types
+```
+
+See [Node Types API](node-types.md) for full reference.

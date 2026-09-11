@@ -403,5 +403,261 @@ n8n-nodes-base.itemLists
 | Merge | Combine inputs | `mode` |
 | JSON | JSON operations | `operation` |
 | Switch | Conditional routing | `rules` |
+| IF | Two-branch boolean | `conditions`, `combineOperation` |
+| Loop | Iterate over input | `batchSize` (or `loopOver` for full pass) |
 | Split In Batches | Batch processing | `batchSize` |
 | Item Lists | Array operations | `mode` |
+| XML | XML parse/stringify | `operation` |
+
+---
+
+## IF Node
+
+Branches execution into a `true` output and a `false` output based on one or more boolean conditions.
+
+### Type
+
+```
+n8n-nodes-base.if
+```
+
+### Description
+
+- Two output connections — main[0] (true) and main[1] (false).
+- Supports single conditions and combined conditions (`AND` / `OR`).
+- Operands are coerced to a common type before comparison, matching n8n v2 behaviour (commit `c89...` 2026-09-10).
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `conditions` | array | Yes | — | List of `{ leftValue, operator, rightValue }` |
+| `combineOperation` | string | No | `and` | How to combine multiple conditions: `and`, `or` |
+
+### Operators
+
+| Operator | Meaning |
+|---|---|
+| `equals`, `notEquals` | Strict / coerced equality |
+| `contains`, `notContains` | Substring / element-in-array |
+| `greaterThan`, `lessThan` | Numeric comparison |
+| `startsWith`, `endsWith` | String prefix / suffix |
+| `exists`, `notExists` | Field presence check |
+| `true`, `false` | Literal boolean check |
+
+### Example
+
+Single condition:
+
+```json
+{
+  "type": "n8n-nodes-base.if",
+  "parameters": {
+    "conditions": [
+      {
+        "leftValue": "={{ $json.amount }}",
+        "operator": "greaterThan",
+        "rightValue": 100
+      }
+    ]
+  }
+}
+```
+
+Combined (any of):
+
+```json
+{
+  "type": "n8n-nodes-base.if",
+  "parameters": {
+    "combineOperation": "or",
+    "conditions": [
+      { "leftValue": "={{ $json.status }}", "operator": "equals", "rightValue": "active" },
+      { "leftValue": "={{ $json.role }}", "operator": "equals", "rightValue": "admin" }
+    ]
+  }
+}
+```
+
+### Connections
+
+```json
+{
+  "connections": {
+    "Amount > 100": {
+      "main": [
+        [{"node": "Send Email", "type": "main", "index": 0}],
+        [{"node": "Log Reject", "type": "main", "index": 0}]
+      ]
+    }
+  }
+}
+```
+
+---
+
+## Loop Node
+
+Iterates the entire input array, emitting one item per loop iteration. Useful when you need to process items in a controlled order rather than streaming them through parallel branches.
+
+### Type
+
+```
+n8n-nodes-base.loop
+```
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `loopOver` | string | No | `items` | What to loop over (`items` or a JSON path) |
+| `batchSize` | integer | No | `1` | Items per loop iteration |
+
+### Example
+
+```json
+{
+  "type": "n8n-nodes-base.loop",
+  "parameters": {
+    "loopOver": "items",
+    "batchSize": 1
+  }
+}
+```
+
+> Pair with `Wait` to introduce a delay between iterations, or with `IF` to short-circuit early.
+
+---
+
+## SplitInBatches Node
+
+Splits the incoming array into fixed-size batches and emits one batch per execution pass. Connect the node's `main[0]` back to itself (or to a downstream that loops back) to walk every batch.
+
+### Type
+
+```
+n8n-nodes-base.splitInBatches
+```
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `batchSize` | integer | Yes | `10` | Items per batch |
+| `options` | object | No | — | Optional behaviour flags |
+
+### Example
+
+```json
+{
+  "type": "n8n-nodes-base.splitInBatches",
+  "parameters": {
+    "batchSize": 50
+  }
+}
+```
+
+### Self-loop pattern
+
+```json
+{
+  "connections": {
+    "Batched": {
+      "main": [
+        [{"node": "Process", "type": "main", "index": 0}],
+        [{"node": "Batched", "type": "main", "index": 0}]
+      ]
+    }
+  }
+}
+```
+
+---
+
+## ItemLists Node
+
+Performs array operations (concatenate, sort, limit, summarize) on a `json` field.
+
+### Type
+
+```
+n8n-nodes-base.itemLists
+```
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `mode` | string | Yes | `concatenateItems`, `limit`, `sort`, `removeDuplicates`, `summarize` |
+| `fieldToSortBy` | string | When `mode=sort` | Field to sort by |
+| `limit` | integer | When `mode=limit` | Max items to keep |
+| `operation` | string | When `mode=summarize` | Aggregation: `sum`, `average`, `count`, `min`, `max` |
+
+### Example — sort
+
+```json
+{
+  "type": "n8n-nodes-base.itemLists",
+  "parameters": {
+    "mode": "sort",
+    "fieldToSortBy": "createdAt",
+    "sortDirection": "desc"
+  }
+}
+```
+
+### Example — summarize
+
+```json
+{
+  "type": "n8n-nodes-base.itemLists",
+  "parameters": {
+    "mode": "summarize",
+    "operation": "sum",
+    "fieldToSummarize": "amount"
+  }
+}
+```
+
+---
+
+## XML Node
+
+Parse, stringify, and transform XML payloads.
+
+### Type
+
+```
+n8n-nodes-base.xml
+```
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `operation` | string | Yes | `jsonToXml`, `xmlToJson` |
+| `attributePrefix` | string | No | Prefix for XML attributes when converting to JSON (default `@`) |
+| `xpath` | string | No | When set, returns the node matching the XPath instead of full conversion |
+
+### Example — XML to JSON
+
+```json
+{
+  "type": "n8n-nodes-base.xml",
+  "parameters": {
+    "operation": "xmlToJson"
+  }
+}
+```
+
+### Example — JSON to XML
+
+```json
+{
+  "type": "n8n-nodes-base.xml",
+  "parameters": {
+    "operation": "jsonToXml",
+    "attributePrefix": "@"
+  }
+}
+```

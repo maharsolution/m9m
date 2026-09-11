@@ -12,7 +12,7 @@ m9m runs n8n workflow JSON unchanged. Migration is usually a one-command operati
 
 ```bash
 # 1. Install m9m
-curl -fsSL https://raw.githubusercontent.com/neul-labs/m9m/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/maharsolution/m9m/main/install.sh | bash
 
 # 2. Export a workflow from n8n (Settings → Download)
 # 3. Run it
@@ -23,15 +23,15 @@ If the workflow uses only built-in n8n nodes, it just works. If it uses communit
 
 ## What runs unchanged
 
-m9m targets ~95% backend feature parity with n8n. The following all work with no modification:
+m9m is at **full webhook parity** with n8n as of the 2026-09-10 cycle: all 19 parity test cases (14 positive + 5 negative) pass against a live n8n reference run. Backend parity is broader than webhook parity — every common node class (HTTP, databases, AI, messaging, email, file, cloud, VCS, productivity) is implemented. The following all work with no modification:
 
 - **Workflow JSON format** — same shape, same node connections, same metadata.
 - **Expression syntax** — `{{ $json.field }}`, `{{ $node["name"].data }}`, `={{ ... }}`, all built-in helpers (`$now`, `$workflow`, `$execution`, `$itemIndex`, `$runIndex`).
-- **40+ built-in node types** — HTTP, databases, AI, messaging, email, file, cloud, VCS, productivity. Run `m9m node list` for the full catalog.
-- **Trigger types** — webhooks, cron schedules, error triggers.
-- **Credential formats** — n8n credential JSON works directly.
+- **42 built-in node types** — HTTP, databases, AI, messaging, email, file, cloud, VCS, productivity, code (Python). Run `m9m node list` for the full catalog, or see [Nodes](../nodes/index.md).
+- **Trigger types** — webhooks, cron schedules, error triggers, sub-workflow triggers, respond-to-webhook.
+- **Credential formats** — n8n credential JSON works directly (when the same encryption key is used) or via the [n8n ↔ m9m sync bridge](#use-the-sync-bridge-recommended-for-active-deployments).
 - **Environment variables** — n8n env var conventions are honored.
-- **REST API surface** — n8n-compatible endpoints for workflow / execution / credential management.
+- **REST API surface** — n8n-compatible endpoints for workflow / execution / credential management, plus m9m-native endpoints for DLQ, telemetry, AI, and node-types introspection.
 
 ## Unsupported features
 
@@ -45,7 +45,7 @@ Honest list. These are *not yet* in m9m:
 | Live shared database with n8n | Not supported | Run side-by-side, migrate workflow-by-workflow |
 | Sub-workflows that recurse community nodes | Not supported | Refactor to use built-in nodes |
 
-Full feature matrix: [N8N_FEATURE_COMPARISON.md](https://github.com/neul-labs/m9m/blob/main/docs/N8N_FEATURE_COMPARISON.md).
+Full feature matrix: [N8N_FEATURE_COMPARISON.md](https://github.com/maharsolution/m9m/blob/main/docs/N8N_FEATURE_COMPARISON.md).
 
 ## Step-by-step migration
 
@@ -54,7 +54,7 @@ Full feature matrix: [N8N_FEATURE_COMPARISON.md](https://github.com/neul-labs/m9
 m9m is a single binary, so running it alongside an existing n8n instance is harmless. Use a different port to avoid conflicts:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/neul-labs/m9m/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/maharsolution/m9m/main/install.sh | bash
 M9M_PORT=8081 m9m serve
 ```
 
@@ -122,7 +122,7 @@ Lowest-risk migration:
 
 Once migrated, you can use what m9m has that n8n doesn't:
 
-- **MCP server** — let Claude Code or Cursor manage workflows directly. ([guide](https://github.com/neul-labs/m9m/blob/main/docs/mcp/README.md))
+- **MCP server** — let Claude Code or Cursor manage workflows directly. ([guide](https://github.com/maharsolution/m9m/blob/main/docs/mcp/README.md))
 - **Sandboxed CLI agents** — Claude Code, Codex, Aider as workflow steps with resource limits.
 - **Go / Node.js / Python SDKs** — embed the engine in your application.
 - **Reproducible benchmarks** — `m9m benchmark`.
@@ -153,10 +153,37 @@ Yes, if you use the same encryption key. Otherwise re-enter secrets.
 No — they have different schemas. Run them with separate stores.
 
 ### What if a node behaves differently?
-Open an issue with both outputs ([GitHub Issues](https://github.com/neul-labs/m9m/issues)). m9m aims for parity, and divergence is a bug.
+Open an issue with both outputs ([GitHub Issues](https://github.com/maharsolution/m9m/issues)). m9m aims for parity, and divergence is a bug.
 
 ### What if a community node is missing?
 File an issue describing the node and the use case. Many community nodes are thin HTTP-Request wrappers and can be replaced inline. For others, native Go ports are welcome contributions.
+
+## Use the sync bridge (recommended for active deployments)
+
+If you have a running n8n instance with active workflows and credentials, the bundled **sync bridge** (`sync-service/sync.py`) is the lowest-effort migration path. It runs as a sidecar in the `m9m-backend` container, polls n8n every 30 seconds by default, and pushes any changes into m9m — including decrypted credentials (it reads n8n's Postgres directly and re-encrypts under m9m's at-rest key).
+
+```bash
+# 1. Edit docker-compose.yml and set:
+#    N8N_BASE_URL=http://your-n8n:5678
+#    N8N_API_KEY=<from n8n Settings → API>
+#    N8N_ENCRYPTION_KEY=<same key n8n was started with>
+
+# 2. Bring the stack up — the bridge starts alongside m9m serve
+docker compose up -d
+
+# 3. Confirm
+curl http://localhost:8001/status
+# {"last_cycle_at":"2026-09-11T08:30:00Z","last_cycle_count":7,"is_running":false,...}
+
+# 4. Force a cycle now (instead of waiting for the next poll)
+curl -X POST http://localhost:8001/sync
+```
+
+Once you have a few clean cycles, deactivate the corresponding workflows in n8n and activate them in m9m. Continue letting the bridge run so any final edits land in both places until you're ready to cut over DNS.
+
+Full reference: [n8n ↔ m9m sync bridge](integrations/n8n-sync.md).
+
+---
 
 ## See also
 
@@ -164,4 +191,5 @@ File an issue describing the node and the use case. Many community nodes are thi
 - [FAQ](faq.md) — common questions
 - [Installation](getting-started/installation.md) — every install path
 - [First Workflow](getting-started/first-workflow.md) — five-minute walkthrough
-- [Feature comparison matrix](https://github.com/neul-labs/m9m/blob/main/docs/N8N_FEATURE_COMPARISON.md)
+- [Sync bridge](integrations/n8n-sync.md) — for active deployments
+- [Feature comparison matrix](https://github.com/maharsolution/m9m/blob/main/docs/N8N_FEATURE_COMPARISON.md)

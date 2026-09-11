@@ -129,9 +129,9 @@ Repository response:
   "json": {
     "id": 123456,
     "name": "m9m",
-    "full_name": "neul-labs/m9m",
+    "full_name": "maharsolution/m9m",
     "description": "High-performance workflow automation",
-    "html_url": "https://github.com/neul-labs/m9m",
+    "html_url": "https://github.com/maharsolution/m9m",
     "stargazers_count": 100,
     "forks_count": 25
   }

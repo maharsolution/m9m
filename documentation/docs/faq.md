@@ -168,10 +168,10 @@ m9m is an open-source workflow automation platform written in Go. It runs [n8n](
 For workflow *execution*: yes. m9m runs n8n workflow JSON, expression syntax, and credentials unchanged across 40+ built-in node types. Community nodes published as `n8n-nodes-*` npm packages and n8n Cloud–specific features are not yet supported. See the [migration guide](migrate-from-n8n.md).
 
 ### Is m9m free and open source?
-Yes. MIT-licensed. No "fair-use" clauses, no source-available restrictions, no commercial-use carveouts. The full source is at [github.com/neul-labs/m9m](https://github.com/neul-labs/m9m).
+Yes. MIT-licensed. No "fair-use" clauses, no source-available restrictions, no commercial-use carveouts. The full source is at [github.com/maharsolution/m9m](https://github.com/maharsolution/m9m).
 
 ### Who builds m9m?
-[Neul Labs](https://github.com/neul-labs) and an open-source community of contributors. Bug reports, PRs, and design proposals are all welcome on [GitHub](https://github.com/neul-labs/m9m).
+[Mahar Solution](https://github.com/maharsolution) (current maintainer, since 2026-09) and an open-source community of contributors. The original author at [Neul Labs](https://github.com/neul-labs) created the project; full credits are in the root [`README.md`](https://github.com/maharsolution/m9m#credits-and-acknowledgements). Bug reports, PRs, and design proposals are all welcome on [GitHub](https://github.com/maharsolution/m9m).
 
 ### What does "m9m" stand for?
 It's just a name. Pronounced "em-nine-em."
@@ -191,7 +191,7 @@ On the same hardware, in our benchmarks:
 | Workflow execution | Baseline | 5–10× slower |
 | Concurrent workflows | 500 | 50 |
 
-Reproducible with `m9m benchmark`. Full methodology in the [performance report](https://github.com/neul-labs/m9m/blob/main/docs/performance-report.md).
+Reproducible with `m9m benchmark`. Full methodology in the [performance report](https://github.com/maharsolution/m9m/blob/main/docs/performance-report.md).
 
 ### Why is m9m faster than n8n?
 Three reasons: (1) Go is compiled and statically linked — no V8 warm-up, no JIT de-optimisation; (2) goroutines on a real thread pool replace the single Node.js event loop, so concurrent workflows scale; (3) no `require()` overhead, no `node_modules/` walk, no npm install on the server.
@@ -226,7 +226,7 @@ Yes — ~46 internal Go packages with tests, all passing on every commit. Plus a
 Yes. Export the workflow JSON from n8n and run `m9m exec workflow.json`. No conversion step. Credentials use the same format. Full walkthrough: [Migrate from n8n](migrate-from-n8n.md).
 
 ### Which n8n nodes are supported?
-40+ built-in node types covering HTTP, databases (PostgreSQL, MySQL, SQLite, MongoDB, Redis, Elasticsearch), AI (OpenAI, Anthropic), messaging (Slack, Discord, Twilio, Teams), email (SMTP, SendGrid), cloud storage (S3, GCS, Azure Blob), version control (GitHub, GitLab), productivity (Notion, Stripe, Google Sheets), file I/O, webhooks, cron, Code, Function, Set, Filter, Merge, JSON, If, Loop. Run `m9m node list` for the full catalog. Full matrix: [N8N_FEATURE_COMPARISON.md](https://github.com/neul-labs/m9m/blob/main/docs/N8N_FEATURE_COMPARISON.md).
+40+ built-in node types covering HTTP, databases (PostgreSQL, MySQL, SQLite, MongoDB, Redis, Elasticsearch), AI (OpenAI, Anthropic), messaging (Slack, Discord, Twilio, Teams), email (SMTP, SendGrid), cloud storage (S3, GCS, Azure Blob), version control (GitHub, GitLab), productivity (Notion, Stripe, Google Sheets), file I/O, webhooks, cron, Code, Function, Set, Filter, Merge, JSON, If, Loop. Run `m9m node list` for the full catalog. Full matrix: [N8N_FEATURE_COMPARISON.md](https://github.com/maharsolution/m9m/blob/main/docs/N8N_FEATURE_COMPARISON.md).
 
 ### Do n8n expressions work?
 Yes. The full expression syntax is supported: `{{ $json.field }}`, `{{ $node["name"].data }}`, `={{ ... }}` for computed values, built-in functions, and helper objects (`$now`, `$workflow`, `$execution`, etc.).
@@ -242,7 +242,7 @@ n8n Cloud–specific features (hosted credentials, Cloud webhooks, etc.) aren't 
 ## AI agents and MCP
 
 ### Does m9m work with Claude Code, Cursor, and other AI coding agents?
-Yes, natively. m9m ships a built-in MCP (Model Context Protocol) server with 37 tools for workflow orchestration. Agents can list, create, execute, and inspect workflows directly. See [the MCP integration guide](https://github.com/neul-labs/m9m/blob/main/docs/mcp/README.md).
+Yes, natively. m9m ships a built-in MCP (Model Context Protocol) server with 37 tools for workflow orchestration. Agents can list, create, execute, and inspect workflows directly. See [the MCP integration guide](https://github.com/maharsolution/m9m/blob/main/docs/mcp/README.md).
 
 ### Can I run AI agents *inside* a workflow?
 Yes. The `cliExecute` node runs Claude Code, Codex, Aider, or any CLI agent in a sandboxed environment (bubblewrap on Linux, namespace isolation, resource limits). See [Nodes › CLI Execution](nodes/cli.md).
@@ -255,16 +255,16 @@ First-class nodes for OpenAI (GPT-4 and o-series) and Anthropic Claude. LiteLLM,
 ## Deployment
 
 ### Where can m9m run?
-macOS (Intel + Apple Silicon), Linux (AMD64 + ARM64), Windows (AMD64). Prebuilt binaries for all platforms on every [GitHub release](https://github.com/neul-labs/m9m/releases).
+macOS (Intel + Apple Silicon), Linux (AMD64 + ARM64), Windows (AMD64). Prebuilt binaries for all platforms on every [GitHub release](https://github.com/maharsolution/m9m/releases).
 
 ### Does m9m need a database?
 For dev: no — it uses SQLite by default. For production: PostgreSQL is recommended. Configuration: [database](configuration/database.md).
 
 ### Can I run m9m in Kubernetes?
-Yes. Helm chart and example manifests in [deploy/](https://github.com/neul-labs/m9m/tree/main/deploy). Production guide: [Deployment › Kubernetes](deployment/kubernetes.md).
+Yes. Helm chart and example manifests in [deploy/](https://github.com/maharsolution/m9m/tree/main/deploy). Production guide: [Deployment › Kubernetes](deployment/kubernetes.md).
 
 ### What about Docker?
-`ghcr.io/neul-labs/m9m:latest` (releases, multi-arch) or `neul-labs/m9m:latest` (Docker Hub, CI builds). See [Deployment › Docker](deployment/docker.md).
+`ghcr.io/maharsolution/m9m:latest` (releases, multi-arch) or `maharsolution/m9m:latest` (Docker Hub, CI builds). See [Deployment › Docker](deployment/docker.md).
 
 ### Does m9m run on Windows?
 Yes. Prebuilt Windows AMD64 binaries on every release.
@@ -283,7 +283,7 @@ Prometheus metrics on `/metrics` (port 9090 by default) and OpenTelemetry tracin
 `pip install m9m-cli` — see the [PyPI package](https://pypi.org/project/m9m-cli/).
 
 ### How do I embed m9m in a Go app?
-Import `github.com/neul-labs/m9m` directly. See the [Go reference](https://pkg.go.dev/github.com/neul-labs/m9m).
+Import `github.com/maharsolution/m9m` directly. See the [Go reference](https://pkg.go.dev/github.com/maharsolution/m9m).
 
 ### Do the SDKs bundle a Node.js or Python runtime?
 No. The SDKs are thin clients that auto-download the platform-native `m9m` Go binary and call it. Your app keeps its own runtime; m9m runs in a separate process.
@@ -318,17 +318,17 @@ Yes. MIT license. Just retain the copyright notice in distributed source.
 No. All features ship in the open-source build — Prometheus metrics, audit logs, multi-workspace, Git versioning, all of it. No "enterprise edition" gating.
 
 ### Is there commercial support?
-Reach out to [Neul Labs](https://github.com/neul-labs) for commercial support arrangements.
+m9m is MIT-licensed and community-supported. Mahar Solution offers best-effort support via [GitHub Issues](https://github.com/maharsolution/m9m/issues) and the [Discussions](https://github.com/maharsolution/m9m/discussions) tab. For commercial engagements, file an issue and we'll route you to a maintainer.
 
 ---
 
 ## Troubleshooting
 
 ### Where do I report bugs?
-[GitHub Issues](https://github.com/neul-labs/m9m/issues).
+[GitHub Issues](https://github.com/maharsolution/m9m/issues).
 
 ### Where do I ask questions?
-[GitHub Discussions](https://github.com/neul-labs/m9m/discussions).
+[GitHub Discussions](https://github.com/maharsolution/m9m/discussions).
 
 ### How do I see what m9m is doing?
 `m9m exec workflow.json --debug` enables verbose logging. For a running server, set `M9M_LOG_LEVEL=debug`.
