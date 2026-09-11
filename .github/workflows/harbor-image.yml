@@ -24,7 +24,8 @@ name: harbor-image
 #   SSH_HOST            — m9m-server host, e.g. `187.77.113.218`
 #   SSH_PORT            — SSH port, `2212` (port 22 is firewalled on the
 #                         deploy box; only 2212 is open)
-#   SSH_USER            — SSH user, `root`
+#   SSH_USER            — SSH user, `mhr` (operator account; was `root`
+#                         before the move to `/home/mhr/` on 2026-09-11)
 #   SSH_PRIVATE_KEY     — Private half of an SSH key whose public
 #                         counterpart is in
 #                         `~/.ssh/authorized_keys` on the server.
@@ -134,5 +135,5 @@ jobs:
           script: |
             set -euo pipefail
             echo "=== deploy triggered by ${{ github.repository }}@${{ github.sha }} ==="
-            bash /root/bin/pull-compose.sh
+            bash /home/mhr/bin/pull-compose.sh
             echo "=== deploy complete ==="

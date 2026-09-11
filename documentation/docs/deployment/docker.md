@@ -476,7 +476,7 @@ Configure these once under
 | `REGISTRY_PASSWORD` | `Abcd.12345!` | Matching password |
 | `SSH_HOST` | `187.77.113.218` | m9m-server host (port 22 is firewalled) |
 | `SSH_PORT` | `2212` | SSH port (port 22 is firewalled on the deploy box) |
-| `SSH_USER` | `root` | SSH user |
+| `SSH_USER` | `mhr` | SSH user (was `root` before the move to `/home/mhr/` on 2026-09-11) |
 | `SSH_PRIVATE_KEY` | (full PEM content) | Private half of a key whose public half is in `~/.ssh/authorized_keys` on the server. Currently the operator's existing `id_rsa`. |
 
 ### Automatic deploy after build
@@ -519,7 +519,7 @@ restart yet.
 |---|---|---|
 | `Permission denied (publickey)` | `SSH_PRIVATE_KEY` not set, or doesn't match an entry in `~/.ssh/authorized_keys` on the server | Compare the public half of the secret against `ssh -p 2212 root@$SSH_HOST 'cat ~/.ssh/authorized_keys'` |
 | `Host key verification failed` | The `known_hosts` pin in the workflow is outdated (server was rebuilt) | Re-read the new fingerprint with `ssh-keyscan -p 2212 $SSH_HOST` and paste it into the workflow |
-| `bash: /root/bin/pull-compose.sh: No such file or directory` | Script was deleted on the server | Recreate it (see "Replacing the legacy `/root/bin/build` pipeline" below) |
+| `bash: /root/bin/pull-compose.sh: Permission denied` or `No such file or directory` | Script lives at `/home/mhr/bin/pull-compose.sh` since the operator move on 2026-09-11 | Update the `script:` body in the workflow to `bash /home/mhr/bin/pull-compose.sh` |
 
 ### Switching the bundled docker-compose.yml to the registry
 
