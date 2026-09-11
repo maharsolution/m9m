@@ -147,17 +147,6 @@ export function updateNodeInWorkflow(workflow: Workflow, nodeId: string, updates
     parameters: updates.parameters ? cloneValue(updates.parameters) : currentNode.parameters,
   }
 
-  // [DEBUG-BUG-AUTH] Trace parameter updates from the NodePanel
-  if (updates.parameters) {
-    // eslint-disable-next-line no-console
-    console.log(
-      '[updateNode] id=%s incoming auth=%s stored auth=%s',
-      nodeId,
-      updates.parameters.authentication,
-      updatedNode.parameters.authentication
-    )
-  }
-
   workflow.nodes[index] = updatedNode
 
   if (updates.name && updates.name !== currentNode.name) {
