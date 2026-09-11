@@ -2,7 +2,7 @@
 
 Internal engineering reference for **m9m — the n8n alternative without the bugs**. m9m is a drop-in n8n alternative in Go: 5–10× faster, 70% lower memory, deterministic execution, zero npm dependencies.
 
-For the public documentation site (installation, tutorials, node reference, API), see [docs.neullabs.com/m9m](https://docs.neullabs.com/m9m) — source under [`documentation/`](../documentation/).
+For the public documentation site (installation, tutorials, node reference, API), see [docs.github.com/maharsolution/m9m/tree/main/docs/m9m](https://docs.github.com/maharsolution/m9m/tree/main/docs/m9m) — source under [`documentation/`](../documentation/).
 
 Official launch path: single binary distribution via package managers and release artifacts. Kubernetes content in this directory should be treated as experimental reference material.
 

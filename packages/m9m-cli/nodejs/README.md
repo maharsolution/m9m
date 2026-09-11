@@ -2,12 +2,12 @@
 
 > **The n8n alternative without the bugs — faster, more reliable workflow automation.**
 
-Node.js / TypeScript bindings for [m9m](https://github.com/neul-labs/m9m), a drop-in n8n alternative written in Go. 5–10× faster execution, 70% lower memory, deterministic runs, single static binary. No Node.js runtime overhead on the server — the engine is a Go binary that this package downloads on install and calls natively.
+Node.js / TypeScript bindings for [m9m](https://github.com/maharsolution/m9m), a drop-in n8n alternative written in Go. 5–10× faster execution, 70% lower memory, deterministic runs, single static binary. No Node.js runtime overhead on the server — the engine is a Go binary that this package downloads on install and calls natively.
 
 [![npm version](https://img.shields.io/npm/v/m9m-cli.svg?style=flat-square)](https://www.npmjs.com/package/m9m-cli)
 [![npm downloads](https://img.shields.io/npm/dm/m9m-cli.svg?style=flat-square)](https://www.npmjs.com/package/m9m-cli)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://github.com/neul-labs/m9m/blob/main/LICENSE)
-[![GitHub release](https://img.shields.io/github/v/release/neul-labs/m9m?style=flat-square)](https://github.com/neul-labs/m9m/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://github.com/maharsolution/m9m/blob/main/LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/maharsolution/m9m?style=flat-square)](https://github.com/maharsolution/m9m/releases)
 
 ```bash
 npm install m9m-cli
@@ -115,7 +115,7 @@ import {
 } from 'm9m-cli';
 ```
 
-Full reference: [docs.neullabs.com/m9m/sdk](https://docs.neullabs.com/m9m).
+Full reference: [docs.github.com/maharsolution/m9m/tree/main/docs/m9m/sdk](https://docs.github.com/maharsolution/m9m/tree/main/docs/m9m).
 
 ---
 
@@ -137,7 +137,7 @@ The correct binary is selected automatically by `process.platform` and `process.
 - **More reliable** — single static binary, no Node.js heap leaks, deterministic execution, no npm transitive-dep CVEs in the runtime path.
 - **Drop-in compatible** — n8n workflow JSON, expressions, and credentials run unchanged.
 
-Full comparison + benchmark methodology: [github.com/neul-labs/m9m](https://github.com/neul-labs/m9m#why-m9m-vs-n8n).
+Full comparison + benchmark methodology: [github.com/maharsolution/m9m](https://github.com/maharsolution/m9m#why-m9m-vs-n8n).
 
 ---
 
@@ -167,7 +167,7 @@ Then pre-stage the `m9m` binary at `~/.m9m/bin/m9m`, or download manually:
 ```bash
 # macOS Apple Silicon
 curl -L -o ~/.m9m/bin/m9m \
-  https://github.com/neul-labs/m9m/releases/latest/download/m9m-darwin-arm64
+  https://github.com/maharsolution/m9m/releases/latest/download/m9m-darwin-arm64
 chmod +x ~/.m9m/bin/m9m
 ```
 
@@ -185,7 +185,7 @@ chmod +x ~/.m9m/bin/m9m
 No — m9m is a Go binary. This package is a thin Node.js client that calls it. There is no embedded Node.js runtime, no V8, no event loop on the server side.
 
 ### Where does the binary come from?
-GitHub Releases: `https://github.com/neul-labs/m9m/releases`. Each release ships signed SHA-256 checksums; the postinstall script verifies them.
+GitHub Releases: `https://github.com/maharsolution/m9m/releases`. Each release ships signed SHA-256 checksums; the postinstall script verifies them.
 
 ### Can I use this offline / air-gapped?
 Yes. Set `M9M_DOWNLOAD_BINARY=0` to skip the postinstall download, then stage the binary at `~/.m9m/bin/m9m` from your internal mirror. See [Pinning and offline use](#pinning-and-offline-use).
@@ -194,25 +194,25 @@ Yes. Set `M9M_DOWNLOAD_BINARY=0` to skip the postinstall download, then stage th
 `M9M_VERSION=v0.2.1 npm install m9m-cli`, or call `downloadBinary('v0.2.1')` at runtime.
 
 ### Does it run n8n workflows unchanged?
-For 40+ built-in node types: yes. Community n8n nodes (`n8n-nodes-*`) and n8n Cloud–specific features are not supported. See the [migration guide](https://github.com/neul-labs/m9m/blob/main/docs/migration/from-n8n.md).
+For 40+ built-in node types: yes. Community n8n nodes (`n8n-nodes-*`) and n8n Cloud–specific features are not supported. See the [migration guide](https://github.com/maharsolution/m9m/blob/main/docs/migration/from-n8n.md).
 
 ---
 
 ## Links
 
-- **Documentation:** [docs.neullabs.com/m9m](https://docs.neullabs.com/m9m)
-- **Repository:** [github.com/neul-labs/m9m](https://github.com/neul-labs/m9m)
-- **Changelog:** [Releases](https://github.com/neul-labs/m9m/releases)
-- **Issues:** [GitHub Issues](https://github.com/neul-labs/m9m/issues)
+- **Documentation:** [docs.github.com/maharsolution/m9m/tree/main/docs/m9m](https://docs.github.com/maharsolution/m9m/tree/main/docs/m9m)
+- **Repository:** [github.com/maharsolution/m9m](https://github.com/maharsolution/m9m)
+- **Changelog:** [Releases](https://github.com/maharsolution/m9m/releases)
+- **Issues:** [GitHub Issues](https://github.com/maharsolution/m9m/issues)
 - **Python SDK:** [`m9m-cli` on PyPI](https://pypi.org/project/m9m-cli/)
 
 ## License
 
-MIT — see [LICENSE](https://github.com/neul-labs/m9m/blob/main/LICENSE).
+MIT — see [LICENSE](https://github.com/maharsolution/m9m/blob/main/LICENSE).
 
-## Part of the Neul Labs toolchain
+## Related projects
 
-m9m is part of the Neul Labs orchestration toolchain:
+The m9m ecosystem and projects that share a maintainer:
 
 | Project | Description |
 |---------|-------------|
@@ -221,4 +221,10 @@ m9m is part of the Neul Labs orchestration toolchain:
 | [fastworker](https://github.com/neul-labs/fastworker) | Background tasks in Python with zero infrastructure — no Redis, no RabbitMQ. |
 | [conductor](https://github.com/neul-labs/conductor) | Multi-agent CLI orchestrator for AI coding agents. |
 
-Learn more at [neullabs.com](https://www.neullabs.com).
+Sibling projects live in their own organisations under their original maintainers; links above are provided for convenience.
+
+---
+
+## Credits
+
+m9m is built on the shoulders of [n8n](https://n8n.io) — n8n's workflow JSON, expressions, credentials, REST surface, and webhook wire shape are the public contract this engine targets. The 19/19 webhook parity achieved in the 2026-09-10 cycle would not have been possible without that stable upstream contract. Originally created by **Dipankar Sarkar** ([historical repo](https://github.com/neul-labs/m9m)); currently maintained by **Mahar Solution** at [`github.com/maharsolution/m9m`](https://github.com/maharsolution/m9m).

@@ -2,6 +2,8 @@
 
 Deploy **m9m — the n8n alternative without the bugs** — with one click. Drop-in n8n alternative in Go: 5–10× faster, 70% lower memory, deterministic execution, no Node.js required.
 
+> m9m is built on the shoulders of [n8n](https://n8n.io) — n8n's workflow JSON, expressions, credential envelopes, REST surface, and webhook wire shape are the public contract m9m targets. Originally created by **Dipankar Sarkar** ([historical repo](https://github.com/neul-labs/m9m)); currently maintained by **Mahar Solution** at [`github.com/maharsolution/m9m`](https://github.com/maharsolution/m9m). See the root [README](../README.md#credits-and-acknowledgements) for full credits.
+
 ## One-Click Deploy
 
 ### Railway
@@ -36,8 +38,8 @@ Use the App Platform with our Dockerfile.
 
 ```bash
 # Pull and run
-docker pull ghcr.io/neul-labs/m9m:latest
-docker run -d -p 8080:8080 ghcr.io/neul-labs/m9m:latest
+docker pull ghcr.io/maharsolution/m9m:latest
+docker run -d -p 8080:8080 ghcr.io/maharsolution/m9m:latest
 
 # With docker-compose
 docker-compose up -d
@@ -130,6 +132,6 @@ helm install m9m m9m/m9m
 
 ## Support
 
-- Documentation: https://docs.m9m.io
-- GitHub Issues: https://github.com/neul-labs/m9m/issues
+- Documentation: https://github.com/maharsolution/m9m/tree/main/docs
+- GitHub Issues: https://github.com/maharsolution/m9m/issues
 - Discord: https://discord.gg/m9m

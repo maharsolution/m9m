@@ -32,23 +32,23 @@ m9m is designed for cloud-native deployments with multiple deployment options:
 ### Quick Start
 ```bash
 # Pull latest image
-docker pull neul-labs/m9m:latest
+docker pull maharsolution/m9m:latest
 
 # Run with default settings
-docker run -p 8080:8080 neul-labs/m9m:latest
+docker run -p 8080:8080 maharsolution/m9m:latest
 
 # Run with custom configuration
 docker run -p 8080:8080 \
   -e M9M_QUEUE_TYPE=redis \
   -e M9M_QUEUE_URL=redis://redis:6379 \
   -v /host/workflows:/app/workflows \
-  neul-labs/m9m:latest
+  maharsolution/m9m:latest
 ```
 
 ### Production Docker Setup
 ```dockerfile
 # Dockerfile for custom build
-FROM neul-labs/m9m:latest
+FROM maharsolution/m9m:latest
 
 # Copy custom configuration
 COPY config.yaml /app/config.yaml
@@ -74,7 +74,7 @@ version: '3.8'
 
 services:
   m9m:
-    image: neul-labs/m9m:latest
+    image: maharsolution/m9m:latest
     ports:
       - "8080:8080"
       - "9090:9090"
@@ -237,7 +237,7 @@ spec:
     spec:
       containers:
       - name: m9m
-        image: neul-labs/m9m:latest
+        image: maharsolution/m9m:latest
         ports:
         - containerPort: 8080
           name: http

@@ -6,15 +6,15 @@ m9m is an open-source workflow automation platform written in Go. It runs n8n wo
 
 **Live webhook parity with n8n: 19/19 cases passing** (14 positive + 5 negative) as of the 2026-09-10 cycle.
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/neul-labs/m9m/ci.yml?branch=main&style=flat-square&logo=github)](https://github.com/neul-labs/m9m/actions)
-[![Go Report Card](https://goreportcard.com/badge/github.com/neul-labs/m9m?style=flat-square)](https://goreportcard.com/report/github.com/neul-labs/m9m)
-[![Coverage](https://img.shields.io/codecov/c/github/neul-labs/m9m?style=flat-square&logo=codecov)](https://codecov.io/gh/neul-labs/m9m)
-[![Go Reference](https://img.shields.io/badge/go.dev-reference-007d9c?style=flat-square&logo=go)](https://pkg.go.dev/github.com/neul-labs/m9m)
-[![Release](https://img.shields.io/github/v/release/neul-labs/m9m?style=flat-square&logo=github)](https://github.com/neul-labs/m9m/releases)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/maharsolution/m9m/ci.yml?branch=main&style=flat-square&logo=github)](https://github.com/maharsolution/m9m/actions)
+[![Go Report Card](https://goreportcard.com/badge/github.com/maharsolution/m9m?style=flat-square)](https://goreportcard.com/report/github.com/maharsolution/m9m)
+[![Coverage](https://img.shields.io/codecov/c/github/maharsolution/m9m?style=flat-square&logo=codecov)](https://codecov.io/gh/maharsolution/m9m)
+[![Go Reference](https://img.shields.io/badge/go.dev-reference-007d9c?style=flat-square&logo=go)](https://pkg.go.dev/github.com/maharsolution/m9m)
+[![Release](https://img.shields.io/github/v/release/maharsolution/m9m?style=flat-square&logo=github)](https://github.com/maharsolution/m9m/releases)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/neul-labs/m9m/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/maharsolution/m9m/main/install.sh | bash
 m9m demo
 ```
 
@@ -30,6 +30,8 @@ m9m demo
 - [Drop-in n8n compatibility](#drop-in-n8n-compatibility)
 - [Built-in integrations](#built-in-integrations)
 - [AI assistant (in-app)](#ai-assistant-in-app)
+- [Sync service (n8n ↔ m9m)](#sync-service-n8n--m9m)
+- [Docker Compose (recommended)](#docker-compose-recommended)
 - [Telemetry & observability](#telemetry--observability)
 - [Ecosystem](#ecosystem)
 - [FAQ](#faq)
@@ -37,6 +39,7 @@ m9m demo
 - [Documentation](#documentation)
 - [Contributing](#contributing)
 - [License](#license)
+- [Credits and acknowledgements](#credits-and-acknowledgements)
 
 ---
 
@@ -82,7 +85,7 @@ Performance numbers are reproducible on your hardware with `m9m benchmark`. The 
 
 ```bash
 # 1. Install
-curl -fsSL https://raw.githubusercontent.com/neul-labs/m9m/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/maharsolution/m9m/main/install.sh | bash
 
 # 2. Run the bundled demo (six workflows execute end-to-end)
 m9m demo
@@ -122,14 +125,14 @@ Results: 6/6 demos passed
 
 | Surface | Command |
 |---|---|
-| **Homebrew (macOS / Linux)** | `brew tap neul-labs/tap && brew install m9m` |
-| **Installer script (any platform)** | `curl -fsSL https://raw.githubusercontent.com/neul-labs/m9m/main/install.sh \| bash` |
-| **Go** | `go install github.com/neul-labs/m9m/cmd/m9m@latest` |
-| **Docker (GHCR)** | `docker run -p 8080:8080 ghcr.io/neul-labs/m9m:latest` |
-| **Docker (Docker Hub)** | `docker run -p 8080:8080 neul-labs/m9m:latest` |
+| **Homebrew (macOS / Linux)** | `brew tap maharsolution/tap && brew install m9m` |
+| **Installer script (any platform)** | `curl -fsSL https://raw.githubusercontent.com/maharsolution/m9m/main/install.sh \| bash` |
+| **Go** | `go install github.com/maharsolution/m9m/cmd/m9m@latest` |
+| **Docker (GHCR)** | `docker run -p 8080:8080 ghcr.io/maharsolution/m9m:latest` |
+| **Docker (Docker Hub)** | `docker run -p 8080:8080 maharsolution/m9m:latest` |
 | **Python SDK** | `pip install m9m-cli` |
 | **Node.js SDK** | `npm install m9m-cli` |
-| **GitHub Releases** | [Download prebuilt binaries](https://github.com/neul-labs/m9m/releases) |
+| **GitHub Releases** | [Download prebuilt binaries](https://github.com/maharsolution/m9m/releases) |
 
 Supported platforms: macOS (Intel + Apple Silicon), Linux (AMD64 + ARM64), Windows (AMD64).
 
@@ -222,6 +225,94 @@ Run `m9m node list` for the full catalog. 42 executors registered in `cmd/m9m/co
 ## AI assistant (in-app)
 
 The in-app **AI assistant** powers workflow generation, node suggestions, error fixes, and chat. It is configured live from **Settings → AI** — provider, base URL, API key, model, max tokens, and temperature override env defaults without a restart. Supports **OpenAI** (GPT-4o, o1, o3, …), **Anthropic** (Claude Opus 4.1, Sonnet 4.5, Haiku 4.5), **MiniMax-M3** (Anthropic-compatible wire shape), and **Ollama** (local, no key). The same Settings card drives the in-app agent and the workflow `openAi` / `anthropic` nodes — both share the resolved runtime, so a change in Settings is picked up by the next workflow execution as well.
+
+---
+
+## Sync service (n8n ↔ m9m)
+
+The repository ships a built-in **n8n → m9m sync bridge** (`sync-service/sync.py`) that keeps the two servers in lock-step without you writing glue code. It runs inside the `m9m-backend` container alongside `m9m serve` (managed by supervisord), polls n8n's public REST API every `POLL_INTERVAL_SECONDS`, decrypts each workflow + credential envelope locally with `N8N_ENCRYPTION_KEY`, and pushes it into m9m through `POST/PUT /api/v1/workflows` and `POST/PUT /api/v1/credentials`. Active-flag filtering, content-hash change detection, typeVersion sanitisation, and credential decryption all happen before the request leaves the bridge.
+
+### What it syncs
+
+| Direction | Item | Source on n8n | Sink on m9m | Notes |
+|---|---|---|---|---|
+| Push | Active workflows | `GET /api/v1/workflows` (`X-N8N-API-KEY`) | `POST/PUT /api/v1/workflows[/{id}]` | Content-hash dedupe; `typeVersion` float → int |
+| Push | Credentials (envelope + decrypted `data`) | n8n Postgres `credentials_entity` (AES-256-CBC + EVP_BytesToKey) | `POST/PUT /api/v1/credentials[/{id}]` | Decrypts locally; m9m re-encrypts at rest under its own key |
+
+### Operating it
+
+```bash
+# Trigger an immediate cycle (returns JSON summary, 502 if anything failed)
+curl -X POST http://localhost:8001/sync
+
+# Last-cycle status (timestamp, source, count, is_running)
+curl http://localhost:8001/status
+
+# Liveness probe for K8s / load balancer
+curl http://localhost:8001/health
+```
+
+### How to wire it up
+
+The simplest path is the bundled `docker-compose.yml` — it already defines `m9m-backend` with port `8001` exposed and the four env vars the bridge reads (`N8N_BASE_URL`, `N8N_API_KEY`, `M9M_BASE_URL`, `N8N_ENCRYPTION_KEY`). Just supply a `.env` containing `N8N_API_KEY` and `GEN_ENCRYPTION_KEY` (the same key n8n was started with — used to decrypt credential blobs). See [Docker Compose](#docker-compose-recommended) below for the full stack.
+
+For a hand-rolled deploy, run `uvicorn sync:app --host 0.0.0.0 --port 8001` from `sync-service/` with these env vars set:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `N8N_BASE_URL` | `http://n8n-designer-frontend:5678` | Where to poll |
+| `N8N_API_KEY` | (required) | n8n admin/owner API key, sent as `X-N8N-API-KEY` |
+| `M9M_BASE_URL` | `http://m9m-backend:8080` | Where to push |
+| `N8N_ENCRYPTION_KEY` (or `GEN_ENCRYPTION_KEY`) | (required for credential sync) | AES-256-CBC key n8n was started with |
+| `POLL_INTERVAL_SECONDS` | `30` | Background poll cadence |
+| `SYNC_ONLY_ACTIVE` | `true` | Skip inactive workflows |
+| `SYNC_PORT` | `8001` | HTTP port for `/sync`, `/status`, `/health` |
+| `N8N_PG_*` | (compose defaults) | Direct Postgres read for credential blobs (REST strips them) |
+
+The `/sync` endpoint is idempotent — it tries `POST` first and falls back to `PUT /{id}` on a 409. Failures are surfaced per-workflow in the JSON response, never raised out of the loop, so one broken workflow cannot stop the others.
+
+---
+
+## Docker Compose (recommended)
+
+The fastest way to run m9m, n8n, and the sync bridge together is the bundled `docker-compose.yml`. It defines four services:
+
+- **`m9m-backend`** — Go engine + FastAPI sync bridge on `:8080` (engine) + `:8001` (sync) + `:9090` (metrics)
+- **`n8n-designer-frontend`** — n8n editor on `:5678` (where you design workflows)
+- **`mysql-db`** — backing store for m9m (MySQL 8)
+- **`postgres-db`** — backing store for n8n (Postgres 16; n8n requires Postgres)
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/maharsolution/m9m.git
+cd m9m
+
+# 2. Create a .env file (only the secrets need to be set — defaults handle the rest)
+cat > .env <<'EOF'
+N8N_API_KEY=replace-with-the-key-from-the-n8n-ui
+GEN_ENCRYPTION_KEY=replace-with-a-strong-random-key-n8n-was-started-with
+DB_MYSQL_PASSWORD=change_me_in_production
+DB_POSTGRESDB_PASSWORD=change_me_in_production
+EOF
+
+# 3. Build & start the stack (first run pulls base images and builds the m9m backend)
+docker compose build m9m-backend
+docker compose up -d
+
+# 4. Open n8n at http://localhost:5678, design your workflow, then trigger a sync:
+curl -X POST http://localhost:8001/sync | jq
+
+# 5. m9m will execute the same workflow at http://localhost:8080 and serve parity tests
+curl http://localhost:8080/healthz
+```
+
+The included compose file is the **same file the production stack at `/root/gabungan` uses** — local dev and prod compose only differ by the env values in `.env`. To rebuild after pulling new commits:
+
+```bash
+git pull && docker compose build m9m-backend && docker compose up -d m9m-backend
+```
+
+For a standalone single-container path, `ghcr.io/maharsolution/m9m:latest` is also published on every release.
 
 ---
 
@@ -320,11 +411,11 @@ Full guide: [docs/monitoring/README.md](docs/monitoring/README.md).
 ## Ecosystem
 
 - **CLI** — `m9m` binary, the primary surface. Serve, exec, schedule, MCP.
-- **Go SDK** — embed the engine directly in a Go application. [Reference](https://pkg.go.dev/github.com/neul-labs/m9m).
+- **Go SDK** — embed the engine directly in a Go application. [Reference](https://pkg.go.dev/github.com/maharsolution/m9m).
 - **Node.js SDK** — [`m9m-cli`](https://www.npmjs.com/package/m9m-cli) on npm. TypeScript-first.
 - **Python SDK** — [`m9m-cli`](https://pypi.org/project/m9m-cli/) on PyPI. Full type hints, context-manager API.
 - **MCP server** — 37 tools for Claude Code / Cursor / other MCP clients. [docs/mcp/README.md](docs/mcp/README.md).
-- **Docker** — `ghcr.io/neul-labs/m9m` (releases) and `neul-labs/m9m` (Docker Hub).
+- **Docker** — `ghcr.io/maharsolution/m9m` (releases) and `maharsolution/m9m` (Docker Hub).
 - **Kubernetes** — Helm chart and example manifests in [deploy/](deploy/).
 
 ---
@@ -387,7 +478,7 @@ The September 2026 cycle focused on closing the remaining n8n wire-shape and exe
 
 | Resource | Description |
 |---|---|
-| [Documentation site](https://docs.neullabs.com/m9m) | Full docs — installation, nodes, API, deployment |
+| [Documentation site](https://github.com/maharsolution/m9m/tree/main/docs) | Full docs — installation, nodes, API, deployment |
 | [Getting Started](docs/README.md) | Quick-start guide |
 | [Why m9m?](docs/N8N_FEATURE_COMPARISON.md) | Feature comparison and gap analysis |
 | [Performance report](docs/performance-report.md) | Benchmarks and methodology |
@@ -403,26 +494,26 @@ The September 2026 cycle focused on closing the remaining n8n wire-shape and exe
 ## Contributing
 
 ```bash
-git clone https://github.com/neul-labs/m9m.git
+git clone https://github.com/maharsolution/m9m.git
 cd m9m
 make deps && make test && make build
 ```
 
-See the [Contributing Guide](docs/CONTRIBUTING.md). Issues and discussions live on [GitHub](https://github.com/neul-labs/m9m/issues).
+See the [Contributing Guide](docs/CONTRIBUTING.md). Issues and discussions live on [GitHub](https://github.com/maharsolution/m9m/issues).
 
 ## Community
 
-- [GitHub Discussions](https://github.com/neul-labs/m9m/discussions) — questions and design proposals
-- [GitHub Issues](https://github.com/neul-labs/m9m/issues) — bugs and feature requests
-- [Release Notes](https://github.com/neul-labs/m9m/releases) — changelog
+- [GitHub Discussions](https://github.com/maharsolution/m9m/discussions) — questions and design proposals
+- [GitHub Issues](https://github.com/maharsolution/m9m/issues) — bugs and feature requests
+- [Release Notes](https://github.com/maharsolution/m9m/releases) — changelog
 
 ## License
 
 MIT License. See [LICENSE](LICENSE).
 
-## Part of the Neul Labs toolchain
+## Related projects
 
-m9m is part of the Neul Labs orchestration toolchain:
+The m9m ecosystem and projects that share a maintainer:
 
 | Project | Description |
 |---------|-------------|
@@ -431,8 +522,18 @@ m9m is part of the Neul Labs orchestration toolchain:
 | [fastworker](https://github.com/neul-labs/fastworker) | Background tasks in Python with zero infrastructure — no Redis, no RabbitMQ. |
 | [conductor](https://github.com/neul-labs/conductor) | Multi-agent CLI orchestrator for AI coding agents. |
 
-Learn more at [neullabs.com](https://www.neullabs.com).
+Sibling projects live in their own organisations under their original maintainers; links above are provided for convenience.
 
 ---
 
-[Documentation](https://docs.neullabs.com/m9m) · [GitHub](https://github.com/neul-labs/m9m) · [npm](https://www.npmjs.com/package/m9m-cli) · [PyPI](https://pypi.org/project/m9m-cli/) · [Docker](https://github.com/neul-labs/m9m/pkgs/container/m9m)
+## Credits and acknowledgements
+
+**m9m is built on the shoulders of [n8n](https://n8n.io).** n8n's workflow JSON format, expression syntax, credential envelopes, REST API surface, and webhook wire shape are the public contract m9m targets. None of the m9m-vs-n8n parity work — and not a single one of the 19 webhook cases that pass in the live parity suite — would have been possible without n8n's stable, well-documented wire shapes and the team's work on the upstream project. If you find m9m useful, please consider [starring n8n on GitHub](https://github.com/n8n-io/n8n) and [supporting the n8n project](https://n8n.io/pricing/) — the open-source foundation they maintain is what makes a drop-in alternative possible.
+
+**Original author.** m9m was created by **Dipankar Sarkar** ([me@dipankar.name](mailto:me@dipankar.name)) — the initial commit (`Initial version`) and the foundational architecture through the [Neul Labs](https://github.com/neul-labs) era live in the historical repository at [`github.com/neul-labs/m9m`](https://github.com/neul-labs/m9m). The MIT licence and project name carry forward unchanged.
+
+**Current maintainer.** This fork is maintained by **Mahar Solution** ([`github.com/maharsolution/m9m`](https://github.com/maharsolution/m9m)). Active development since the September 2026 cycle focuses on n8n webhook parity, observability, the in-app AI assistant, and the n8n↔m9m sync bridge. Issues and pull requests are welcome at the new repository.
+
+---
+
+[Documentation](https://github.com/maharsolution/m9m/tree/main/docs) · [GitHub](https://github.com/maharsolution/m9m) · [npm](https://www.npmjs.com/package/m9m-cli) · [PyPI](https://pypi.org/project/m9m-cli/) · [Docker](https://github.com/maharsolution/m9m/pkgs/container/m9m)

@@ -17,7 +17,7 @@ The Go SDK provides direct access to the m9m workflow engine.
 ### Installation
 
 ```go
-import "github.com/neul-labs/m9m/pkg/m9m"
+import "github.com/maharsolution/m9m/pkg/m9m"
 ```
 
 ### Quick Start
@@ -28,7 +28,7 @@ package main
 import (
     "fmt"
     "log"
-    "github.com/neul-labs/m9m/pkg/m9m"
+    "github.com/maharsolution/m9m/pkg/m9m"
 )
 
 func main() {

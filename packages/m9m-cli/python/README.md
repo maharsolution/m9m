@@ -2,12 +2,12 @@
 
 > **The n8n alternative without the bugs — faster, more reliable workflow automation.**
 
-Python bindings for [m9m](https://github.com/neul-labs/m9m), a drop-in n8n alternative written in Go. 5–10× faster execution, 70% lower memory, deterministic runs, single static binary. No Node.js or JVM on the server — the engine is a Go binary that this package downloads and calls natively.
+Python bindings for [m9m](https://github.com/maharsolution/m9m), a drop-in n8n alternative written in Go. 5–10× faster execution, 70% lower memory, deterministic runs, single static binary. No Node.js or JVM on the server — the engine is a Go binary that this package downloads and calls natively.
 
 [![PyPI version](https://img.shields.io/pypi/v/m9m-cli.svg?style=flat-square)](https://pypi.org/project/m9m-cli/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/m9m-cli.svg?style=flat-square)](https://pypi.org/project/m9m-cli/)
 [![Python versions](https://img.shields.io/pypi/pyversions/m9m-cli.svg?style=flat-square)](https://pypi.org/project/m9m-cli/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://github.com/neul-labs/m9m/blob/main/LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://github.com/maharsolution/m9m/blob/main/LICENSE)
 
 ```bash
 pip install m9m-cli
@@ -116,7 +116,7 @@ from m9m import (
 )
 ```
 
-Full reference: [docs.neullabs.com/m9m/sdk](https://docs.neullabs.com/m9m).
+Full reference: [docs.github.com/maharsolution/m9m/tree/main/docs/m9m/sdk](https://docs.github.com/maharsolution/m9m/tree/main/docs/m9m).
 
 ---
 
@@ -138,7 +138,7 @@ The correct binary is auto-selected by `platform.system()` and `platform.machine
 - **More reliable** — single static binary, no Node.js heap leaks, deterministic execution, no npm transitive-dep CVEs in the runtime path.
 - **Drop-in compatible** — n8n workflow JSON, expressions, and credentials run unchanged.
 
-Full comparison + benchmark methodology: [github.com/neul-labs/m9m](https://github.com/neul-labs/m9m#why-m9m-vs-n8n).
+Full comparison + benchmark methodology: [github.com/maharsolution/m9m](https://github.com/maharsolution/m9m#why-m9m-vs-n8n).
 
 ---
 
@@ -164,7 +164,7 @@ Stage the binary manually at `~/.m9m/bin/m9m`:
 ```bash
 # Linux AMD64
 curl -L -o ~/.m9m/bin/m9m \
-  https://github.com/neul-labs/m9m/releases/latest/download/m9m-linux-amd64
+  https://github.com/maharsolution/m9m/releases/latest/download/m9m-linux-amd64
 chmod +x ~/.m9m/bin/m9m
 ```
 
@@ -181,7 +181,7 @@ chmod +x ~/.m9m/bin/m9m
 No — m9m is a Go binary. This package is a thin Python client that invokes it. There is no embedded interpreter, no FFI to a C extension at runtime.
 
 ### Where does the binary come from?
-GitHub Releases: `https://github.com/neul-labs/m9m/releases`. Each release ships SHA-256 checksums; the downloader verifies them.
+GitHub Releases: `https://github.com/maharsolution/m9m/releases`. Each release ships SHA-256 checksums; the downloader verifies them.
 
 ### Can I use this offline / air-gapped?
 Yes. Set `M9M_BINARY_PATH=/path/to/m9m` to point at a pre-staged binary, or place it at `~/.m9m/bin/m9m`. See [Pinning and offline use](#pinning-and-offline-use).
@@ -190,7 +190,7 @@ Yes. Set `M9M_BINARY_PATH=/path/to/m9m` to point at a pre-staged binary, or plac
 `download_binary("v0.2.1")` once, or set `M9M_VERSION=v0.2.1` before first use.
 
 ### Does it run n8n workflows unchanged?
-For 40+ built-in node types: yes. Community n8n nodes (`n8n-nodes-*`) and n8n Cloud–specific features are not supported. See the [migration guide](https://github.com/neul-labs/m9m/blob/main/docs/migration/from-n8n.md).
+For 40+ built-in node types: yes. Community n8n nodes (`n8n-nodes-*`) and n8n Cloud–specific features are not supported. See the [migration guide](https://github.com/maharsolution/m9m/blob/main/docs/migration/from-n8n.md).
 
 ---
 
@@ -210,19 +210,19 @@ result = engine.execute(workflow, [DataItem(json={"key": "value"})])
 
 ## Links
 
-- **Documentation:** [docs.neullabs.com/m9m](https://docs.neullabs.com/m9m)
-- **Repository:** [github.com/neul-labs/m9m](https://github.com/neul-labs/m9m)
-- **Changelog:** [Releases](https://github.com/neul-labs/m9m/releases)
-- **Issues:** [GitHub Issues](https://github.com/neul-labs/m9m/issues)
+- **Documentation:** [docs.github.com/maharsolution/m9m/tree/main/docs/m9m](https://docs.github.com/maharsolution/m9m/tree/main/docs/m9m)
+- **Repository:** [github.com/maharsolution/m9m](https://github.com/maharsolution/m9m)
+- **Changelog:** [Releases](https://github.com/maharsolution/m9m/releases)
+- **Issues:** [GitHub Issues](https://github.com/maharsolution/m9m/issues)
 - **Node.js SDK:** [`m9m-cli` on npm](https://www.npmjs.com/package/m9m-cli)
 
 ## License
 
-MIT — see [LICENSE](https://github.com/neul-labs/m9m/blob/main/LICENSE).
+MIT — see [LICENSE](https://github.com/maharsolution/m9m/blob/main/LICENSE).
 
-## Part of the Neul Labs toolchain
+## Related projects
 
-m9m is part of the Neul Labs orchestration toolchain:
+The m9m ecosystem and projects that share a maintainer:
 
 | Project | Description |
 |---------|-------------|
@@ -231,4 +231,10 @@ m9m is part of the Neul Labs orchestration toolchain:
 | [fastworker](https://github.com/neul-labs/fastworker) | Background tasks in Python with zero infrastructure — no Redis, no RabbitMQ. |
 | [conductor](https://github.com/neul-labs/conductor) | Multi-agent CLI orchestrator for AI coding agents. |
 
-Learn more at [neullabs.com](https://www.neullabs.com).
+Sibling projects live in their own organisations under their original maintainers; links above are provided for convenience.
+
+---
+
+## Credits
+
+m9m is built on the shoulders of [n8n](https://n8n.io) — n8n's workflow JSON, expressions, credentials, REST surface, and webhook wire shape are the public contract this engine targets. The 19/19 webhook parity achieved in the 2026-09-10 cycle would not have been possible without that stable upstream contract. Originally created by **Dipankar Sarkar** ([historical repo](https://github.com/neul-labs/m9m)); currently maintained by **Mahar Solution** at [`github.com/maharsolution/m9m`](https://github.com/maharsolution/m9m).
