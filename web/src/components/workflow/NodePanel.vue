@@ -42,6 +42,14 @@ watch(
   node,
   (newNode) => {
     if (newNode) {
+      // [DEBUG-BUG-AUTH] Trace what the watcher resets local state to
+      // eslint-disable-next-line no-console
+      console.log(
+        '[NodePanel.watch] reset for id=%s name=%s auth=%s',
+        newNode.id,
+        newNode.name,
+        newNode.parameters?.authentication
+      )
       localName.value = newNode.name
       localParameters.value = { ...newNode.parameters }
       // The WorkflowNode.credentials map values are NodeCredential
@@ -80,6 +88,15 @@ const updateName = () => {
 const updateParameter = (key: string, value: unknown) => {
   if (!node.value) return
   const newParams = { ...localParameters.value, [key]: value }
+  // [DEBUG-BUG-AUTH] Trace the dropdown change handler
+  // eslint-disable-next-line no-console
+  console.log(
+    '[NodePanel.updateParameter] node=%s key=%s value=%j -> newParams.auth=%s',
+    node.value.id,
+    key,
+    value,
+    newParams.authentication
+  )
   localParameters.value = newParams
   workflowEditorStore.updateNode(node.value.id, { parameters: newParams })
 }

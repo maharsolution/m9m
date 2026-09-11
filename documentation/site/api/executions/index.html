@@ -12,7 +12,7 @@
         <meta name="author" content="Neul Labs">
       
       
-        <link rel="canonical" href="https://m9m.docs.neullabs.com/api/executions/">
+        <link rel="canonical" href="https://docs.neullabs.com/m9m/api/executions/">
       
       
         <link rel="prev" href="../workflows/">
@@ -22,7 +22,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.49">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.4.0">
     
     
       
@@ -30,10 +30,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.6f8fc17f.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.9f615399.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.649f08f9.min.css">
       
       
 
@@ -52,7 +52,7 @@
       
     
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -63,21 +63,21 @@
   <meta name="description" content="API endpoints for managing workflow executions.">
   <meta name="keywords" content="m9m API, REST API, workflow API, n8n API compatibility">
   <meta name="author" content="Neul Labs">
-  <link rel="canonical" href="https://m9m.docs.neullabs.com/api/executions/">
+  <link rel="canonical" href="https://docs.neullabs.com/m9m/api/executions/">
 
   
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="m9m Documentation">
   <meta property="og:title" content="Executions API">
   <meta property="og:description" content="API endpoints for managing workflow executions.">
-  <meta property="og:url" content="https://m9m.docs.neullabs.com/api/executions/">
-  <meta property="og:image" content="https://m9m.docs.neullabs.com/assets/og.png">
+  <meta property="og:url" content="https://docs.neullabs.com/m9m/api/executions/">
+  <meta property="og:image" content="https://docs.neullabs.com/m9m/assets/og.png">
 
   
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Executions API">
   <meta name="twitter:description" content="API endpoints for managing workflow executions.">
-  <meta name="twitter:image" content="https://m9m.docs.neullabs.com/assets/og.png">
+  <meta name="twitter:image" content="https://docs.neullabs.com/m9m/assets/og.png">
 
   
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
@@ -100,9 +100,9 @@
     },
     "license": "https://opensource.org/licenses/MIT",
     "codeRepository": "https://github.com/neul-labs/m9m",
-    "url": "https://m9m.docs.neullabs.com/",
+    "url": "https://docs.neullabs.com/m9m/",
     "downloadUrl": "https://github.com/neul-labs/m9m/releases",
-    "softwareHelp": "https://m9m.docs.neullabs.com/",
+    "softwareHelp": "https://docs.neullabs.com/m9m/",
     "publisher": {
       "@type": "Organization",
       "name": "Neul Labs",
@@ -127,6 +127,9 @@
     <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
   
     
+    
+      <script>var palette=__md_get("__palette");if(palette&&"object"==typeof palette.color)for(var key of Object.keys(palette.color))document.body.setAttribute("data-md-color-"+key,palette.color[key])</script>
+    
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
     <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
     <label class="md-overlay" for="__drawer"></label>
@@ -145,17 +148,19 @@
     
       
 
-<header class="md-header" data-md-component="header">
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
     <a href="../.." title="m9m Documentation" class="md-header__button md-logo" aria-label="m9m Documentation" data-md-component="logo">
       
   
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
       
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
     </label>
     <div class="md-header__title" data-md-component="header-title">
       <div class="md-header__ellipsis">
@@ -180,20 +185,20 @@
     
     
     
-    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
     
-      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
       </label>
     
   
     
     
     
-    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_2">
     
-      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12c0-2.42-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
       </label>
     
   
@@ -201,13 +206,10 @@
       
     
     
-      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
-    
-    
     
       <label class="md-header__button md-icon" for="__search">
         
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
       </label>
       <div class="md-search" data-md-component="search" role="dialog">
   <label class="md-search__overlay" for="__search"></label>
@@ -216,20 +218,20 @@
       <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
       <label class="md-search__icon md-icon" for="__search">
         
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
         
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
       </label>
       <nav class="md-search__options" aria-label="Search">
         
           <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
             
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7 0-.24-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91 1.61 0 2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08Z"/></svg>
           </a>
         
         <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
           
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
         </button>
       </nav>
       
@@ -237,7 +239,7 @@
       
     </form>
     <div class="md-search__output">
-      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+      <div class="md-search__scrollwrap" data-md-scrollfix>
         <div class="md-search-result" data-md-component="search-result">
           <div class="md-search-result__meta">
             Initializing search
@@ -254,7 +256,7 @@
         <a href="https://github.com/neul-labs/m9m" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.4.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg>
   </div>
   <div class="md-source__repository">
     neul-labs/m9m
@@ -271,345 +273,6 @@
       
         
           
-            
-<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
-  <div class="md-grid">
-    <ul class="md-tabs__list">
-      
-        
-  
-  
-  
-    <li class="md-tabs__item">
-      <a href="../.." class="md-tabs__link">
-        
-  
-    
-  
-  Home
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-    <li class="md-tabs__item">
-      <a href="../../why-m9m/" class="md-tabs__link">
-        
-  
-    
-  
-  Why m9m?
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-    <li class="md-tabs__item">
-      <a href="../../migrate-from-n8n/" class="md-tabs__link">
-        
-  
-    
-  
-  Migrate from n8n
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-    <li class="md-tabs__item">
-      <a href="../../faq/" class="md-tabs__link">
-        
-  
-    
-  
-  FAQ
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../getting-started/" class="md-tabs__link">
-          
-  
-    
-  
-  Getting Started
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../configuration/" class="md-tabs__link">
-          
-  
-    
-  
-  Configuration
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../cli/" class="md-tabs__link">
-          
-  
-    
-  
-  CLI Reference
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-    
-  
-  
-    
-    
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
-          
-  
-    
-  
-  API Reference
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../nodes/" class="md-tabs__link">
-          
-  
-    
-  
-  Nodes
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../workflows/" class="md-tabs__link">
-          
-  
-    
-  
-  Workflows
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../expressions/" class="md-tabs__link">
-          
-  
-    
-  
-  Expressions
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../credentials/" class="md-tabs__link">
-          
-  
-    
-  
-  Credentials
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../scheduling/" class="md-tabs__link">
-          
-  
-    
-  
-  Scheduling
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../webhooks/" class="md-tabs__link">
-          
-  
-    
-  
-  Webhooks
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../deployment/" class="md-tabs__link">
-          
-  
-    
-  
-  Deployment
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../architecture/" class="md-tabs__link">
-          
-  
-    
-  
-  Architecture
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../troubleshooting/" class="md-tabs__link">
-          
-  
-    
-  
-  Troubleshooting
-
-        </a>
-      </li>
-    
-  
-
-      
-    </ul>
-  </div>
-</nav>
-          
         
       
       <main class="md-main" data-md-component="main">
@@ -623,15 +286,13 @@
                     
 
 
-  
 
-
-<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
     <a href="../.." title="m9m Documentation" class="md-nav__button md-logo" aria-label="m9m Documentation" data-md-component="logo">
       
   
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
 
     </a>
     m9m Documentation
@@ -641,7 +302,7 @@
       <a href="https://github.com/neul-labs/m9m" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.4.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg>
   </div>
   <div class="md-source__repository">
     neul-labs/m9m
@@ -653,7 +314,6 @@
     
       
       
-  
   
   
   
@@ -676,7 +336,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../../why-m9m/" class="md-nav__link">
         
@@ -693,7 +352,6 @@
     
       
       
-  
   
   
   
@@ -716,7 +374,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../../faq/" class="md-nav__link">
         
@@ -736,7 +393,6 @@
   
   
   
-  
     
     
       
@@ -755,13 +411,11 @@
     
     
       
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
+        
         
         
           
@@ -781,8 +435,7 @@
 
             </a>
             
-              
-              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_5">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
@@ -799,7 +452,6 @@
             
               
                 
-  
   
   
   
@@ -823,7 +475,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../../getting-started/first-workflow/" class="md-nav__link">
         
@@ -844,7 +495,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../../getting-started/concepts/" class="md-nav__link">
         
@@ -862,7 +512,6 @@
             
               
                 
-  
   
   
   
@@ -893,7 +542,6 @@
   
   
   
-  
     
     
       
@@ -914,13 +562,11 @@
     
     
       
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
+        
         
         
           
@@ -940,8 +586,7 @@
 
             </a>
             
-              
-              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_6">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
@@ -958,7 +603,6 @@
             
               
                 
-  
   
   
   
@@ -982,7 +626,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../../configuration/database/" class="md-nav__link">
         
@@ -1000,7 +643,6 @@
             
               
                 
-  
   
   
   
@@ -1024,7 +666,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../../configuration/security/" class="md-nav__link">
         
@@ -1042,7 +683,6 @@
             
               
                 
-  
   
   
   
@@ -1073,7 +713,6 @@
   
   
   
-  
     
     
       
@@ -1094,13 +733,11 @@
     
     
       
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
+        
         
         
           
@@ -1120,8 +757,7 @@
 
             </a>
             
-              
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_7">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
@@ -1138,7 +774,6 @@
             
               
                 
-  
   
   
   
@@ -1162,7 +797,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../../cli/workflows/" class="md-nav__link">
         
@@ -1180,7 +814,6 @@
             
               
                 
-  
   
   
   
@@ -1204,7 +837,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../../cli/nodes/" class="md-nav__link">
         
@@ -1222,7 +854,6 @@
             
               
                 
-  
   
   
   
@@ -1255,7 +886,6 @@
     
   
   
-  
     
     
       
@@ -1280,16 +910,11 @@
     
     
       
-        
-        
-      
-      
-        
-      
-    
     
     <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
+        
+        
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
@@ -1307,8 +932,7 @@
 
             </a>
             
-              
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="">
+              <label class="md-nav__link " for="__nav_8">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
@@ -1325,7 +949,6 @@
             
               
                 
-  
   
   
   
@@ -1349,7 +972,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../workflows/" class="md-nav__link">
         
@@ -1370,7 +992,6 @@
   
   
     
-  
   
   
     <li class="md-nav__item md-nav__item--active">
@@ -1419,9 +1040,7 @@
       
         <li class="md-nav__item">
   <a href="#list-executions" class="md-nav__link">
-    <span class="md-ellipsis">
-      List Executions
-    </span>
+    List Executions
   </a>
   
     <nav class="md-nav" aria-label="List Executions">
@@ -1429,45 +1048,35 @@
         
           <li class="md-nav__item">
   <a href="#query-parameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      Query Parameters
-    </span>
+    Query Parameters
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#status-values" class="md-nav__link">
-    <span class="md-ellipsis">
-      Status Values
-    </span>
+    Status Values
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#mode-values" class="md-nav__link">
-    <span class="md-ellipsis">
-      Mode Values
-    </span>
+    Mode Values
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#example-request" class="md-nav__link">
-    <span class="md-ellipsis">
-      Example Request
-    </span>
+    Example Request
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#response" class="md-nav__link">
-    <span class="md-ellipsis">
-      Response
-    </span>
+    Response
   </a>
   
 </li>
@@ -1479,9 +1088,7 @@
       
         <li class="md-nav__item">
   <a href="#get-execution" class="md-nav__link">
-    <span class="md-ellipsis">
-      Get Execution
-    </span>
+    Get Execution
   </a>
   
     <nav class="md-nav" aria-label="Get Execution">
@@ -1489,27 +1096,21 @@
         
           <li class="md-nav__item">
   <a href="#example-request_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      Example Request
-    </span>
+    Example Request
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#response_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      Response
-    </span>
+    Response
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#failed-execution-response" class="md-nav__link">
-    <span class="md-ellipsis">
-      Failed Execution Response
-    </span>
+    Failed Execution Response
   </a>
   
 </li>
@@ -1521,9 +1122,7 @@
       
         <li class="md-nav__item">
   <a href="#delete-execution" class="md-nav__link">
-    <span class="md-ellipsis">
-      Delete Execution
-    </span>
+    Delete Execution
   </a>
   
     <nav class="md-nav" aria-label="Delete Execution">
@@ -1531,18 +1130,14 @@
         
           <li class="md-nav__item">
   <a href="#example-request_2" class="md-nav__link">
-    <span class="md-ellipsis">
-      Example Request
-    </span>
+    Example Request
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#response_2" class="md-nav__link">
-    <span class="md-ellipsis">
-      Response
-    </span>
+    Response
   </a>
   
 </li>
@@ -1554,9 +1149,7 @@
       
         <li class="md-nav__item">
   <a href="#retry-execution" class="md-nav__link">
-    <span class="md-ellipsis">
-      Retry Execution
-    </span>
+    Retry Execution
   </a>
   
     <nav class="md-nav" aria-label="Retry Execution">
@@ -1564,18 +1157,14 @@
         
           <li class="md-nav__item">
   <a href="#example-request_3" class="md-nav__link">
-    <span class="md-ellipsis">
-      Example Request
-    </span>
+    Example Request
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#response_3" class="md-nav__link">
-    <span class="md-ellipsis">
-      Response
-    </span>
+    Response
   </a>
   
 </li>
@@ -1587,9 +1176,7 @@
       
         <li class="md-nav__item">
   <a href="#cancel-execution" class="md-nav__link">
-    <span class="md-ellipsis">
-      Cancel Execution
-    </span>
+    Cancel Execution
   </a>
   
     <nav class="md-nav" aria-label="Cancel Execution">
@@ -1597,27 +1184,21 @@
         
           <li class="md-nav__item">
   <a href="#example-request_4" class="md-nav__link">
-    <span class="md-ellipsis">
-      Example Request
-    </span>
+    Example Request
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#response-cancellation-requested" class="md-nav__link">
-    <span class="md-ellipsis">
-      Response (cancellation requested)
-    </span>
+    Response (cancellation requested)
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#response-runtime-cannot-cancel-this-execution" class="md-nav__link">
-    <span class="md-ellipsis">
-      Response (runtime cannot cancel this execution)
-    </span>
+    Response (runtime cannot cancel this execution)
   </a>
   
 </li>
@@ -1629,9 +1210,7 @@
       
         <li class="md-nav__item">
   <a href="#bulk-delete" class="md-nav__link">
-    <span class="md-ellipsis">
-      Bulk Delete
-    </span>
+    Bulk Delete
   </a>
   
     <nav class="md-nav" aria-label="Bulk Delete">
@@ -1639,27 +1218,21 @@
         
           <li class="md-nav__item">
   <a href="#request-body" class="md-nav__link">
-    <span class="md-ellipsis">
-      Request Body
-    </span>
+    Request Body
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#example-request_5" class="md-nav__link">
-    <span class="md-ellipsis">
-      Example Request
-    </span>
+    Example Request
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#response_4" class="md-nav__link">
-    <span class="md-ellipsis">
-      Response
-    </span>
+    Response
   </a>
   
 </li>
@@ -1671,9 +1244,7 @@
       
         <li class="md-nav__item">
   <a href="#execution-statistics" class="md-nav__link">
-    <span class="md-ellipsis">
-      Execution Statistics
-    </span>
+    Execution Statistics
   </a>
   
     <nav class="md-nav" aria-label="Execution Statistics">
@@ -1681,27 +1252,21 @@
         
           <li class="md-nav__item">
   <a href="#query-parameters_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      Query Parameters
-    </span>
+    Query Parameters
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#example-request_6" class="md-nav__link">
-    <span class="md-ellipsis">
-      Example Request
-    </span>
+    Example Request
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#response_5" class="md-nav__link">
-    <span class="md-ellipsis">
-      Response
-    </span>
+    Response
   </a>
   
 </li>
@@ -1713,9 +1278,7 @@
       
         <li class="md-nav__item">
   <a href="#error-responses" class="md-nav__link">
-    <span class="md-ellipsis">
-      Error Responses
-    </span>
+    Error Responses
   </a>
   
     <nav class="md-nav" aria-label="Error Responses">
@@ -1723,33 +1286,150 @@
         
           <li class="md-nav__item">
   <a href="#404-not-found" class="md-nav__link">
-    <span class="md-ellipsis">
-      404 Not Found
-    </span>
+    404 Not Found
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#409-conflict" class="md-nav__link">
-    <span class="md-ellipsis">
-      409 Conflict
-    </span>
+    409 Conflict
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#400-bad-request" class="md-nav__link">
-    <span class="md-ellipsis">
-      400 Bad Request
-    </span>
+    400 Bad Request
   </a>
   
 </li>
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-node-retry" class="md-nav__link">
+    Per-Node Retry
+  </a>
+  
+    <nav class="md-nav" aria-label="Per-Node Retry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#request-body_1" class="md-nav__link">
+    Request Body
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-request_7" class="md-nav__link">
+    Example Request
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#response_6" class="md-nav__link">
+    Response
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#use-case" class="md-nav__link">
+    Use case
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recent-executions" class="md-nav__link">
+    Recent Executions
+  </a>
+  
+    <nav class="md-nav" aria-label="Recent Executions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#query-parameters_2" class="md-nav__link">
+    Query Parameters
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-request_8" class="md-nav__link">
+    Example Request
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#response_7" class="md-nav__link">
+    Response
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#count-executions" class="md-nav__link">
+    Count Executions
+  </a>
+  
+    <nav class="md-nav" aria-label="Count Executions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#query-parameters_3" class="md-nav__link">
+    Query Parameters
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-request_9" class="md-nav__link">
+    Example Request
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#response_8" class="md-nav__link">
+    Response
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#debug-mode" class="md-nav__link">
+    Debug Mode
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#edges-taken" class="md-nav__link">
+    Edges Taken
+  </a>
   
 </li>
       
@@ -1764,7 +1444,6 @@
             
               
                 
-  
   
   
   
@@ -1788,7 +1467,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../schedules/" class="md-nav__link">
         
@@ -1809,7 +1487,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../credentials/" class="md-nav__link">
         
@@ -1827,7 +1504,6 @@
             
               
                 
-  
   
   
   
@@ -1858,7 +1534,6 @@
   
   
   
-  
     
     
       
@@ -1893,13 +1568,11 @@
     
     
       
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
+        
         
         
           
@@ -1919,8 +1592,7 @@
 
             </a>
             
-              
-              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_9">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
@@ -1937,7 +1609,6 @@
             
               
                 
-  
   
   
   
@@ -1961,7 +1632,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../../nodes/transform/" class="md-nav__link">
         
@@ -1979,7 +1649,6 @@
             
               
                 
-  
   
   
   
@@ -2003,7 +1672,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../../nodes/triggers/" class="md-nav__link">
         
@@ -2021,7 +1689,6 @@
             
               
                 
-  
   
   
   
@@ -2045,7 +1712,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../../nodes/messaging/" class="md-nav__link">
         
@@ -2063,7 +1729,6 @@
             
               
                 
-  
   
   
   
@@ -2087,7 +1752,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../../nodes/cli/" class="md-nav__link">
         
@@ -2105,7 +1769,6 @@
             
               
                 
-  
   
   
   
@@ -2129,7 +1792,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../../nodes/vcs/" class="md-nav__link">
         
@@ -2150,7 +1812,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../../nodes/email/" class="md-nav__link">
         
@@ -2168,7 +1829,6 @@
             
               
                 
-  
   
   
   
@@ -2199,7 +1859,6 @@
   
   
   
-  
     
     
       
@@ -2218,13 +1877,11 @@
     
     
       
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
+        
         
         
           
@@ -2244,8 +1901,7 @@
 
             </a>
             
-              
-              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_10">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
@@ -2262,7 +1918,6 @@
             
               
                 
-  
   
   
   
@@ -2286,7 +1941,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../../workflows/executing/" class="md-nav__link">
         
@@ -2307,7 +1961,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../../workflows/data-flow/" class="md-nav__link">
         
@@ -2325,7 +1978,6 @@
             
               
                 
-  
   
   
   
@@ -2356,7 +2008,6 @@
   
   
   
-  
     
     
       
@@ -2371,13 +2022,11 @@
     
     
       
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
+        
         
         
           
@@ -2397,8 +2046,7 @@
 
             </a>
             
-              
-              <label class="md-nav__link " for="__nav_11" id="__nav_11_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_11">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
@@ -2415,7 +2063,6 @@
             
               
                 
-  
   
   
   
@@ -2436,7 +2083,6 @@
             
               
                 
-  
   
   
   
@@ -2467,7 +2113,6 @@
   
   
   
-  
     
     
       
@@ -2480,13 +2125,11 @@
     
     
       
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
+        
         
         
           
@@ -2506,8 +2149,7 @@
 
             </a>
             
-              
-              <label class="md-nav__link " for="__nav_12" id="__nav_12_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_12">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
@@ -2524,7 +2166,6 @@
             
               
                 
-  
   
   
   
@@ -2555,7 +2196,6 @@
   
   
   
-  
     
     
       
@@ -2568,13 +2208,11 @@
     
     
       
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
+        
         
         
           
@@ -2594,8 +2232,7 @@
 
             </a>
             
-              
-              <label class="md-nav__link " for="__nav_13" id="__nav_13_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_13">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
@@ -2612,7 +2249,6 @@
             
               
                 
-  
   
   
   
@@ -2643,7 +2279,6 @@
   
   
   
-  
     
     
       
@@ -2656,13 +2291,11 @@
     
     
       
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
+        
         
         
           
@@ -2682,8 +2315,7 @@
 
             </a>
             
-              
-              <label class="md-nav__link " for="__nav_14" id="__nav_14_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_14">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
@@ -2700,7 +2332,6 @@
             
               
                 
-  
   
   
   
@@ -2731,7 +2362,6 @@
   
   
   
-  
     
     
       
@@ -2748,13 +2378,11 @@
     
     
       
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
+        
         
         
           
@@ -2774,8 +2402,7 @@
 
             </a>
             
-              
-              <label class="md-nav__link " for="__nav_15" id="__nav_15_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_15">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
@@ -2792,7 +2419,6 @@
             
               
                 
-  
   
   
   
@@ -2816,7 +2442,6 @@
   
   
   
-  
     <li class="md-nav__item">
       <a href="../../deployment/kubernetes/" class="md-nav__link">
         
@@ -2834,7 +2459,6 @@
             
               
                 
-  
   
   
   
@@ -2865,7 +2489,6 @@
   
   
   
-  
     
     
       
@@ -2880,13 +2503,11 @@
     
     
       
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
+        
         
         
           
@@ -2906,8 +2527,7 @@
 
             </a>
             
-              
-              <label class="md-nav__link " for="__nav_16" id="__nav_16_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_16">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
@@ -2924,7 +2544,6 @@
             
               
                 
-  
   
   
   
@@ -2945,7 +2564,6 @@
             
               
                 
-  
   
   
   
@@ -2976,7 +2594,6 @@
   
   
   
-  
     
     
       
@@ -2989,13 +2606,11 @@
     
     
       
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
+        
         
         
           
@@ -3015,8 +2630,7 @@
 
             </a>
             
-              
-              <label class="md-nav__link " for="__nav_17" id="__nav_17_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_17">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
@@ -3033,7 +2647,6 @@
             
               
                 
-  
   
   
   
@@ -3087,9 +2700,7 @@
       
         <li class="md-nav__item">
   <a href="#list-executions" class="md-nav__link">
-    <span class="md-ellipsis">
-      List Executions
-    </span>
+    List Executions
   </a>
   
     <nav class="md-nav" aria-label="List Executions">
@@ -3097,45 +2708,35 @@
         
           <li class="md-nav__item">
   <a href="#query-parameters" class="md-nav__link">
-    <span class="md-ellipsis">
-      Query Parameters
-    </span>
+    Query Parameters
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#status-values" class="md-nav__link">
-    <span class="md-ellipsis">
-      Status Values
-    </span>
+    Status Values
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#mode-values" class="md-nav__link">
-    <span class="md-ellipsis">
-      Mode Values
-    </span>
+    Mode Values
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#example-request" class="md-nav__link">
-    <span class="md-ellipsis">
-      Example Request
-    </span>
+    Example Request
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#response" class="md-nav__link">
-    <span class="md-ellipsis">
-      Response
-    </span>
+    Response
   </a>
   
 </li>
@@ -3147,9 +2748,7 @@
       
         <li class="md-nav__item">
   <a href="#get-execution" class="md-nav__link">
-    <span class="md-ellipsis">
-      Get Execution
-    </span>
+    Get Execution
   </a>
   
     <nav class="md-nav" aria-label="Get Execution">
@@ -3157,27 +2756,21 @@
         
           <li class="md-nav__item">
   <a href="#example-request_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      Example Request
-    </span>
+    Example Request
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#response_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      Response
-    </span>
+    Response
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#failed-execution-response" class="md-nav__link">
-    <span class="md-ellipsis">
-      Failed Execution Response
-    </span>
+    Failed Execution Response
   </a>
   
 </li>
@@ -3189,9 +2782,7 @@
       
         <li class="md-nav__item">
   <a href="#delete-execution" class="md-nav__link">
-    <span class="md-ellipsis">
-      Delete Execution
-    </span>
+    Delete Execution
   </a>
   
     <nav class="md-nav" aria-label="Delete Execution">
@@ -3199,18 +2790,14 @@
         
           <li class="md-nav__item">
   <a href="#example-request_2" class="md-nav__link">
-    <span class="md-ellipsis">
-      Example Request
-    </span>
+    Example Request
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#response_2" class="md-nav__link">
-    <span class="md-ellipsis">
-      Response
-    </span>
+    Response
   </a>
   
 </li>
@@ -3222,9 +2809,7 @@
       
         <li class="md-nav__item">
   <a href="#retry-execution" class="md-nav__link">
-    <span class="md-ellipsis">
-      Retry Execution
-    </span>
+    Retry Execution
   </a>
   
     <nav class="md-nav" aria-label="Retry Execution">
@@ -3232,18 +2817,14 @@
         
           <li class="md-nav__item">
   <a href="#example-request_3" class="md-nav__link">
-    <span class="md-ellipsis">
-      Example Request
-    </span>
+    Example Request
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#response_3" class="md-nav__link">
-    <span class="md-ellipsis">
-      Response
-    </span>
+    Response
   </a>
   
 </li>
@@ -3255,9 +2836,7 @@
       
         <li class="md-nav__item">
   <a href="#cancel-execution" class="md-nav__link">
-    <span class="md-ellipsis">
-      Cancel Execution
-    </span>
+    Cancel Execution
   </a>
   
     <nav class="md-nav" aria-label="Cancel Execution">
@@ -3265,27 +2844,21 @@
         
           <li class="md-nav__item">
   <a href="#example-request_4" class="md-nav__link">
-    <span class="md-ellipsis">
-      Example Request
-    </span>
+    Example Request
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#response-cancellation-requested" class="md-nav__link">
-    <span class="md-ellipsis">
-      Response (cancellation requested)
-    </span>
+    Response (cancellation requested)
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#response-runtime-cannot-cancel-this-execution" class="md-nav__link">
-    <span class="md-ellipsis">
-      Response (runtime cannot cancel this execution)
-    </span>
+    Response (runtime cannot cancel this execution)
   </a>
   
 </li>
@@ -3297,9 +2870,7 @@
       
         <li class="md-nav__item">
   <a href="#bulk-delete" class="md-nav__link">
-    <span class="md-ellipsis">
-      Bulk Delete
-    </span>
+    Bulk Delete
   </a>
   
     <nav class="md-nav" aria-label="Bulk Delete">
@@ -3307,27 +2878,21 @@
         
           <li class="md-nav__item">
   <a href="#request-body" class="md-nav__link">
-    <span class="md-ellipsis">
-      Request Body
-    </span>
+    Request Body
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#example-request_5" class="md-nav__link">
-    <span class="md-ellipsis">
-      Example Request
-    </span>
+    Example Request
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#response_4" class="md-nav__link">
-    <span class="md-ellipsis">
-      Response
-    </span>
+    Response
   </a>
   
 </li>
@@ -3339,9 +2904,7 @@
       
         <li class="md-nav__item">
   <a href="#execution-statistics" class="md-nav__link">
-    <span class="md-ellipsis">
-      Execution Statistics
-    </span>
+    Execution Statistics
   </a>
   
     <nav class="md-nav" aria-label="Execution Statistics">
@@ -3349,27 +2912,21 @@
         
           <li class="md-nav__item">
   <a href="#query-parameters_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      Query Parameters
-    </span>
+    Query Parameters
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#example-request_6" class="md-nav__link">
-    <span class="md-ellipsis">
-      Example Request
-    </span>
+    Example Request
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#response_5" class="md-nav__link">
-    <span class="md-ellipsis">
-      Response
-    </span>
+    Response
   </a>
   
 </li>
@@ -3381,9 +2938,7 @@
       
         <li class="md-nav__item">
   <a href="#error-responses" class="md-nav__link">
-    <span class="md-ellipsis">
-      Error Responses
-    </span>
+    Error Responses
   </a>
   
     <nav class="md-nav" aria-label="Error Responses">
@@ -3391,33 +2946,150 @@
         
           <li class="md-nav__item">
   <a href="#404-not-found" class="md-nav__link">
-    <span class="md-ellipsis">
-      404 Not Found
-    </span>
+    404 Not Found
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#409-conflict" class="md-nav__link">
-    <span class="md-ellipsis">
-      409 Conflict
-    </span>
+    409 Conflict
   </a>
   
 </li>
         
           <li class="md-nav__item">
   <a href="#400-bad-request" class="md-nav__link">
-    <span class="md-ellipsis">
-      400 Bad Request
-    </span>
+    400 Bad Request
   </a>
   
 </li>
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-node-retry" class="md-nav__link">
+    Per-Node Retry
+  </a>
+  
+    <nav class="md-nav" aria-label="Per-Node Retry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#request-body_1" class="md-nav__link">
+    Request Body
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-request_7" class="md-nav__link">
+    Example Request
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#response_6" class="md-nav__link">
+    Response
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#use-case" class="md-nav__link">
+    Use case
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recent-executions" class="md-nav__link">
+    Recent Executions
+  </a>
+  
+    <nav class="md-nav" aria-label="Recent Executions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#query-parameters_2" class="md-nav__link">
+    Query Parameters
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-request_8" class="md-nav__link">
+    Example Request
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#response_7" class="md-nav__link">
+    Response
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#count-executions" class="md-nav__link">
+    Count Executions
+  </a>
+  
+    <nav class="md-nav" aria-label="Count Executions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#query-parameters_3" class="md-nav__link">
+    Query Parameters
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-request_9" class="md-nav__link">
+    Example Request
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#response_8" class="md-nav__link">
+    Response
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#debug-mode" class="md-nav__link">
+    Debug Mode
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#edges-taken" class="md-nav__link">
+    Edges Taken
+  </a>
   
 </li>
       
@@ -3830,16 +3502,150 @@
 <a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="w">  </span><span class="nt">&quot;code&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">400</span>
 <a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="p">}</span>
 </code></pre></div>
-
-
-
-
-
-
-
-  
-  
-
+<hr />
+<h2 id="per-node-retry">Per-Node Retry<a class="headerlink" href="#per-node-retry" title="Permanent link">&para;</a></h2>
+<p>Re-run a single node from a previous execution, then continue the rest of the workflow from that point. The original execution is left intact; a new execution is created with <code>mode: "retry-node"</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="err">POST /api/v1/executions/{id}/retry-node</span>
+</code></pre></div>
+<h3 id="request-body_1">Request Body<a class="headerlink" href="#request-body_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>nodeId</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>The node id (from the original execution's <code>nodeExecutions</code>) to re-run</td>
+</tr>
+<tr>
+<td><code>data</code></td>
+<td>array</td>
+<td>No</td>
+<td>Override input data for the retried node. Defaults to the captured input from the original execution.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="example-request_7">Example Request<a class="headerlink" href="#example-request_7" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8080/api/v1/executions/exec-789/retry-node<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer &lt;token&gt;&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
+<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="s1">    &quot;nodeId&quot;: &quot;http-1&quot;,</span>
+<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="s1">    &quot;data&quot;: [{&quot;json&quot;: {&quot;userId&quot;: 42}}]</span>
+<a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="s1">  }&#39;</span>
+</code></pre></div>
+<h3 id="response_6">Response<a class="headerlink" href="#response_6" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="p">{</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">  </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;exec-791&quot;</span><span class="p">,</span>
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">  </span><span class="nt">&quot;workflowId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;550e8400-e29b-41d4-a716-446655440000&quot;</span><span class="p">,</span>
+<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;running&quot;</span><span class="p">,</span>
+<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="w">  </span><span class="nt">&quot;mode&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;retry-node&quot;</span><span class="p">,</span>
+<a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a><span class="w">  </span><span class="nt">&quot;startedAt&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-01-26T16:00:00Z&quot;</span><span class="p">,</span>
+<a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a><span class="w">  </span><span class="nt">&quot;retriedFrom&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a><span class="w">    </span><span class="nt">&quot;executionId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;exec-789&quot;</span><span class="p">,</span>
+<a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a><span class="w">    </span><span class="nt">&quot;nodeId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;http-1&quot;</span>
+<a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-30-11" name="__codelineno-30-11" href="#__codelineno-30-11"></a><span class="p">}</span>
+</code></pre></div>
+<h3 id="use-case">Use case<a class="headerlink" href="#use-case" title="Permanent link">&para;</a></h3>
+<p>Workflow failed at the <code>SendGrid</code> node. Fix the upstream data, hit <code>/retry-node</code> on the SendGrid node, and the rest of the workflow runs with the new output.</p>
+<hr />
+<h2 id="recent-executions">Recent Executions<a class="headerlink" href="#recent-executions" title="Permanent link">&para;</a></h2>
+<p>Lightweight "what just ran" feed for the dashboard. Returns the last 20 executions ordered by <code>startedAt</code> descending. Lighter than <code>GET /executions</code> because it skips <code>nodeExecutions</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="err">GET /api/v1/executions/recent</span>
+</code></pre></div>
+<h3 id="query-parameters_2">Query Parameters<a class="headerlink" href="#query-parameters_2" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>limit</code></td>
+<td>integer</td>
+<td><code>20</code></td>
+<td>Max items (max 100)</td>
+</tr>
+<tr>
+<td><code>workflowId</code></td>
+<td>string</td>
+<td>—</td>
+<td>Filter by workflow</td>
+</tr>
+</tbody>
+</table>
+<h3 id="example-request_8">Example Request<a class="headerlink" href="#example-request_8" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>curl<span class="w"> </span><span class="s2">&quot;http://localhost:8080/api/v1/executions/recent?limit=5&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer &lt;token&gt;&quot;</span>
+</code></pre></div>
+<h3 id="response_7">Response<a class="headerlink" href="#response_7" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="p">{</span>
+<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="w">  </span><span class="nt">&quot;data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="w">    </span><span class="p">{</span>
+<a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a><span class="w">      </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;exec-790&quot;</span><span class="p">,</span>
+<a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a><span class="w">      </span><span class="nt">&quot;workflowId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;wf-123&quot;</span><span class="p">,</span>
+<a id="__codelineno-33-6" name="__codelineno-33-6" href="#__codelineno-33-6"></a><span class="w">      </span><span class="nt">&quot;workflowName&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Daily Report&quot;</span><span class="p">,</span>
+<a id="__codelineno-33-7" name="__codelineno-33-7" href="#__codelineno-33-7"></a><span class="w">      </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;completed&quot;</span><span class="p">,</span>
+<a id="__codelineno-33-8" name="__codelineno-33-8" href="#__codelineno-33-8"></a><span class="w">      </span><span class="nt">&quot;mode&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;manual&quot;</span><span class="p">,</span>
+<a id="__codelineno-33-9" name="__codelineno-33-9" href="#__codelineno-33-9"></a><span class="w">      </span><span class="nt">&quot;startedAt&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2024-01-26T16:00:00Z&quot;</span><span class="p">,</span>
+<a id="__codelineno-33-10" name="__codelineno-33-10" href="#__codelineno-33-10"></a><span class="w">      </span><span class="nt">&quot;duration&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1234</span>
+<a id="__codelineno-33-11" name="__codelineno-33-11" href="#__codelineno-33-11"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-33-12" name="__codelineno-33-12" href="#__codelineno-33-12"></a><span class="w">  </span><span class="p">]</span>
+<a id="__codelineno-33-13" name="__codelineno-33-13" href="#__codelineno-33-13"></a><span class="p">}</span>
+</code></pre></div>
+<hr />
+<h2 id="count-executions">Count Executions<a class="headerlink" href="#count-executions" title="Permanent link">&para;</a></h2>
+<p>Total count, optionally filtered. Cheaper than <code>GET /executions</code> because no documents are read.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="err">GET /api/v1/executions/count</span>
+</code></pre></div>
+<h3 id="query-parameters_3">Query Parameters<a class="headerlink" href="#query-parameters_3" title="Permanent link">&para;</a></h3>
+<p>Same as <a href="#list-executions"><code>GET /executions</code></a>.</p>
+<h3 id="example-request_9">Example Request<a class="headerlink" href="#example-request_9" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>curl<span class="w"> </span><span class="s2">&quot;http://localhost:8080/api/v1/executions/count?status=failed&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer &lt;token&gt;&quot;</span>
+</code></pre></div>
+<h3 id="response_8">Response<a class="headerlink" href="#response_8" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">&quot;count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div>
+<hr />
+<h2 id="debug-mode">Debug Mode<a class="headerlink" href="#debug-mode" title="Permanent link">&para;</a></h2>
+<p>Each workflow has a <code>debug</code> boolean (see <code>GET /workflows/{id}</code>). When <code>debug: true</code>:</p>
+<ul>
+<li>Every node's full input and output data is captured and surfaced in <code>nodeExecutions[*].inputData</code> / <code>outputData</code>.</li>
+<li>The NDV Input/Output/Settings tabs show the captured payload.</li>
+</ul>
+<p>When <code>debug: false</code> (default):</p>
+<ul>
+<li>Only the <strong>most recent executed node</strong> retains its full payload.</li>
+<li>Earlier nodes retain only their summary (status, duration, error message). NDV falls back to the most recent node's output.</li>
+<li>Sticky-note nodes (<code>type: n8n-nodes-base.stickyNote</code>) are skipped entirely from <code>nodeExecutions</code> since they don't actually run.</li>
+</ul>
+<p>Toggle via <code>PATCH /api/v1/workflows/{id}</code> with <code>"debug": true</code>.</p>
+<p>See <a href="../../workflows/debug-and-retry/">workflows/debug-and-retry</a> for the user-facing guide.</p>
+<hr />
+<h2 id="edges-taken">Edges Taken<a class="headerlink" href="#edges-taken" title="Permanent link">&para;</a></h2>
+<p>Each execution record carries an <code>edgesTaken</code> array — the list of connection ids the engine actually traversed. The UI uses this to colour edges per state (taken / skipped / errored). Sub-workflow invocations preserve the parent's <code>edgesTaken</code> accumulator.</p>
+<p>See <a href="../../workflows/execution-edges/">workflows/execution-edges</a>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="p">{</span>
+<a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="w">  </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;exec-790&quot;</span><span class="p">,</span>
+<a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="w">  </span><span class="nt">&quot;edgesTaken&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a><span class="w">    </span><span class="s2">&quot;Start → Fetch Data&quot;</span><span class="p">,</span>
+<a id="__codelineno-37-5" name="__codelineno-37-5" href="#__codelineno-37-5"></a><span class="w">    </span><span class="s2">&quot;Fetch Data → SendGrid&quot;</span>
+<a id="__codelineno-37-6" name="__codelineno-37-6" href="#__codelineno-37-6"></a><span class="w">  </span><span class="p">]</span>
+<a id="__codelineno-37-7" name="__codelineno-37-7" href="#__codelineno-37-7"></a><span class="p">}</span>
+</code></pre></div>
 
 
 
@@ -3850,16 +3656,15 @@
             </div>
           
           
-  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var tab,labels=set.querySelector(".tabbed-labels");for(tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
 
-<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
         
           <button type="button" class="md-top md-icon" data-md-component="top" hidden>
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
-  Back to top
-</button>
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12Z"/></svg>
+            Back to top
+          </button>
         
       </main>
       
@@ -3870,10 +3675,10 @@
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../workflows/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Workflows">
+          <a href="../workflows/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Workflows" rel="prev">
             <div class="md-footer__button md-icon">
               
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
             </div>
             <div class="md-footer__title">
               <span class="md-footer__direction">
@@ -3887,7 +3692,7 @@
         
         
           
-          <a href="../jobs/" class="md-footer__link md-footer__link--next" aria-label="Next: Jobs">
+          <a href="../jobs/" class="md-footer__link md-footer__link--next" aria-label="Next: Jobs" rel="next">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
@@ -3898,7 +3703,7 @@
             </div>
             <div class="md-footer__button md-icon">
               
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11H4Z"/></svg>
             </div>
           </a>
         
@@ -3923,7 +3728,7 @@
     
     
     <a href="https://github.com/neul-labs/m9m" target="_blank" rel="noopener" title="m9m on GitHub" class="md-social__link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8M97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.4.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg>
     </a>
   
     
@@ -3931,7 +3736,7 @@
     
     
     <a href="https://www.npmjs.com/package/m9m-cli" target="_blank" rel="noopener" title="m9m-cli on npm" class="md-social__link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M288 288h-32v-64h32zm288-128v192H288v32H160v-32H0V160zm-416 32H32v128h64v-96h32v96h32zm160 0H192v160h64v-32h64zm224 0H352v128h64v-96h32v96h32v-96h32v96h32z"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.4.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M288 288h-32v-64h32v64zm288-128v192H288v32H160v-32H0V160h576zm-416 32H32v128h64v-96h32v96h32V192zm160 0H192v160h64v-32h64V192zm224 0H352v128h64v-96h32v96h32v-96h32v96h32V192z"/></svg>
     </a>
   
     
@@ -3939,7 +3744,7 @@
     
     
     <a href="https://pypi.org/project/m9m-cli/" target="_blank" rel="noopener" title="m9m-cli on PyPI" class="md-social__link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.8 200.5c-7.7-30.9-22.3-54.2-53.4-54.2h-40.1v47.4c0 36.8-31.2 67.8-66.8 67.8H172.7c-29.2 0-53.4 25-53.4 54.3v101.8c0 29 25.2 46 53.4 54.3 33.8 9.9 66.3 11.7 106.8 0 26.9-7.8 53.4-23.5 53.4-54.3v-40.7H226.2v-13.6h160.2c31.1 0 42.6-21.7 53.4-54.2 11.2-33.5 10.7-65.7 0-108.6M286.2 404c11.1 0 20.1 9.1 20.1 20.3 0 11.3-9 20.4-20.1 20.4-11 0-20.1-9.2-20.1-20.4.1-11.3 9.1-20.3 20.1-20.3M167.8 248.1h106.8c29.7 0 53.4-24.5 53.4-54.3V91.9c0-29-24.4-50.7-53.4-55.6-35.8-5.9-74.7-5.6-106.8.1-45.2 8-53.4 24.7-53.4 55.6v40.7h106.9v13.6h-147c-31.1 0-58.3 18.7-66.8 54.2-9.8 40.7-10.2 66.1 0 108.6 7.6 31.6 25.7 54.2 56.8 54.2H101v-48.8c0-35.3 30.5-66.4 66.8-66.4m-6.7-142.6c-11.1 0-20.1-9.1-20.1-20.3.1-11.3 9-20.4 20.1-20.4 11 0 20.1 9.2 20.1 20.4s-9 20.3-20.1 20.3"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.4.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.8 200.5c-7.7-30.9-22.3-54.2-53.4-54.2h-40.1v47.4c0 36.8-31.2 67.8-66.8 67.8H172.7c-29.2 0-53.4 25-53.4 54.3v101.8c0 29 25.2 46 53.4 54.3 33.8 9.9 66.3 11.7 106.8 0 26.9-7.8 53.4-23.5 53.4-54.3v-40.7H226.2v-13.6h160.2c31.1 0 42.6-21.7 53.4-54.2 11.2-33.5 10.7-65.7 0-108.6zM286.2 404c11.1 0 20.1 9.1 20.1 20.3 0 11.3-9 20.4-20.1 20.4-11 0-20.1-9.2-20.1-20.4.1-11.3 9.1-20.3 20.1-20.3zM167.8 248.1h106.8c29.7 0 53.4-24.5 53.4-54.3V91.9c0-29-24.4-50.7-53.4-55.6-35.8-5.9-74.7-5.6-106.8.1-45.2 8-53.4 24.7-53.4 55.6v40.7h106.9v13.6h-147c-31.1 0-58.3 18.7-66.8 54.2-9.8 40.7-10.2 66.1 0 108.6 7.6 31.6 25.7 54.2 56.8 54.2H101v-48.8c0-35.3 30.5-66.4 66.8-66.4zm-6.7-142.6c-11.1 0-20.1-9.1-20.1-20.3.1-11.3 9-20.4 20.1-20.4 11 0 20.1 9.2 20.1 20.4s-9 20.3-20.1 20.3z"/></svg>
     </a>
   
     
@@ -3947,7 +3752,7 @@
     
     
     <a href="https://github.com/neul-labs/m9m/pkgs/container/m9m" target="_blank" rel="noopener" title="m9m on GHCR" class="md-social__link">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M349.9 236.3h-66.1v-59.4h66.1zm0-204.3h-66.1v60.7h66.1zm78.2 144.8H362v59.4h66.1zm-156.3-72.1h-66.1v60.1h66.1zm78.1 0h-66.1v60.1h66.1zm276.8 100c-14.4-9.7-47.6-13.2-73.1-8.4-3.3-24-16.7-44.9-41.1-63.7l-14-9.3-9.3 14c-18.4 27.8-23.4 73.6-3.7 103.8-8.7 4.7-25.8 11.1-48.4 10.7H2.4c-8.7 50.8 5.8 116.8 44 162.1 37.1 43.9 92.7 66.2 165.4 66.2 157.4 0 273.9-72.5 328.4-204.2 21.4.4 67.6.1 91.3-45.2 1.5-2.5 6.6-13.2 8.5-17.1zm-511.1-27.9h-66v59.4h66.1v-59.4zm78.1 0h-66.1v59.4h66.1zm78.1 0h-66.1v59.4h66.1zm-78.1-72.1h-66.1v60.1h66.1z"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.4.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M349.9 236.3h-66.1v-59.4h66.1v59.4zm0-204.3h-66.1v60.7h66.1V32zm78.2 144.8H362v59.4h66.1v-59.4zm-156.3-72.1h-66.1v60.1h66.1v-60.1zm78.1 0h-66.1v60.1h66.1v-60.1zm276.8 100c-14.4-9.7-47.6-13.2-73.1-8.4-3.3-24-16.7-44.9-41.1-63.7l-14-9.3-9.3 14c-18.4 27.8-23.4 73.6-3.7 103.8-8.7 4.7-25.8 11.1-48.4 10.7H2.4c-8.7 50.8 5.8 116.8 44 162.1 37.1 43.9 92.7 66.2 165.4 66.2 157.4 0 273.9-72.5 328.4-204.2 21.4.4 67.6.1 91.3-45.2 1.5-2.5 6.6-13.2 8.5-17.1l-13.3-8.9zm-511.1-27.9h-66v59.4h66.1v-59.4zm78.1 0h-66.1v59.4h66.1v-59.4zm78.1 0h-66.1v59.4h66.1v-59.4zm-78.1-72.1h-66.1v60.1h66.1v-60.1z"/></svg>
     </a>
   
 </div>
@@ -3961,11 +3766,10 @@
       <div class="md-dialog__inner md-typeset"></div>
     </div>
     
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.sections", "navigation.expand", "navigation.top", "navigation.footer", "navigation.indexes", "search.suggest", "search.highlight", "search.share", "content.code.copy", "content.code.annotate", "content.tabs.link", "toc.follow"], "search": "../../assets/javascripts/workers/search.a264c092.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
     
-    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "navigation.footer", "navigation.indexes", "search.suggest", "search.highlight", "search.share", "content.code.copy", "content.code.annotate", "content.tabs.link", "toc.follow"], "search": "../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
     
-    
-      <script src="../../assets/javascripts/bundle.88dd0f4e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.4e0fa4ba.min.js"></script>
       
     
   </body>

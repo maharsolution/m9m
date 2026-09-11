@@ -46,13 +46,24 @@ export const useWorkflowStore = defineStore('workflow', () => {
     loading.value = true
     error.value = null
     try {
+      // [DEBUG-BUG-AUTH] Trace what the frontend is actually sending.
+      const _trace = currentWorkflow.value.nodes.map((n) => ({
+        id: n.id,
+        type: n.type,
+        auth: n.parameters?.authentication,
+      }))
+      console.log('[save] about to PUT workflow id=%s nodes=%j', currentWorkflow.value.id, _trace)
       if (currentWorkflow.value.id) {
+        const putBody = currentWorkflow.value
+        console.log('[save] PUT body has auth=%s', putBody.nodes[0]?.parameters?.authentication)
         currentWorkflow.value = await workflowApi.updateWorkflow(
           currentWorkflow.value.id,
-          currentWorkflow.value
+          putBody
         )
+        console.log('[save] PUT returned auth=%s', currentWorkflow.value.nodes[0]?.parameters?.authentication)
       } else {
         currentWorkflow.value = await workflowApi.createWorkflow(currentWorkflow.value)
+        console.log('[save] CREATE returned auth=%s', currentWorkflow.value.nodes[0]?.parameters?.authentication)
       }
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to save workflow'

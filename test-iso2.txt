@@ -1,6 +1,0 @@
-=== RUN   TestWebhookManager_RegisterWorkflowWebhooks
-2026/09/02 19:24:42 Γ£à Webhook registered: GET /hook-a (workflow=wf-multi, test=false)
-2026/09/02 19:24:42 Γ£à Webhook registered: POST /hook-b (workflow=wf-multi, test=false)
---- PASS: TestWebhookManager_RegisterWorkflowWebhooks (0.00s)
-PASS
-ok  	github.com/neul-labs/m9m/internal/webhooks	5.940s

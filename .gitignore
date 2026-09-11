@@ -14,7 +14,7 @@ __pycache__/
 *.pyo
 .venv/
 secrets/
-
+mahar/
 # Build artifacts
 *.o
 *.a
@@ -102,6 +102,12 @@ packages/m9m-cli/nodejs/package-lock.json
 # them is ever staged again.
 .cursor/
 .claude/
+
+# Parity validation report — contains the live deploy target's
+# IP, sheet IDs, and per-case body diffs from a private
+# spreadsheet. Kept on the local disk for the user; not for the
+# remote.
+workflow-test.MD
 bocahtuanakal.json
 sw.json
 sw0.json
