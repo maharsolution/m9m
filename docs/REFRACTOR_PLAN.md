@@ -341,17 +341,17 @@ Acceptance:
 ## Phase 10: Frontend Feature Decomposition
 
 Primary targets:
-- `web/src/components/copilot/AgentCopilot.vue`
+- `web/src/components/ai/AgentAI.vue`
 - `web/src/composables/useKeyboardShortcuts.ts`
 
 Target structure:
-- `web/src/components/copilot/AgentCopilot.vue`
+- `web/src/components/ai/AgentAI.vue`
   shell and layout
-- `web/src/components/copilot/CopilotChatTab.vue`
-- `web/src/components/copilot/CopilotGenerateTab.vue`
-- `web/src/components/copilot/CopilotSuggestTab.vue`
-- `web/src/components/copilot/CopilotExplainTab.vue`
-- `web/src/composables/useCopilotApi.ts`
+- `web/src/components/ai/AIChatTab.vue`
+- `web/src/components/ai/AIGenerateTab.vue`
+- `web/src/components/ai/AISuggestTab.vue`
+- `web/src/components/ai/AIExplainTab.vue`
+- `web/src/composables/useAIApi.ts`
 - `web/src/composables/useKeyboardShortcuts.ts`
   generic registry only
 - `web/src/composables/useWorkflowShortcuts.ts`

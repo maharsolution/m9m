@@ -598,3 +598,194 @@ func TestAnthropicNode_Execute_CustomTemperature(t *testing.T) {
 	require.NoError(t, err)
 	assert.InDelta(t, 0.95, capturedBody["temperature"], 0.001)
 }
+
+// ---------------------------------------------------------------
+// Anthropic-compatible provider routing (MiniMax-M3)
+// ---------------------------------------------------------------
+
+// fakeAnthropicServer is a tiny stand-in for any Anthropic-compatible
+// endpoint — same `/v1/messages` route, same response shape. Used to
+// prove that the node hits whatever URL resolveBaseURL returns.
+// Returns the server plus a getter pair so concurrent tests can read
+// the captured request / body after the call.
+func fakeAnthropicServer(t *testing.T) (*httptest.Server, func() *http.Request, func() map[string]interface{}) {
+	t.Helper()
+	var (
+		capturedReq  *http.Request
+		capturedBody map[string]interface{}
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedReq = r
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &capturedBody)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"content": []interface{}{
+				map[string]interface{}{"type": "text", "text": "ok"},
+			},
+			"stop_reason": "end_turn",
+			"usage":       map[string]interface{}{"input_tokens": 1, "output_tokens": 1},
+		})
+	}))
+	getReq := func() *http.Request { return capturedReq }
+	getBody := func() map[string]interface{} { return capturedBody }
+	return srv, getReq, getBody
+}
+
+func newAnthropicNodePointingAt(t *testing.T, srv *httptest.Server) *AnthropicNode {
+	t.Helper()
+	node := NewAnthropicNode()
+	node.httpClient = &http.Client{
+		Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			req.URL.Scheme = "http"
+			req.URL.Host = srv.Listener.Addr().String()
+			return http.DefaultTransport.RoundTrip(req)
+		}),
+	}
+	return node
+}
+
+func TestAnthropicNode_ResolveBaseURL_DefaultIsAnthropic(t *testing.T) {
+	// Ensure no env-var override leaks into the test.
+	t.Setenv("M9M_MINIMAX_BASE_URL", "")
+	t.Setenv("M9M_ANTHROPIC_BASE_URL", "")
+	n := NewAnthropicNode()
+	assert.Equal(t, defaultAnthropicBaseURL, n.resolveBaseURL(map[string]interface{}{}))
+}
+
+func TestAnthropicNode_ResolveBaseURL_ExplicitBaseURLWins(t *testing.T) {
+	t.Setenv("M9M_MINIMAX_BASE_URL", "")
+	t.Setenv("M9M_ANTHROPIC_BASE_URL", "")
+	n := NewAnthropicNode()
+	got := n.resolveBaseURL(map[string]interface{}{"baseURL": "https://proxy.example.com/v1/"})
+	assert.Equal(t, "https://proxy.example.com/v1", got, "trailing slash should be trimmed")
+}
+
+func TestAnthropicNode_ResolveBaseURL_ProviderNamedMiniMax(t *testing.T) {
+	t.Setenv("M9M_MINIMAX_BASE_URL", "")
+	t.Setenv("M9M_ANTHROPIC_BASE_URL", "")
+	n := NewAnthropicNode()
+	got := n.resolveBaseURL(map[string]interface{}{"provider": "MiniMax"})
+	assert.Equal(t, defaultMiniMaxBaseURL, got)
+}
+
+func TestAnthropicNode_ResolveBaseURL_MiniMaxEnvOverridesDefault(t *testing.T) {
+	t.Setenv("M9M_MINIMAX_BASE_URL", "https://MiniMax.example.com/anthropic")
+	t.Setenv("M9M_ANTHROPIC_BASE_URL", "")
+	n := NewAnthropicNode()
+	got := n.resolveBaseURL(map[string]interface{}{})
+	assert.Equal(t, "https://MiniMax.example.com/anthropic", got)
+}
+
+func TestAnthropicNode_ResolveBaseURL_AnthropicEnvOverridesDefault(t *testing.T) {
+	t.Setenv("M9M_MINIMAX_BASE_URL", "")
+	t.Setenv("M9M_ANTHROPIC_BASE_URL", "https://gateway.example.com/v1")
+	n := NewAnthropicNode()
+	got := n.resolveBaseURL(map[string]interface{}{})
+	assert.Equal(t, "https://gateway.example.com/v1", got)
+}
+
+func TestAnthropicNode_IsMiniMaxDetection(t *testing.T) {
+	cases := []struct {
+		baseURL string
+		want    bool
+	}{
+		{"https://api.anthropic.com/v1", false},
+		{"https://api.MiniMax.chat/v1", true},
+		{"https://api.MiniMax.chat/v1/", true},
+		{"https://api.MiniMax.chat/anthropic", true},
+		{"https://api.MiniMax.io/v1", true},
+		{"https://gateway.example.com/v1", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.baseURL, func(t *testing.T) {
+			assert.Equal(t, tc.want, isMiniMax(tc.baseURL))
+		})
+	}
+}
+
+func TestAnthropicNode_Execute_RoutesToMiniMaxWhenProviderIsMiniMax(t *testing.T) {
+	// The httptest server imitates MiniMax's Anthropic-compatible
+	// surface — same /v1/messages route, same response shape. We
+	// verify the node POSTs there when `provider: "MiniMax"`.
+	srv, _, getBody := fakeAnthropicServer(t)
+	defer srv.Close()
+
+	n := newAnthropicNodePointingAt(t, srv)
+
+	_, err := n.Execute(
+		[]model.DataItem{{JSON: map[string]interface{}{}}},
+		map[string]interface{}{
+			"apiKey":   "minimax-key-xyz",
+			"prompt":   "Hello",
+			"provider": "MiniMax",
+			"model":    "MiniMax-M3",
+		},
+	)
+	require.NoError(t, err)
+	body := getBody()
+	assert.Equal(t, "MiniMax-M3", body["model"], "request body should reflect chosen model")
+}
+
+func TestAnthropicNode_Execute_ResultItemIncludesProviderAndBaseURL(t *testing.T) {
+	srv, _, _ := fakeAnthropicServer(t)
+	defer srv.Close()
+
+	n := newAnthropicNodePointingAt(t, srv)
+
+	result, err := n.Execute(
+		[]model.DataItem{{JSON: map[string]interface{}{}}},
+		map[string]interface{}{
+			"apiKey":   "k",
+			"prompt":   "hi",
+			"provider": "MiniMax",
+		},
+	)
+	require.NoError(t, err)
+	require.Len(t, result, 1)
+	assert.Equal(t, "MiniMax", result[0].JSON["provider"])
+	assert.Equal(t, defaultMiniMaxBaseURL, result[0].JSON["baseUrl"])
+}
+
+func TestAnthropicNode_Execute_SendsBothAuthHeaders(t *testing.T) {
+	srv, getReq, _ := fakeAnthropicServer(t)
+	defer srv.Close()
+
+	n := newAnthropicNodePointingAt(t, srv)
+
+	_, err := n.Execute(
+		[]model.DataItem{{JSON: map[string]interface{}{}}},
+		map[string]interface{}{
+			"apiKey":   "secret-key",
+			"prompt":   "hi",
+			"provider": "MiniMax",
+		},
+	)
+	require.NoError(t, err)
+	req := getReq()
+	require.NotNil(t, req)
+	assert.Equal(t, "secret-key", req.Header.Get("x-api-key"))
+	assert.Equal(t, "Bearer secret-key", req.Header.Get("Authorization"))
+	assert.Equal(t, "2023-06-01", req.Header.Get("anthropic-version"))
+}
+
+func TestAnthropicNode_Execute_DefaultProviderIsAnthropic(t *testing.T) {
+	srv, _, getBody := fakeAnthropicServer(t)
+	defer srv.Close()
+
+	n := newAnthropicNodePointingAt(t, srv)
+
+	result, err := n.Execute(
+		[]model.DataItem{{JSON: map[string]interface{}{}}},
+		map[string]interface{}{
+			"apiKey": "k",
+			"prompt": "hi",
+		},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, "anthropic", result[0].JSON["provider"])
+	assert.Equal(t, defaultAnthropicBaseURL, result[0].JSON["baseUrl"])
+	body := getBody()
+	assert.Equal(t, "claude-3-5-sonnet-20241022", body["model"])
+}

@@ -240,6 +240,19 @@ external_services:
   anthropic:
     api_key: ""
     default_model: "claude-3-sonnet-20240229"
+    # Optional override for the Anthropic-compatible endpoint. When set,
+    # both the Anthropic workflow node and the in-app copilot route
+    # through this URL instead of api.anthropic.com.
+    # M9M_ANTHROPIC_BASE_URL takes precedence at runtime.
+    base_url: ""
+
+  # Anthropic-compatible provider (MiniMax-M3 etc). The same node
+  # executor handles both — flip the per-node "provider" parameter to
+  # "MiniMax" or set M9M_MINIMAX_BASE_URL globally to route every call.
+  minimax:
+    api_key: ""
+    default_model: "MiniMax-M3"
+    base_url: "https://api.MiniMax.chat/v1"
 
   # Cloud Providers
   aws:

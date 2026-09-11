@@ -80,7 +80,7 @@ var EnterpriseData = []EnterpriseFeature{
 	{"Dead Letter Queue", "Built-in", "Not available"},
 	{"Prometheus Metrics", "Built-in", "Community plugin"},
 	{"OpenTelemetry Tracing", "Built-in", "Not available"},
-	{"AI Copilot (MCP)", "Built-in", "Not available"},
+	{"AI Assistant (MCP)", "Built-in", "Not available"},
 	{"Hot-Reload Plugins", "Built-in", "Restart required"},
 	{"Workflow Versioning", "Built-in", "Enterprise only"},
 	{"Multi-Workspace", "Built-in", "Enterprise only"},

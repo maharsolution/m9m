@@ -72,9 +72,20 @@ helm install m9m m9m/m9m
 | `M9M_DB_POSTGRES_URL` | PostgreSQL connection URL | - |
 | `M9M_QUEUE_TYPE` | Queue type (memory/redis/rabbitmq) | `memory` |
 | `M9M_QUEUE_URL` | Queue connection URL | - |
-| `M9M_COPILOT_PROVIDER` | AI provider (openai/anthropic/ollama) | - |
-| `M9M_COPILOT_API_KEY` | AI API key | - |
-| `M9M_COPILOT_MODEL` | AI model name | `gpt-4` |
+| `M9M_AI_PROVIDER`     | AI provider (openai/anthropic/minimax/ollama)        | - |
+| `M9M_AI_API_KEY`      | AI API key                                            | - |
+| `M9M_AI_BASE_URL`     | AI base URL (overrides provider default)              | - |
+| `M9M_AI_MODEL`        | AI model name                                         | `gpt-4o` |
+| `M9M_AI_MAX_TOKENS`   | AI max tokens                                         | `4096` |
+| `M9M_AI_TEMPERATURE`  | AI temperature                                        | `0.7` |
+| `M9M_AI_TIMEOUT_MS`   | AI request timeout (ms)                               | `60000` |
+| `M9M_AI_ENABLED`      | Master switch for the in-app AI assistant             | `false` |
+
+> The env-var path is preserved for headless deployments; the recommended
+> path is now **Settings → AI** in the web UI, which writes to the same
+> DB store and takes effect live (no restart). The legacy
+> `M9M_COPILOT_*` variables are still honoured as deprecated aliases
+> for backward compatibility.
 
 ## Architecture
 

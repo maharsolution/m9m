@@ -1,5 +1,10 @@
-// Package copilot provides AI-powered workflow assistance
-package copilot
+// Package ai provides the in-app AI assistant that powers workflow
+// generation, node suggestions, error fixes, and conversational
+// workflow building. It runs against any OpenAI-compatible, Anthropic,
+// Anthropic-compatible (MiniMax), or Ollama endpoint, configured either
+// through environment variables or live from the Settings → AI page
+// (env-default with DB-override, same pattern as Settings → Telemetry).
+package ai
 
 import (
 	"bytes"
@@ -15,17 +20,19 @@ import (
 	"github.com/neul-labs/m9m/internal/model"
 )
 
-// Provider represents an AI provider
+// Provider represents an AI provider.
 type Provider string
 
 const (
 	ProviderOpenAI    Provider = "openai"
 	ProviderAnthropic Provider = "anthropic"
+	ProviderMiniMax   Provider = "minimax" // Anthropic-compatible wire shape
 	ProviderOllama    Provider = "ollama"
 )
 
-// Config configures the copilot service
+// Config configures the AI service.
 type Config struct {
+	Enabled     bool          // master switch — when false, AI calls are short-circuited
 	Provider    Provider
 	APIKey      string
 	BaseURL     string
@@ -35,7 +42,7 @@ type Config struct {
 	Timeout     time.Duration
 }
 
-// DefaultConfig returns default configuration
+// DefaultConfig returns the default AI configuration.
 func DefaultConfig() *Config {
 	return &Config{
 		Provider:    ProviderOpenAI,
@@ -46,14 +53,16 @@ func DefaultConfig() *Config {
 	}
 }
 
-// Copilot provides AI-powered workflow assistance
-type Copilot struct {
+// AI provides the in-app AI assistant: workflow generation, node
+// suggestions, explanation, error fixes, and chat. Construct one with
+// NewAI; the Runtime type (see runtime.go) handles live config swaps.
+type AI struct {
 	config     *Config
 	httpClient *http.Client
 	nodeTypes  []NodeTypeInfo
 }
 
-// NodeTypeInfo describes available node types
+// NodeTypeInfo describes an available node type.
 type NodeTypeInfo struct {
 	Type        string `json:"type"`
 	Name        string `json:"name"`
@@ -61,13 +70,14 @@ type NodeTypeInfo struct {
 	Category    string `json:"category"`
 }
 
-// NewCopilot creates a new copilot instance
-func NewCopilot(config *Config) *Copilot {
+// NewAI creates a new AI assistant. config may be nil, in which case
+// DefaultConfig is used.
+func NewAI(config *Config) *AI {
 	if config == nil {
 		config = DefaultConfig()
 	}
 
-	return &Copilot{
+	return &AI{
 		config: config,
 		httpClient: &http.Client{
 			Timeout: config.Timeout,
@@ -76,32 +86,36 @@ func NewCopilot(config *Config) *Copilot {
 	}
 }
 
-// GenerateWorkflowRequest represents a request to generate a workflow
+// Config returns the AI service's current configuration. Callers should
+// not mutate the returned pointer; use Runtime.Apply for live changes.
+func (a *AI) Config() *Config { return a.config }
+
+// GenerateWorkflowRequest represents a request to generate a workflow.
 type GenerateWorkflowRequest struct {
 	Description string                 `json:"description"`
 	Context     map[string]interface{} `json:"context,omitempty"`
 }
 
-// GenerateWorkflowResponse represents the response from workflow generation
+// GenerateWorkflowResponse represents the response from workflow generation.
 type GenerateWorkflowResponse struct {
 	Workflow    *model.Workflow `json:"workflow"`
 	Explanation string          `json:"explanation"`
 	Suggestions []string        `json:"suggestions,omitempty"`
 }
 
-// SuggestNodesRequest represents a request for node suggestions
+// SuggestNodesRequest represents a request for node suggestions.
 type SuggestNodesRequest struct {
 	CurrentWorkflow *model.Workflow `json:"currentWorkflow,omitempty"`
 	SelectedNode    string          `json:"selectedNode,omitempty"`
 	UserQuery       string          `json:"userQuery"`
 }
 
-// SuggestNodesResponse represents node suggestions
+// SuggestNodesResponse represents node suggestions.
 type SuggestNodesResponse struct {
 	Suggestions []NodeSuggestion `json:"suggestions"`
 }
 
-// NodeSuggestion represents a suggested node
+// NodeSuggestion represents a suggested node.
 type NodeSuggestion struct {
 	Type        string                 `json:"type"`
 	Name        string                 `json:"name"`
@@ -111,12 +125,12 @@ type NodeSuggestion struct {
 	Confidence  float64                `json:"confidence"`
 }
 
-// ExplainWorkflowRequest represents a request to explain a workflow
+// ExplainWorkflowRequest represents a request to explain a workflow.
 type ExplainWorkflowRequest struct {
 	Workflow *model.Workflow `json:"workflow"`
 }
 
-// ExplainWorkflowResponse represents workflow explanation
+// ExplainWorkflowResponse represents workflow explanation.
 type ExplainWorkflowResponse struct {
 	Summary     string            `json:"summary"`
 	NodeDetails []NodeExplanation `json:"nodeDetails"`
@@ -124,30 +138,30 @@ type ExplainWorkflowResponse struct {
 	Suggestions []string          `json:"suggestions,omitempty"`
 }
 
-// NodeExplanation explains a single node
+// NodeExplanation explains a single node.
 type NodeExplanation struct {
-	NodeName    string `json:"nodeName"`
-	Purpose     string `json:"purpose"`
-	InputData   string `json:"inputData"`
-	OutputData  string `json:"outputData"`
+	NodeName   string `json:"nodeName"`
+	Purpose    string `json:"purpose"`
+	InputData  string `json:"inputData"`
+	OutputData string `json:"outputData"`
 }
 
-// FixErrorRequest represents a request to fix an error
+// FixErrorRequest represents a request to fix an error.
 type FixErrorRequest struct {
-	Workflow     *model.Workflow `json:"workflow"`
-	ErrorMessage string          `json:"errorMessage"`
-	FailedNode   string          `json:"failedNode"`
-	ExecutionData interface{}    `json:"executionData,omitempty"`
+	Workflow      *model.Workflow `json:"workflow"`
+	ErrorMessage  string          `json:"errorMessage"`
+	FailedNode    string          `json:"failedNode"`
+	ExecutionData interface{}     `json:"executionData,omitempty"`
 }
 
-// FixErrorResponse represents error fix suggestions
+// FixErrorResponse represents error fix suggestions.
 type FixErrorResponse struct {
-	Diagnosis   string           `json:"diagnosis"`
-	Fixes       []ErrorFix       `json:"fixes"`
-	Prevention  string           `json:"prevention"`
+	Diagnosis  string     `json:"diagnosis"`
+	Fixes      []ErrorFix `json:"fixes"`
+	Prevention string     `json:"prevention"`
 }
 
-// ErrorFix represents a suggested fix
+// ErrorFix represents a suggested fix.
 type ErrorFix struct {
 	Description string                 `json:"description"`
 	NodeChanges map[string]interface{} `json:"nodeChanges,omitempty"`
@@ -155,96 +169,86 @@ type ErrorFix struct {
 	AutoApply   bool                   `json:"autoApply"`
 }
 
-// ChatMessage represents a chat message
+// ChatMessage represents a chat message.
 type ChatMessage struct {
 	Role    string `json:"role"` // user, assistant, system
 	Content string `json:"content"`
 }
 
-// ChatRequest represents a chat request
+// ChatRequest represents a chat request.
 type ChatRequest struct {
 	Messages        []ChatMessage   `json:"messages"`
 	CurrentWorkflow *model.Workflow `json:"currentWorkflow,omitempty"`
 }
 
-// ChatResponse represents a chat response
+// ChatResponse represents a chat response.
 type ChatResponse struct {
 	Message         string          `json:"message"`
 	WorkflowChanges *model.Workflow `json:"workflowChanges,omitempty"`
 	Actions         []ChatAction    `json:"actions,omitempty"`
 }
 
-// ChatAction represents a suggested action from chat
+// ChatAction represents a suggested action from chat.
 type ChatAction struct {
 	Type        string                 `json:"type"` // add_node, modify_node, delete_node, connect_nodes
 	Description string                 `json:"description"`
 	Data        map[string]interface{} `json:"data"`
 }
 
-// GenerateWorkflow generates a workflow from a description
-func (c *Copilot) GenerateWorkflow(ctx context.Context, req *GenerateWorkflowRequest) (*GenerateWorkflowResponse, error) {
-	prompt := c.buildGenerateWorkflowPrompt(req)
-
-	response, err := c.callLLM(ctx, prompt)
+// GenerateWorkflow generates a workflow from a description.
+func (a *AI) GenerateWorkflow(ctx context.Context, req *GenerateWorkflowRequest) (*GenerateWorkflowResponse, error) {
+	prompt := a.buildGenerateWorkflowPrompt(req)
+	response, err := a.callLLM(ctx, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call LLM: %w", err)
 	}
-
-	return c.parseGenerateWorkflowResponse(response)
+	return a.parseGenerateWorkflowResponse(response)
 }
 
-// SuggestNodes suggests nodes based on context
-func (c *Copilot) SuggestNodes(ctx context.Context, req *SuggestNodesRequest) (*SuggestNodesResponse, error) {
-	prompt := c.buildSuggestNodesPrompt(req)
-
-	response, err := c.callLLM(ctx, prompt)
+// SuggestNodes suggests nodes based on context.
+func (a *AI) SuggestNodes(ctx context.Context, req *SuggestNodesRequest) (*SuggestNodesResponse, error) {
+	prompt := a.buildSuggestNodesPrompt(req)
+	response, err := a.callLLM(ctx, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call LLM: %w", err)
 	}
-
-	return c.parseSuggestNodesResponse(response)
+	return a.parseSuggestNodesResponse(response)
 }
 
-// ExplainWorkflow explains a workflow in natural language
-func (c *Copilot) ExplainWorkflow(ctx context.Context, req *ExplainWorkflowRequest) (*ExplainWorkflowResponse, error) {
-	prompt := c.buildExplainWorkflowPrompt(req)
-
-	response, err := c.callLLM(ctx, prompt)
+// ExplainWorkflow explains a workflow in natural language.
+func (a *AI) ExplainWorkflow(ctx context.Context, req *ExplainWorkflowRequest) (*ExplainWorkflowResponse, error) {
+	prompt := a.buildExplainWorkflowPrompt(req)
+	response, err := a.callLLM(ctx, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call LLM: %w", err)
 	}
-
-	return c.parseExplainWorkflowResponse(response)
+	return a.parseExplainWorkflowResponse(response)
 }
 
-// FixError suggests fixes for workflow errors
-func (c *Copilot) FixError(ctx context.Context, req *FixErrorRequest) (*FixErrorResponse, error) {
-	prompt := c.buildFixErrorPrompt(req)
-
-	response, err := c.callLLM(ctx, prompt)
+// FixError suggests fixes for workflow errors.
+func (a *AI) FixError(ctx context.Context, req *FixErrorRequest) (*FixErrorResponse, error) {
+	prompt := a.buildFixErrorPrompt(req)
+	response, err := a.callLLM(ctx, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call LLM: %w", err)
 	}
-
-	return c.parseFixErrorResponse(response)
+	return a.parseFixErrorResponse(response)
 }
 
-// Chat handles conversational workflow building
-func (c *Copilot) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
-	prompt := c.buildChatPrompt(req)
-
-	response, err := c.callLLM(ctx, prompt)
+// Chat handles conversational workflow building.
+func (a *AI) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
+	prompt := a.buildChatPrompt(req)
+	response, err := a.callLLM(ctx, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call LLM: %w", err)
 	}
-
-	return c.parseChatResponse(response)
+	return a.parseChatResponse(response)
 }
 
 // Prompt builders
 
-func (c *Copilot) buildGenerateWorkflowPrompt(req *GenerateWorkflowRequest) string {
-	nodeTypesJSON, _ := json.Marshal(c.nodeTypes)
+func (a *AI) buildGenerateWorkflowPrompt(req *GenerateWorkflowRequest) string {
+	nodeTypesJSON, _ := json.Marshal(a.nodeTypes)
 
 	return fmt.Sprintf(`You are an expert workflow automation assistant for m9m, an agent-native workflow platform.
 
@@ -289,8 +293,8 @@ IMPORTANT: Generate valid JSON only. The workflow must follow this structure:
 }`, string(nodeTypesJSON), req.Description)
 }
 
-func (c *Copilot) buildSuggestNodesPrompt(req *SuggestNodesRequest) string {
-	nodeTypesJSON, _ := json.Marshal(c.nodeTypes)
+func (a *AI) buildSuggestNodesPrompt(req *SuggestNodesRequest) string {
+	nodeTypesJSON, _ := json.Marshal(a.nodeTypes)
 	workflowJSON := ""
 	if req.CurrentWorkflow != nil {
 		wfBytes, _ := json.Marshal(req.CurrentWorkflow)
@@ -324,7 +328,7 @@ Suggest the most appropriate nodes to add. Respond with JSON:
 }`, string(nodeTypesJSON), workflowJSON, req.SelectedNode, req.UserQuery)
 }
 
-func (c *Copilot) buildExplainWorkflowPrompt(req *ExplainWorkflowRequest) string {
+func (a *AI) buildExplainWorkflowPrompt(req *ExplainWorkflowRequest) string {
 	workflowJSON, _ := json.Marshal(req.Workflow)
 
 	return fmt.Sprintf(`Explain this workflow in simple terms:
@@ -347,7 +351,7 @@ Respond with JSON:
 }`, string(workflowJSON))
 }
 
-func (c *Copilot) buildFixErrorPrompt(req *FixErrorRequest) string {
+func (a *AI) buildFixErrorPrompt(req *FixErrorRequest) string {
 	workflowJSON, _ := json.Marshal(req.Workflow)
 
 	return fmt.Sprintf(`A workflow execution failed. Help diagnose and fix the issue.
@@ -373,8 +377,8 @@ Respond with JSON:
 }`, string(workflowJSON), req.FailedNode, req.ErrorMessage)
 }
 
-func (c *Copilot) buildChatPrompt(req *ChatRequest) string {
-	nodeTypesJSON, _ := json.Marshal(c.nodeTypes)
+func (a *AI) buildChatPrompt(req *ChatRequest) string {
+	nodeTypesJSON, _ := json.Marshal(a.nodeTypes)
 	workflowJSON := ""
 	if req.CurrentWorkflow != nil {
 		wfBytes, _ := json.Marshal(req.CurrentWorkflow)
@@ -413,32 +417,34 @@ Respond helpfully. If suggesting workflow changes, include them in JSON format:
 
 // LLM integration
 
-func (c *Copilot) callLLM(ctx context.Context, prompt string) (string, error) {
-	switch c.config.Provider {
+func (a *AI) callLLM(ctx context.Context, prompt string) (string, error) {
+	switch a.config.Provider {
 	case ProviderOpenAI:
-		return c.callOpenAI(ctx, prompt)
-	case ProviderAnthropic:
-		return c.callAnthropic(ctx, prompt)
+		return a.callOpenAI(ctx, prompt)
+	case ProviderAnthropic, ProviderMiniMax:
+		// MiniMax exposes an Anthropic-compatible /v1/messages surface,
+		// so the same call path works for both.
+		return a.callAnthropic(ctx, prompt)
 	case ProviderOllama:
-		return c.callOllama(ctx, prompt)
+		return a.callOllama(ctx, prompt)
 	default:
-		return "", fmt.Errorf("unsupported provider: %s", c.config.Provider)
+		return "", fmt.Errorf("unsupported provider: %s", a.config.Provider)
 	}
 }
 
-func (c *Copilot) callOpenAI(ctx context.Context, prompt string) (string, error) {
-	baseURL := c.config.BaseURL
+func (a *AI) callOpenAI(ctx context.Context, prompt string) (string, error) {
+	baseURL := a.config.BaseURL
 	if baseURL == "" {
 		baseURL = "https://api.openai.com/v1"
 	}
 
 	requestBody := map[string]interface{}{
-		"model": c.config.Model,
+		"model": a.config.Model,
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt},
 		},
-		"max_tokens":  c.config.MaxTokens,
-		"temperature": c.config.Temperature,
+		"max_tokens":  a.config.MaxTokens,
+		"temperature": a.config.Temperature,
 	}
 
 	body, _ := json.Marshal(requestBody)
@@ -448,9 +454,9 @@ func (c *Copilot) callOpenAI(ctx context.Context, prompt string) (string, error)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.config.APIKey)
+	req.Header.Set("Authorization", "Bearer "+a.config.APIKey)
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := a.httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -484,11 +490,11 @@ func (c *Copilot) callOpenAI(ctx context.Context, prompt string) (string, error)
 	return result.Choices[0].Message.Content, nil
 }
 
-func (c *Copilot) callAnthropic(ctx context.Context, prompt string) (string, error) {
-	baseURL := c.config.BaseURL
+func (a *AI) callAnthropic(ctx context.Context, prompt string) (string, error) {
+	baseURL := a.config.BaseURL
 	if baseURL == "" {
 		// Honour MiniMax first when its env var is set, so operators
-		// can route the in-app copilot through the same gateway as
+		// can route the AI assistant through the same gateway as
 		// their Anthropic-compatible workflow calls.
 		if u := strings.TrimSpace(os.Getenv("M9M_MINIMAX_BASE_URL")); u != "" {
 			baseURL = strings.TrimRight(u, "/")
@@ -500,8 +506,8 @@ func (c *Copilot) callAnthropic(ctx context.Context, prompt string) (string, err
 	}
 
 	requestBody := map[string]interface{}{
-		"model":      c.config.Model,
-		"max_tokens": c.config.MaxTokens,
+		"model":      a.config.Model,
+		"max_tokens": a.config.MaxTokens,
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt},
 		},
@@ -514,10 +520,10 @@ func (c *Copilot) callAnthropic(ctx context.Context, prompt string) (string, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", c.config.APIKey)
+	req.Header.Set("x-api-key", a.config.APIKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := a.httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -549,14 +555,14 @@ func (c *Copilot) callAnthropic(ctx context.Context, prompt string) (string, err
 	return result.Content[0].Text, nil
 }
 
-func (c *Copilot) callOllama(ctx context.Context, prompt string) (string, error) {
-	baseURL := c.config.BaseURL
+func (a *AI) callOllama(ctx context.Context, prompt string) (string, error) {
+	baseURL := a.config.BaseURL
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
 	}
 
 	requestBody := map[string]interface{}{
-		"model":  c.config.Model,
+		"model":  a.config.Model,
 		"prompt": prompt,
 		"stream": false,
 	}
@@ -569,7 +575,7 @@ func (c *Copilot) callOllama(ctx context.Context, prompt string) (string, error)
 
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := a.httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -593,85 +599,61 @@ func (c *Copilot) callOllama(ctx context.Context, prompt string) (string, error)
 
 // Response parsers
 
-func (c *Copilot) parseGenerateWorkflowResponse(response string) (*GenerateWorkflowResponse, error) {
-	// Extract JSON from response (may be wrapped in markdown)
+func (a *AI) parseGenerateWorkflowResponse(response string) (*GenerateWorkflowResponse, error) {
 	jsonStr := extractJSON(response)
-
 	var result GenerateWorkflowResponse
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-		// Try to create a basic response
 		return &GenerateWorkflowResponse{
 			Explanation: response,
 			Suggestions: []string{"Could not parse workflow. Please try a more specific description."},
 		}, nil
 	}
-
 	return &result, nil
 }
 
-func (c *Copilot) parseSuggestNodesResponse(response string) (*SuggestNodesResponse, error) {
+func (a *AI) parseSuggestNodesResponse(response string) (*SuggestNodesResponse, error) {
 	jsonStr := extractJSON(response)
-
 	var result SuggestNodesResponse
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-		return &SuggestNodesResponse{
-			Suggestions: []NodeSuggestion{},
-		}, nil
+		return &SuggestNodesResponse{Suggestions: []NodeSuggestion{}}, nil
 	}
-
 	return &result, nil
 }
 
-func (c *Copilot) parseExplainWorkflowResponse(response string) (*ExplainWorkflowResponse, error) {
+func (a *AI) parseExplainWorkflowResponse(response string) (*ExplainWorkflowResponse, error) {
 	jsonStr := extractJSON(response)
-
 	var result ExplainWorkflowResponse
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-		return &ExplainWorkflowResponse{
-			Summary: response,
-		}, nil
+		return &ExplainWorkflowResponse{Summary: response}, nil
 	}
-
 	return &result, nil
 }
 
-func (c *Copilot) parseFixErrorResponse(response string) (*FixErrorResponse, error) {
+func (a *AI) parseFixErrorResponse(response string) (*FixErrorResponse, error) {
 	jsonStr := extractJSON(response)
-
 	var result FixErrorResponse
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-		return &FixErrorResponse{
-			Diagnosis: response,
-		}, nil
+		return &FixErrorResponse{Diagnosis: response}, nil
 	}
-
 	return &result, nil
 }
 
-func (c *Copilot) parseChatResponse(response string) (*ChatResponse, error) {
+func (a *AI) parseChatResponse(response string) (*ChatResponse, error) {
 	jsonStr := extractJSON(response)
-
 	var result ChatResponse
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-		// Just return the text as a message
-		return &ChatResponse{
-			Message: response,
-		}, nil
+		return &ChatResponse{Message: response}, nil
 	}
-
 	return &result, nil
 }
 
 // Helper functions
 
 func extractJSON(text string) string {
-	// Try to find JSON in the response
 	start := strings.Index(text, "{")
 	if start == -1 {
 		return text
 	}
-
-	// Find matching closing brace
 	depth := 0
 	for i := start; i < len(text); i++ {
 		if text[i] == '{' {
@@ -683,7 +665,6 @@ func extractJSON(text string) string {
 			}
 		}
 	}
-
 	return text[start:]
 }
 

@@ -4,6 +4,8 @@
 
 m9m is an open-source workflow automation platform written in Go. It runs n8n workflow JSON unchanged, executes 5–10× faster, uses 70% less memory, and ships as a single 30 MB binary with zero runtime dependencies. No Node.js, no npm tree, no event-loop stalls.
 
+**Live webhook parity with n8n: 19/19 cases passing** (14 positive + 5 negative) as of the 2026-09-10 cycle.
+
 [![Build Status](https://img.shields.io/github/actions/workflow/status/neul-labs/m9m/ci.yml?branch=main&style=flat-square&logo=github)](https://github.com/neul-labs/m9m/actions)
 [![Go Report Card](https://goreportcard.com/badge/github.com/neul-labs/m9m?style=flat-square)](https://goreportcard.com/report/github.com/neul-labs/m9m)
 [![Coverage](https://img.shields.io/codecov/c/github/neul-labs/m9m?style=flat-square&logo=codecov)](https://codecov.io/gh/neul-labs/m9m)
@@ -26,8 +28,12 @@ m9m demo
 - [Install](#install)
 - [Use cases](#use-cases)
 - [Drop-in n8n compatibility](#drop-in-n8n-compatibility)
+- [Built-in integrations](#built-in-integrations)
+- [AI assistant (in-app)](#ai-assistant-in-app)
+- [Telemetry & observability](#telemetry--observability)
 - [Ecosystem](#ecosystem)
 - [FAQ](#faq)
+- [Recent highlights (2026-09 cycle)](#recent-highlights-2026-09-cycle)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
 - [License](#license)
@@ -56,6 +62,7 @@ m9m is open source under the MIT license, ships for macOS, Linux, and Windows on
 | **Runtime** | Single static Go binary | Node.js + ~1,000 npm packages |
 | **Deterministic execution** | Yes | No (event-loop ordering) |
 | **n8n workflow JSON** | Runs unchanged | Native |
+| **n8n webhook parity** | **19/19 cases** (14 pos + 5 neg) | Native |
 | **MCP server for Claude Code** | Built in (37 tools) | Not available |
 | **License** | MIT | Sustainable Use License |
 
@@ -162,6 +169,10 @@ m9m exec my-n8n-workflow.json
 - Trigger types (webhooks, cron schedules)
 - Credential formats and environment variables
 - REST API endpoints (n8n-compatible surface)
+- Webhook wire shape (headers, status codes, response bodies, Content-Type priority)
+- JWT auth (RS256/HS256), basic auth, header auth — `X-N8N-API-KEY` compatible
+- Execution semantics: `$(NodeName)` resolution, `runIndex`, `RunAwareNodeExecutor`
+- IF v2 boolean operators, Switch rule routing, splitInBatches loop semantics
 
 **What doesn't (yet):**
 
@@ -169,6 +180,18 @@ m9m exec my-n8n-workflow.json
 - n8n Cloud–specific features
 - Live database sharing with an existing n8n instance
 - The n8n web UI (m9m ships its own)
+
+### n8n webhook parity — 19/19 (2026-09-10)
+
+The live parity suite runs 19 webhook cases (14 positive + 5 negative) against a production n8n instance and an m9m instance side-by-side, verifying identical HTTP responses, headers, status codes, and execution semantics. The 2026-09-10 cycle resolved the last two long-standing gaps (IF/Switch routing leaks + Postgres `sslMode`) — the full per-case report and the cycle-by-cycle diff are kept inside the repository.
+
+| Suite | Cases | Status |
+|---|---|---|
+| Positive webhook tests | 14 | ✅ PASS |
+| Negative webhook tests | 5 | ✅ PASS |
+| **Total** | **19** | **✅ 19/19** |
+
+Coverage includes: Webhook → Code, Webhook → Switch (route), Webhook → HTTP basic auth, Webhook → Set (assign + formula), Webhook → XML (`jsonToxml` / `xmlTojson`), Webhook → Code → Loop → Response, Webhook → Code → IF (Pay validation), Webhook → IF (mysql/postgres switch), plus negative cases for malformed JSON, auth failures, and missing routes.
 
 Full migration guide: [docs/migration/from-n8n.md](docs/migration/from-n8n.md).
 
@@ -179,17 +202,118 @@ Full migration guide: [docs/migration/from-n8n.md](docs/migration/from-n8n.md).
 | Category | Nodes |
 |---|---|
 | **Databases** | PostgreSQL, MySQL, SQLite, MongoDB, Redis, Elasticsearch |
-| **Cloud storage** | AWS S3, GCP Cloud Storage, Azure Blob |
+| **Cloud** | AWS S3, AWS Lambda, Azure Blob Storage, GCP Cloud Storage |
 | **AI / LLM** | OpenAI (GPT-4), Anthropic Claude |
 | **Messaging** | Slack, Discord, Twilio, Microsoft Teams |
-| **Email** | SMTP, SendGrid |
+| **Email** | SMTP (`sendEmail`), SendGrid |
 | **Version control** | GitHub, GitLab |
 | **Productivity** | Notion, Stripe, Google Sheets |
-| **CLI agents** | Claude Code, Codex, Aider (sandboxed) |
-| **HTTP / Webhooks** | HTTP Request, Webhook trigger |
-| **Logic** | Set, Filter, Code, Function, Merge, JSON, If, Loop, Cron |
+| **CLI agents** | Claude Code, Codex, Aider (sandboxed), `executeCommand` |
+| **HTTP / Webhooks** | HTTP Request, Webhook trigger, Respond to Webhook |
+| **Data formats** | JSON, XML (jsonToxml / xmlTojson) |
+| **Files** | Read Binary File, Write Binary File |
+| **Code execution** | Code (JS via Goja), Function, Python Code |
+| **Logic & flow** | Set, Filter, Merge, Item Lists, If, Switch, Loop, Cron, splitInBatches, Wait, NoOp, Execute Workflow |
 
-Run `m9m node list` for the full catalog. Custom logic in JavaScript or Python when you need it.
+Run `m9m node list` for the full catalog. 42 executors registered in `cmd/m9m/commands/exec.go::RegisterAllNodes`. Custom logic in JavaScript (Code / Function) or Python (Python Code) when you need it.
+
+---
+
+## AI assistant (in-app)
+
+The in-app **AI assistant** powers workflow generation, node suggestions, error fixes, and chat. It is configured live from **Settings → AI** — provider, base URL, API key, model, max tokens, and temperature override env defaults without a restart. Supports **OpenAI** (GPT-4o, o1, o3, …), **Anthropic** (Claude Opus 4.1, Sonnet 4.5, Haiku 4.5), **MiniMax-M3** (Anthropic-compatible wire shape), and **Ollama** (local, no key). The same Settings card drives the in-app agent and the workflow `openAi` / `anthropic` nodes — both share the resolved runtime, so a change in Settings is picked up by the next workflow execution as well.
+
+---
+
+## Telemetry & observability
+
+m9m ships production-grade observability out of the box — no extra agents, no paid tiers. Every workflow execution, node call, AI agent invocation, database query, and webhook is instrumented by default and exported through three complementary surfaces.
+
+### What's emitted
+
+| Signal | Source | Format | Default endpoint |
+|---|---|---|---|
+| **Metrics** | Engine, queue, scheduler, node registry | Prometheus text | `:9090/metrics` (when started with `--metrics-port`) |
+| **Traces** | Workflow span → per-node span → AI agent span | OpenTelemetry (OTLP gRPC + HTTP) | Disabled by default — flip on via env, DB, or UI |
+| **Logs** | Engine + nodes, with correlation IDs | Structured (JSON in prod, text in dev) | stderr |
+| **Health** | Storage, queue, OTEL pipeline, dependency health | JSON | `GET /healthz`, `GET /readyz` |
+
+### OpenTelemetry tracing — what your workflows get
+
+Every workflow execution produces a span tree:
+
+```
+workflow.execute                          (workflow_id, mode, status)
+├── node.execute  (n8n-nodes-base.httpRequest)
+├── node.execute  (n8n-nodes-base.set)
+└── node.execute  (n8n-nodes-base.code)
+    └── agent.generate  (openAi / anthropic, model, tokens)
+```
+
+Spans carry `workflow.id`, `workflow.name`, `node.type`, `node.name`, `execution.id`, `execution.mode`, plus standard `service.name=m9m`, `service.version=<git-sha>` resource attributes.
+
+### Configuration
+
+Three layers, resolved in this priority order (highest wins):
+
+1. **Live UI toggle** — flip tracing on/off from **Settings → Telemetry** without a restart. The UI writes to the DB; the engine reloads on next execution.
+2. **DB override** — `m9m.otel_config` row in the active storage backend. Survives restarts, overrides env.
+3. **Environment variables** — standard OpenTelemetry vars take effect at boot:
+   - `OTEL_SDK_DISABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_PROTOCOL` (grpc | http/protobuf | http/json)
+   - `OTEL_SERVICE_NAME` (defaults to `m9m`), `OTEL_RESOURCE_ATTRIBUTES`
+   - m9m-specific: `M9M_OTEL_ENABLED`, `M9M_OTEL_ENDPOINT`, `M9M_OTEL_PROTOCOL`, `M9M_OTEL_HEADERS`, `M9M_OTEL_SAMPLE_RATIO` — these win over the standard `OTEL_*` vars
+
+A sanitised `.env.example` is checked in; the typo'd local `,env` is git-ignored.
+
+### Prometheus metrics — what's exposed
+
+Representative metrics (full list at `GET /metrics`):
+
+```
+# Workflow
+m9m_workflow_executions_total{workflow_id, workflow_name, status, mode}
+m9m_workflow_duration_seconds{workflow_id, workflow_name}     histogram
+m9m_workflow_errors_total{workflow_id, error_type}
+m9m_workflow_concurrent_executions                            gauge
+
+# Nodes
+m9m_node_executions_total{node_type, status}
+m9m_node_duration_seconds{node_type}                          histogram
+
+# Queue + scheduler
+m9m_queue_jobs_total{queue, status}
+m9m_scheduler_next_run{workflow_id}                           gauge
+
+# HTTP / webhooks
+m9m_webhook_requests_total{path, status}
+m9m_webhook_duration_seconds{path}                            histogram
+
+# AI
+m9m_ai_tokens_total{provider, model, direction}               (input/output)
+```
+
+Scrape config (Prometheus):
+
+```yaml
+scrape_configs:
+  - job_name: m9m
+    static_configs:
+      - targets: ['m9m-host:9090']
+```
+
+### Health endpoints
+
+| Endpoint | Purpose | Used by |
+|---|---|---|
+| `GET /healthz` | Liveness — process is up | K8s livenessProbe |
+| `GET /readyz` | Readiness — storage, queue, OTEL pipeline reachable | K8s readinessProbe / load balancers |
+| `GET /metrics` | Prometheus exposition | Prometheus / VictoriaMetrics |
+
+### Debug mode
+
+Per-workflow debug flag in the UI: when ON, every node's full input and output is persisted with the execution (NDV-style Input / Output / Settings tabs). When OFF, only the last-actually-executed node's data is captured — keeps the executions table small for production.
+
+Full guide: [docs/monitoring/README.md](docs/monitoring/README.md).
 
 ---
 
@@ -226,13 +350,36 @@ Yes, natively. m9m ships a built-in MCP (Model Context Protocol) server with 37 
 Yes. Prebuilt Windows AMD64 binaries are on every GitHub release. macOS (Intel + Apple Silicon) and Linux (AMD64 + ARM64) are also first-class.
 
 ### Is m9m production-ready?
-Yes. Single static binary, Prometheus metrics, OpenTelemetry tracing, Git-based workflow versioning, audit logs, and multi-workspace support are all built in — not gated behind a paid tier. Production deployment guide: [docs/deployment/](docs/deployment/).
+Yes. Single static binary, Prometheus metrics, OpenTelemetry tracing (env-default + DB-override, toggleable live from the UI), `/healthz` + `/readyz` probes, Git-based workflow versioning, audit logs, multi-workspace support, per-workflow debug flag, and per-node retry are all built in — not gated behind a paid tier. Production deployment guide: [docs/deployment/](docs/deployment/).
+
+### Does m9m support OpenTelemetry tracing?
+Yes — full OTLP export (gRPC and HTTP/protobuf) with a three-layer config stack: standard `OTEL_SDK_*` env vars at boot, `M9M_OTEL_*` overrides, DB-stored config that survives restarts, and a Settings → Telemetry toggle that flips tracing on/off live without a restart. Every workflow produces a span tree (`workflow.execute` → `node.execute` → `agent.generate`) with `workflow.id`, `node.type`, `execution.id`, and `service.version=<git-sha>` resource attributes. See [Telemetry & observability](#telemetry--observability) above for the full config matrix and metrics list.
+
+### Has m9m actually been tested against a live n8n instance?
+Yes. A parity suite runs 19 webhook cases (14 positive + 5 negative) against a production n8n instance and an m9m instance side-by-side, and reports 19/19 PASS as of the 2026-09-10 cycle. The full per-case report with request/response diffs lives in the repository. Every n8n wire-shape fix from the last cycle (Content-Type priority, JWT auth, header auth, basic auth, malformed-JSON 422, response-body trim, IF v2 boolean operators, splitInBatches loop semantics, Postgres `sslMode`, respond-to-webhook unwrapping) is verified live, not just unit-tested.
 
 ### Is m9m free and open source?
 Yes. MIT-licensed. No "fair-use" clauses, no source-available restrictions, no commercial-use carveouts.
 
 ### How does m9m compare to Zapier or Make?
 Zapier and Make are hosted SaaS platforms; m9m is self-hosted open-source software you run on your own infrastructure. The right comparison is to n8n, Airflow, or Temporal — and m9m is faster than all three for the integration-automation use case.
+
+---
+
+## Recent highlights (2026-09 cycle)
+
+The September 2026 cycle focused on closing the remaining n8n wire-shape and execution-semantics gaps so m9m can serve as a true drop-in replacement behind the same webhook URLs:
+
+- **19/19 webhook parity with n8n** — all positive and negative cases PASS on the live side-by-side parity suite.
+- **n8n-style execution detail UI** — Input / Output / Settings tabs, Schema / Table / JSON views, sticky-note skipping, visible workflow edges with state-coloured execution edges.
+- **Per-workflow debug flag + per-node retry** — capture all node I/O only when debug is ON; `POST /executions/:id/retry-node` + "Retry from here" button.
+- **OpenTelemetry tracing (3-layer config)** — standard `OTEL_SDK_*` env vars accepted at boot, `M9M_OTEL_*` wins, DB-stored override survives restarts, **Settings → Telemetry** live toggle without restart. Workflow → node → AI-agent span tree with `service.version=<git-sha>` resource attribute.
+- **AI assistant with live Settings wiring** — full **Settings → AI** card (OpenAI / Anthropic Claude / MiniMax / Ollama, with per-provider model dropdown) using the same env-default + DB-override pattern as Telemetry; runtime swap is mutex-guarded so in-flight chat requests finish on the previous *AI. The in-app `Agent Copilot` is renamed to `AI` to reflect that it handles all providers, not just GitHub Copilot.
+- **Credential bridge** — sync from n8n Postgres (REST API strips the `data` field), seeded into m9m's in-memory store at startup, idempotent POST.
+- **XML node** — `n8n-nodes-base.xml` executor (`jsonToxml` / `xmlTojson`, case-insensitive mode spellings) + parity test script.
+- **Engine semantics** — `$(NodeName)` reads the most recent `runIndex`, `RunAwareNodeExecutor` for `$(NodeName).item.json` in Code nodes, splitInBatches anchor + done-branch scheduling stabilised, decorative nodes (sticky notes / comments) skipped.
+- **Database** — Postgres `sslMode=disable` default to match n8n, automatic `node_data` column migration for existing MySQL/Postgres tables.
+- **Build pipeline** — Vue frontend built inside Docker so `//go:embed dist/*` is non-empty; `web/dist` untracked and wiped in web-builder stage.
 
 ---
 

@@ -1,7 +1,11 @@
 <script setup lang="ts">
 /**
- * Agent Copilot Component
- * AI-powered workflow assistance for m9m
+ * AgentAI Component
+ *
+ * AI-powered workflow assistance for m9m. Replaces the legacy
+ * "Agent Copilot" panel. All HTTP traffic goes through /api/v1/ai/*;
+ * the panel degrades gracefully when the AI runtime is not configured
+ * (Settings → AI).
  */
 import { ref, watch } from 'vue';
 import {
@@ -44,7 +48,7 @@ interface ChatMessage {
 const chatMessages = ref<ChatMessage[]>([
   {
     role: 'assistant',
-    content: 'Hi! I\'m your Agent Copilot. I can help you build workflows, suggest nodes, explain your workflow, or fix errors. What would you like to do?',
+    content: "Hi! I'm your AI assistant. I can help you build workflows, suggest nodes, explain your workflow, or fix errors. What would you like to do?",
     timestamp: new Date(),
   },
 ]);
@@ -62,7 +66,7 @@ const nodeSuggestions = ref<Array<{
 const generatedWorkflow = ref<object | null>(null);
 const generationExplanation = ref('');
 
-// API base URL
+// API base URL — all AI traffic goes through /api/v1/ai/*
 const apiBase = '/api/v1';
 
 // Send chat message
@@ -82,7 +86,7 @@ async function sendChatMessage() {
   isLoading.value = true;
 
   try {
-    const response = await fetch(`${apiBase}/copilot/chat`, {
+    const response = await fetch(`${apiBase}/ai/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -120,7 +124,7 @@ async function generateWorkflow() {
   isLoading.value = true;
 
   try {
-    const response = await fetch(`${apiBase}/copilot/generate`, {
+    const response = await fetch(`${apiBase}/ai/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -143,7 +147,7 @@ async function getSuggestions() {
   isLoading.value = true;
 
   try {
-    const response = await fetch(`${apiBase}/copilot/suggest`, {
+    const response = await fetch(`${apiBase}/ai/suggest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -221,8 +225,8 @@ function handleKeydown(e: KeyboardEvent) {
     >
       <div class="flex items-center gap-2">
         <SparklesIcon class="w-5 h-5" />
-        <span class="font-semibold">Agent Copilot</span>
-        <span class="text-xs bg-white/20 px-2 py-0.5 rounded-full">AI</span>
+        <span class="font-semibold">AI</span>
+        <span class="text-xs bg-white/20 px-2 py-0.5 rounded-full">assistant</span>
       </div>
       <div class="flex items-center gap-2">
         <button
@@ -423,7 +427,7 @@ function handleKeydown(e: KeyboardEvent) {
           <div class="text-center py-8 text-slate-500">
             <DocumentTextIcon class="w-12 h-12 mx-auto mb-3 opacity-50" />
             <p>Select a workflow to explain</p>
-            <p class="text-sm mt-1">The copilot will analyze and explain your workflow</p>
+            <p class="text-sm mt-1">The AI assistant will analyze and explain your workflow</p>
           </div>
         </div>
       </div>

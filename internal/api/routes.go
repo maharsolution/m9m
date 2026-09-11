@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/neul-labs/m9m/internal/ai"
 	"github.com/neul-labs/m9m/internal/otel"
 )
 
@@ -77,11 +78,12 @@ func (s *APIServer) RegisterRoutes(router *mux.Router) {
 	api.HandleFunc("/version", s.GetVersion).Methods("GET", "OPTIONS")
 	api.HandleFunc("/metrics", s.GetMetrics).Methods("GET", "OPTIONS")
 
-	api.HandleFunc("/copilot/generate", s.CopilotGenerate).Methods("POST", "OPTIONS")
-	api.HandleFunc("/copilot/suggest", s.CopilotSuggest).Methods("POST", "OPTIONS")
-	api.HandleFunc("/copilot/explain", s.CopilotExplain).Methods("POST", "OPTIONS")
-	api.HandleFunc("/copilot/fix", s.CopilotFix).Methods("POST", "OPTIONS")
-	api.HandleFunc("/copilot/chat", s.CopilotChat).Methods("POST", "OPTIONS")
+	api.HandleFunc("/ai/generate", s.AIGenerate).Methods("POST", "OPTIONS")
+	api.HandleFunc("/ai/suggest", s.AISuggest).Methods("POST", "OPTIONS")
+	api.HandleFunc("/ai/explain", s.AIExplain).Methods("POST", "OPTIONS")
+	api.HandleFunc("/ai/fix", s.AIFix).Methods("POST", "OPTIONS")
+	api.HandleFunc("/ai/chat", s.AIChat).Methods("POST", "OPTIONS")
+	api.HandleFunc("/ai/health", s.AIHealthCheck).Methods("GET", "OPTIONS")
 
 	api.HandleFunc("/dlq", s.ListDLQ).Methods("GET", "OPTIONS")
 	api.HandleFunc("/dlq/{id}", s.GetDLQItem).Methods("GET", "OPTIONS")
@@ -108,6 +110,24 @@ func (s *APIServer) RegisterRoutes(router *mux.Router) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_, _ = w.Write([]byte(`{"error":"otel storage not initialised"}`))
+		}).Methods("GET", "PUT", "PATCH", "DELETE", "OPTIONS")
+	}
+
+	// AI agent config — env-default with DB-override, same pattern as
+	// OTEL above. The handler is mounted only when an AI store is
+	// wired in serve.go; otherwise we 503 so the UI can still render
+	// the Settings → AI page and tell the operator to restart.
+	if s.aiStore != nil {
+		aiHandler := ai.NewAPIHandler(s.aiStore, s.aiRuntime)
+		api.HandleFunc("/ai", aiHandler.Get).Methods("GET", "OPTIONS")
+		api.HandleFunc("/ai", aiHandler.Put).Methods("PUT", "PATCH", "OPTIONS")
+		api.HandleFunc("/ai", aiHandler.Delete).Methods("DELETE", "OPTIONS")
+		api.HandleFunc("/ai/test", aiHandler.TestChat).Methods("POST", "OPTIONS")
+	} else {
+		api.HandleFunc("/ai", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"error":"ai storage not initialised"}`))
 		}).Methods("GET", "PUT", "PATCH", "DELETE", "OPTIONS")
 	}
 }
