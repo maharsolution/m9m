@@ -19,12 +19,12 @@ const props = withDefaults(defineProps<{
   isLoading: boolean
   isExecuting: boolean
   showNodePalette: boolean
-  showAgentAI?: boolean
+  showAgentAi?: boolean
 }>(), {
   workflowName: '',
   workflowActive: false,
   workflowDebug: false,
-  showAgentAI: false,
+  showAgentAi: false,
 })
 
 const emit = defineEmits<{
@@ -123,7 +123,7 @@ function cancelEditingName() {
         @click="emit('toggleAI')"
         :class="[
           'px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5',
-          props.showAgentAI
+          props.showAgentAi
             ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400'
             : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
         ]"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   HomeIcon,
@@ -13,12 +13,24 @@ import {
   CalendarDaysIcon,
 } from '@heroicons/vue/24/outline'
 import { useWorkflowStore, useCredentialsStore, useExecutionStore } from '@/stores'
+import { getBuildInfo, type BuildInfo } from '@/api/buildInfo'
 
 const route = useRoute()
 const router = useRouter()
 const workflowStore = useWorkflowStore()
 const credentialsStore = useCredentialsStore()
 const executionStore = useExecutionStore()
+
+// buildInfo is fetched once on mount from /api/v1/version so the
+// footer chip below reflects the exact source identity stamped into the
+// running binary by the Dockerfile (-ldflags -X main.Commit=...).
+// Surfaced as "<version> @ <commit> • <buildDate>" so a user can
+// distinguish "I just rebuilt the container and the chip changed" from
+// "the chip still shows the previous commit — old image is running".
+//
+// A null buildInfo (network error / backend down) is treated as
+// "unknown" so the footer doesn't go blank.
+const buildInfo = ref<BuildInfo | null>(null)
 
 interface NavItem {
   name: string
@@ -65,6 +77,56 @@ onMounted(async () => {
   } catch {
     // Badges can render without counts; no error toast needed.
   }
+
+  // Pull the running binary's source identity in parallel so the
+  // footer chip below reflects the latest rebuild. We swallow errors
+  // silently — when the backend isn't reachable (offline dev box,
+  // CORS misconfig, etc.) the footer just shows the static "v1.0.0"
+  // label rather than going blank.
+  try {
+    buildInfo.value = await getBuildInfo()
+  } catch {
+    buildInfo.value = null
+  }
+})
+
+// Footer fields rendered in the bottom of the sidebar.
+//
+// `versionLabel` — what to show next to the m9m logo in the footer.
+//   * When buildInfo loaded successfully: "<version> @ <commit>"
+//     (e.g. "v1.0.0 @ abc1234"). Short enough to fit in a 280px wide
+//     sidebar, and the commit hash lets the user cross-reference the
+//     change list ("which push is the container on?").
+//   * When buildInfo is missing (backend offline): fall back to the
+//     static "v1.0.0 - Agent Native" label so the sidebar never goes
+//     blank.
+//
+// `buildDateLabel` — small text under `versionLabel` showing when
+//   the binary was built. Truncated to "YYYY-MM-DD HH:MM" so it fits
+//   the footer width; the full ISO timestamp is also rendered in the
+//   `title` attribute as a tooltip for users who want the exact
+//   second.
+const versionLabel = computed(() => {
+  const info = buildInfo.value
+  if (!info) return 'v1.0.0 - Agent Native'
+  const v = info.version && info.version !== 'unknown' ? info.version : 'dev'
+  const c = info.commit && info.commit !== 'unknown' ? info.commit : 'unknown'
+  return `${v} @ ${c}`
+})
+
+const buildDateLabel = computed(() => {
+  const info = buildInfo.value
+  if (!info || !info.buildDate || info.buildDate === 'unknown') return ''
+  // Trim "2026-09-11T07:00:00Z" → "2026-09-11 07:00 UTC" for the chip,
+  // and keep the raw ISO string in `title` for hover.
+  const pretty = info.buildDate.replace('T', ' ').replace(/Z$/, ' UTC')
+  return pretty
+})
+
+const buildDateTitle = computed(() => {
+  const info = buildInfo.value
+  if (!info || !info.buildDate || info.buildDate === 'unknown') return ''
+  return `Built ${info.buildDate}`
 })
 </script>
 
@@ -127,10 +189,26 @@ onMounted(async () => {
     </nav>
 
     <!-- Footer -->
+    <!-- Footer: shows the running binary's source identity so users
+         can tell at a glance whether the container is on the latest
+         push. The `versionLabel` is "<version> @ <commit-short>"
+         (e.g. "v1.0.0 @ abc1234"); `buildDateLabel` underneath shows
+         the UTC build timestamp. When the /version endpoint is
+         unreachable (backend offline / CORS error / dev env) the
+         labels fall back to the static "v1.0.0 - Agent Native" so
+         the sidebar never goes blank. -->
     <div class="p-4 border-t border-slate-200 dark:border-slate-700">
       <div class="text-xs text-slate-500 dark:text-slate-400">
         <div class="font-medium">m9m</div>
-        <div>v1.0.0 - Agent Native</div>
+        <div
+          class="font-mono"
+          :title="buildDateTitle || 'Build identity unavailable'"
+        >
+          {{ versionLabel }}
+        </div>
+        <div v-if="buildDateLabel" class="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 font-mono">
+          {{ buildDateLabel }}
+        </div>
       </div>
     </div>
   </aside>

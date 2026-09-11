@@ -48,8 +48,17 @@ COPY --from=web-builder /web/dist ./internal/web/dist
 
 # Build the application
 # CGO is needed for sqlite3
+#
+# COMMIT / BUILD_DATE are passed as build args (typically by /root/bin/build)
+# so the resulting binary exposes its exact source identity on
+# /api/v1/version. Without them, the binary defaults to "unknown" and the
+# UI footer cannot tell whether the running container is fresh or stale.
+ARG COMMIT="unknown"
+ARG BUILD_DATE="unknown"
 RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo \
-    -ldflags="-w -s -extldflags '-static'" \
+    -ldflags="-w -s -extldflags '-static' \
+              -X main.Commit=${COMMIT} \
+              -X main.BuildDate=${BUILD_DATE}" \
     -o m9m ./cmd/m9m
 
 # Runtime stage

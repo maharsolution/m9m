@@ -969,7 +969,13 @@ func TestGetNodeType(t *testing.T) {
 // Version Tests
 
 func TestGetVersion(t *testing.T) {
-	_, router, _ := setupTestServer(t)
+	server, router, _ := setupTestServer(t)
+
+	// Stamp a known build identity so we can assert the response reflects
+	// exactly what SetBuildInfo was called with. Without this the fields
+	// would all be "unknown" and we couldn't catch a regression where
+	// someone accidentally reverts the wiring.
+	server.SetBuildInfo("1.2.3", "abc1234", "2026-09-11T07:00:00Z")
 
 	req := httptest.NewRequest("GET", "/api/v1/version", nil)
 	w := httptest.NewRecorder()
@@ -982,8 +988,38 @@ func TestGetVersion(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	// Version response should have some fields
-	assert.NotNil(t, response)
+	// Legacy n8n-compatible fields stay intact — the sync bridge / MCP
+	// server / parity suite read these.
+	assert.Equal(t, "1.0.0-compatible", response["n8nVersion"])
+	assert.Equal(t, "0.2.0", response["serverVersion"])
+	assert.Equal(t, "m9m", response["implementation"])
+
+	// New build identity fields exposed for the sidebar footer. These
+	// are what users look at to verify the container is on the latest
+	// push.
+	assert.Equal(t, "1.2.3", response["version"])
+	assert.Equal(t, "abc1234", response["commit"])
+	assert.Equal(t, "2026-09-11T07:00:00Z", response["buildDate"])
+}
+
+func TestGetVersion_UnsetBuildInfo(t *testing.T) {
+	// When SetBuildInfo is never called (e.g. a unit test that wires
+	// a bare APIServer), the new fields should fall back to "unknown"
+	// rather than panicking or returning an empty string. This guards
+	// against accidental nil-deref on a future refactor.
+	_, router, _ := setupTestServer(t)
+
+	req := httptest.NewRequest("GET", "/api/v1/version", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	assert.Equal(t, "unknown", response["version"])
+	assert.Equal(t, "unknown", response["commit"])
+	assert.Equal(t, "unknown", response["buildDate"])
 }
 
 // CORS and OPTIONS Tests

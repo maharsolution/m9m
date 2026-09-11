@@ -76,6 +76,17 @@ type APIServer struct {
 	aiStore   *ai.ConfigStore
 	aiRuntime *ai.Runtime
 
+	// version / commit / buildDate identify the running binary's source.
+	// Set via SetBuildInfo from cmd/m9m/commands/serve.go so the
+	// /api/v1/version endpoint can tell the UI which exact source is
+	// serving requests — letting users distinguish "I rebuilt and pulled
+	// the fresh image" from "the container is still on the old image".
+	// All three default to "unknown" so callers that never call
+	// SetBuildInfo (tests, etc.) still get a valid JSON response.
+	version    string
+	commit     string
+	buildDate  string
+
 	executionMu      sync.RWMutex
 	executionCancels map[string]context.CancelFunc
 }
@@ -156,6 +167,30 @@ func (s *APIServer) SetOTelManager(m *otel.Manager, store *otel.ConfigStore) {
 // the next LoadFromStorage refresh.
 func (s *APIServer) SetCredentialManager(cm *credentials.CredentialManager) {
 	s.credMgr = cm
+}
+
+// SetBuildInfo records the running binary's source identity so
+// /api/v1/version can return it. The frontend sidebar footer reads
+// these fields to render "v1.0.0 @ <commit> • <date>" — without them,
+// users can't tell whether the container they're hitting was rebuilt
+// from the latest push or is still running the previous image.
+//
+// All three arguments are expected to be non-empty (the Dockerfile
+// stamps COMMIT + BUILD_DATE via -ldflags); an empty value falls back
+// to "unknown" so the response is always JSON-valid.
+func (s *APIServer) SetBuildInfo(version, commit, buildDate string) {
+	if version == "" {
+		version = "unknown"
+	}
+	if commit == "" {
+		commit = "unknown"
+	}
+	if buildDate == "" {
+		buildDate = "unknown"
+	}
+	s.version = version
+	s.commit = commit
+	s.buildDate = buildDate
 }
 
 // SetAI wires the AI config store and runtime so the /api/v1/ai and

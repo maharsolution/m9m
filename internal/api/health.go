@@ -38,7 +38,14 @@ func (s *APIServer) ReadyCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *APIServer) GetVersion(w http.ResponseWriter, r *http.Request) {
-	s.sendJSON(w, http.StatusOK, map[string]interface{}{
+	// Default n8n-compatible serverVersion is preserved so existing
+	// consumers (the parity suite, the n8n sync bridge, the MCP server)
+	// keep working unchanged. The three new fields below — version,
+	// commit, buildDate — are the source identity stamped into the
+	// binary by Dockerfile -ldflags. The frontend sidebar uses them to
+	// render "v<version> @ <commit> • <buildDate>" so a user can verify
+	// at a glance whether the container is serving the latest push.
+	resp := map[string]interface{}{
 		"n8nVersion":     "1.0.0-compatible",
 		"serverVersion":  "0.2.0",
 		"implementation": "m9m",
@@ -48,7 +55,29 @@ func (s *APIServer) GetVersion(w http.ResponseWriter, r *http.Request) {
 			"expressions": true,
 			"credentials": true,
 		},
-	})
+	}
+
+	// Surface the running binary's identity. Populated by
+	// SetBuildInfo at server startup; "unknown" when SetBuildInfo was
+	// never called (e.g. running via `go run` for local dev or in unit
+	// tests that don't bother wiring it).
+	if s.version != "" {
+		resp["version"] = s.version
+	} else {
+		resp["version"] = "unknown"
+	}
+	if s.commit != "" {
+		resp["commit"] = s.commit
+	} else {
+		resp["commit"] = "unknown"
+	}
+	if s.buildDate != "" {
+		resp["buildDate"] = s.buildDate
+	} else {
+		resp["buildDate"] = "unknown"
+	}
+
+	s.sendJSON(w, http.StatusOK, resp)
 }
 
 func (s *APIServer) GetSettings(w http.ResponseWriter, r *http.Request) {

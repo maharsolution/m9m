@@ -50,6 +50,16 @@ func SetVersionInfo(v, c, b string) {
 	buildDate = b
 }
 
+// GetVersionInfo returns the version triple previously set via
+// SetVersionInfo. The API server's /version handler uses this to expose
+// the running binary's exact source identity (commit hash + UTC build
+// timestamp) so the UI can render "vX.Y.Z @ <shortsha> • <date>" in the
+// sidebar footer. Returns ("dev", "unknown", "unknown") when SetVersionInfo
+// was never called (e.g. `go run` for local dev).
+func GetVersionInfo() (string, string, string) {
+	return version, commit, buildDate
+}
+
 func init() {
 	// Global flags available to all commands
 	rootCmd.PersistentFlags().StringVarP(&workspaceFlag, "workspace", "w", "", "Workspace to use (default: current)")

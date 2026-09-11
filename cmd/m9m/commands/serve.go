@@ -306,6 +306,16 @@ func runServe(cmd *cobra.Command, args []string) {
 		apiServer.SetCredentialManager(credMgr)
 	}
 
+	// Stamp the running binary's source identity into the API server so
+	// /api/v1/version returns commit + build date. The Dockerfile fills
+	// COMMIT / BUILD_DATE via -ldflags at compile time, and main.go
+	// forwards them into commands via SetVersionInfo — we just read
+	// them back here. Users rely on these to tell whether the running
+	// container is the latest push or a stale image from a previous
+	// rebuild.
+	v, c, bd := GetVersionInfo()
+	apiServer.SetBuildInfo(v, c, bd)
+
 	// Setup router
 	router := mux.NewRouter()
 
