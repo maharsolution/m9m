@@ -220,11 +220,21 @@ const renameWorkflow = (name: string) => {
         leave-from-class="translate-x-0 opacity-100"
         leave-to-class="translate-x-full opacity-0"
       >
-        <AgentAI
+        <!-- AgentAI is a fixed-position floating panel (its own root
+             element has `fixed bottom-4 right-4`). Wrapping it in the
+             slide-in transition above still animates opacity + the
+             parent's transform, which gives a clean entry from the
+             right edge. The external `class="w-96"` is the requested
+             panel width. -->
+        <div
           v-if="showAI"
-          class="w-96"
-          @close="showAI = false"
-        />
+          class="w-96 flex-shrink-0 h-full"
+        >
+          <AgentAI
+            :embedded="true"
+            @close="showAI = false"
+          />
+        </div>
       </transition>
     </div>
   </div>

@@ -31,7 +31,7 @@ const emit = defineEmits<{
   back: []
   rename: [name: string]
   togglePalette: []
-  toggleAI: []
+  toggleAi: []
   toggleActive: []
   toggleDebug: []
   execute: []
@@ -42,6 +42,27 @@ const editingName = ref(false)
 const workflowNameInput = ref('')
 
 const displayName = computed(() => props.workflowName || 'Untitled Workflow')
+
+// Mirror the toggle-panel / toggle-AI props into local refs so the
+// button highlight updates immediately on click. Without this, the
+// class binding `props.showNodePalette ? ...` sometimes stays stale
+// on the initial render — Vue's render proxy tracks the dependency
+// but the reactive proxy returned by `withDefaults(defineProps<...>())`
+// doesn't always trigger re-evaluation when a parent ref toggles
+// from one boolean to the same-shape boolean. The `defineProps<...>()`
+// return value IS reactive, but binding the conditional directly
+// against `props.foo` works fine in some templates and not others
+// (this file's Nodes/AI buttons consistently failed while the
+// Active/Debug buttons worked — likely due to a Vue compiler quirk
+// around optional vs required booleans).
+//
+// Keeping a local mirror that's explicit-ref + watch makes the
+// reactivity unambiguous: every parent prop change flips the local
+// ref synchronously, and the class binding reads from the local ref.
+const localShowNodePalette = ref(props.showNodePalette)
+const localShowAgentAi = ref(props.showAgentAi ?? false)
+watch(() => props.showNodePalette, (v) => { localShowNodePalette.value = !!v })
+watch(() => props.showAgentAi, (v) => { localShowAgentAi.value = !!v })
 
 watch(
   () => props.workflowName,
@@ -112,7 +133,7 @@ function cancelEditingName() {
         @click="emit('togglePalette')"
         :class="[
           'px-3 py-1.5 text-sm font-medium rounded-lg transition-colors',
-          props.showNodePalette
+          localShowNodePalette
             ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
             : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
         ]"
@@ -120,10 +141,10 @@ function cancelEditingName() {
         Nodes
       </button>
       <button
-        @click="emit('toggleAI')"
+        @click="emit('toggleAi')"
         :class="[
           'px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5',
-          props.showAgentAi
+          localShowAgentAi
             ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400'
             : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
         ]"

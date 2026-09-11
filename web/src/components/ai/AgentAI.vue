@@ -22,6 +22,15 @@ import {
 const props = defineProps<{
   workflow?: object;
   isOpen?: boolean;
+  /**
+   * embedded=true means the panel is rendered inside a flex column of
+   * the workflow editor (the right-side slide-in panel). In that mode
+   * it expands to fill the parent's height (`h-full`) instead of the
+   * fixed `h-[600px]` size used when the panel floats over the page.
+   * embedded=false (default) keeps the legacy floating behaviour for
+   * any other mount point (Settings, future modals, etc.).
+   */
+  embedded?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -215,8 +224,8 @@ function handleKeydown(e: KeyboardEvent) {
 
 <template>
   <div
-    class="fixed bottom-4 right-4 w-96 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden z-50"
-    :class="{ 'h-[600px]': isExpanded, 'h-14': !isExpanded }"
+    class="w-96 h-full bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col"
+    :class="{ 'h-[600px]': isExpanded && !embedded, 'h-14': !isExpanded, 'h-full': isExpanded && embedded }"
   >
     <!-- Header -->
     <div
