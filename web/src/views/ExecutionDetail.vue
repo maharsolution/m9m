@@ -29,7 +29,7 @@
  * same payload is rendered three different ways without any
  * filtering.
  */
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, markRaw, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
@@ -56,6 +56,25 @@ import type { Workflow, WorkflowNode, DataItem } from '@/types'
 import type { NodeType, NodeProperty } from '@/types/node'
 import ExecutionDataView from '@/components/execution/ExecutionDataView.vue'
 import PropertyEditor from '@/components/execution/PropertyEditor.vue'
+import BaseNode from '@/components/nodes/BaseNode.vue'
+
+// nodeTypes maps the `type: 'custom'` discriminator emitted by
+// buildFlowNodes to the actual Vue component that should render
+// each node. Without this mapping, Vue Flow falls back to its
+// built-in default renderer which renders the node label as
+// inline text with no styling — that's the bug behind "execution
+// view shows tiny raw-text nodes". WorkflowCanvas registers the
+// exact same mapping; we mirror it here so the editor and
+// execution views look identical.
+//
+// `markRaw` tells Vue not to make the component definition
+// reactive (the Vue Flow library keeps an internal Map of types
+// and a reactive wrapper around it triggers spurious re-renders
+// on every reactive change). WorkflowCanvas uses the same
+// `markRaw` pattern — see node-types in that file.
+const nodeTypes = {
+  custom: markRaw(BaseNode),
+}
 
 type NodeState = 'pending' | 'success' | 'failed' | 'running' | 'skipped'
 type DataTab = 'input' | 'output' | 'settings'
@@ -909,6 +928,7 @@ function downloadData() {
         <VueFlow
           :nodes="flowNodes"
           :edges="flowEdges"
+          :node-types="nodeTypes"
           :default-viewport="{ x: 100, y: 100, zoom: 1 }"
           :min-zoom="0.3"
           :max-zoom="2"

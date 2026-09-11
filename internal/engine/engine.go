@@ -1547,6 +1547,7 @@ func recordEdgesTaken(taken map[string]bool, sourceNode *model.Node, outputData 
 			}
 		}
 	case "switch":
+		lastBranch := len(conns.Main) - 1
 		for _, item := range outputData {
 			v, ok := item.JSON["_switchRuleIndex"]
 			if !ok {
@@ -1556,11 +1557,43 @@ func recordEdgesTaken(taken map[string]bool, sourceNode *model.Node, outputData 
 			if !ok {
 				continue
 			}
+			// SwitchNode.Execute emits `_switchRuleIndex: len(rules)`
+			// when no rule matched AND fallbackToLast is set —
+			// that's an out-of-range index relative to
+			// `connections.Main` (the number of downstream branches
+			// is normally equal to the number of rules, but a
+			// trimmed workflow with a missing rule still leaves the
+			// tag at len(rules)). The router collapses this to
+			// `main[lastBranch]` per the fallbackToLast contract;
+			// mirror that here so the recorded edges match the
+			// items the router actually delivered.
+			if n >= len(conns.Main) {
+				n = lastBranch
+			}
+			if n < 0 {
+				continue
+			}
 			branchWithItems[n] = true
 		}
-		// Unmatched items fall through to main[last] — the
-		// router's `fallbackToLast` behaviour. Mirror it here.
-		branchWithItems[len(conns.Main)-1] = true
+		// NOTE: previously this branch also did
+		// `branchWithItems[len(conns.Main)-1] = true` to mirror the
+		// router's `fallbackToLast` behaviour. That was wrong:
+		// fallback-to-last is already handled inside SwitchNode.Execute
+		// — when no rule matches and `fallbackToLast` is set, the
+		// node itself emits an item with `_switchRuleIndex: len(rules)`
+		// (which lands in the `for _, item := range outputData` loop
+		// above, gets clamped to `len(conns.Main)-1` by the
+		// out-of-range check, and marks the last branch). Adding the
+		// unconditional `true` here caused the UI to grey-out the
+		// wrong path: for a 3-branch Switch that routed a matched
+		// item to branch 0, edgesTaken still contained branch 2's
+		// edge as `true`, which the frontend painted green even
+		// though no items actually flowed down main[2]. Removed in
+		// 4e18bf9 follow-up.
+		//
+		// If `fallbackToLast=false` AND no rule matched, the Switch
+		// emits zero items — every branch should be absent from
+		// `taken`, which matches what the router actually delivered.
 	default:
 		for i := range conns.Main {
 			branchWithItems[i] = true

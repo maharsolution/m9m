@@ -114,6 +114,106 @@ func TestRecordEdgesTaken_SwitchRouteRule2(t *testing.T) {
 	}
 }
 
+// TestRecordEdgesTaken_SwitchMatchedRule0DoesNotMarkLastBranch is
+// the regression test for the bug where a Switch node that routed
+// a matched item to rule 0 was ALSO marking the LAST branch as
+// taken. Cause: recordEdgesTaken used to unconditionally set
+// `branchWithItems[len(conns.Main)-1] = true` for every Switch
+// output, on the theory that "unmatched items fall through to
+// main[last]". That assumption is wrong — the Switch node itself
+// handles `fallbackToLast` by emitting an item with
+// `_switchRuleIndex: len(rules)`, which the loop above already
+// routes to branch `len-1`. Adding the unconditional `true` here
+// caused the UI to green-paint the path to "Set Others" even when
+// the input only matched "Set Tisha" — exactly the user's
+// webhook `m9m` workflow bug ("others line should be gray").
+func TestRecordEdgesTaken_SwitchMatchedRule0DoesNotMarkLastBranch(t *testing.T) {
+	workflow := &model.Workflow{
+		Name: "webhook m9m",
+		Nodes: []model.Node{
+			{ID: "switch-id", Name: "Switch", Type: "n8n-nodes-base.switch"},
+			{ID: "set-tisha", Name: "Set Tisha", Type: "n8n-nodes-base.set"},
+			{ID: "set-erwan", Name: "Set Erwan", Type: "n8n-nodes-base.set"},
+			{ID: "set-others", Name: "Set Others", Type: "n8n-nodes-base.set"},
+		},
+		Connections: map[string]model.Connections{
+			"Switch": {Main: [][]model.Connection{
+				{{Node: "Set Tisha", Type: "main", Index: 0}},
+				{{Node: "Set Erwan", Type: "main", Index: 0}},
+				{{Node: "Set Others", Type: "main", Index: 0}},
+			}},
+		},
+	}
+
+	// The Switch emitted exactly 1 item: the matched Tisha rule.
+	switchOutput := []model.DataItem{
+		{JSON: map[string]interface{}{
+			"_switchRuleIndex": 0,
+			"nama":             "Tisha",
+		}},
+	}
+
+	taken := map[string]bool{}
+	recordEdgesTaken(taken, &workflow.Nodes[0], switchOutput, workflow)
+
+	if !taken["switch-id:0:set-tisha:0"] {
+		t.Errorf("matched branch 0 (Tisha) should be taken; got %v", taken)
+	}
+	if taken["switch-id:1:set-erwan:0"] {
+		t.Errorf("unmatched branch 1 (Erwan) should NOT be taken; got %v", taken)
+	}
+	if taken["switch-id:2:set-others:0"] {
+		t.Errorf("unmatched last branch (Others) should NOT be taken; got %v", taken)
+	}
+}
+
+// TestRecordEdgesTaken_SwitchFallbackToLastStillMarksLastBranch
+// covers the case where fallbackToLast IS supposed to route the
+// item down the last branch. When the Switch sees no matching rule
+// AND fallbackToLast is set, it emits an item with
+// `_switchRuleIndex: len(rules)` — which IS routed to branch
+// `len-1`. The regression must not have over-corrected by
+// discarding the last branch entirely: when the input item
+// genuinely arrives with `_switchRuleIndex == len(rules)`, the
+// last branch MUST still be marked taken.
+func TestRecordEdgesTaken_SwitchFallbackToLastStillMarksLastBranch(t *testing.T) {
+	workflow := &model.Workflow{
+		Name: "SwitchFallback",
+		Nodes: []model.Node{
+			{ID: "src", Name: "Switch", Type: "n8n-nodes-base.switch"},
+			{ID: "r0", Name: "Rule0", Type: "n8n-nodes-base.set"},
+			{ID: "r1", Name: "Rule1", Type: "n8n-nodes-base.set"},
+			{ID: "r2", Name: "Rule2", Type: "n8n-nodes-base.set"},
+		},
+		Connections: map[string]model.Connections{
+			"Switch": {Main: [][]model.Connection{
+				{{Node: "Rule0", Type: "main", Index: 0}},
+				{{Node: "Rule1", Type: "main", Index: 0}},
+				{{Node: "Rule2", Type: "main", Index: 0}},
+			}},
+		},
+	}
+
+	// The Switch emitted one item with the fallback tag — `len(rules)=3`.
+	// The loop in recordEdgesTaken should pick this up and mark branch 2.
+	switchOutput := []model.DataItem{
+		{JSON: map[string]interface{}{"_switchRuleIndex": 3, "v": "fallback"}},
+	}
+
+	taken := map[string]bool{}
+	recordEdgesTaken(taken, &workflow.Nodes[0], switchOutput, workflow)
+
+	if !taken["src:2:r2:0"] {
+		t.Errorf("fallback branch 2 should be taken; got %v", taken)
+	}
+	if taken["src:0:r0:0"] {
+		t.Errorf("non-fallback branch 0 should NOT be taken; got %v", taken)
+	}
+	if taken["src:1:r1:0"] {
+		t.Errorf("non-fallback branch 1 should NOT be taken; got %v", taken)
+	}
+}
+
 // TestRecordEdgesTaken_NoConnections verifies the no-op path: a node
 // with no downstream connections must not panic and must not record
 // any edges. This guards against workflows that have a single end
