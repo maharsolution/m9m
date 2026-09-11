@@ -175,9 +175,10 @@ curl -X POST http://localhost:8080/api/v1/otel/test \
 
 When the runtime reads the config, the layers merge in this order, **last wins**:
 
-1. **Built-in defaults** — telemetry is off.
-2. **`M9M_OTEL_*` env vars** — `M9M_OTEL_ENABLED`, `M9M_OTEL_ENDPOINT`, `M9M_OTEL_PROTOCOL`, `M9M_OTEL_HEADERS`, `M9M_OTEL_SAMPLE_RATIO`. Standard `OTEL_SDK_*` env vars are also honoured; `M9M_OTEL_*` wins when both are set.
-3. **DB-stored override** — what you save via `PUT /api/v1/otel`. Persists across restarts.
+1. **Built-in defaults** — telemetry is off (`Enabled=false`, `Protocol=http/protobuf`).
+2. **Standard `OTEL_*` SDK env vars** — `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `OTEL_TRACES_SAMPLER`, etc. Honoured as a fallback.
+3. **`M9M_OTEL_*` env vars** — `M9M_OTEL_ENABLED`, `M9M_OTEL_EXPORTER_OTLP_ENDPOINT`, `M9M_OTEL_EXPORTER_OTLP_PROTOCOL`, `M9M_OTEL_EXPORTER_OTLP_HEADERS`, `M9M_OTEL_EXPORTER_OTLP_HEADERS_FILE`, `M9M_OTEL_TRACES_SAMPLE_RATE`, `M9M_OTEL_TRACES_PRODUCTION_ONLY`, `M9M_OTEL_TRACES_INCLUDE_NODE_SPANS`, `M9M_OTEL_TRACES_INJECT_OUTBOUND`, `M9M_OTEL_SERVICE_NAME`, `M9M_OTEL_SERVICE_VERSION`, `M9M_OTEL_INSTANCE_ID`. The `M9M_AGENTS_TRACING_*` family controls GenAI spans. `M9M_OTEL_*` wins over the bare `OTEL_*` names when both are set.
+4. **DB-stored override** — what you save via `PUT /api/v1/otel`. Persists across restarts.
 4. **Live UI toggle** — the master on/off switch in Settings.
 
 The `/healthz` endpoint reports whether the OTel pipeline is healthy (exporter connected, no recent errors).

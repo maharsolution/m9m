@@ -295,17 +295,42 @@ These will be removed in a future major release. Migrate to the `M9M_AI_*` names
 
 ## Telemetry
 
-OpenTelemetry tracing configuration. Mirrors `OTEL_SDK_*` from the upstream SDK with m9m-specific overrides.
+OpenTelemetry tracing configuration. Mirrors the upstream SDK env vars with m9m-specific overrides.
+
+The m9m-side name is listed first; the standard `OTEL_*` SDK name is read as
+a fallback when the m9m name is unset (the m9m name still wins when both
+are set).
+
+### Core tracing
 
 | Variable | Default | Description |
 |---|---|---|
 | `M9M_OTEL_ENABLED` | `false` | Master on/off |
-| `M9M_OTEL_PROTOCOL` | `grpc` | `grpc` or `http` |
-| `M9M_OTEL_ENDPOINT` | `localhost:4317` | OTLP endpoint (host:port for gRPC, full URL for HTTP) |
-| `M9M_OTEL_HEADERS` | — | Comma-separated `key=value` pairs (e.g. `x-api-key=abc,foo=bar`) |
-| `M9M_OTEL_SAMPLE_RATIO` | `1.0` (when enabled) | 0.0–1.0 |
+| `M9M_OTEL_EXPORTER_OTLP_PROTOCOL` (or `OTEL_EXPORTER_OTLP_PROTOCOL`) | `http/protobuf` | `grpc`, `http`, or `http/protobuf` |
+| `M9M_OTEL_EXPORTER_OTLP_ENDPOINT` (or `OTEL_EXPORTER_OTLP_ENDPOINT`) | `http://localhost:4317` (gRPC) / `http://localhost:4318` (HTTP) | OTLP collector base URL; the exporter appends the protocol path |
+| `M9M_OTEL_EXPORTER_OTLP_HEADERS` (or `OTEL_EXPORTER_OTLP_HEADERS`) | — | Comma-separated `key=value` pairs (e.g. `x-api-key=abc,foo=bar`) |
+| `M9M_OTEL_EXPORTER_OTLP_HEADERS_FILE` (or `OTEL_EXPORTER_OTLP_HEADERS_FILE`) | — | File with same `key=value` pairs; takes precedence over `HEADERS` when set |
+| `M9M_OTEL_TRACES_SAMPLE_RATE` (or `OTEL_TRACES_SAMPLER_ARG`) | `1.0` (when enabled) | 0.0–1.0 trace ratio |
+| `M9M_OTEL_TRACES_PRODUCTION_ONLY` | `true` | When `true`, non-production execution modes are sampled with `NeverSample` |
+| `M9M_OTEL_TRACES_INCLUDE_NODE_SPANS` | `true` | When `false`, only `workflow.execute` spans are emitted (no per-node span) |
+| `M9M_OTEL_TRACES_INJECT_OUTBOUND` | `true` | Whether the HTTP Request node injects a `traceparent` header on outbound calls |
 
-If both `M9M_OTEL_*` and the standard `OTEL_SDK_*` variables are set, `M9M_OTEL_*` wins.
+### Resource attributes
+
+| Variable | Default | Description |
+|---|---|---|
+| `M9M_OTEL_SERVICE_NAME` (or `OTEL_SERVICE_NAME`) | `m9m` | `service.name` on the OTel resource |
+| `M9M_OTEL_SERVICE_VERSION` (or `OTEL_SERVICE_VERSION`) | `<git-sha>` (or `dev`) | `service.version` on the OTel resource |
+| `M9M_OTEL_INSTANCE_ID` | `<hostname>:<pid>` | `service.instance.id` |
+| `M9M_ENV` | `production` / `development` | `deployment.environment` on the OTel resource |
+
+### Agents (GenAI) tracing
+
+| Variable | Default | Description |
+|---|---|---|
+| `M9M_AGENTS_TRACING_ENABLED` | `false` | Toggle GenAI agent + tool-call spans |
+| `M9M_AGENTS_TRACING_RECORD_INPUTS` | `true` | Whether prompts / tool args are recorded as `gen_ai.prompt` / `gen_ai.tool.call.arguments` |
+| `M9M_AGENTS_TRACING_RECORD_OUTPUTS` | `true` | Whether completions / tool results are recorded as `gen_ai.completion` / `gen_ai.tool.call.result` |
 
 A DB-stored override layer (set via `PUT /api/v1/otel`) wins over env. See [Observability](../observability/index.md) and [Telemetry API](../api/telemetry.md).
 

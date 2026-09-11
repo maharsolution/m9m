@@ -17,8 +17,8 @@ This page covers tracing. For metrics see `/metrics`, for logs see the structure
 ```bash
 # 1. Point at any OTLP-compatible backend
 export M9M_OTEL_ENABLED=true
-export M9M_OTEL_PROTOCOL=grpc
-export M9M_OTEL_ENDPOINT=localhost:4317
+export M9M_OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+export M9M_OTEL_EXPORTER_OTLP_ENDPOINT=localhost:4317
 
 # 2. Start the server
 m9m serve
@@ -39,43 +39,81 @@ The backend should receive a `m9m.otel.test` span with attributes `service.name=
 
 Two protocols, both OTLP:
 
-| Protocol | Env / config key | Default endpoint | Notes |
+| Protocol | Accepted values | Default endpoint | Notes |
 |---|---|---|---|
-| OTLP gRPC | `grpc` | `localhost:4317` | Lower overhead, recommended for production |
-| OTLP HTTP/protobuf | `http` | `localhost:4318/v1/traces` | Easier to debug; slightly higher overhead |
+| OTLP gRPC | `grpc` | `http://localhost:4317` | Lower overhead, recommended for production |
+| OTLP HTTP/protobuf | `http`, `http/protobuf` | `http://localhost:4318` | Easier to debug; slightly higher overhead |
+
+The OTel SDK default is `http/protobuf`. m9m's `ApplyDefaults()` mirrors that
+unless the operator set `Protocol=grpc`. Protocol strings are case-insensitive
+(the loader lower-cases them before validating).
 
 Jaeger is **no longer** a first-class exporter — use an OTLP collector that forwards to Jaeger (or use Tempo, Honeycomb, Datadog, etc., all of which speak OTLP).
 
 ### Configuration layers
 
-There are **four layers**, applied in this order, **last wins**:
+There are **five layers**, applied in this order, **last wins**:
 
-1. **Built-in defaults** — disabled.
-2. **Standard `OTEL_SDK_*` env vars** — honoured by the upstream OTel SDK.
-3. **`M9M_OTEL_*` env vars** — m9m's convenience aliases. Win over `OTEL_SDK_*` when both are set.
+1. **Built-in defaults** — `Enabled=false`, `Protocol="http/protobuf"`, defaults shown in the table below.
+2. **Standard OpenTelemetry SDK vars** — `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `OTEL_TRACES_SAMPLER`, etc. Honoured by the upstream OTel SDK; loaded as a fallback.
+3. **`M9M_OTEL_*` env vars** — m9m's convenience aliases (names prefixed with `M9M_` to avoid clashing with n8n on a shared host). Win over the bare `OTEL_*` names when both are set.
 4. **DB-stored override** — what you save via `PUT /api/v1/otel`. Persists across restarts. Wins over env.
-5. **Live UI toggle** in **Settings → Telemetry** — overrides everything for the on/off bit.
+5. **Live UI toggle** in **Settings → Telemetry** — overrides everything for the on/off bit only. Other fields keep their env / DB value.
 
 ### Environment variables
+
+The m9m-side names are listed first. When only a standard OTel-SDK name is
+shown, m9m reads the standard SDK var as a fallback (the m9m name still wins
+when both are set).
+
+#### Core tracing
 
 | Variable | Type | Default | Description |
 |---|---|---|---|
 | `M9M_OTEL_ENABLED` | boolean | `false` | Master on/off |
-| `M9M_OTEL_PROTOCOL` | string | `grpc` | `grpc` or `http` |
-| `M9M_OTEL_ENDPOINT` | string | `localhost:4317` | OTLP endpoint (host:port for gRPC, full URL for HTTP) |
-| `M9M_OTEL_HEADERS` | string | — | Comma-separated `key=value` pairs (e.g. `x-api-key=abc,foo=bar`) |
-| `M9M_OTEL_SAMPLE_RATIO` | number | `1.0` (when enabled) | 0.0–1.0 fraction of traces to keep |
+| `M9M_OTEL_EXPORTER_OTLP_PROTOCOL` (or `OTEL_EXPORTER_OTLP_PROTOCOL`) | string | `http/protobuf` | `grpc`, `http`, or `http/protobuf` |
+| `M9M_OTEL_EXPORTER_OTLP_ENDPOINT` (or `OTEL_EXPORTER_OTLP_ENDPOINT`) | string | `http://localhost:4317` (gRPC) or `http://localhost:4318` (HTTP) | OTLP collector base URL; the exporter appends the protocol path |
+| `M9M_OTEL_EXPORTER_OTLP_HEADERS` (or `OTEL_EXPORTER_OTLP_HEADERS`) | string | — | Comma-separated `key=value` pairs (e.g. `x-api-key=abc,foo=bar`) |
+| `M9M_OTEL_EXPORTER_OTLP_HEADERS_FILE` (or `OTEL_EXPORTER_OTLP_HEADERS_FILE`) | string | — | Path to a file containing the same `key=value` pairs. When set, takes precedence over `HEADERS` |
+| `M9M_OTEL_TRACES_SAMPLE_RATE` (or `OTEL_TRACES_SAMPLER_ARG`) | number | `1.0` (when enabled) | 0.0–1.0 fraction of traces to keep. Combined with `OTEL_TRACES_SAMPLER` (`always_on`, `always_off`, `traceidratio`, `parentbased_*)` |
+| `M9M_OTEL_TRACES_PRODUCTION_ONLY` | boolean | `true` | When `true`, executions whose mode is NOT `webhook`/`trigger`/`manual`/`retry` are sampled with `NeverSample`. Matches n8n's n8n-OTEL behaviour |
+| `M9M_OTEL_TRACES_INCLUDE_NODE_SPANS` | boolean | `true` | When `false`, the engine skips `node.execute` spans and only emits `workflow.execute` |
+| `M9M_OTEL_TRACES_INJECT_OUTBOUND` | boolean | `true` | Whether the HTTP Request node injects a `traceparent` header on outbound calls |
 
-Legacy `OTEL_SDK_*` vars are accepted but `M9M_OTEL_*` wins on conflict.
+#### Resource attributes
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `M9M_OTEL_SERVICE_NAME` (or `OTEL_SERVICE_NAME`) | string | `m9m` | `service.name` on the OTel resource |
+| `M9M_OTEL_SERVICE_VERSION` (or `OTEL_SERVICE_VERSION`) | string | `<git-sha>` (or `dev`) | `service.version` on the OTel resource |
+| `M9M_OTEL_INSTANCE_ID` | string | `<hostname>:<pid>` | `service.instance.id`. Auto-generated when unset |
+| `M9M_ENV` | string | `production` / `development` | `deployment.environment` on the OTel resource |
+
+#### Agents (GenAI) tracing
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `M9M_AGENTS_TRACING_ENABLED` | boolean | `false` | Toggles GenAI agent + tool-call spans |
+| `M9M_AGENTS_TRACING_RECORD_INPUTS` | boolean | `true` | Whether prompts / tool args are recorded as `gen_ai.prompt` / `gen_ai.tool.call.arguments` |
+| `M9M_AGENTS_TRACING_RECORD_OUTPUTS` | boolean | `true` | Whether completions / tool results are recorded as `gen_ai.completion` / `gen_ai.tool.call.result` |
+
+#### Standard OTel-SDK fallbacks
+
+Read as fallbacks (m9m-prefixed names win on conflict):
+
+- `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_PROTOCOL`,
+  `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_EXPORTER_OTLP_HEADERS_FILE`
+- `OTEL_SERVICE_NAME`, `OTEL_SERVICE_VERSION`
+- `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG`
 
 ### Sampling
 
 | Strategy | When |
 |---|---|
-| Always-on | `sampleRatio = 1.0` |
-| Always-off | `M9M_OTEL_ENABLED=false` |
-| Ratio | `sampleRatio = 0.1` keeps ~10% |
-| Parent-based (default) | When `sampleRatio` is unset, the parent's decision propagates |
+| Always-on | `M9M_OTEL_TRACES_SAMPLE_RATE=1` |
+| Always-off | `M9M_OTEL_ENABLED=false` or `M9M_OTEL_TRACES_SAMPLE_RATE=0` |
+| Ratio | `M9M_OTEL_TRACES_SAMPLE_RATE=0.1` keeps ~10% |
+| Parent-based (default when unset) | `OTEL_TRACES_SAMPLER=parentbased_*` propagates the parent's decision |
 
 For multi-service tracing, set `sampleRatio` consistently or rely on parent-based; otherwise you'll see partial traces.
 
@@ -246,8 +284,8 @@ docker run --rm -p 4317:4317 -p 4318:4318 \
 
 # Configure m9m
 export M9M_OTEL_ENABLED=true
-export M9M_OTEL_PROTOCOL=grpc
-export M9M_OTEL_ENDPOINT=localhost:4317
+export M9M_OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+export M9M_OTEL_EXPORTER_OTLP_ENDPOINT=localhost:4317
 m9m serve
 ```
 
@@ -255,9 +293,9 @@ m9m serve
 
 ```bash
 export M9M_OTEL_ENABLED=true
-export M9M_OTEL_PROTOCOL=grpc
-export M9M_OTEL_ENDPOINT=api.honeycomb.io:443
-export M9M_OTEL_HEADERS="x-honeycomb-team=YOUR_API_KEY"
+export M9M_OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+export M9M_OTEL_EXPORTER_OTLP_ENDPOINT=api.honeycomb.io:443
+export M9M_OTEL_EXPORTER_OTLP_HEADERS="x-honeycomb-team=YOUR_API_KEY"
 m9m serve
 ```
 
@@ -265,8 +303,8 @@ m9m serve
 
 ```bash
 export M9M_OTEL_ENABLED=true
-export M9M_OTEL_PROTOCOL=grpc
-export M9M_OTEL_ENDPOINT=localhost:4317
+export M9M_OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+export M9M_OTEL_EXPORTER_OTLP_ENDPOINT=localhost:4317
 m9m serve
 ```
 

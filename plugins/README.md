@@ -729,11 +729,13 @@ All examples are in the `examples/` directory:
 
 ## Contributing
 
-We welcome plugin contributions! To share your plugins:
+We welcome plugin contributions. The `plugins/` directory is **part of the main
+m9m repo** (not a separate repository), so plugins live alongside the core
+codebase:
 
 1. Test your plugin thoroughly
 2. Add documentation and examples
-3. Submit a pull request to the [m9m-plugins](https://github.com/maharsolution/m9m-plugins) repository
+3. Open a pull request against [`maharsolution/m9m/tree/main/plugins`](https://github.com/maharsolution/m9m/tree/main/plugins)
 
 ## Support
 

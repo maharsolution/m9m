@@ -3,9 +3,11 @@ package ai
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -182,19 +184,23 @@ type ConfigView struct {
 // rest of the codebase can treat AI as off without nil-checking
 // Config.
 func LoadConfigFromEnv() Config {
-	provider := strings.ToLower(strings.TrimSpace(firstNonEmpty("M9M_AI_PROVIDER", "M9M_COPILOT_PROVIDER")))
+	provider, providerFromLegacy := pickEnv("M9M_AI_PROVIDER", "M9M_COPILOT_PROVIDER")
 	if provider == "" {
 		provider = string(ProviderOpenAI)
 	}
+	apiKey, apiKeyFromLegacy := pickEnv("M9M_AI_API_KEY", "M9M_COPILOT_API_KEY")
+	baseURL, baseURLFromLegacy := pickEnv("M9M_AI_BASE_URL", "M9M_COPILOT_BASE_URL")
+	model, modelFromLegacy := pickEnv("M9M_AI_MODEL", "M9M_COPILOT_MODEL")
+
 	cfg := Config{
-		Enabled:    envBool("M9M_AI_ENABLED", false),
-		Provider:   Provider(provider),
-		APIKey:     strings.TrimSpace(firstNonEmpty("M9M_AI_API_KEY", "M9M_COPILOT_API_KEY")),
-		BaseURL:    strings.TrimSpace(firstNonEmpty("M9M_AI_BASE_URL", "M9M_COPILOT_BASE_URL")),
-		Model:      strings.TrimSpace(firstNonEmpty("M9M_AI_MODEL", "M9M_COPILOT_MODEL")),
-		MaxTokens:  envInt("M9M_AI_MAX_TOKENS", 4096),
+		Enabled:     envBool("M9M_AI_ENABLED", false),
+		Provider:    Provider(strings.ToLower(strings.TrimSpace(provider))),
+		APIKey:      strings.TrimSpace(apiKey),
+		BaseURL:     strings.TrimSpace(baseURL),
+		Model:       strings.TrimSpace(model),
+		MaxTokens:   envInt("M9M_AI_MAX_TOKENS", 4096),
 		Temperature: envFloat("M9M_AI_TEMPERATURE", 0.7),
-		Timeout:    time.Duration(envInt("M9M_AI_TIMEOUT_MS", 60000)) * time.Millisecond,
+		Timeout:     time.Duration(envInt("M9M_AI_TIMEOUT_MS", 60000)) * time.Millisecond,
 	}
 	// Validate the provider we got from env; unknown values fall back
 	// to OpenAI rather than panicking later.
@@ -205,20 +211,75 @@ func LoadConfigFromEnv() Config {
 		cfg.Provider = ProviderOpenAI
 	}
 	cfg.ApplyDefaults()
+
+	// Emit the deprecation banner once per process for each legacy
+	// var that actually contributed a value. We only complain when the
+	// legacy name was the source of truth (new name unset); an
+	// operator who explicitly set both wins, with the new name
+	// already documented elsewhere.
+	warnCopilotLegacy(providerFromLegacy, apiKeyFromLegacy, baseURLFromLegacy, modelFromLegacy)
 	return cfg
 }
 
-// firstNonEmpty returns the first non-empty value from a list of env
-// var names. Used to honour both the new M9M_AI_* names and the
-// deprecated M9M_COPILOT_* names so existing `.env` files keep
-// working.
-func firstNonEmpty(names ...string) string {
-	for _, n := range names {
-		if v := strings.TrimSpace(os.Getenv(n)); v != "" {
-			return v
+// copilotDeprecationOnce gates the legacy-env-var warning so we don't
+// spam the log on every config reload. Tests that depend on the warn
+// behaviour override this via resetCopilotDeprecationWarning() in
+// their setup.
+var copilotDeprecationOnce sync.Once
+
+// resetCopilotDeprecationWarning is a test helper that lets unit
+// tests re-arm the deprecation warning so they can observe the
+// banner from a clean state. Not used in production.
+func resetCopilotDeprecationWarning() {
+	copilotDeprecationOnce = sync.Once{}
+}
+
+// warnCopilotLegacy logs a single WARN line per process listing the
+// legacy M9M_COPILOT_* env vars that contributed a value. Operators
+// reading the log want to know both "is anyone still using the legacy
+// name" and "which keys are still being honoured", so the warning
+// lists exactly the keys that mattered.
+func warnCopilotLegacy(provider, apiKey, baseURL, model bool) {
+	if !provider && !apiKey && !baseURL && !model {
+		return
+	}
+	copilotDeprecationOnce.Do(func() {
+		keys := make([]string, 0, 4)
+		if provider {
+			keys = append(keys, "M9M_COPILOT_PROVIDER")
+		}
+		if apiKey {
+			keys = append(keys, "M9M_COPILOT_API_KEY")
+		}
+		if baseURL {
+			keys = append(keys, "M9M_COPILOT_BASE_URL")
+		}
+		if model {
+			keys = append(keys, "M9M_COPILOT_MODEL")
+		}
+		log.Printf("WARNING: deprecated M9M_COPILOT_* env var(s) still in use (%s); please rename to the M9M_AI_* equivalents before the next major release (see CHANGELOG.md [Unreleased] for context)", strings.Join(keys, ", "))
+	})
+}
+
+// pickEnv returns the value of the first non-empty env var in the
+// list, alongside a boolean that is true when a non-primary name was
+// the source of the value. Used by LoadConfigFromEnv to honour both
+// the new M9M_AI_* names and the deprecated M9M_COPILOT_* names, and
+// to emit a deprecation warning exactly once per process when a
+// legacy var is what actually supplied a value.
+func pickEnv(names ...string) (string, bool) {
+	if len(names) == 0 {
+		return "", false
+	}
+	if v := strings.TrimSpace(os.Getenv(names[0])); v != "" {
+		return v, false
+	}
+	for i := 1; i < len(names); i++ {
+		if v := strings.TrimSpace(os.Getenv(names[i])); v != "" {
+			return v, true
 		}
 	}
-	return ""
+	return "", false
 }
 
 func envBool(name string, def bool) bool {
