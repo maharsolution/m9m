@@ -185,3 +185,54 @@ func (cm *CredentialManager) LoadFromStorage(store storage.WorkflowStorage) erro
 	}
 	return nil
 }
+
+// UpsertCredential writes a credential to the in-memory store that
+// the engine reads at execution time. The API uses this after a
+// successful storage.SaveCredential / storage.UpdateCredential so
+// the in-memory map stays in sync with persistent storage without
+// having to re-run LoadFromStorage (which would re-read the entire
+// table and drop any in-flight node→credential mappings).
+//
+// We mirror the storage.Credential envelope as-is. The persistent
+// storage layer persists `Data` as plain JSON (no encryption at
+// that boundary; encryption happens inside the in-memory store on
+// GetCredential when Encrypted=true), so the values we copy in
+// here match exactly what LoadFromStorage would seed. Encrypted is
+// left false so GetCredential returns the same plain map the engine
+// already expected after a fresh LoadFromStorage.
+func (cm *CredentialManager) UpsertCredential(c *storage.Credential) {
+	if c == nil || c.ID == "" {
+		return
+	}
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.store.credentials[c.ID] = &Credential{
+		ID:   c.ID,
+		Name: c.Name,
+		Type: c.Type,
+		Data: c.Data,
+	}
+}
+
+// RemoveCredential evicts a credential from the in-memory store.
+// Mirrors storage.DeleteCredential on the API side; without it, a
+// credential deleted via the UI would still resolve at execution
+// time (because the engine only knows about the in-memory map).
+func (cm *CredentialManager) RemoveCredential(id string) {
+	if id == "" {
+		return
+	}
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	delete(cm.store.credentials, id)
+}
+
+// GetCredential fetches a credential from the in-memory store by
+// id. Returns the same shape the engine sees via the store, so
+// callers (including tests) can verify the write-through path
+// without poking at internal maps.
+func (cm *CredentialManager) GetCredential(id string) (*Credential, error) {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return cm.store.GetCredential(id)
+}

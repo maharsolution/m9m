@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/mux"
+	"github.com/neul-labs/m9m/internal/credentials"
 	"github.com/neul-labs/m9m/internal/storage"
 )
 
@@ -262,5 +263,70 @@ func TestCredentialPatchPartial(t *testing.T) {
 	}
 	if updated.Type != "apiKey" {
 		t.Fatalf("type changed unexpectedly: %s", updated.Type)
+	}
+}
+
+// TestCredentialWriteThroughToEngine verifies the fix for the
+// user-reported bug: credentials created/updated/deleted via the
+// UI must be visible to the workflow engine immediately, without
+// requiring a server restart or a manual LoadFromStorage refresh.
+// We stand up a tiny CredentialManager (the same one the engine
+// reads), wire it through SetCredentialManager, and assert that
+// UpsertCredential / RemoveCredential are invoked by the handlers.
+func TestCredentialWriteThroughToEngine(t *testing.T) {
+	// The credential store requires M9M_DEV_MODE=true (or a
+	// real N8N_ENCRYPTION_KEY in the environment) to spin up
+	// without prod-mode encryption-key gating. Tests run in dev
+	// mode so we set it explicitly here and clean it up.
+	t.Setenv("M9M_DEV_MODE", "true")
+
+	srv := newTestServer(t)
+	cm, err := credentials.NewCredentialManager()
+	if err != nil {
+		t.Fatalf("NewCredentialManager: %v", err)
+	}
+	srv.SetCredentialManager(cm)
+
+	// Create — manager should now have the credential.
+	createBody := map[string]any{
+		"name": "write-thru",
+		"type": "apiKey",
+		"data": map[string]any{"apiKey": "k-create"},
+	}
+	w := doJSON(t, srv, http.MethodPost, "/api/v1/credentials", createBody)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create: status %d body %s", w.Code, w.Body.String())
+	}
+	var created CredentialResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &created)
+	if _, err := cm.GetCredential(created.ID); err != nil {
+		t.Fatalf("credential not in manager after Create: %v", err)
+	}
+
+	// Update — manager's data must reflect the new value.
+	updateBody := map[string]any{
+		"name": "write-thru",
+		"type": "apiKey",
+		"data": map[string]any{"apiKey": "k-updated"},
+	}
+	w = doJSON(t, srv, http.MethodPut, "/api/v1/credentials/"+created.ID, updateBody)
+	if w.Code != http.StatusOK {
+		t.Fatalf("update: status %d body %s", w.Code, w.Body.String())
+	}
+	c, err := cm.GetCredential(created.ID)
+	if err != nil {
+		t.Fatalf("GetCredential after update: %v", err)
+	}
+	if got := c.Data["apiKey"]; got != "k-updated" {
+		t.Fatalf("expected apiKey=k-updated, got %v", got)
+	}
+
+	// Delete — manager must drop it.
+	w = doJSON(t, srv, http.MethodDelete, "/api/v1/credentials/"+created.ID, nil)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("delete: status %d body %s", w.Code, w.Body.String())
+	}
+	if _, err := cm.GetCredential(created.ID); err == nil {
+		t.Fatalf("credential still in manager after Delete")
 	}
 }

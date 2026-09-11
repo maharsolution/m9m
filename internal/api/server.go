@@ -8,6 +8,8 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
+	"github.com/neul-labs/m9m/internal/ai"
+	"github.com/neul-labs/m9m/internal/credentials"
 	"github.com/neul-labs/m9m/internal/engine"
 	"github.com/neul-labs/m9m/internal/otel"
 	"github.com/neul-labs/m9m/internal/queue"
@@ -56,8 +58,23 @@ type APIServer struct {
 	config         *APIServerConfig
 	webhookManager *webhooks.WebhookManager
 
+	// credMgr is the in-memory credential store the workflow
+	// engine reads from at execution time. The API handlers
+	// write through both `storage` (DB) and this manager so
+	// credentials created or updated after server startup are
+	// visible to the engine immediately — without going through
+	// a full LoadFromStorage round trip. Set via
+	// SetCredentialManager from cmd/m9m/commands/serve.go.
+	credMgr *credentials.CredentialManager
+
 	otelManager *otel.Manager
 	otelStore   *otel.ConfigStore
+
+	// aiStore persists user-edited AI config overrides (env-default +
+	// DB-override). aiRuntime is the live *AI service the handlers
+	// reach into; both can be nil when the AI subsystem is disabled.
+	aiStore   *ai.ConfigStore
+	aiRuntime *ai.Runtime
 
 	executionMu      sync.RWMutex
 	executionCancels map[string]context.CancelFunc
@@ -129,4 +146,24 @@ func (s *APIServer) SetWebhookManager(wm *webhooks.WebhookManager) {
 func (s *APIServer) SetOTelManager(m *otel.Manager, store *otel.ConfigStore) {
 	s.otelManager = m
 	s.otelStore = store
+}
+
+// SetCredentialManager wires the in-memory credential store the
+// engine reads from at execution time. The credential create /
+// update / delete handlers write through to this manager in
+// addition to the DB, so a credential added via the UI is visible
+// to running workflows without waiting for a server restart or
+// the next LoadFromStorage refresh.
+func (s *APIServer) SetCredentialManager(cm *credentials.CredentialManager) {
+	s.credMgr = cm
+}
+
+// SetAI wires the AI config store and runtime so the /api/v1/ai and
+// /api/v1/ai/{generate,suggest,explain,fix,chat} handlers can serve
+// requests. Both arguments may be nil — when only store is supplied,
+// PUT/DELETE will persist changes without live-reloading the AI
+// service (useful for tests).
+func (s *APIServer) SetAI(store *ai.ConfigStore, runtime *ai.Runtime) {
+	s.aiStore = store
+	s.aiRuntime = runtime
 }

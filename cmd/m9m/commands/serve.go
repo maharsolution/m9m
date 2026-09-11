@@ -15,10 +15,11 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
 
+	"github.com/neul-labs/m9m/internal/ai"
 	"github.com/neul-labs/m9m/internal/api"
 	"github.com/neul-labs/m9m/internal/credentials"
 	"github.com/neul-labs/m9m/internal/engine"
-	"github.com/neul-labs/m9m/internal/nodes/ai"
+	ainodes "github.com/neul-labs/m9m/internal/nodes/ai"
 	"github.com/neul-labs/m9m/internal/otel"
 	"github.com/neul-labs/m9m/internal/queue"
 	"github.com/neul-labs/m9m/internal/scheduler"
@@ -187,12 +188,12 @@ func runServe(cmd *cobra.Command, args []string) {
 		// (e.g. when a build excludes OpenAI) so the test harnesses
 		// can still run.
 		if node, err := eng.GetNodeExecutor("n8n-nodes-base.openAi"); err == nil {
-			if aiNode, ok := node.(*ai.OpenAINode); ok {
+			if aiNode, ok := node.(*ainodes.OpenAINode); ok {
 				aiNode.SetOTelManager(otelManager)
 			}
 		}
 		if node, err := eng.GetNodeExecutor("n8n-nodes-base.anthropic"); err == nil {
-			if aiNode, ok := node.(*ai.AnthropicNode); ok {
+			if aiNode, ok := node.(*ainodes.AnthropicNode); ok {
 				aiNode.SetOTelManager(otelManager)
 			}
 		}
@@ -216,6 +217,19 @@ func runServe(cmd *cobra.Command, args []string) {
 		}
 		eng.SetCredentialManager(credMgr)
 	}
+
+	// Initialize the in-app AI assistant config — env-default with
+	// DB-override, same pattern as OTEL. The runtime is constructed
+	// even when AI is disabled at boot so PUT /api/v1/ai can flip it
+	// on without a server restart.
+	aiStore := ai.NewConfigStore(store)
+	aiOverride, err := aiStore.LoadOrZero()
+	if err != nil {
+		logger.Printf("Warning: failed to load AI override: %v (falling back to env defaults)", err)
+	}
+	aiCfg := ai.EffectiveConfig(aiOverride)
+	aiRuntime := ai.NewRuntime(aiCfg)
+	logger.Printf("AI assistant initialised: enabled=%t provider=%s model=%s", aiCfg.Enabled, aiCfg.Provider, aiCfg.Model)
 
 	// Initialize job queue
 	var jobQueue queue.JobQueue
@@ -275,6 +289,21 @@ func runServe(cmd *cobra.Command, args []string) {
 	// cases — only a build error above leaves it nil.
 	if otelManager != nil {
 		apiServer.SetOTelManager(otelManager, otelStore)
+	}
+	// Wire the AI store + runtime so the UI can configure providers
+	// live and the /api/v1/ai/{generate,suggest,explain,fix,chat}
+	// handlers can reach the current *AI service. Both are always
+	// non-nil here; the runtime may still have Enabled=false when
+	// no provider is configured (in which case the handlers return
+	// skeleton responses — see internal/api/ai.go).
+	apiServer.SetAI(aiStore, aiRuntime)
+	// Wire the in-memory credential manager into the API server
+	// so the credentials create/update/delete handlers can write
+	// through to the store the engine reads at execution time.
+	// Without this the engine never sees credentials added via
+	// the UI (it only sees what LoadFromStorage seeded at boot).
+	if credMgr != nil {
+		apiServer.SetCredentialManager(credMgr)
 	}
 
 	// Setup router

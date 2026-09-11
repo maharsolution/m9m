@@ -5,7 +5,7 @@ import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue'
 import WorkflowEditorToolbar from '@/components/workflow/WorkflowEditorToolbar.vue'
 import NodePalette from '@/components/workflow/NodePalette.vue'
 import NodePanel from '@/components/workflow/NodePanel.vue'
-import AgentCopilot from '@/components/copilot/AgentCopilot.vue'
+import AgentAI from '@/components/ai/AgentAI.vue'
 import { useWorkflowEditorStore, useWorkflowStore } from '@/stores'
 
 const route = useRoute()
@@ -15,7 +15,7 @@ const workflowEditorStore = useWorkflowEditorStore()
 
 const showNodePalette = ref(true)
 const showNodePanel = ref(false)
-const showCopilot = ref(false)
+const showAI = ref(false)
 const isExecuting = ref(false)
 
 const workflowId = computed(() => route.params.id as string | undefined)
@@ -31,6 +31,55 @@ onMounted(async () => {
     workflowEditorStore.createNewWorkflow()
   }
 })
+
+// Re-initialise the editor when the route changes between two
+// existing workflows OR between an existing workflow and
+// `/workflows/new`. Without this watch, navigating from a
+// previously-saved workflow to a fresh one keeps the previous
+// nodes on the canvas (because Vue Router reuses the same
+// component instance, so onMounted never fires again) — which
+// is the user-reported "New Workflow still shows the previous
+// nodes" bug. The watcher mirrors the onMounted branch exactly
+// so reload-on-route and initial-mount behave identically.
+//
+// Skips:
+//   * When the new id already matches the workflow currently
+//     loaded in the store. That's the post-save path:
+//     saveWorkflow() routes from /workflows/new → /workflows/{id}
+//     and the store already holds the freshly-saved workflow,
+//     so re-fetching would just be an extra round-trip for
+//     no gain.
+//   * When arriving at /workflows/new with no real id in the
+//     store (e.g. the Duplicate action in WorkflowList seeds
+//     a fresh draft with id='' before navigating). Wiping the
+//     draft would discard the duplicated content.
+watch(
+  workflowId,
+  async (newId, oldId) => {
+    if (newId === oldId) return
+    if (!newId || newId === 'new') {
+      const current = workflow.value
+      // `current.id === ''` is the fresh-draft signal: the store
+      // holds a workflow someone just placed but it hasn't been
+      // persisted yet (Duplicate action, New button via onMounted,
+      // etc.). `!current.id` covers the onMounted-direct case where
+      // currentWorkflow was never set, and the store falls back to
+      // null when no draft was prepared.
+      if (current && current.id === '') {
+        return
+      }
+      workflowEditorStore.createNewWorkflow()
+      return
+    }
+    if (workflow.value?.id === newId) return
+    try {
+      await workflowStore.fetchWorkflow(newId)
+      workflowEditorStore.resetEditorState()
+    } catch (e) {
+      console.error('Failed to load workflow on route change:', e)
+    }
+  }
+)
 
 // Watch for selected node changes to show/hide panel
 watch(selectedNode, (node) => {
@@ -125,11 +174,11 @@ const renameWorkflow = (name: string) => {
       :is-loading="workflowStore.loading"
       :is-executing="isExecuting"
       :show-node-palette="showNodePalette"
-      :show-copilot="showCopilot"
+      :show-agent-ai="showAI"
       @back="router.push('/workflows')"
       @rename="renameWorkflow"
       @toggle-palette="showNodePalette = !showNodePalette"
-      @toggle-copilot="showCopilot = !showCopilot"
+      @toggle-ai="showAI = !showAI"
       @toggle-active="toggleActive"
       @toggle-debug="toggleDebug"
       @execute="executeWorkflow"
@@ -171,10 +220,10 @@ const renameWorkflow = (name: string) => {
         leave-from-class="translate-x-0 opacity-100"
         leave-to-class="translate-x-full opacity-0"
       >
-        <AgentCopilot
-          v-if="showCopilot"
+        <AgentAI
+          v-if="showAI"
           class="w-96"
-          @close="showCopilot = false"
+          @close="showAI = false"
         />
       </transition>
     </div>

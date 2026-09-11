@@ -131,6 +131,16 @@ func (s *APIServer) CreateCredential(w http.ResponseWriter, r *http.Request) {
 		s.sendError(w, http.StatusInternalServerError, "Failed to save credential", err)
 		return
 	}
+
+	// Mirror to the in-memory credential store the engine reads
+	// at execution time. Without this, a credential created via
+	// the UI after server startup is invisible to running
+	// workflows until the server is restarted (or LoadFromStorage
+	// is re-run, which we never do).
+	if s.credMgr != nil {
+		s.credMgr.UpsertCredential(cred)
+	}
+
 	s.sendJSON(w, http.StatusCreated, toCredentialResponse(cred))
 }
 
@@ -180,6 +190,14 @@ func (s *APIServer) UpdateCredential(w http.ResponseWriter, r *http.Request) {
 		s.sendError(w, http.StatusInternalServerError, "Failed to update credential", err)
 		return
 	}
+
+	// Mirror to the in-memory store so the next engine
+	// ResolveWorkflowCredentials picks up the updated data.
+	// Same rationale as CreateCredential above.
+	if s.credMgr != nil {
+		s.credMgr.UpsertCredential(&merged)
+	}
+
 	s.sendJSON(w, http.StatusOK, toCredentialResponse(&merged))
 }
 
@@ -196,6 +214,13 @@ func (s *APIServer) DeleteCredential(w http.ResponseWriter, r *http.Request) {
 	if err := s.storage.DeleteCredential(id); err != nil {
 		s.sendError(w, http.StatusNotFound, "Credential not found", err)
 		return
+	}
+
+	// Drop from the in-memory store too, otherwise the engine
+	// would still resolve this id at execution time and the user
+	// would wonder why a "deleted" credential keeps working.
+	if s.credMgr != nil {
+		s.credMgr.RemoveCredential(id)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
