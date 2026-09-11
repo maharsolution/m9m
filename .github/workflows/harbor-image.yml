@@ -1,0 +1,142 @@
+name: harbor-image
+
+# Replace the on-server `/root/bin/build` pipeline. Every push to
+# `main` triggers a fresh multi-arch build of the m9m Docker image and
+# pushes it to Harbor. The remote box no longer runs `bin/build`;
+# instead its `/root/gabungan/docker-compose.yaml` pulls the same
+# image via `docker compose pull m9m-backend && docker compose up -d`.
+#
+# Triggers:
+#   * push to `main`
+#   * manual dispatch (workflow_dispatch) for emergency rebuilds
+#   * tag push v* (same shape as release.yml — keeps tag→image flow
+#     in lock-step with the GHCR release pipeline)
+#
+# Required GitHub Secrets (Settings → Secrets and variables → Actions):
+#   REGISTRY_USERNAME   — Harbor robot or personal account, e.g. `m9m`
+#   REGISTRY_PASSWORD   — matching password for that account
+#
+# The workflow intentionally does NOT shell out to the deploy server.
+# Pull + restart is handled by the operator (or, in production, a
+# separate "deploy" workflow that reacts to new tags via Harbor webhooks).
+# This keeps the workflow idempotent and safe to re-run.
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag_suffix:
+        description: 'Optional suffix appended to branch-based tags (e.g. -rc1). Leave empty for default tags.'
+        required: false
+        default: ''
+
+env:
+  REGISTRY_HOST: harbor.solutiontech.id
+  IMAGE_NAME: m9m-core
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-push:
+    name: Build & push to Harbor
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve image tags
+        id: meta
+        run: |
+          set -euo pipefail
+
+          # Short SHA — always present, identifies this exact commit.
+          COMMIT_SHORT="${GITHUB_SHA::7}"
+
+          # Image references vary by trigger:
+          #   * push to main           : main-<sha>, main, latest
+          #   * tag v1.2.3             : v1.2.3, 1.2, 1, latest
+          #   * workflow_dispatch      : dispatch-<sha>, latest (with optional -suffix on the latter)
+          TAGS=()
+
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            TAGS+=(
+              "${VERSION}"
+              "${VERSION%.*}"
+              "${VERSION%%.*}"
+              "latest"
+            )
+          elif [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            TAGS+=(
+              "main-${COMMIT_SHORT}"
+              "main"
+              "latest"
+            )
+          else
+            # workflow_dispatch or any other branch — keep the SHA-tied
+            # tag and a :latest pointer so a manual rebuild never
+            # silently shadows a known release.
+            TAGS+=(
+              "dispatch-${COMMIT_SHORT}"
+              "latest"
+            )
+            if [[ -n "${{ inputs.tag_suffix }}" ]]; then
+              TAGS+=("dispatch-${COMMIT_SHORT}-${{ inputs.tag_suffix }}")
+            fi
+          fi
+
+          # Join the array into a newline-separated list for $GITHUB_OUTPUT.
+          printf 'tags<<EOF\n%s\nEOF\n' "$(printf '%s\n' "${TAGS[@]}")" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Harbor
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_HOST }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Compute build date
+        id: build_date
+        run: echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push multi-arch image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY_HOST }}/m9m/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.title=m9m-core
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.build_date.outputs.build_date }}
+          build-args: |
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ steps.build_date.outputs.build_date }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Log out of Harbor
+        if: always()
+        run: |
+          # docker/login-action stores credentials at
+          # ~/.docker/config.json. Revoke them at the end of the job so
+          # a leaked runner image doesn't carry the Harbor token.
+          docker logout "${{ env.REGISTRY_HOST }}" || true

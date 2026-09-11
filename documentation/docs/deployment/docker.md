@@ -406,3 +406,112 @@ docker run --rm -v m9m-data:/data -v $(pwd):/backup alpine tar czf /backup/m9m-b
 # Backup database
 docker exec m9m m9m backup /data/backup.sql
 ```
+
+## Image registry (Harbor + GitHub Actions)
+
+Starting with the 2026-09 cycle, the m9m Docker image is **built by a GitHub
+Action and pushed to the project's Harbor registry**, instead of being
+built in-place by `/root/bin/build` on the deploy server. The end-to-end
+shape is:
+
+```
+git push origin main
+     │
+     ▼
+┌─────────────────────────────────────────────┐
+│ .github/workflows/harbor-image.yml          │
+│   (ubuntu-latest, buildx, multi-arch)       │
+│                                             │
+│   docker buildx build                       │
+│     --platform linux/amd64,linux/arm64      │
+│     --tag harbor.solutiontech.id/           │
+│          m9m/m9m-core:main-<sha>,main,latest│
+│     --push                                  │
+└─────────────────────────────────────────────┘
+     │
+     ▼
+harbor.solutiontech.id/m9m/m9m-core:*
+     │
+     ▼  (operator or webhook)
+ssh root@<server> "cd /root/gabungan && \
+  docker compose pull m9m-backend && \
+  docker compose up -d"
+```
+
+The image is published under the following tag matrix:
+
+| Trigger | Tags applied |
+|---|---|
+| `git push origin main` | `main-<sha>`, `main`, `latest` |
+| `git push origin v1.2.3` | `v1.2.3`, `1.2`, `1`, `latest` |
+| Manual **Run workflow** | `dispatch-<sha>`, `latest`, `dispatch-<sha>-<suffix>` (suffix optional) |
+
+### Required secrets
+
+Configure these once under
+`Settings → Secrets and variables → Actions` on the GitHub side:
+
+| Secret | Example | Purpose |
+|---|---|---|
+| `REGISTRY_USERNAME` | `m9m` | Harbor robot account or personal username |
+| `REGISTRY_PASSWORD` | `Abcd.12345!` | Matching password |
+
+The workflow is otherwise self-contained — it does not shell out to the
+deploy server, so a leaked runner cannot overwrite `/root/gabungan`.
+
+### Switching the bundled docker-compose.yml to the registry
+
+The repo's `docker-compose.yml` pins `image: ${REGISTRY_IMAGE_URL:-m9m}`.
+Set `REGISTRY_IMAGE_URL` in your environment file:
+
+```bash
+# .env (operator-local, never committed)
+REGISTRY_IMAGE_URL=https://harbor.solutiontech.id/m9m/m9m-core:latest
+REGISTRY_URL=https://harbor.solutiontech.id
+REGISTRY_USER=m9m
+REGISTRY_PASSWORD=...        # mirrors the GitHub Secret
+```
+
+Then start the stack as usual:
+
+```bash
+docker compose pull m9m-backend
+docker compose up -d
+```
+
+`pull_policy: always` ensures the compose stack fetches the latest tag
+on every `up`, so a new push to `main` is picked up the next time
+someone (or a Harbor webhook) runs `docker compose up -d`.
+
+### Local development without Harbor
+
+If you want to test a code change before pushing, fall back to a local
+build:
+
+```bash
+unset REGISTRY_IMAGE_URL          # falls back to `image: m9m`
+docker build -t m9m .
+docker compose up -d
+```
+
+The bundled Dockerfile lives at the repo root and is identical to what
+the GitHub Action builds; only the tag and registry differ.
+
+### Replacing the legacy `/root/bin/build` pipeline
+
+Before this workflow landed, deploys ran through `/root/bin/build` on
+the server itself. The replacement script on the server is now roughly:
+
+```bash
+#!/usr/bin/env bash
+# /root/bin/pull-compose.sh — runs on the deploy server
+set -euo pipefail
+cd /root/gabungan
+docker compose pull m9m-backend
+docker compose up -d m9m-backend
+```
+
+Pair it with a Harbor webhook (project → Webhooks → Push notification)
+that hits this script over SSH, or run it manually after each push. The
+old `docker build --no-cache` step is now redundant because the GitHub
+Action always builds from a clean Buildx cache.

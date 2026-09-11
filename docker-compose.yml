@@ -7,10 +7,19 @@ services:
   # Both the m9m backend and the n8n<->m9m sync bridge run inside this
   # single container, managed by supervisord (see the root Dockerfile /
   # supervisord.conf). The sync bridge's HTTP API is published on 8001.
+  #
+  # Image source: the m9m image is now published to Harbor by the
+  # .github/workflows/harbor-image.yml workflow on every push to main.
+  # `REGISTRY_IMAGE_URL` (default `https://harbor.solutiontech.id/m9m/m9m-core:latest`)
+  # pins exactly which tag is pulled. Operators override per
+  # environment via .env / docker-compose.override.yaml. The previous
+  # build-from-source flow (`/root/bin/build`) is replaced by this
+  # registry pull; see documentation/docs/deployment/docker.md.
   m9m-backend:
-    image: m9m
+    image: ${REGISTRY_IMAGE_URL:-m9m}
     container_name: m9m-backend
     restart: always
+    pull_policy: always
     ports:
       - "8080:8080"
       - "9090:9090"
