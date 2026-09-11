@@ -72,7 +72,7 @@ import BaseNode from '@/components/nodes/BaseNode.vue'
 // and a reactive wrapper around it triggers spurious re-renders
 // on every reactive change). WorkflowCanvas uses the same
 // `markRaw` pattern — see node-types in that file.
-const nodeTypes = {
+const nodeTypes: Record<string, any> = {
   custom: markRaw(BaseNode),
 }
 
