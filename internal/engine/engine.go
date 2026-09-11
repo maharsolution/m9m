@@ -273,10 +273,26 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 	// the live runExecutionData. Both fields are cleared at the end
 	// to keep the engine re-entrant across concurrent workflows.
 	e.workflow = workflow
-	// Reset the EdgesTaken accumulator before every run so a
+	// Save + reset the EdgesTaken accumulator before every run so a
 	// re-used engine (long-lived process) never leaks edges from
 	// the previous workflow into the current one. The map is
 	// small (O(E)) and the allocation cost is negligible.
+	//
+	// For the SUB-workflow case (an ExecuteWorkflow node recursing
+	// back into ExecuteWorkflowWithContext with a different
+	// workflow), `parentEdgesTaken` holds the caller's accumulated
+	// edges. Without merging them back at the end of this call,
+	// the inner run would clobber the caller's accumulator — so
+	// when the OUTER (parent) workflow later returns its result,
+	// its EdgesTaken would only contain edges recorded AFTER the
+	// sub-workflow returned, not the parent's own edges. That's
+	// the bug behind "execution view shows grey lines on the
+	// parent workflow that contains an Execute Workflow node":
+	// the persisted EdgesTaken only had sub-workflow keys, so the
+	// frontend's `parseEdgeId(parentId:...)` lookups all missed
+	// and fell through to the default slate-400 stroke. The merge
+	// happens just before the result is constructed below.
+	parentEdgesTaken := e.edgesTaken
 	e.edgesTaken = make(map[string]bool)
 	e.runExecutionData = &expressions.RunExecutionData{
 		ExecutionData: &expressions.ExecutionData{},
@@ -701,6 +717,20 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		}
 	}
 
+	// Merge this run's EdgesTaken back into the parent's
+	// accumulator (if any) and restore the field so the rest of
+	// the parent's execution loop keeps accumulating against the
+	// combined map. For the OUTERMOST call `parentEdgesTaken` is
+	// nil — that's the "top-level run" case, and we just keep
+	// this run's map as-is. See the parentEdgesTaken capture at
+	// the top of this function for the full rationale.
+	if parentEdgesTaken != nil {
+		for k, v := range e.edgesTaken {
+			parentEdgesTaken[k] = v
+		}
+		e.edgesTaken = parentEdgesTaken
+	}
+
 	return &ExecutionResult{
 		Data: finalResult,
 		// Publish the per-node output map so external callers (the
@@ -718,7 +748,10 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		// Debug=ON (because the per-node snapshots let it infer the
 		// path); with this set the same colouring works under
 		// Debug=OFF, satisfying the "different colour per edge"
-		// requirement without bloating the DB.
+		// requirement without bloating the DB. After the merge
+		// above, `e.edgesTaken` contains both this run's edges and
+		// (for nested sub-workflows) every inner run's edges, so
+		// the persisted value reflects the full execution tree.
 		EdgesTaken: e.edgesTaken,
 	}, nil
 }

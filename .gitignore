@@ -94,12 +94,14 @@ packages/m9m-cli/nodejs/lib/*.dll
 packages/m9m-cli/nodejs/package-lock.json
 
 # Cursor / Claude agent local state — per-user IDE/tooling only.
-# Skills, docs, and parity reports under .claude/ may be intentionally
-# committed on a case-by-case basis; memories/ is always local.
+# Both directories are intentionally kept off the remote: rules,
+# skills, memories, and settings are local to each developer and
+# contain workspace-specific credentials (server IPs, API keys)
+# that should not be published. They stay on the local disk via
+# .claude/ and .cursor/ remaining untracked paths; nothing under
+# them is ever staged again.
 .cursor/
-.claude/memories/
-.claude/settings.local.json
-.claude/.mcp.json
+.claude/
 bocahtuanakal.json
 sw.json
 sw0.json

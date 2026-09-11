@@ -188,3 +188,98 @@ func TestExecuteWorkflowPopulatesEdgesTaken(t *testing.T) {
 		t.Errorf("expected edge n1:0:n2:0 to be marked taken; got %v", result.EdgesTaken)
 	}
 }
+
+// TestExecuteWorkflow_SubWorkflowEdgesMergedIntoParent covers the
+// regression fixed in the EdgesTaken parent-merge path: when a
+// parent workflow invokes an ExecuteWorkflow node that runs a
+// sub-workflow, the parent's edgesTaken accumulator used to be
+// reset on the inner call and clobbered by the sub-workflow's
+// keys. The frontend then couldn't find any of the parent
+// workflow's edges in the persisted EdgesTaken map and fell
+// through to the default grey stroke for every parent edge.
+//
+// This test simulates the recursion directly: the engine field
+// `edgesTaken` is the shared accumulator, so manually seeding it
+// with parent edges and then calling ExecuteWorkflow on a
+// different workflow exercises the same merge path the
+// ExecuteWorkflowNode → EngineAdapter recursion uses. After the
+// call, both the parent-seeded edge AND the sub-workflow's
+// newly-recorded edge must be present.
+func TestExecuteWorkflow_SubWorkflowEdgesMergedIntoParent(t *testing.T) {
+	engine := NewWorkflowEngine().(*workflowEngineImpl)
+
+	engine.RegisterNodeExecutor("n8n-nodes-base.start", &mockNodeExecutor{
+		name: "start-mock",
+		description: base.NodeDescription{
+			Name:        "Start",
+			Description: "Trigger-only manual start",
+			Category:    "Trigger",
+		},
+	})
+	engine.RegisterNodeExecutor("n8n-nodes-base.set", &mockNodeExecutor{
+		name: "set-mock",
+		description: base.NodeDescription{
+			Name:        "Set",
+			Description: "Mock Set node",
+			Category:    "Transform",
+		},
+	})
+
+	// Seed the parent's accumulator with an edge that
+	// represents the parent's Webhook → Call SubWorkflow
+	// connection. In production this key is set when the
+	// parent's Webhook executes; the regression was that the
+	// sub-workflow's inner ExecuteWorkflowWithContext call
+	// wiped this map on reset.
+	parentEdge := "parent-webhook:0:parent-call:0"
+	engine.edgesTaken = map[string]bool{parentEdge: true}
+
+	// Now run a separate workflow on the same engine instance
+	// (mirrors what the ExecuteWorkflowNode does internally
+	// when it recurses into ExecuteWorkflowWithContext with
+	// the child workflow). The accumulator must be merged,
+	// not replaced.
+	subWorkflow := &model.Workflow{
+		Name:   "Sub",
+		Active: false,
+		Nodes: []model.Node{
+			{ID: "s1", Name: "SubStart", Type: "n8n-nodes-base.start"},
+			{ID: "s2", Name: "SubSet", Type: "n8n-nodes-base.set"},
+		},
+		Connections: map[string]model.Connections{
+			"SubStart": {Main: [][]model.Connection{{{Node: "SubSet", Type: "main", Index: 0}}}},
+		},
+	}
+
+	result, err := engine.ExecuteWorkflow(subWorkflow, []model.DataItem{{JSON: map[string]interface{}{"x": 1}}})
+	if err != nil {
+		t.Fatalf("ExecuteWorkflow failed: %v", err)
+	}
+	if result == nil {
+		t.Fatalf("expected non-nil ExecutionResult")
+	}
+
+	// Parent's seeded edge must still be present — that's
+	// the fix. Pre-fix this assertion would fail because the
+	// reset on the inner call dropped the parent's keys.
+	if !result.EdgesTaken[parentEdge] {
+		t.Errorf("parent edge %q was lost; EdgesTaken=%v", parentEdge, result.EdgesTaken)
+	}
+	// Sub-workflow's own edge must also be present so the UI
+	// can colour it green.
+	if !result.EdgesTaken["s1:0:s2:0"] {
+		t.Errorf("sub-workflow edge s1:0:s2:0 missing; EdgesTaken=%v", result.EdgesTaken)
+	}
+
+	// And the engine field itself must still be populated so
+	// any further edges the parent records after this call
+	// (i.e. the parent's edges LEAVING the Call SubWorkflow
+	// node) keep accumulating into the same combined map
+	// rather than starting a fresh one.
+	if engine.edgesTaken == nil {
+		t.Fatalf("engine.edgesTaken is nil after sub-workflow call; parent loop would lose edges")
+	}
+	if !engine.edgesTaken[parentEdge] || !engine.edgesTaken["s1:0:s2:0"] {
+		t.Errorf("engine.edgesTaken missing merged keys after sub-workflow call; got %v", engine.edgesTaken)
+	}
+}
