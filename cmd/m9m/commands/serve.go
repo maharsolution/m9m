@@ -149,20 +149,18 @@ func runServe(cmd *cobra.Command, args []string) {
 
 	// Load JS plugin nodes (community / n8n-nodes-*). The directory
 	// is optional — when empty, only the built-in core nodes are
-	// registered. Plugins are loaded AFTER the core nodes so the
-	// engine registry has the well-known catalog ready before any
-	// plugin nodes are added.
+	// registered. The plugin registry loads JS / gRPC / REST
+	// descriptors from the directory at startup and registers each
+	// one as a `NodeExecutor` against the engine.
 	pluginDir := firstNonEmpty(servePluginDir, os.Getenv("M9M_PLUGIN_DIR"))
 	if pluginDir != "" {
-		pluginReg := plugins.NewRegistry()
-		if err := pluginReg.LoadDir(pluginDir); err != nil {
+		pluginReg := plugins.NewPluginRegistry()
+		if err := pluginReg.LoadPluginsFromDirectory(pluginDir); err != nil {
 			logger.Printf("Plugin loader: %v (continuing without community plugins)", err)
-		} else {
-			if err := pluginReg.RegisterAll(eng); err != nil {
-				logger.Printf("Plugin registration: %v", err)
-			} else {
-				logger.Printf("Loaded %d community plugin node(s) from %s", pluginReg.Count(), pluginDir)
-			}
+		} else if err := pluginReg.RegisterWithEngine(eng); err != nil {
+			logger.Printf("Plugin loader: %v (continuing without community plugins)", err)
+		} else if total := pluginReg.Count(); total > 0 {
+			logger.Printf("Loaded %d community plugin node(s) from %s", total, pluginDir)
 		}
 	}
 

@@ -2,140 +2,359 @@ package plugins
 
 import (
 	"fmt"
-	"os"
+	"log"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 
 	"github.com/neul-labs/m9m/internal/engine"
+	"github.com/neul-labs/m9m/internal/nodes/base"
 )
 
-// Registry holds the loaded plugins and threads them through the
-// engine. The map is keyed by node type (e.g.
-// `n8n-nodes-base.my-node`) so registration with the engine is a
-// straight assignment.
-//
-// All methods are safe for concurrent use; the only mutable state
-// is the plugin map and the engine pointer.
-type Registry struct {
-	mu      sync.RWMutex
-	plugins map[string]*Plugin
-	dirs    []string
+// PluginType represents the type of plugin
+type PluginType string
+
+const (
+	PluginTypeJavaScript PluginType = "javascript"
+	PluginTypeGRPC       PluginType = "grpc"
+	PluginTypeREST       PluginType = "rest"
+)
+
+// Plugin represents a generic plugin interface
+type Plugin interface {
+	GetDescription() base.NodeDescription
+	GetType() PluginType
 }
 
-// NewRegistry returns an empty registry. Call `LoadDir` once
-// (typically during `m9m serve` startup) and `RegisterAll` to
-// install the plugins with the engine.
-func NewRegistry() *Registry {
-	return &Registry{plugins: map[string]*Plugin{}}
+// PluginRegistry manages all loaded plugins
+type PluginRegistry struct {
+	plugins          map[string]Plugin
+	pluginDir        string                  // Directory where plugins are loaded from
+	engine           engine.WorkflowEngine   // Reference to workflow engine for re-registration
+	jsConfig         *JavaScriptPluginConfig
+	grpcConfig       *GRPCPluginConfig
+	restConfig       *RESTPluginConfig
+	mu               sync.RWMutex
 }
 
-// LoadDir walks `dir` for `*.js` files and loads each one. Plugin
-// load errors are collected and returned as a single multi-error so
-// the operator can see every problem at once; a single broken
-// plugin does not abort the entire startup.
-func (r *Registry) LoadDir(dir string) error {
-	if dir == "" {
-		return nil
+// NewPluginRegistry creates a new plugin registry
+func NewPluginRegistry() *PluginRegistry {
+	return &PluginRegistry{
+		plugins:    make(map[string]Plugin),
+		jsConfig:   DefaultJavaScriptPluginConfig(),
+		grpcConfig: DefaultGRPCPluginConfig(),
+		restConfig: DefaultRESTPluginConfig(),
 	}
-	if _, err := os.Stat(dir); err != nil {
-		return fmt.Errorf("plugin dir %s: %w", dir, err)
-	}
-	entries, err := os.ReadDir(dir)
+}
+
+// SetJavaScriptConfig sets the configuration for JavaScript plugins
+func (r *PluginRegistry) SetJavaScriptConfig(config *JavaScriptPluginConfig) {
+	r.jsConfig = config
+}
+
+// SetGRPCConfig sets the configuration for gRPC plugins
+func (r *PluginRegistry) SetGRPCConfig(config *GRPCPluginConfig) {
+	r.grpcConfig = config
+}
+
+// SetRESTConfig sets the configuration for REST plugins
+func (r *PluginRegistry) SetRESTConfig(config *RESTPluginConfig) {
+	r.restConfig = config
+}
+
+// LoadPluginsFromDirectory scans a directory and loads all plugins
+func (r *PluginRegistry) LoadPluginsFromDirectory(dir string) error {
+	r.mu.Lock()
+	r.pluginDir = dir  // Save directory for hot-reload
+	r.mu.Unlock()
+
+	log.Printf("Scanning for plugins in: %s", dir)
+
+	// Find all plugin files
+	jsFiles, err := filepath.Glob(filepath.Join(dir, "*.js"))
 	if err != nil {
-		return fmt.Errorf("read plugin dir %s: %w", dir, err)
+		return fmt.Errorf("failed to scan for JavaScript plugins: %w", err)
 	}
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Name() < entries[j].Name()
-	})
 
-	var errs []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		if !strings.HasSuffix(e.Name(), ".js") {
-			continue
-		}
-		full := filepath.Join(dir, e.Name())
-		p, err := Load(full)
-		if err != nil {
-			errs = append(errs, err.Error())
-			continue
-		}
-		r.mu.Lock()
-		// Last-write-wins: if two plugins resolve to the same
-		// nodeType, the later file in alphabetical order replaces
-		// the earlier one. This keeps `m9m node list` deterministic
-		// for `m9m plugin install` workflows that drop multiple
-		// files into the directory.
-		if existing, ok := r.plugins[p.NodeType]; ok {
-			errs = append(errs, fmt.Sprintf("plugin %s: node type %q already registered from %s (replaced by %s)",
-				e.Name(), p.NodeType, existing.FilePath, full))
-		}
-		r.plugins[p.NodeType] = p
-		r.mu.Unlock()
+	grpcFiles, err := filepath.Glob(filepath.Join(dir, "*.grpc.yaml"))
+	if err != nil {
+		return fmt.Errorf("failed to scan for gRPC plugins: %w", err)
 	}
-	r.dirs = append(r.dirs, dir)
 
-	if len(errs) > 0 {
-		return fmt.Errorf("plugin load errors: %s", strings.Join(errs, "; "))
+	restFiles, err := filepath.Glob(filepath.Join(dir, "*.rest.yaml"))
+	if err != nil {
+		return fmt.Errorf("failed to scan for REST plugins: %w", err)
 	}
+
+	// Load JavaScript plugins
+	for _, file := range jsFiles {
+		if err := r.LoadJavaScriptPlugin(file); err != nil {
+			log.Printf("Warning: Failed to load JavaScript plugin %s: %v", file, err)
+			continue
+		}
+		log.Printf("✓ Loaded JavaScript plugin: %s", file)
+	}
+
+	// Load gRPC plugins
+	for _, file := range grpcFiles {
+		if err := r.LoadGRPCPlugin(file); err != nil {
+			log.Printf("Warning: Failed to load gRPC plugin %s: %v", file, err)
+			continue
+		}
+		log.Printf("✓ Loaded gRPC plugin: %s", file)
+	}
+
+	// Load REST API plugins
+	for _, file := range restFiles {
+		if err := r.LoadRESTPlugin(file); err != nil {
+			log.Printf("Warning: Failed to load REST plugin %s: %v", file, err)
+			continue
+		}
+		log.Printf("✓ Loaded REST plugin: %s", file)
+	}
+
+	log.Printf("Plugin loading complete. Total plugins: %d", r.Count())
+
 	return nil
 }
 
-// RegisterAll wires every loaded plugin with the engine as a
-// `NodeExecutor` wrapper. The wrapper serialises `execute` calls
-// because Goja is not re-entrant — concurrent invocations of the
-// same plugin would otherwise corrupt the VM.
-func (r *Registry) RegisterAll(eng engine.WorkflowEngine) error {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	for nodeType, p := range r.plugins {
-		eng.RegisterNodeExecutor(nodeType, &Wrapper{plugin: p})
+// LoadJavaScriptPlugin loads a JavaScript plugin from a file
+func (r *PluginRegistry) LoadJavaScriptPlugin(filePath string) error {
+	plugin, err := LoadJavaScriptPlugin(filePath, r.jsConfig)
+	if err != nil {
+		return err
 	}
+
+	return r.RegisterPlugin(plugin.Name, plugin)
+}
+
+// LoadGRPCPlugin loads a gRPC plugin from a configuration file
+func (r *PluginRegistry) LoadGRPCPlugin(filePath string) error {
+	plugin, err := LoadGRPCPlugin(filePath, r.grpcConfig)
+	if err != nil {
+		return err
+	}
+
+	return r.RegisterPlugin(plugin.Name, plugin)
+}
+
+// LoadRESTPlugin loads a REST API plugin from a configuration file
+func (r *PluginRegistry) LoadRESTPlugin(filePath string) error {
+	plugin, err := LoadRESTPlugin(filePath, r.restConfig)
+	if err != nil {
+		return err
+	}
+
+	return r.RegisterPlugin(plugin.Name, plugin)
+}
+
+// RegisterPlugin registers a plugin with the registry
+func (r *PluginRegistry) RegisterPlugin(name string, plugin Plugin) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Normalize name
+	name = normalizePluginName(name)
+
+	if _, exists := r.plugins[name]; exists {
+		return fmt.Errorf("plugin with name %s already registered", name)
+	}
+
+	r.plugins[name] = plugin
 	return nil
 }
 
-// List returns the loaded plugins, sorted by node type for
-// deterministic `m9m node list` output.
-func (r *Registry) List() []*Plugin {
+// GetPlugin retrieves a plugin by name
+func (r *PluginRegistry) GetPlugin(name string) (Plugin, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	out := make([]*Plugin, 0, len(r.plugins))
-	for _, p := range r.plugins {
-		out = append(out, p)
-	}
-	sort.Slice(out, func(i, j int) bool {
-		return out[i].NodeType < out[j].NodeType
-	})
-	return out
+
+	plugin, exists := r.plugins[name]
+	return plugin, exists
 }
 
-// Count returns the number of loaded plugins.
-func (r *Registry) Count() int {
+// Count returns the number of registered plugins
+func (r *PluginRegistry) Count() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return len(r.plugins)
 }
 
-// Reload re-reads a single plugin file. Used by the file watcher
-// to hot-reload on change. Returns the new plugin (or an error) so
-// the caller can decide whether to swap it in.
-func (r *Registry) Reload(nodeType string) (*Plugin, error) {
-	r.mu.Lock()
-	existing, ok := r.plugins[nodeType]
-	r.mu.Unlock()
-	if !ok {
-		return nil, fmt.Errorf("plugin %q is not loaded", nodeType)
+// ListPlugins returns a list of all plugin names
+func (r *PluginRegistry) ListPlugins() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	names := make([]string, 0, len(r.plugins))
+	for name := range r.plugins {
+		names = append(names, name)
 	}
-	p, err := Load(existing.FilePath)
-	if err != nil {
-		return nil, err
-	}
+
+	return names
+}
+
+// RegisterWithEngine registers all plugins with the workflow engine
+func (r *PluginRegistry) RegisterWithEngine(eng engine.WorkflowEngine) error {
 	r.mu.Lock()
-	r.plugins[nodeType] = p
+	r.engine = eng  // Save engine reference for hot-reload
+	plugins := make(map[string]Plugin)
+	for k, v := range r.plugins {
+		plugins[k] = v
+	}
 	r.mu.Unlock()
-	return p, nil
+
+	for name, plugin := range plugins {
+		var executor base.NodeExecutor
+
+		switch p := plugin.(type) {
+		case *JavaScriptNodePlugin:
+			executor = NewJavaScriptNodeWrapper(p)
+		case *GRPCNodePlugin:
+			executor = NewGRPCNodeWrapper(p)
+		case *RESTNodePlugin:
+			executor = NewRESTNodeWrapper(p)
+		default:
+			log.Printf("Warning: Unknown plugin type for %s", name)
+			continue
+		}
+
+		// Register with engine using n8n-nodes-base prefix
+		nodeName := fmt.Sprintf("n8n-nodes-base.%s", name)
+		eng.RegisterNodeExecutor(nodeName, executor)
+
+		log.Printf("Registered plugin node: %s", nodeName)
+	}
+
+	return nil
+}
+
+// ReloadPlugin reloads a specific plugin (for hot reload)
+func (r *PluginRegistry) ReloadPlugin(name string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	plugin, exists := r.plugins[name]
+	if !exists {
+		return fmt.Errorf("plugin %s not found", name)
+	}
+
+	// Get the file path based on plugin type
+	var filePath string
+	switch p := plugin.(type) {
+	case *JavaScriptNodePlugin:
+		filePath = p.FilePath
+	case *GRPCNodePlugin:
+		filePath = p.ConfigPath
+	case *RESTNodePlugin:
+		filePath = p.ConfigPath
+	default:
+		return fmt.Errorf("unknown plugin type")
+	}
+
+	// Remove old plugin
+	delete(r.plugins, name)
+
+	// Reload based on file extension
+	if strings.HasSuffix(filePath, ".js") {
+		return r.LoadJavaScriptPlugin(filePath)
+	} else if strings.HasSuffix(filePath, ".grpc.yaml") {
+		return r.LoadGRPCPlugin(filePath)
+	} else if strings.HasSuffix(filePath, ".rest.yaml") {
+		return r.LoadRESTPlugin(filePath)
+	}
+
+	return fmt.Errorf("unknown plugin file type: %s", filePath)
+}
+
+// ReloadAllPlugins reloads all plugins from the plugin directory
+func (r *PluginRegistry) ReloadAllPlugins() error {
+	r.mu.RLock()
+	pluginDir := r.pluginDir
+	eng := r.engine
+	r.mu.RUnlock()
+
+	if pluginDir == "" {
+		return fmt.Errorf("no plugin directory configured")
+	}
+
+	if eng == nil {
+		return fmt.Errorf("no workflow engine registered")
+	}
+
+	log.Printf("Reloading all plugins from: %s", pluginDir)
+
+	// Clear old plugins (close gRPC connections if needed)
+	r.mu.Lock()
+	for name, plugin := range r.plugins {
+		if grpcPlugin, ok := plugin.(*GRPCNodePlugin); ok {
+			if err := grpcPlugin.Close(); err != nil {
+				log.Printf("Warning: Failed to close gRPC plugin %s: %v", name, err)
+			}
+		}
+	}
+	r.plugins = make(map[string]Plugin)
+	r.mu.Unlock()
+
+	// Reload all plugins from directory
+	if err := r.LoadPluginsFromDirectory(pluginDir); err != nil {
+		return fmt.Errorf("failed to reload plugins: %w", err)
+	}
+
+	// Re-register all plugins with engine
+	if err := r.RegisterWithEngine(eng); err != nil {
+		return fmt.Errorf("failed to register reloaded plugins: %w", err)
+	}
+
+	log.Printf("✅ Successfully reloaded %d plugins", r.Count())
+	return nil
+}
+
+// GetPluginDirectory returns the current plugin directory
+func (r *PluginRegistry) GetPluginDirectory() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.pluginDir
+}
+
+// GetStats returns statistics about loaded plugins
+func (r *PluginRegistry) GetStats() map[string]interface{} {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	stats := map[string]interface{}{
+		"total":      len(r.plugins),
+		"javascript": 0,
+		"grpc":       0,
+		"rest":       0,
+		"directory":  r.pluginDir,
+	}
+
+	for _, plugin := range r.plugins {
+		switch plugin.GetType() {
+		case PluginTypeJavaScript:
+			stats["javascript"] = stats["javascript"].(int) + 1
+		case PluginTypeGRPC:
+			stats["grpc"] = stats["grpc"].(int) + 1
+		case PluginTypeREST:
+			stats["rest"] = stats["rest"].(int) + 1
+		}
+	}
+
+	return stats
+}
+
+// normalizePluginName normalizes a plugin name to a standard format
+func normalizePluginName(name string) string {
+	// Remove spaces and convert to lowercase
+	name = strings.ToLower(name)
+	name = strings.ReplaceAll(name, " ", "-")
+	name = strings.ReplaceAll(name, "_", "-")
+
+	return name
+}
+
+// GetType returns the plugin type
+func (p *JavaScriptNodePlugin) GetType() PluginType {
+	return PluginTypeJavaScript
 }
