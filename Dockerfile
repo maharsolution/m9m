@@ -55,10 +55,16 @@ COPY --from=web-builder /web/dist ./internal/web/dist
 # UI footer cannot tell whether the running container is fresh or stale.
 ARG COMMIT="unknown"
 ARG BUILD_DATE="unknown"
+# IMPORTANT: the `-ldflags` value is a SINGLE shell token — POSIX sh does
+# not honour `\<newline>` line continuations inside double-quoted
+# strings, so a multi-line ldflags string here would be passed to `go
+# build` with literal backslashes in it, which the linker rejects with
+# "unknown flag" (exit code 1). The whole ldflags string is therefore
+# collapsed onto one line below. Newlines are replaced with spaces; the
+# embedded `-extldflags '-static'` retains the single quotes because
+# the outer double quotes still protect whitespace.
 RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo \
-    -ldflags="-w -s -extldflags '-static' \
-              -X main.Commit=${COMMIT} \
-              -X main.BuildDate=${BUILD_DATE}" \
+    -ldflags="-w -s -extldflags '-static' -X main.Commit=${COMMIT} -X main.BuildDate=${BUILD_DATE}" \
     -o m9m ./cmd/m9m
 
 # Runtime stage
