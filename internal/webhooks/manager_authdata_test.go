@@ -44,8 +44,9 @@ func TestResolveCredentialAuthData_BasicAuth(t *testing.T) {
 		Parameters: map[string]interface{}{"authentication": "basicAuth"},
 	}
 
-	got := resolveCredentialAuthData(ws, node)
+	got, gotID := resolveCredentialAuthData(ws, node)
 	assert.NotNil(t, got)
+	assert.Equal(t, id, gotID)
 	assert.Equal(t, "admin", got["username"])
 	assert.Equal(t, "admin123", got["password"])
 }
@@ -65,8 +66,9 @@ func TestResolveCredentialAuthData_HeaderAuth(t *testing.T) {
 		Parameters: map[string]interface{}{"authentication": "headerAuth"},
 	}
 
-	got := resolveCredentialAuthData(ws, node)
+	got, gotID := resolveCredentialAuthData(ws, node)
 	assert.NotNil(t, got)
+	assert.Equal(t, cred.ID, gotID)
 	assert.Equal(t, "x-api-key", got["headerName"])
 	assert.Equal(t, "admin123", got["headerValue"])
 }
@@ -76,8 +78,9 @@ func TestResolveCredentialAuthData_NoAuth(t *testing.T) {
 	node := &model.Node{
 		Parameters: map[string]interface{}{"authentication": "none"},
 	}
-	got := resolveCredentialAuthData(ws, node)
+	got, gotID := resolveCredentialAuthData(ws, node)
 	assert.Nil(t, got)
+	assert.Equal(t, "", gotID)
 }
 
 func TestResolveCredentialAuthData_MissingFromStore(t *testing.T) {
@@ -88,8 +91,9 @@ func TestResolveCredentialAuthData_MissingFromStore(t *testing.T) {
 		},
 		Parameters: map[string]interface{}{"authentication": "basicAuth"},
 	}
-	got := resolveCredentialAuthData(ws, node)
+	got, gotID := resolveCredentialAuthData(ws, node)
 	assert.Nil(t, got, "missing credential must NOT abort webhook registration; fall back to legacy 'any well-formed header' check")
+	assert.Equal(t, "ghost", gotID, "credential id is still recorded so a later save can refresh")
 }
 
 func TestResolveCredentialAuthData_EmptyCredData(t *testing.T) {
@@ -106,6 +110,38 @@ func TestResolveCredentialAuthData_EmptyCredData(t *testing.T) {
 		},
 		Parameters: map[string]interface{}{"authentication": "basicAuth"},
 	}
-	got := resolveCredentialAuthData(ws, node)
+	got, gotID := resolveCredentialAuthData(ws, node)
 	assert.Nil(t, got, "empty credential data must not produce an empty AuthData envelope")
+	assert.Equal(t, cred.ID, gotID)
+}
+
+// TestLiveAuthData_HonoursCredentialUpdate is the regression for the
+// user-reported "save credentials not honoured after authorization"
+// bug: AuthData used to be a registration-time snapshot, so PATCH
+// /credentials/{id} left the webhook accepting the old password.
+func TestLiveAuthData_HonoursCredentialUpdate(t *testing.T) {
+	ws := newTestStore(t)
+	cred := &storage.Credential{
+		ID: "live-basic", Name: "live", Type: "httpBasicAuth",
+		Data: map[string]interface{}{"user": "alice", "password": "secret1"},
+	}
+	assert.NoError(t, ws.SaveCredential(cred))
+
+	mgr := NewWebhookManager(NewMemoryWebhookStorage(ws), ws, nil)
+	wh := &Webhook{
+		AuthType:     "basicAuth",
+		CredentialID: cred.ID,
+		// Stale snapshot — deliberately wrong so liveAuthData must
+		// win over AuthData for the test to pass.
+		AuthData: map[string]interface{}{"username": "alice", "password": "secret1"},
+	}
+
+	got := mgr.liveAuthData(wh)
+	assert.Equal(t, "secret1", got["password"])
+
+	cred.Data["password"] = "secret2"
+	assert.NoError(t, ws.UpdateCredential(cred.ID, cred))
+
+	got = mgr.liveAuthData(wh)
+	assert.Equal(t, "secret2", got["password"], "liveAuthData must re-read storage after credential update")
 }

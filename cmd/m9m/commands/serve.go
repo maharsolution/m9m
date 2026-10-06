@@ -21,6 +21,7 @@ import (
 	"github.com/neul-labs/m9m/internal/engine"
 	ainodes "github.com/neul-labs/m9m/internal/nodes/ai"
 	"github.com/neul-labs/m9m/internal/otel"
+	"github.com/neul-labs/m9m/internal/plugins"
 	"github.com/neul-labs/m9m/internal/queue"
 	"github.com/neul-labs/m9m/internal/scheduler"
 	"github.com/neul-labs/m9m/internal/storage"
@@ -42,6 +43,7 @@ var (
 	serveQueueType   string
 	serveQueueDB     string
 	serveWorkers     int
+	servePluginDir   string
 )
 
 var serveCmd = &cobra.Command{
@@ -76,6 +78,7 @@ func init() {
 	serveCmd.Flags().StringVar(&serveQueueType, "queue", "sqlite", "Queue type: memory, sqlite")
 	serveCmd.Flags().StringVar(&serveQueueDB, "queue-db", "", "Queue SQLite database path (for sqlite queue)")
 	serveCmd.Flags().IntVar(&serveWorkers, "workers", 4, "Number of worker threads for job processing")
+	serveCmd.Flags().StringVar(&servePluginDir, "plugin-dir", "", "Directory containing JS plugin files for community nodes (one .js file per node)")
 }
 
 func runServe(cmd *cobra.Command, args []string) {
@@ -143,6 +146,25 @@ func runServe(cmd *cobra.Command, args []string) {
 	// Initialize engine
 	eng := engine.NewWorkflowEngine()
 	RegisterAllNodes(eng, store)
+
+	// Load JS plugin nodes (community / n8n-nodes-*). The directory
+	// is optional — when empty, only the built-in core nodes are
+	// registered. Plugins are loaded AFTER the core nodes so the
+	// engine registry has the well-known catalog ready before any
+	// plugin nodes are added.
+	pluginDir := firstNonEmpty(servePluginDir, os.Getenv("M9M_PLUGIN_DIR"))
+	if pluginDir != "" {
+		pluginReg := plugins.NewRegistry()
+		if err := pluginReg.LoadDir(pluginDir); err != nil {
+			logger.Printf("Plugin loader: %v (continuing without community plugins)", err)
+		} else {
+			if err := pluginReg.RegisterAll(eng); err != nil {
+				logger.Printf("Plugin registration: %v", err)
+			} else {
+				logger.Printf("Loaded %d community plugin node(s) from %s", pluginReg.Count(), pluginDir)
+			}
+		}
+	}
 
 	// Bootstrap OpenTelemetry. The manager is shared across the engine,
 	// the AI agent nodes, and the API server. Config layers env defaults

@@ -382,6 +382,10 @@ func RegisterAllNodes(eng engine.WorkflowEngine, wfLookup core.WorkflowLookup) {
 	// Additional messaging nodes
 	eng.RegisterNodeExecutor("n8n-nodes-base.twilio", messaging.NewTwilioNode())
 	eng.RegisterNodeExecutor("n8n-nodes-base.microsoftTeams", messaging.NewTeamsNode())
+	eng.RegisterNodeExecutor("n8n-nodes-base.kafka", messaging.NewKafkaNode())
+
+	// Additional trigger nodes (Kafka)
+	eng.RegisterNodeExecutor("n8n-nodes-base.kafkaTrigger", trigger.NewKafkaTriggerNode())
 
 	// Additional email nodes
 	eng.RegisterNodeExecutor("n8n-nodes-base.sendGrid", email.NewSendGridNode())

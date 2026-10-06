@@ -21,8 +21,37 @@ func NewWaitNode() *WaitNode {
 			Name:        "Wait",
 			Description: "Pauses execution for a specified duration",
 			Category:    "Core",
+			Properties:  waitProperties(),
+			Inputs:      []string{"main"},
+			Outputs:     []string{"main"},
 		}),
 	}
+}
+
+// waitProperties returns the Wait node's property descriptors. Mirrors
+// n8n's `INodeTypeDescription.properties` for the `Wait` core node:
+// the resume mode (afterTime / afterTimeFromLastItem / afterWebhook /
+// atTime) plus the amount/unit pair (or webhookSuffix for
+// `afterWebhook`).
+func waitProperties() []base.NodeProperty {
+	resumeModes := []base.Option{
+		{Name: "After Time", Value: "afterTime"},
+		{Name: "After Time From Last Item", Value: "afterTimeFromLastItem"},
+		{Name: "After Webhook", Value: "afterWebhook"},
+		{Name: "At Time", Value: "atTime"},
+	}
+	units := []base.Option{
+		{Name: "Milliseconds", Value: "milliseconds"},
+		{Name: "Seconds", Value: "seconds"},
+		{Name: "Minutes", Value: "minutes"},
+	}
+	props := []base.NodeProperty{
+		base.StringOpt("Resume", "resume", "afterTime", "When the wait should release the workflow.", resumeModes, true),
+		base.NumberProp("Amount", "amount", 1, "How long to wait (when Resume is a time-based mode).", false),
+		base.StringOpt("Unit", "unit", "seconds", "Unit of the Amount field.", units, false),
+		base.StringProp("Webhook suffix", "webhookSuffix", "", "URL suffix for the resume webhook (when Resume is After Webhook).", "resume-token", false),
+	}
+	return append(props, base.CommonSettings()...)
 }
 
 // Execute pauses and then passes through input data.

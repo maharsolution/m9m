@@ -384,6 +384,15 @@ func (h *Handler) parseRequest(r *http.Request) (*WebhookRequest, error) {
 }
 
 func (h *Handler) authenticateRequest(r *http.Request, webhook *Webhook) error {
+	// Prefer the live credential from storage over the registration-time
+	// AuthData snapshot. Without this, editing a credential in the
+	// Credentials menu leaves the webhook honouring the old password
+	// until the workflow is re-saved / reactivated.
+	authData := webhook.AuthData
+	if h.manager != nil {
+		authData = h.manager.liveAuthData(webhook)
+	}
+
 	switch webhook.AuthType {
 	case "none", "":
 		return nil
@@ -395,19 +404,33 @@ func (h *Handler) authenticateRequest(r *http.Request, webhook *Webhook) error {
 			return fmt.Errorf("basic auth required")
 		}
 
-		expectedUsername := getAuthData(webhook.AuthData, "username", "")
-		expectedPassword := getAuthData(webhook.AuthData, "password", "")
+		expectedUsername := getAuthData(authData, "username", "")
+		expectedPassword := getAuthData(authData, "password", "")
 
-		// n8n stores Basic Auth credentials separately from the webhook
-		// registration record. When no resolved credential is available,
-		// preserve the node-level contract by requiring a well-formed
-		// Basic header and let the Webhook node validate its syntax.
-		if expectedUsername == "" && expectedPassword == "" {
-			if username == "" && password == "" {
-				return fmt.Errorf("invalid credentials")
-			}
-			break
+	// n8n stores Basic Auth credentials separately from the webhook
+	// registration record. When no resolved credential is available,
+	// the fallback depends on whether the webhook was registered with
+	// a CredentialID:
+	//
+	//   * CredentialID set (modern path): the credential lookup
+	//     returned nothing usable — fail closed. The previous
+	//     "accept any well-formed header" behaviour was a security
+	//     hole: a misconfigured workflow would 200 OK on bogus
+	//     credentials. B-02 in bug-fix.MD.
+	//   * CredentialID empty (legacy path): the webhook was
+	//     registered before live auth-data was wired. Accept any
+	//     well-formed header so the Webhook node's own validator
+	//     can run; if it doesn't accept it, the Webhook node
+	//     will surface an auth error during execution instead.
+	if expectedUsername == "" && expectedPassword == "" {
+		if webhook.CredentialID != "" {
+			return fmt.Errorf("invalid credentials")
 		}
+		if username == "" && password == "" {
+			return fmt.Errorf("invalid credentials")
+		}
+		break
+	}
 
 		// SECURITY: Use constant-time comparison to prevent timing attacks
 		usernameMatch := subtle.ConstantTimeCompare([]byte(username), []byte(expectedUsername)) == 1
@@ -430,7 +453,7 @@ func (h *Handler) authenticateRequest(r *http.Request, webhook *Webhook) error {
 			return fmt.Errorf("API key required in X-API-Key header")
 		}
 
-		expectedKey := getAuthData(webhook.AuthData, "apiKey", "")
+		expectedKey := getAuthData(authData, "apiKey", "")
 
 		// SECURITY: Use constant-time comparison to prevent timing attacks
 		if subtle.ConstantTimeCompare([]byte(apiKey), []byte(expectedKey)) != 1 {
@@ -439,8 +462,8 @@ func (h *Handler) authenticateRequest(r *http.Request, webhook *Webhook) error {
 
 	case "header", "headerAuth":
 		// Custom header authentication
-		headerName := getAuthData(webhook.AuthData, "headerName", "Authorization")
-		headerValue := getAuthData(webhook.AuthData, "headerValue", "")
+		headerName := getAuthData(authData, "headerName", "Authorization")
+		headerValue := getAuthData(authData, "headerValue", "")
 
 		actualValue := r.Header.Get(headerName)
 
@@ -469,7 +492,7 @@ func (h *Handler) authenticateRequest(r *http.Request, webhook *Webhook) error {
 		if token == "" || token == r.Header.Get("Authorization") {
 			return fmt.Errorf("jwt auth required")
 		}
-		if err := verifyJWT(token, webhook.AuthData); err != nil {
+		if err := verifyJWT(token, authData); err != nil {
 			return err
 		}
 

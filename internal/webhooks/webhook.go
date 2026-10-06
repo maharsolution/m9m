@@ -14,7 +14,14 @@ type Webhook struct {
 	IsTest          bool                   `json:"isTest"`          // Test vs production webhook
 	Active          bool                   `json:"active"`          // Whether webhook is active
 	AuthType        string                 `json:"authType"`        // none, basic, apiKey, header
-	AuthData        map[string]interface{} `json:"authData"`        // Authentication configuration
+	AuthData        map[string]interface{} `json:"authData"`        // Authentication configuration (snapshot at register)
+	// CredentialID is the storage id of the credential the webhook
+	// node is bound to (httpBasicAuth / httpHeaderAuth / jwtAuth).
+	// Kept alongside AuthData so request-time auth can re-read the
+	// live secret from storage instead of honouring a stale snapshot
+	// after the user edits the credential in the Credentials menu
+	// without re-saving the workflow.
+	CredentialID    string                 `json:"credentialId,omitempty"`
 	ResponseMode    string                 `json:"responseMode"`    // onReceived, lastNode, responseNode
 	ResponseData    string                 `json:"responseData"`    // firstEntryJson, allEntries, noData
 	ResponseHeaders map[string]string      `json:"responseHeaders"` // Custom response headers

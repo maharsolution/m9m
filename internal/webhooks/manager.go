@@ -417,7 +417,11 @@ func (m *WebhookManager) createWebhookFromNode(workflow *model.Workflow, node *m
 	// (`Simple Basic Auth` → /webhook/webhook_callrest) without
 	// introducing a new dependency between the webhook handler and
 	// the credential manager.
-	authData := resolveCredentialAuthData(m.workflowStorage, node)
+	//
+	// AuthData is a snapshot taken at registration. We also record
+	// CredentialID so authenticateRequest can re-read the live
+	// secret after a Credentials-menu edit (see liveAuthData).
+	authData, credID := resolveCredentialAuthData(m.workflowStorage, node)
 
 	return &Webhook{
 		WorkflowID:   workflow.ID,
@@ -428,24 +432,25 @@ func (m *WebhookManager) createWebhookFromNode(workflow *model.Workflow, node *m
 		Active:       workflow.Active && !isTest,
 		AuthType:     authType,
 		AuthData:     authData,
+		CredentialID: credID,
 		ResponseMode: responseMode,
 		ResponseData: responseData,
 	}
 }
 
 // resolveCredentialAuthData maps a node's attached credential into
-// the AuthData shape that `authenticateRequest` consumes. It is a
-// pure function of the credential store + node; the manager calls it
-// at registration time so the handler can stay stateless.
+// the AuthData shape that `authenticateRequest` consumes, plus the
+// credential id so the handler can re-read the secret live on every
+// request (see liveAuthData).
 //
-// Returns nil if no credential is attached or the credential is
+// Returns (nil, "") if no credential is attached or the credential is
 // missing from the store — the handler will then fall back to its
 // "well-formed header present" check (matches the legacy behaviour
 // and preserves parity for workflows whose credential sync hasn't
 // caught up yet).
-func resolveCredentialAuthData(ws storage.WorkflowStorage, node *model.Node) map[string]interface{} {
+func resolveCredentialAuthData(ws storage.WorkflowStorage, node *model.Node) (map[string]interface{}, string) {
 	if node.Credentials == nil || len(node.Credentials) == 0 {
-		return nil
+		return nil, ""
 	}
 	// Pick the credential whose type matches the requested authType.
 	// For `basicAuth` we look up `httpBasicAuth`; for `headerAuth` we
@@ -454,7 +459,7 @@ func resolveCredentialAuthData(ws storage.WorkflowStorage, node *model.Node) map
 	// genericCredentialType parameter the n8n UI uses on the node.
 	authType := getStringParam(node.Parameters, "authentication", "none")
 	if authType == "none" || authType == "" {
-		return nil
+		return nil, ""
 	}
 	var credType string
 	switch authType {
@@ -470,11 +475,11 @@ func resolveCredentialAuthData(ws storage.WorkflowStorage, node *model.Node) map
 	case "jwtAuth":
 		credType = "jwtAuth"
 	default:
-		return nil
+		return nil, ""
 	}
 	ref, ok := node.Credentials[credType]
 	if !ok || ref.ID == "" {
-		return nil
+		return nil, ""
 	}
 	cred, err := ws.GetCredential(ref.ID)
 	if err != nil || cred == nil {
@@ -484,6 +489,17 @@ func resolveCredentialAuthData(ws storage.WorkflowStorage, node *model.Node) map
 		// offline. Instead we leave AuthData nil and rely on the
 		// handler's "well-formed header present" check, which matches
 		// the legacy fall-through and is no worse than before.
+		return nil, ref.ID
+	}
+	return authDataFromCredential(cred), ref.ID
+}
+
+// authDataFromCredential converts a stored credential envelope into
+// the AuthData map authenticateRequest / verifyJWT consume. Shared by
+// registration-time resolve and request-time liveAuthData so both
+// paths produce identical shapes.
+func authDataFromCredential(cred *storage.Credential) map[string]interface{} {
+	if cred == nil {
 		return nil
 	}
 	switch cred.Type {
@@ -502,24 +518,43 @@ func resolveCredentialAuthData(ws storage.WorkflowStorage, node *model.Node) map
 		}
 		return map[string]interface{}{"headerName": name, "headerValue": val}
 	case "jwtAuth":
-		// n8n's JWT auth on a Webhook requires the caller to present a
-		// JWT signed with the configured secret. For parity we accept
-		// the same: the handler's `headerAuth` path already does
-		// constant-time header value comparison, which is exactly the
-		// shape we need here.
-		secret := stringFromData(cred.Data, "secret")
-		header := stringFromData(cred.Data, "headerPrefix")
-		if header == "" {
-			header = "Bearer"
+		// Pass the credential data through so verifyJWT can read
+		// secret / publicKey / algorithm. Also keep headerPrefix for
+		// any caller that still inspects it.
+		if len(cred.Data) == 0 {
+			return nil
 		}
-		// We pre-bake the expected value as `${headerPrefix} <secret>`
-		// because that's the canonical n8n verification pattern
-		// (HMAC-signed JWT). For static-secret parity tests this
-		// still matches because the caller supplies the same prefix
-		// and the secret is checked by re-running the same HMAC.
-		return map[string]interface{}{"headerName": "Authorization", "headerValue": header + " " + secret}
+		out := make(map[string]interface{}, len(cred.Data))
+		for k, v := range cred.Data {
+			out[k] = v
+		}
+		return out
 	}
 	return nil
+}
+
+// liveAuthData returns the AuthData that authenticateRequest should
+// use for this webhook. When CredentialID is set, it re-reads the
+// credential from persistent storage so a Credentials-menu edit is
+// honoured without re-saving the workflow. Falls back to the
+// registration-time snapshot when the id is empty or the store
+// lookup fails (keeps legacy behaviour for webhooks registered
+// before CredentialID was stamped).
+func (m *WebhookManager) liveAuthData(webhook *Webhook) map[string]interface{} {
+	if webhook == nil {
+		return nil
+	}
+	if webhook.CredentialID == "" || m.workflowStorage == nil {
+		return webhook.AuthData
+	}
+	cred, err := m.workflowStorage.GetCredential(webhook.CredentialID)
+	if err != nil || cred == nil {
+		return webhook.AuthData
+	}
+	if live := authDataFromCredential(cred); live != nil {
+		return live
+	}
+	return webhook.AuthData
 }
 
 // stringFromData is a typed accessor for credential data fields. n8n
