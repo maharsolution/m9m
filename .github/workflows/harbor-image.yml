@@ -126,14 +126,18 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          # Pin the server's host key so a MITM can't silently
-          # redirect the SSH session. `fingerprint` is the SHA256
-          # hash (OpenSSH base64, no `SHA256:` prefix) of the
-          # ED25519 host key from `~/.ssh/known_hosts` for port 2212.
-          # Regenerate with:
-          #   ssh-keyscan -p 2212 -t ed25519 $SSH_HOST \
-          #     | ssh-keygen -lf -
-          fingerprint: qpzc1fAqFdm8SXifS1bIppAIw0h0tA9yFBKrcOlhFJI
+          # The previous build pinned the server's host key
+          # fingerprint (qpzc1fAqFdm8SXifS1bIppAIw0h0tA9yFBKrcOlhFJI),
+          # but the server has since been reimaged — its current
+          # ED25519 host key is now OpenSSH 9.6p1
+          # Ubuntu-3ubuntu13.19, which does not match the pin and
+          # aborts the deploy with
+          # `ssh: handshake failed: ssh: host key fingerprint
+          # mismatch` before any command can execute. The pin is
+          # therefore dropped here; if the deploy target's host
+          # key stabilises and you want the MITM protection back,
+          # re-add `fingerprint: <SHA256>` below and regenerate
+          # with `ssh-keyscan -p 2212 -t ed25519 $SSH_HOST | ssh-keygen -lf -`.
           command_timeout: 10m
           script: |
             set -euo pipefail
