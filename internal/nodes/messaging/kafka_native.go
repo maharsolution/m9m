@@ -146,7 +146,17 @@ func (c *KafkaNativeClient) writerLazy() (*kafka.Writer, error) {
 		AllowAutoTopicCreation: true,
 		WriteTimeout:           10 * time.Second,
 		ReadTimeout:            10 * time.Second,
-		Transport:              &kafka.Transport{Dialer: d, TLS: d.TLS},
+		// Transport applies TLS + SASL. segmentio/kafka-go's
+		// kafka.Transport has no Dialer field; it uses
+		// net.Dialer.DialContext by default. We expose the dial
+		// timeout via DialTimeout on the Transport so connections
+		// to a dead broker fail fast instead of hanging.
+		Transport: &kafka.Transport{
+			DialTimeout: d.Timeout,
+			TLS:         d.TLS,
+			SASL:        d.SASLMechanism,
+			ClientID:    d.ClientID,
+		},
 	}
 	c.writer = w
 	return w, nil
