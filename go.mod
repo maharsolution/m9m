@@ -20,6 +20,15 @@ require (
 	// Database Drivers
 	github.com/go-sql-driver/mysql v1.9.3
 
+	// Kafka client (native TCP / SASL / TLS — pure Go, no CGO).
+	// Selected over confluent-kafka-go because the Docker build
+	// already needs CGO only for sqlite3; pulling librdkafka would
+	// bloat the image. segmentio/kafka-go is MIT-licensed, supports
+	// PLAIN/SCRAM SASL, TLS, and consumer groups, and is the
+	// dependency of choice for the `n8n-nodes-base.kafka` /
+	// `n8n-nodes-base.kafkaTrigger` native transport.
+	github.com/segmentio/kafka-go v0.4.47
+
 	// Authentication & Security
 	github.com/golang-jwt/jwt/v4 v4.5.1
 

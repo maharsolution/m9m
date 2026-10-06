@@ -5,21 +5,26 @@
 //   - n8n-nodes-base.kafka        — produce a message to a topic
 //   - n8n-nodes-base.kafkaTrigger — consume a message from a topic
 //
-// Both nodes speak the Confluent-compatible REST Proxy protocol
-// (`POST /topics/{topic}/produce`, `POST /consumers/{group}`,
-// `GET /consumers/{group}/records`). The REST proxy is preferred
-// over a raw TCP Kafka client because:
+// Each node supports two transport modes, selected via the `mode`
+// parameter on the node:
 //
-//  1. Zero new dependencies (no `kafka-go`, `confluent-kafka-go`).
-//  2. The proxy is the supported deployment pattern in production
+//   - `mode: rest` (default) — speaks the Confluent-compatible REST
+//     Proxy protocol (`POST /topics/{topic}/produce`,
+//     `POST /consumers/{group}`, `GET /consumers/{group}/records`).
+//     The proxy is the supported deployment pattern in production
 //     Kubernetes / serverless clusters where opening direct broker
-//     ports is forbidden.
-//  3. ACLs and schema validation are configured once on the proxy
-//     instead of per-client.
+//     ports is forbidden; ACLs and schema validation are configured
+//     once on the proxy instead of per-client.
+//   - `mode: native` — opens TCP connections to one or more
+//     `bootstrap.servers` directly via `segmentio/kafka-go`. Supports
+//     PLAIN / SCRAM-SHA-256 / SCRAM-SHA-512 SASL and TLS. No proxy
+//     hop, no extra sidecar. Use this when the broker is reachable
+//     from the m9m container and you want to skip the proxy round-
+//     trip.
 //
-// When the operator needs the throughput of a native client, swap
-// in `franz-go` or `segmentio/kafka-go` and wire a second
-// `kafkaBackend` here. The node contract stays the same.
+// Both modes share the same `kafkaBackend` contract (see below) so
+// the node-level rendering of the produce result / poll output is
+// identical regardless of transport.
 package messaging
 
 import (
@@ -39,11 +44,18 @@ import (
 )
 
 // kafkaBackend is the dispatch interface shared by the producer
-// and consumer nodes. The REST proxy implementation is the only
-// one shipped today; a future native client can slot in here
-// without changing the node-level contract.
+// and consumer nodes. The REST proxy and the native (segmentio/
+// kafka-go) client both implement it, so the node-level code does
+// not branch on transport mode.
 type kafkaBackend interface {
 	Produce(ctx context.Context, topic string, key, value []byte, headers map[string]string) (kafkaProduceResult, error)
+	// Poll blocks for up to `timeout` waiting for new records on
+	// the configured topic, returning at most `maxRecords` items.
+	// Used by the consumer trigger node; producer-only clients
+	// (REST proxy) return (nil, nil) for it because their
+	// consumer path is a different REST shape implemented inside
+	// the consumer trigger's `pollRecords` helper.
+	Poll(ctx context.Context, timeout time.Duration, maxRecords int) ([]KafkaRecord, error)
 	Close() error
 }
 
@@ -70,7 +82,7 @@ func NewKafkaNode() *KafkaNode {
 	return &KafkaNode{
 		BaseNode: base.NewBaseNode(base.NodeDescription{
 			Name:        "Kafka",
-			Description: "Produce messages to a Kafka topic via REST Proxy",
+			Description: "Produce messages to a Kafka topic via REST Proxy or native TCP.",
 			Category:    "Messaging",
 			Properties:  kafkaProperties(),
 			Inputs:      []string{"main"},
@@ -82,24 +94,43 @@ func NewKafkaNode() *KafkaNode {
 
 // kafkaProperties returns the Kafka producer property descriptors.
 // Mirrors n8n's `INodeTypeDescription.properties` for
-// `n8n-nodes-base.kafka`: a REST Proxy URL plus auth (basic /
-// API key), a topic, a message body that defaults to
-// `={{ $json }}`, optional key, and optional headers.
+// `n8n-nodes-base.kafka`: a transport switch (rest / native), a
+// REST Proxy URL or a comma-separated `bootstrap.servers` list, a
+// topic, a message body that defaults to `={{ $json }}`, optional
+// key, optional SASL/TLS fields, and optional headers.
 func kafkaProperties() []base.NodeProperty {
+	modes := []base.Option{
+		{Name: "REST Proxy", Value: "rest"},
+		{Name: "Native (segmentio/kafka-go)", Value: "native"},
+	}
 	authModes := []base.Option{
 		{Name: "None", Value: "none"},
 		{Name: "Basic", Value: "basic"},
 		{Name: "API key", Value: "apiKey"},
 	}
+	saslMechs := []base.Option{
+		{Name: "PLAIN", Value: "PLAIN"},
+		{Name: "SCRAM-SHA-256", Value: "SCRAM-SHA-256"},
+		{Name: "SCRAM-SHA-512", Value: "SCRAM-SHA-512"},
+	}
 	props := []base.NodeProperty{
-		base.StringProp("REST Proxy URL", "restProxyUrl", "", "Confluent-compatible REST Proxy base URL.", "http://kafka-rest:8082", true),
-		base.StringProp("Topic", "topic", "", "Topic to produce to.", "events.user", true),
-		base.StringProp("Key", "key", "", "Optional message key (used for partitioning).", "{{ $json.id }}", false),
-		base.StringProp("Value", "value", "", "Message payload — evaluated as an n8n expression, then JSON-encoded.", "={{ $json }}", true),
+		base.StringOpt("Transport", "mode", "rest", "REST Proxy hops through a sidecar proxy; Native opens TCP to the brokers via segmentio/kafka-go.", modes, true),
+		// REST Proxy fields (mode=rest)
+		base.StringProp("REST Proxy URL", "restProxyUrl", "", "Confluent-compatible REST Proxy base URL (mode=rest).", "http://kafka-rest:8082", false),
 		base.StringOpt("Authentication", "authentication", "none", "How to authenticate against the REST Proxy.", authModes, false),
 		base.StringProp("Username", "username", "", "Username for Basic auth.", "", false),
 		base.StringProp("Password", "password", "", "Password for Basic auth.", "", false),
 		base.StringProp("API key", "apiKey", "", "API key (alternative to Basic).", "", false),
+		// Native fields (mode=native)
+		base.StringProp("Bootstrap Servers", "brokers", "", "Comma-separated broker list for mode=native (e.g. broker1:9092,broker2:9092).", "broker1:9092", false),
+		base.StringOpt("SASL Mechanism", "saslMechanism", "", "PLAIN / SCRAM-SHA-256 / SCRAM-SHA-512 — leave empty for no SASL.", saslMechs, false),
+		base.StringProp("SASL Username", "saslUsername", "", "Username for SASL (mode=native).", "", false),
+		base.StringProp("SASL Password", "saslPassword", "", "Password for SASL (mode=native).", "", false),
+		base.BoolProp("TLS", "tls", false, "Enable TLS for the native broker connection (mode=native)."),
+		// Shared
+		base.StringProp("Topic", "topic", "", "Topic to produce to.", "events.user", true),
+		base.StringProp("Key", "key", "", "Optional message key (used for partitioning).", "{{ $json.id }}", false),
+		base.StringProp("Value", "value", "", "Message payload — evaluated as an n8n expression, then JSON-encoded.", "={{ $json }}", true),
 		base.JsonProp("Headers", "headers", "{}", "Optional headers map attached to every record."),
 	}
 	return append(props, base.CommonSettings()...)
@@ -170,27 +201,89 @@ func (n *KafkaNode) Execute(inputData []model.DataItem, nodeParams map[string]in
 	return result, nil
 }
 
-// backendFor returns (and caches) the per-node REST proxy
-// client. The client is a thin HTTP wrapper that signs the
-// request according to the configured auth mode.
+// backendFor returns (and caches) the per-node transport client
+// for the configured `mode` (rest / native). The REST proxy client
+// is a thin HTTP wrapper that signs the request according to the
+// configured auth mode; the native client opens TCP connections
+// directly to the broker list. Caching is per-instance: a workflow
+// that produces 1k items reuses the same Writer / Reader instead of
+// paying a TCP handshake on every record.
 func (n *KafkaNode) backendFor(params map[string]interface{}) (kafkaBackend, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	if n.backend != nil {
 		return n.backend, nil
 	}
-	restURL, _ := params["restProxyUrl"].(string)
-	if restURL == "" {
-		return nil, fmt.Errorf("restProxyUrl is required")
+	mode := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", params["mode"])))
+	if mode == "" {
+		mode = "rest"
 	}
-	auth := kafkaAuth{
-		Mode:     fmt.Sprintf("%v", params["authentication"]),
-		Username: fmt.Sprintf("%v", params["username"]),
-		Password: fmt.Sprintf("%v", params["password"]),
-		APIKey:   fmt.Sprintf("%v", params["apiKey"]),
+	switch mode {
+	case "native":
+		brokersRaw := strings.TrimSpace(fmt.Sprintf("%v", params["brokers"]))
+		if brokersRaw == "" {
+			return nil, fmt.Errorf("brokers is required when mode=native")
+		}
+		var brokers []string
+		for _, b := range strings.Split(brokersRaw, ",") {
+			b = strings.TrimSpace(b)
+			if b != "" {
+				brokers = append(brokers, b)
+			}
+		}
+		topic := strings.TrimSpace(fmt.Sprintf("%v", params["topic"]))
+		client, err := NewKafkaNativeClient(KafkaNativeConfig{
+			Brokers:       brokers,
+			Topic:         topic,
+			SASLMechanism: strings.TrimSpace(fmt.Sprintf("%v", params["saslMechanism"])),
+			SASLUsername:  fmt.Sprintf("%v", params["saslUsername"]),
+			SASLPassword:  fmt.Sprintf("%v", params["saslPassword"]),
+			TLS:           boolParam(params, "tls", false),
+			ClientID:      "m9m-kafka-producer",
+		})
+		if err != nil {
+			return nil, err
+		}
+		n.backend = client
+		return n.backend, nil
+	default: // "rest" or any unrecognised value (legacy behaviour)
+		restURL := strings.TrimSpace(fmt.Sprintf("%v", params["restProxyUrl"]))
+		if restURL == "" {
+			return nil, fmt.Errorf("restProxyUrl is required when mode=rest")
+		}
+		auth := kafkaAuth{
+			Mode:     fmt.Sprintf("%v", params["authentication"]),
+			Username: fmt.Sprintf("%v", params["username"]),
+			Password: fmt.Sprintf("%v", params["password"]),
+			APIKey:   fmt.Sprintf("%v", params["apiKey"]),
+		}
+		n.backend = &kafkaRESTProxy{baseURL: strings.TrimRight(restURL, "/"), auth: auth, client: n.httpClient}
+		return n.backend, nil
 	}
-	n.backend = &kafkaRESTProxy{baseURL: strings.TrimRight(restURL, "/"), auth: auth, client: n.httpClient}
-	return n.backend, nil
+}
+
+// boolParam returns the bool value of `k` from the params map,
+// defaulting to `def` when missing or of an unexpected type. Used
+// by the native-broker dispatcher so an int(0) or a string("false")
+// doesn't silently default the wrong way.
+func boolParam(p map[string]interface{}, k string, def bool) bool {
+	v, ok := p[k]
+	if !ok {
+		return def
+	}
+	switch t := v.(type) {
+	case bool:
+		return t
+	case string:
+		s := strings.ToLower(strings.TrimSpace(t))
+		switch s {
+		case "1", "true", "yes", "on":
+			return true
+		case "0", "false", "no", "off", "":
+			return false
+		}
+	}
+	return def
 }
 
 // materialiseValue evaluates a value parameter against the
@@ -350,15 +443,37 @@ func (k *kafkaRESTProxy) Produce(ctx context.Context, topic string, key, value [
 
 func (k *kafkaRESTProxy) Close() error { return nil }
 
+// Poll is a no-op for the REST proxy producer client. The
+// consumer path on REST Proxy uses a different shape (create
+// consumer / subscribe / poll records) that lives on the
+// `KafkaTriggerNode` itself rather than on this backend.
+func (k *kafkaRESTProxy) Poll(_ context.Context, _ time.Duration, _ int) ([]KafkaRecord, error) {
+	return nil, nil
+}
+
 // ValidateParameters validates the Kafka producer parameters.
+// Mode-aware: `restProxyUrl` is required when mode=rest; `brokers`
+// is required when mode=native. `topic` and `value` are always
+// required.
 func (n *KafkaNode) ValidateParameters(params map[string]interface{}) error {
 	if params == nil {
 		return n.CreateError("parameters cannot be nil", nil)
 	}
-	if rest, _ := params["restProxyUrl"].(string); rest == "" {
-		return n.CreateError("restProxyUrl is required", nil)
+	mode := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", params["mode"])))
+	if mode == "" {
+		mode = "rest"
 	}
-	if topic, _ := params["topic"].(string); topic == "" {
+	switch mode {
+	case "native":
+		if b := strings.TrimSpace(fmt.Sprintf("%v", params["brokers"])); b == "" {
+			return n.CreateError("brokers is required when mode=native", nil)
+		}
+	default:
+		if rest, _ := params["restProxyUrl"].(string); strings.TrimSpace(rest) == "" {
+			return n.CreateError("restProxyUrl is required when mode=rest", nil)
+		}
+	}
+	if topic := strings.TrimSpace(fmt.Sprintf("%v", params["topic"])); topic == "" {
 		return n.CreateError("topic is required", nil)
 	}
 	if v, ok := params["value"]; !ok || fmt.Sprintf("%v", v) == "" {
