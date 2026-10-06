@@ -65,7 +65,7 @@ ARG BUILD_DATE="unknown"
 # the outer double quotes still protect whitespace.
 RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo \
     -ldflags="-w -s -extldflags '-static' -X main.Commit=${COMMIT} -X main.BuildDate=${BUILD_DATE}" \
-    -o m9m ./cmd/m9m
+    -o app ./cmd/m9m
 
 # Runtime stage
 FROM alpine:latest
@@ -91,8 +91,16 @@ RUN addgroup -g 1000 n8n && \
 
 WORKDIR /app
 
-# Copy the m9m binary from the builder.
-COPY --from=builder /build/m9m /usr/local/bin/m9m
+# Copy the m9m binary from the builder. The builder outputs the
+# binary as `/build/app` (rather than `/build/m9m`) to dodge a
+# BuildKit/GHA secret-mask collision: when the output name or any
+# path segment matches a registered secret value, BuildKit
+# re-renders it as `***` in the failed-build error and the actual
+# Go compile error becomes unreadable. Renaming the output to
+# `app` here keeps the in-container binary path (`/usr/local/bin/m9m`,
+# which is what supervisord.conf[::program:m9m] invokes) intact
+# while pushing the masked stage clear of the BuildKit matcher.
+COPY --from=builder /build/app /usr/local/bin/m9m
 RUN chmod +x /usr/local/bin/m9m
 
 # Install the sync bridge's Python deps BEFORE copying its source so the
