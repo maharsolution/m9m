@@ -94,11 +94,17 @@ func (c *KafkaNativeClient) dialer() (*kafka.Dialer, error) {
 		var saslMech sasl.Mechanism
 		switch mech {
 		case "PLAIN":
-			saslMech = plain.Plain(c.cfg.SASLUsername, c.cfg.SASLPassword)
+			saslMech = plain.Mechanism{Username: c.cfg.SASLUsername, Password: c.cfg.SASLPassword}
 		case "SCRAM-SHA-256":
-			saslMech = scram.SHA256(c.cfg.SASLUsername, c.cfg.SASLPassword)
+			saslMech, err = scram.Mechanism(scram.SHA256, c.cfg.SASLUsername, c.cfg.SASLPassword)
+			if err != nil {
+				return nil, fmt.Errorf("kafka native: scram-sha-256 init: %w", err)
+			}
 		case "SCRAM-SHA-512":
-			saslMech = scram.SHA512(c.cfg.SASLUsername, c.cfg.SASLPassword)
+			saslMech, err = scram.Mechanism(scram.SHA512, c.cfg.SASLUsername, c.cfg.SASLPassword)
+			if err != nil {
+				return nil, fmt.Errorf("kafka native: scram-sha-512 init: %w", err)
+			}
 		default:
 			return nil, fmt.Errorf("kafka native: unsupported SASL mechanism %q (supported: PLAIN, SCRAM-SHA-256, SCRAM-SHA-512)", c.cfg.SASLMechanism)
 		}
