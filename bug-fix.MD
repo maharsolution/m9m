@@ -166,6 +166,7 @@ All values that flow through `cloneValue` (parameters, credentials, settings, st
 
 **Files touched:**
 - `web/src/lib/workflowGraph.ts:7-25` — new implementation + rationale comment
+- `web/src/components/workflow/NodePanel.vue:67-75` — restore `NodeProperty` typing on `visibleProperties` (follow-up: a prior `displayOptions` commit had narrowed the cast to `{ displayOptions?: NodePropertyDisplayOptions }`, which broke `vue-tsc -b && vite build` in CI — unblocking the GHA was required to ship)
 - `bug-fix.MD` — this entry
 - `web/test/workflowGraph-cloneValue.test.mjs` — new regression test (Node `node:test` runner)
 
