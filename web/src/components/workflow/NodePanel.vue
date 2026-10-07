@@ -14,7 +14,7 @@ import {
 } from '@/stores'
 import { getNodeCategory, getNodeCredentialTypes } from '@/types/node'
 import type { Credential } from '@/types/api'
-import type { NodeProperty, NodePropertyDisplayOptions } from '@/types/node'
+import type { NodeProperty } from '@/types/node'
 
 const workflowEditorStore = useWorkflowEditorStore()
 const nodesStore = useNodesStore()
