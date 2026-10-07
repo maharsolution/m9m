@@ -44,12 +44,22 @@ const localCredentials = ref<Record<string, BoundCredential>>({})
 // no `hide` constraint passes. This lets the Kafka form offer
 // distinct REST-Proxy and Native-broker fields without showing the
 // REST URL when `mode=native` (or vice versa).
+//
+// `props` is the full property list — we fall back to the referenced
+// property's `default` when the user hasn't set a value yet, so a
+// freshly-added node with `mode`'s default ("rest") immediately shows
+// the REST-Proxy field without requiring a click round-trip.
 const matchCondition = (
   cond: Record<string, unknown[]> | undefined,
+  props: NodeProperty[],
 ): boolean => {
   if (!cond) return true
   for (const [key, allowed] of Object.entries(cond)) {
-    const v = localParameters.value[key]
+    let v = localParameters.value[key]
+    if (v === undefined) {
+      const ref = props.find((p) => p.name === key)
+      v = ref?.default
+    }
     const list = (allowed as unknown[]) ?? []
     if (v === undefined) return false
     if (!list.some((a) => a === v)) return false
@@ -57,15 +67,18 @@ const matchCondition = (
   return true
 }
 const isPropertyVisible = (
-  prop: { displayOptions?: NodePropertyDisplayOptions },
+  prop: NodeProperty,
+  props: NodeProperty[],
 ): boolean => {
   const opts = prop.displayOptions
   if (!opts) return true
-  return matchCondition(opts.show) && !matchCondition(opts.hide)
+  return (
+    matchCondition(opts.show, props) && !matchCondition(opts.hide, props)
+  )
 }
 const visibleProperties = computed(() => {
-  const all = (nodeType.value?.properties ?? []) as Array<NodeProperty>
-  return all.filter(isPropertyVisible)
+  const all = (nodeType.value?.properties ?? []) as NodeProperty[]
+  return all.filter((p) => isPropertyVisible(p, all))
 })
 
 // Sync local state with selected node
