@@ -187,6 +187,56 @@ Baseline run on this commit: 3 pass, 0 fail (≈150 ms).
 
 ---
 
+## B-12 — Kafka / KafkaTrigger REST vs Native Fields All Hidden
+
+**File:** `web/src/components/workflow/NodePanel.vue:matchCondition` / `isPropertyVisible` (lines ~42–78 pre-fix)
+
+**Symptom (user 2026-10-07, screenshot `image-a2830776-e0e7-4d80-aa8d-e7202bb6791a.png`):** Adding a fresh Kafka node with default `mode=rest`, only `Topic / Key / Value / Headers` render. `REST Proxy URL`, `Authentication`, `Username`, `Password`, `API Key` (and the native equivalents `Brokers / SASL* / TLS / Client ID` on `mode=native`) are missing entirely. Same for `n8n-nodes-base.kafkaTrigger`.
+
+**Root cause (frontend):** `matchCondition(cond)` was a two-valued `boolean` that returned `true` for `cond === undefined`. `isPropertyVisible` then computed
+
+```ts
+matchCondition(opts.show) && !matchCondition(opts.hide)
+```
+
+For any property with a `show` rule but no `hide` rule — every Kafka property — `matchCondition(undefined)` returned `true`, so `!true` short-circuited the entire expression to `false`. Result: every displayOptions-gated field was hidden.
+
+This was a fresh regression introduced together with the `displayOptions` plumbing for Kafka dual-mode in B-04 — verified offline in the browser console by replaying the exact predicate against the live `/api/v1/node-types` payload (`modeArr=["rest"]`, `v="rest"`, `list.some(a => a === v) === true`, `hideResult === true` → `!hideResult === false` → property hidden).
+
+**Fix:** `matchCondition` now returns `boolean | null` with `null` meaning "no constraint" — distinct from `true` ("constraint satisfied"). `isPropertyVisible` only blocks on `hideMatch === true`:
+
+```ts
+const matchCondition = (cond, props) => {
+  if (!cond) return null
+  ...
+  return true  // or false
+}
+const isPropertyVisible = (prop, props) => {
+  const opts = prop.displayOptions
+  if (!opts) return true
+  const showMatch = matchCondition(opts.show, props)
+  const hideMatch = matchCondition(opts.hide, props)
+  if (showMatch === false) return false
+  if (hideMatch === true) return false
+  return true
+}
+```
+
+A `show` rule with no `hide` rule no longer equals "always hidden"; a `hide` rule that matches still correctly suppresses the field.
+
+**Files touched:**
+- `web/src/components/workflow/NodePanel.vue:41–89` — three-valued `matchCondition`, restructured `isPropertyVisible`.
+
+**Acceptance (live on `http://187.77.113.218:8080` after GHA deploy of commit `8cd6498`):**
+- Kafka node, fresh add, default `mode=rest` → renders `REST Proxy URL`, `Authentication`, `Username`, `Password`, `API Key`, `Topic`, `Key`, `Value`, `Headers`.
+- Kafka node, switch to `mode=native` → REST fields disappear, native fields (`Bootstrap Servers`, `SASL Mechanism`, `SASL Username`, `SASL Password`, `TLS`, `Client ID`) appear.
+- KafkaTrigger node, same behaviour.
+- Switching back to `rest` restores REST fields; `mode=native` → REST fields removed again. Reactive update of `visibleProperties` confirmed via CDP `Runtime.evaluate` on `localParameters`.
+
+**Note:** Independent from B-11 (which was about save persistence via `cloneValue`/`updateNode`). B-12 is purely a render-time filter bug. Both shipped in the same deploy window.
+
+---
+
 ## Prioritas & ETA
 
 | Phase | Bug | ETA | Status |
@@ -198,6 +248,7 @@ Baseline run on this commit: 3 pass, 0 fail (≈150 ms).
 | P1 Week 2 | B-10 JS plugin loader | 4d | **DONE 2026-10-06** |
 | P1 Week 3 | ExecutionDetail NDV tabs (frontend) | 5d | Open (out of backend scope) |
 | **P0 2026-10-07** | **B-11 Webhook save-time persistence** | **0.5d** | **DONE 2026-10-07** |
+| **P0 2026-10-07** | **B-12 Kafka/KafkaTrigger REST-vs-NAT visibility** | **0.25d** | **DONE 2026-10-07** |
 | P2 Week 4 | B-05, B-07 docs sync | 1d | Open |
 
 ## Cara Verifikasi Global
