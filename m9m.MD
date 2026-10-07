@@ -25,8 +25,8 @@
 | Timer | `cron` | Done |
 | Code | `executeCommand`, `pythonCode` | Done |
 | File | `readBinaryFile`, `writeBinaryFile` | Done |
-| Database | `postgres`, `mySql`, `sqlite`, `elasticsearch`, `redis`, `mongoDb` | Done (redis HTTP proxy — §3) |
-| Messaging | `slack`, `discord`, `twilio`, `microsoftTeams` | Done |
+| Database | `postgres`, `mySql`, `sqlite`, `elasticsearch`, `redis`, `mongoDb` | Done (redis dual-mode: native + http — §3) |
+| Messaging | `slack`, `discord`, `twilio`, `microsoftTeams`, `kafka`, `kafkaTrigger` | Done (kafka dual-mode: rest + native — §4.1) |
 | AI | `@n8n/n8n-nodes-langchain.openAi`, `anthropic` | Done |
 | Core | `start`, `noOp`, `wait`, `executeWorkflow` | Done |
 | Cloud | `awsLambda`, `s3`, `azureBlobStorage`, `gcpCloudStorage` | Done S3/Lambda/Blob/GCS only |
@@ -34,7 +34,7 @@
 | Productivity | `googleSheets`, `notion`, `stripe` | Done |
 | Email | `sendEmail`, `sendGrid` | Done |
 
-Gap builtin vs n8n 400+ nodes: Salesforce, HubSpot, Shopify, Jira, Supabase, Airtable, WhatsApp, Dropbox/Drive, Kafka, Redis native, dll — belum. Community `n8n-nodes-*` (npm) belum — lihat §1.9 + §4.5.
+Gap builtin vs n8n 400+ nodes: Salesforce, HubSpot, Shopify, Jira, Supabase, Airtable, WhatsApp, Dropbox/Drive — belum. Kafka + Redis native + JS plugin loader sudah landed 2026-10-06. Community `n8n-nodes-*` (npm) covered via Goja JS loader (`--plugin-dir`) — lihat §1.9 + §4.5.
 
 ### 1.3 Webhook Surface — Parity 19/19 (2026-09-10)
 - Routes `/webhook/{path:.*}`, `/webhook-test/{path:.*}`, `/api/v1/webhooks*`.

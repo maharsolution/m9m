@@ -14,6 +14,7 @@ import {
 } from '@/stores'
 import { getNodeCategory, getNodeCredentialTypes } from '@/types/node'
 import type { Credential } from '@/types/api'
+import type { NodePropertyDisplayOptions } from '@/types/node'
 
 const workflowEditorStore = useWorkflowEditorStore()
 const nodesStore = useNodesStore()
@@ -36,6 +37,38 @@ const localParameters = ref<Record<string, unknown>>({})
 // implicit from the map key. We cast through `any` because TS does not
 // narrow optional id with the dynamic key signature.
 const localCredentials = ref<Record<string, BoundCredential>>({})
+
+// Visibility helper for n8n-style `displayOptions`. n8n stores
+// `{show: {param: [value, ...]}}` and `{hide: {param: [value, ...]}}`;
+// a property is visible only when every `show` constraint passes and
+// no `hide` constraint passes. This lets the Kafka form offer
+// distinct REST-Proxy and Native-broker fields without showing the
+// REST URL when `mode=native` (or vice versa).
+const matchCondition = (
+  cond: Record<string, unknown[]> | undefined,
+): boolean => {
+  if (!cond) return true
+  for (const [key, allowed] of Object.entries(cond)) {
+    const v = localParameters.value[key]
+    const list = (allowed as unknown[]) ?? []
+    if (v === undefined) return false
+    if (!list.some((a) => a === v)) return false
+  }
+  return true
+}
+const isPropertyVisible = (
+  prop: { displayOptions?: NodePropertyDisplayOptions },
+): boolean => {
+  const opts = prop.displayOptions
+  if (!opts) return true
+  return matchCondition(opts.show) && !matchCondition(opts.hide)
+}
+const visibleProperties = computed(() => {
+  const all = (nodeType.value?.properties ?? []) as Array<{
+    displayOptions?: NodePropertyDisplayOptions
+  }>
+  return all.filter(isPropertyVisible)
+})
 
 // Sync local state with selected node
 watch(
@@ -246,9 +279,9 @@ const getCategoryColor = () => {
         <h4 class="font-medium text-slate-900 dark:text-white">Parameters</h4>
 
         <!-- Dynamic parameters based on node type -->
-        <div v-if="nodeType?.properties?.length" class="space-y-4">
+        <div v-if="visibleProperties.length" class="space-y-4">
           <div
-            v-for="prop in nodeType.properties"
+            v-for="prop in visibleProperties"
             :key="prop.name"
             class="space-y-1"
           >

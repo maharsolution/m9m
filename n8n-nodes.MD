@@ -267,37 +267,31 @@ The pattern is:
 These are the concrete implementation gaps. None of them is a
 research question; each maps to a file change.
 
-### 5.1 Persist per-node I/O during execution — **BLOCKING**
+### 5.1 Persist per-node I/O during execution — **DONE (B-08, 2026-10-06)**
 
 `internal/model/workflow.go:188` declares
-`NodeData map[string][]DataItem`. The struct is there, but **the engine
-never populates it** while running a workflow. Today an execution stores
-only the workflow-level `data`.
+`NodeData map[string][]DataItem`. The engine now populates it via
+`internal/engine/execution_node_data.go::BuildExecutionNodeData` after
+every node finishes; both successful and failed runs are captured
+(start + last when Debug=OFF, all nodes when Debug=ON).
+Live-verified against `exec_1791105373029262839_775` — the payload
+carries entries for all 5 nodes (`HTTP Request`, `Respond Set`,
+`Respond to Webhook`, `Sticky Note`, `Webhook`).
 
-**Fix**: in `internal/engine/...` (the workflow runner), after each node
-finishes, write
-`execution.NodeData[node.Name] = output` before moving on. This must be
-done for **both** successful and failed nodes, capturing the failure
-under `data[i].json.error` if the engine currently throws.
+### 5.2 Expose `INodeTypeDescription`-equivalent properties — **DONE for top-10 (B-09, 2026-10-06); MongoDB done 2026-10-07**
 
-**Effort**: ~1 day. Touch engine + storage layer.
-
-### 5.2 Expose `INodeTypeDescription`-equivalent properties — **BLOCKING for parity**
-
-`internal/nodes/base/node.go`'s `NodeDescription` has only
-`Name, DisplayName, Description, Category`. The
-`GET /api/v1/node-types` endpoint therefore returns no `properties`
-array, so the Settings panel in the NDV has no schema to render.
-
-**Fix**: extend `base.NodeDescription` with a `Properties []NodeProperty`
-field (mirroring n8n's `INodeProperties`:
-`displayName, name, type, default, options, displayOptions, required, typeOptions`)
-and populate it in each `NewXxxNode()` factory. Then surface it from the
-node-types API and from a new `GET /api/v1/node-types/{name}` endpoint.
-
-**Effort**: ~1 week (100+ nodes need their `properties` filled in). The
-most-used nodes (HTTP, Set, IF, Switch, Code, Webhook, Cron) should be
-done first.
+`internal/nodes/base/node.go::NodeDescription` now carries a
+`Properties []NodeProperty` field, and the helpers in
+`internal/nodes/base/properties.go` build per-node property slices
+mirroring n8n's `INodeProperties` (`displayName, name, type, default,
+options, displayOptions, required, typeOptions`).
+`GET /api/v1/node-types` returns those slices; the `n8n-nodes-base.*`
+endpoints in the catalogue all show non-empty property counts. Top-10
+coverage (HTTP 32, Set 14, IF 12, Webhook 17, Cron 12, Code 11,
+Filter 11, Merge 14, Wait 12, Switch 12) plus Postgres (13), MySQL,
+SQLite, Redis (25), MongoDB (12) and Kafka + KafkaTrigger (23 each).
+Remaining 80+ nodes still rely on the legacy path (Settings tab is
+suppressed for them; Parameters fall back to raw JSON).
 
 ### 5.3 Rebuild `ExecutionDetail.vue` to match n8n's NDV
 
@@ -305,14 +299,14 @@ The current implementation (`web/src/views/ExecutionDetail.vue`) has:
 
 - ✅ Per-node state colouring on the canvas
 - ✅ Right panel with state badge, error, output, parameters, credentials
-- ❌ No tabbed input/output/parameters layout
-- ❌ No Schema/Table/JSON mode switcher
-- ❌ Per-node-type parameter rendering (just dumps raw `parameters`)
-- ❌ Multi-branch output rendering (IF/Switch/Merge show no tab strip)
-- ❌ The "execution step nodes are not connected" reported by the user is
+- ✅ Tabbed Input / Output / Settings(Parameters) layout — `web/src/views/ExecutionDetail.vue:1-130`
+- ✅ Schema / Table / JSON mode switcher — same file
+- ✅ Per-node-type parameter rendering — `PropertyEditor.vue` consumes the `properties` array
+- ✅ Multi-branch output rendering (IF / Switch / Merge) — branch picker via `nodeData[name][branch]`
+- ✅ The "execution step nodes are not connected" reported by the user is
   actually a **layout bug** in the right-pane header, not the canvas (the
   edges between canvas nodes ARE drawn — see `ExecutionDetail.vue:340-350`
-  `<VueFlow :edges="flowEdges">`). Confirm with screenshot in §7.
+  `<VueFlow :edges="flowEdges">`). Verified live 2026-09-09.
 
 **Fix plan**:
 
@@ -334,25 +328,17 @@ The current implementation (`web/src/views/ExecutionDetail.vue`) has:
    show a fourth **Binary** tab listing each `data[i].binary.<key>`
    with name / mime / size / download button.
 
-### 5.4 Render Schema / Table / JSON views
+### 5.4 Render Schema / Table / JSON views — **DONE**
 
-Three pure-functional Vue composables:
+Three renderers live in `web/src/components/execution/ExecutionDataView.vue`
+behind the `viewMode` reactive (`'schema' | 'table' | 'json'`).
+`Schema` walks the item tree with the same classification algorithm as
+n8n's `VirtualSchema.vue`; `Table` unions top-level keys across items
+and uses `vue-virtual-scroller` for >100 rows; `JSON` pretty-prints
+and offers a Copy button. The chosen mode is stored per-tab in
+`localStorage`.
 
-- `useSchemaView(items: DataItem[])` — builds the nested type tree by
-  walking one item. Use the same algorithm as n8n's `VirtualSchema.vue`
-  (described in <https://deepwiki.com/n8n-io/n8n/6.3-parameter-input-and-expression-editor>):
-  recursively classify each leaf as `string | number | boolean | array | object | date | binary`.
-  Render as a tree with expand/collapse. Use `vue-virtual-scroller` for
-  large trees.
-- `useTableView(items: DataItem[])` — builds the column set by unioning
-  the top-level keys of every item, then renders rows × columns. Nested
-  objects render as compact JSON strings in the cell. Use
-  `vue-virtual-scroller` for >100 rows.
-- `useJsonView(items: DataItem[])` — pretty-prints with
-  `JSON.stringify(items, null, 2)` and a Copy button. Existing
-  `prettyJson()` already does this; just needs to be wrapped in a tab.
-
-### 5.5 Fix the canvas state colouring (it already works)
+### 5.5 Fix the canvas state colouring — **DONE (2026-09-09 live)**
 
 The user reported "execution step nodes also not connected". The
 **edges are drawn** (verified live on 2026-09-09 against the deployed

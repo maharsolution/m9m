@@ -265,6 +265,44 @@ type Option struct {
 	Value string `json:"value"`
 }
 
+// WithDisplayOptions attaches an n8n-style `displayOptions` rule and
+// returns the receiver, so builders can chain:
+//
+//	prop := base.StringProp(...).WithDisplayOptions(
+//	    base.NodeProperty_DisplayOptions_Show("mode", []string{"native"}),
+//	)
+//
+// The default `Show` rule hides the field unless the named sibling
+// property equals one of the listed values; the matched helper supports
+// inverse cases (`hide` blocks). Used heavily by Kafka to keep the
+// REST-Proxy and Native-broker fields mutually exclusive.
+func (p NodeProperty) WithDisplayOptions(opts map[string]interface{}) NodeProperty {
+	p.DisplayOptions = opts
+	return p
+}
+
+// NodeProperty_DisplayOptions_Show builds the standard n8n shape
+// `{show: {param: [value, ...]}}` for displayOptions. The property is
+// visible only when `params[param]` equals one of `values` (string
+// equality, matching n8n's behaviour).
+func NodeProperty_DisplayOptions_Show(param string, values []string) map[string]interface{} {
+	return map[string]interface{}{
+		"show": map[string]interface{}{
+			param: values,
+		},
+	}
+}
+
+// NodeProperty_DisplayOptions_Hide builds `{hide: {param: [value, ...]}}`
+// — the property is visible unless the sibling equals any listed value.
+func NodeProperty_DisplayOptions_Hide(param string, values []string) map[string]interface{} {
+	return map[string]interface{}{
+		"hide": map[string]interface{}{
+			param: values,
+		},
+	}
+}
+
 // ExecutionParams holds parameters for node execution
 type ExecutionParams struct {
 	CurrentNodeName string
