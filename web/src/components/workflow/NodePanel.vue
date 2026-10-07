@@ -14,7 +14,7 @@ import {
 } from '@/stores'
 import { getNodeCategory, getNodeCredentialTypes } from '@/types/node'
 import type { Credential } from '@/types/api'
-import type { NodePropertyDisplayOptions } from '@/types/node'
+import type { NodeProperty, NodePropertyDisplayOptions } from '@/types/node'
 
 const workflowEditorStore = useWorkflowEditorStore()
 const nodesStore = useNodesStore()
@@ -64,9 +64,7 @@ const isPropertyVisible = (
   return matchCondition(opts.show) && !matchCondition(opts.hide)
 }
 const visibleProperties = computed(() => {
-  const all = (nodeType.value?.properties ?? []) as Array<{
-    displayOptions?: NodePropertyDisplayOptions
-  }>
+  const all = (nodeType.value?.properties ?? []) as Array<NodeProperty>
   return all.filter(isPropertyVisible)
 })
 
