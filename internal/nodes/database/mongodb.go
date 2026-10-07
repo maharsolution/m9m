@@ -30,9 +30,48 @@ func NewMongoDBNode() *MongoDBNode {
 			Name:        "MongoDB",
 			Description: "Perform operations on MongoDB collections",
 			Category:    "Database",
+			Properties:  mongoProperties(),
+			Inputs:      []string{"main"},
+			Outputs:     []string{"main"},
 		}),
 		client: &http.Client{},
 	}
+}
+
+// mongoProperties returns the MongoDB node's property descriptors.
+// Mirrors n8n's INodeTypeDescription.properties for the MongoDB
+// node: a base URL + dataSource for the Atlas Data API flavour
+// the existing executor speaks, an operation picker covering
+// find / findOne / insert / insertMany / update / delete /
+// aggregate / count, and the collection / database / filter /
+// document fields the engine actually reads.
+func mongoProperties() []base.NodeProperty {
+	ops := []base.Option{
+		{Name: "Find", Value: "find"},
+		{Name: "Find One", Value: "findOne"},
+		{Name: "Insert", Value: "insert"},
+		{Name: "Insert Many", Value: "insertMany"},
+		{Name: "Update", Value: "update"},
+		{Name: "Delete", Value: "delete"},
+		{Name: "Aggregate", Value: "aggregate"},
+		{Name: "Count", Value: "count"},
+	}
+	props := []base.NodeProperty{
+		base.StringProp("Base URL", "baseUrl", "http://localhost:27017", "MongoDB Data API base URL (Atlas or local proxy).", "http://localhost:27017", false),
+		base.StringProp("Data Source", "dataSource", "Cluster0", "Atlas data source name (or proxy cluster).", false),
+		base.StringProp("API Key", "apiKey", "", "API key sent as the `api-key` header (optional).", "********", false),
+		base.StringOpt("Operation", "operation", "find", "MongoDB operation to run.", ops, true),
+		base.StringProp("Database", "database", "", "MongoDB database name.", "mydb", true),
+		base.StringProp("Collection", "collection", "", "MongoDB collection name.", "users", true),
+		base.JsonProp("Filter", "filter", "{}", "MongoDB filter expression (find / update / delete / count)."),
+		base.JsonProp("Sort", "sort", "{}", "MongoDB sort spec (find)."),
+		base.NumberProp("Limit", "limit", 0, "Max documents to return (find). 0 = no limit.", false),
+		base.JsonProp("Document", "document", "{}", "Single document (insert). Falls back to input data when empty."),
+		base.JsonProp("Documents", "documents", "[]", "Array of documents (insertMany). Falls back to input items."),
+		base.JsonProp("Update", "update", "{}", "MongoDB update spec (update)."),
+		base.JsonProp("Pipeline", "pipeline", "[]", "Aggregation pipeline (aggregate)."),
+	}
+	return append(props, base.CommonSettings()...)
 }
 
 // NewMongoDBNodeWithClient creates a MongoDB node with a custom HTTP client.

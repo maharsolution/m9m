@@ -468,10 +468,16 @@ func resolveCredentialAuthData(ws storage.WorkflowStorage, node *model.Node) (ma
 	case "headerAuth":
 		credType = "httpHeaderAuth"
 	case "apiKey":
-		// n8n's apiKey node auth uses a generic header — there is no
-		// dedicated credential type for it in m9m; fall back to
-		// httpHeaderAuth because that's the closest match.
-		credType = "httpHeaderAuth"
+		// n8n's apiKey auth is stored on a dedicated `apiKeyAuth`
+		// credential type. Older m9m workflows created before that
+		// type existed kept it under `httpHeaderAuth` (the same
+		// {name, value} shape), so resolve to whichever exists
+		// rather than hard-coding the fallback.
+		if ref, ok := node.Credentials["apiKeyAuth"]; ok && ref.ID != "" {
+			credType = "apiKeyAuth"
+		} else {
+			credType = "httpHeaderAuth"
+		}
 	case "jwtAuth":
 		credType = "jwtAuth"
 	default:
@@ -512,6 +518,20 @@ func authDataFromCredential(cred *storage.Credential) map[string]interface{} {
 		return map[string]interface{}{"username": user, "password": pass}
 	case "httpHeaderAuth":
 		name := stringFromData(cred.Data, "name")
+		val := stringFromData(cred.Data, "value")
+		if name == "" && val == "" {
+			return nil
+		}
+		return map[string]interface{}{"headerName": name, "headerValue": val}
+	case "apiKeyAuth":
+		// Dedicated credential type for n8n's apiKey auth. Same
+		// wire shape as httpHeaderAuth (name + value) but kept
+		// separate so handlers and the sync bridge don't have to
+		// guess based on the node's `authentication` parameter.
+		name := stringFromData(cred.Data, "name")
+		if name == "" {
+			name = "X-API-Key"
+		}
 		val := stringFromData(cred.Data, "value")
 		if name == "" && val == "" {
 			return nil
@@ -948,7 +968,7 @@ func extractResponseNodeData(workflow *model.Workflow, triggerNode string, resul
 // the priority table be unit-tested without spinning up a manager.
 func resolveContentType(respondNodeParams map[string]interface{}, inboundContentType string, body interface{}) string {
 	// (1) Per-node override.
-	if ct := readRespondToWebhookHeaders(respondNodeParams)["content-type"]; ct != "" {
+	if ct := readRespondToWebhookHeaders(respondNodeParams)["Content-Type"]; ct != "" {
 		return ct
 	}
 	// (2) Inbound Content-Type, only when the body looks like XML/text
@@ -1002,9 +1022,14 @@ func looksLikeXMLOrTextContentType(ct string) bool {
 
 // readRespondToWebhookHeaders reads the `options.responseHeaders`
 // map from a Respond-to-Webhook node's parameters and returns it
-// normalised to lower-case keys (HTTP headers are case-insensitive
-// but the n8n UI sometimes mixes cases). Returns an empty map when
-// the node has no override block.
+// normalised to canonical header keys (e.g. `Content-Type`, not
+// `content-type`). HTTP headers are case-insensitive but emitting
+// them in canonical form avoids a lossy round-trip on the wire
+// (`Content-Type` → `content-type` → `Content-Type` works, but
+// `X-MY-Custom-Header` → `x-my-custom-header` → `X-My-Custom-Header`
+// is wrong). The downstream `w.Header().Set` call requires
+// canonical keys anyway. Returns an empty map when the node has
+// no override block.
 //
 // Accepted shapes (n8n versions vary):
 //
@@ -1050,14 +1075,14 @@ func readRespondToWebhookHeaders(params map[string]interface{}) map[string]strin
 			if name == "" {
 				continue
 			}
-			out[strings.ToLower(name)] = value
+			out[http.CanonicalHeaderKey(name)] = value
 		}
 		return out
 	}
 	// Legacy shape: direct {HeaderName: value} map.
 	for ks, v := range rh {
 		vs, _ := v.(string)
-		out[strings.ToLower(ks)] = vs
+		out[http.CanonicalHeaderKey(ks)] = vs
 	}
 	return out
 }
