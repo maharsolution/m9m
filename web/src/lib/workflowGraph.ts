@@ -4,8 +4,21 @@ import { getNodeCategory } from '@/types/node'
 
 const EDGE_ID_PREFIX = 'workflow-edge'
 
+// `cloneValue` deep-clones a value that should travel through Pinia
+// state and over the wire as plain data. The previous implementation
+// used `structuredClone`, which throws `DataCloneError` on Vue
+// reactive proxies (Pinia `currentWorkflow.value.nodes[i].parameters`
+// is itself a reactive tree — sub-objects like `options: {}` are
+// wrapped, so any nested object can fail cloning). Workflow nodes
+// only carry JSON-serialisable data (parameters, credentials, settings,
+// pinData, staticData), so JSON round-trip is correct and, as a
+// side effect, drops reactivity. Returning the original value for
+// `null`/`undefined` keeps `cloneValue(undefined)` returning
+// `undefined` so the `updates.X ? cloneValue(...) : current.X`
+// call-sites behave as before.
 function cloneValue<T>(value: T): T {
-  return structuredClone(value)
+  if (value === null || value === undefined) return value
+  return JSON.parse(JSON.stringify(value)) as T
 }
 
 function cloneWorkflowNode(node: WorkflowNode): WorkflowNode {
