@@ -49,11 +49,17 @@ const localCredentials = ref<Record<string, BoundCredential>>({})
 // property's `default` when the user hasn't set a value yet, so a
 // freshly-added node with `mode`'s default ("rest") immediately shows
 // the REST-Proxy field without requiring a click round-trip.
+//
+// `matchCondition` returns `null` (no constraint), `true` (constraint
+// satisfied) or `false` (constraint violated). The three-valued result
+// lets `isPropertyVisible` distinguish "absent hide rule" from "hide
+// rule that happens to match" — `!matchCondition(undefined)` would
+// incorrectly read as "this property must be hidden".
 const matchCondition = (
   cond: Record<string, unknown[]> | undefined,
   props: NodeProperty[],
-): boolean => {
-  if (!cond) return true
+): boolean | null => {
+  if (!cond) return null
   for (const [key, allowed] of Object.entries(cond)) {
     let v = localParameters.value[key]
     if (v === undefined) {
@@ -72,9 +78,11 @@ const isPropertyVisible = (
 ): boolean => {
   const opts = prop.displayOptions
   if (!opts) return true
-  return (
-    matchCondition(opts.show, props) && !matchCondition(opts.hide, props)
-  )
+  const showMatch = matchCondition(opts.show, props)
+  const hideMatch = matchCondition(opts.hide, props)
+  if (showMatch === false) return false
+  if (hideMatch === true) return false
+  return true
 }
 const visibleProperties = computed(() => {
   const all = (nodeType.value?.properties ?? []) as NodeProperty[]
