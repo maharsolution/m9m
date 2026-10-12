@@ -2,6 +2,7 @@ package credentials
 
 import (
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/neul-labs/m9m/internal/model"
@@ -104,6 +105,19 @@ func (cm *CredentialManager) InjectCredentialsIntoNodeParameters(nodeID string, 
 	creds, err := cm.GetNodeCredentials(nodeID)
 	if err != nil {
 		return nil, err
+	}
+	// TEMP DEBUG (BUG-2026-10-12-003): print what the engine sees for this
+	// node so we can confirm whether the in-memory credential cache is in
+	// sync with the bridge-pushed data.
+	if os.Getenv("M9M_DEBUG_KAFKA_VALIDATE") != "" {
+		cm.mu.RLock()
+		mappings := cm.nodeMappings[nodeID]
+		cm.mu.RUnlock()
+		fmt.Fprintf(os.Stderr, "[InjectCredentialsIntoNodeParameters] nodeID=%s mappings=%d creds=%d keys=", nodeID, len(mappings), len(creds))
+		for k := range creds {
+			fmt.Fprintf(os.Stderr, "%s ", k)
+		}
+		fmt.Fprintf(os.Stderr, "\n")
 	}
 
 	// Create a copy of parameters and inject credentials
