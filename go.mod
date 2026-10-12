@@ -20,6 +20,14 @@ require (
 	// Database Drivers
 	github.com/go-sql-driver/mysql v1.9.3
 
+	// MongoDB native client (pure Go via mongo-driver, no CGO).
+	// Powers `n8n-nodes-base.mongoDb` in native mode — direct
+	// TCP / BSON wire protocol, no proxy required. Apache-2.0,
+	// pulls in `golang.org/x/crypto` (already in our tree for
+	// SCRAM) and `github.com/xdg-go/scram` / `xdg-go/pbkdf2`
+	// (already indirect).
+	go.mongodb.org/mongo-driver v1.17.4
+
 	// Kafka client (native TCP / SASL / TLS — pure Go, no CGO).
 	// Selected over confluent-kafka-go because the Docker build
 	// already needs CGO only for sqlite3; pulling librdkafka would

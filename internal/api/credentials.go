@@ -359,6 +359,22 @@ var credentialSchemas = map[string]CredentialTypeSchema{
 		},
 		Required: []string{"host", "database", "user", "password"},
 	},
+	"mongoDb": {
+		Type:        "mongoDb",
+		DisplayName: "MongoDB",
+		Properties: []SchemaProperty{
+			{Name: "connectionString", DisplayName: "Connection String", Type: "password", Required: false, Description: "Full mongodb:// URI (overrides host/port)."},
+			{Name: "host", DisplayName: "Host", Type: "string", Required: false, Default: "localhost"},
+			{Name: "port", DisplayName: "Port", Type: "number", Required: false, Default: 27017},
+			{Name: "database", DisplayName: "Default Database", Type: "string", Required: false, Description: "Default auth source / db (also used as authSource for user/pass login)."},
+			{Name: "user", DisplayName: "User", Type: "string", Required: false},
+			{Name: "password", DisplayName: "Password", Type: "password", Required: false},
+			{Name: "tls", DisplayName: "TLS", Type: "boolean", Default: false},
+			{Name: "tlsAllowInvalidCertificates", DisplayName: "Allow Invalid TLS Certs", Type: "boolean", Default: false},
+			{Name: "authSource", DisplayName: "Auth Source", Type: "string", Default: "admin", Description: "Database where the user is defined (e.g. 'admin' for Atlas)."},
+		},
+		Required: []string{},
+	},
 	"slack": {
 		Type:        "slack",
 		DisplayName: "Slack",

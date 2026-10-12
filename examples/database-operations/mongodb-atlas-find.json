@@ -1,0 +1,119 @@
+{
+  "name": "MongoDB Atlas — Find documents by filter",
+  "description": "Webhook-triggered lookup against a MongoDB Atlas cluster using mongodb+srv://. Reads `?customer_id=...` from the incoming request, queries the `customers` collection in the `tds` database, and returns the matching documents as JSON. See m9m.MD for the rewritten MongoDB node (uses the official mongo-driver, not the legacy Atlas Data API).",
+  "category": "database-operations",
+  "difficulty": "beginner",
+  "estimatedTime": "5 minutes",
+  "prerequisites": [
+    "A MongoDB Atlas cluster (or any reachable MongoDB)",
+    "A user with read access to the target database + collection"
+  ],
+  "learningObjectives": [
+    "Connect m9m to a MongoDB cluster via a standard URI (mongodb:// or mongodb+srv://)",
+    "Pass runtime values into the filter using n8n expressions",
+    "Return the matched documents through a webhook response"
+  ],
+  "securityNote": "The connection string below contains a placeholder password (***REDACTED***). NEVER commit a real password to a workflow JSON file. Use one of: (a) an n8n credential of type mongoDb, (b) a process-wide env var read by m9m, or (c) the engine's secret store. The literal value here is for local development only.",
+  "nodes": [
+    {
+      "id": "webhook-in",
+      "name": "Webhook In",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-480, 256],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "mongo_find",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "m9m-mongo-find-001"
+    },
+    {
+      "id": "extract-id",
+      "name": "Extract customer_id",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [-240, 256],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cust-id",
+              "name": "customer_id",
+              "type": "string",
+              "value": "={{ $json.query.customer_id || $json.body.customer_id || '' }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "mongo-find",
+      "name": "MongoDB Find",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1,
+      "position": [0, 256],
+      "parameters": {
+        "connectionString": "mongodb+srv://tdssolutiontech_db_user:***REDACTED***@cluster0.aldwftp.mongodb.net/?appName=Cluster0",
+        "database": "tds",
+        "collection": "customers",
+        "operation": "find",
+        "filter": "={ \"customer_id\": \"{{ $json.customer_id }}\" }",
+        "limit": 10,
+        "sort": "{ \"createdAt\": -1 }"
+      }
+    },
+    {
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [240, 256],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"count\": {{ $('MongoDB Find').all().length }},\n  \"results\": {{ $('MongoDB Find').all() }}\n}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook In": {
+      "main": [
+        [
+          {
+            "node": "Extract customer_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract customer_id": {
+      "main": [
+        [
+          {
+            "node": "MongoDB Find",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB Find": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
