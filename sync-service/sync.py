@@ -730,8 +730,19 @@ def status():
 
 
 @app.post("/sync")
-async def sync_endpoint():
-    """Run a single cycle synchronously and return the summary."""
+async def sync_endpoint(force: bool = False):
+    """Run a single cycle synchronously and return the summary.
+
+    `?force=true` (or `?force=1`) wipes the in-memory content-hash
+    cache first, so every workflow is re-pushed into m9m even when
+    n8n reports no content change. Use this after manually editing
+    m9m to drift it out of sync, or to audit the wire format against
+    a fresh fetch.
+    """
+    if force:
+        cleared = len(_last_hash)
+        _last_hash.clear()
+        print(f"[sync:manual] force=True -> cleared {cleared} cached hashes")
     async with _cycle_lock:
         summary = await run_cycle("manual")
     if any(r.get("status") == "failed" for r in summary["results"]):
