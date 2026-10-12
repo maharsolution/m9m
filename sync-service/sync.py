@@ -729,6 +729,33 @@ def status():
     }
 
 
+@app.get("/debug/credentials")
+def debug_credentials():
+    """Return the full credential envelopes (id, name, type, decrypted data)
+    read directly from n8n's Postgres. Useful for verifying what the
+    bridge actually pushes; the public API strips `data` for safety.
+
+    Reads the in-process N8N_ENCRYPTION_KEY; on a fresh container the
+    N8N_ENCRYPTION_KEY env var must already be set or this returns 503.
+    """
+    if not N8N_ENCRYPTION_KEY:
+        return JSONResponse(status_code=503, content={"error": "N8N_ENCRYPTION_KEY not set"})
+    creds = fetch_n8n_credentials()
+    out = []
+    for c in creds:
+        envelope = {
+            "id": c.get("id"),
+            "name": c.get("name"),
+            "type": c.get("type"),
+        }
+        try:
+            envelope["data"] = decrypt_n8n_credential_data(c.get("data", ""))
+        except Exception as e:
+            envelope["data_error"] = str(e)
+        out.append(envelope)
+    return {"credentials": out}
+
+
 @app.post("/sync")
 async def sync_endpoint(force: bool = False):
     """Run a single cycle synchronously and return the summary.
