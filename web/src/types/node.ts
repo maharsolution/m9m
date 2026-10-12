@@ -122,8 +122,13 @@ export function getNodeCategory(nodeType: string): NodeCategory {
   if (nodeType.includes('start') || nodeType.includes('executeWorkflow')) {
     return 'core'
   }
-  // Data / Database
-  if (nodeType.includes('postgres') || nodeType.includes('mysql') || nodeType.includes('sqlite') || nodeType.includes('mongo') || nodeType.includes('redis') || nodeType.includes('elastic')) {
+  // Data / Database. Case-insensitive so `n8n-nodes-base.mySql`
+  // (camelCase n8n convention) lands in the Data section alongside
+  // `n8n-nodes-base.mongoDb` — previously the lowercase substring
+  // check missed MySQL and it fell through to the action fallback,
+  // making it the only DB node rendered under "Actions".
+  const lc = nodeType.toLowerCase()
+  if (lc.includes('postgres') || lc.includes('mysql') || lc.includes('sqlite') || lc.includes('mongo') || lc.includes('redis') || lc.includes('elastic')) {
     return 'data'
   }
   // Communication
@@ -155,7 +160,7 @@ const NODE_CREDENTIAL_TYPE_MAP: Record<string, string[]> = {
   'n8n-nodes-base.postgres': ['postgres'],
   'n8n-nodes-base.mySql': ['mySql'],
   'n8n-nodes-base.sqlite': [],
-  'n8n-nodes-base.mongoDb': [],
+  'n8n-nodes-base.mongoDb': ['mongoDb'],
   'n8n-nodes-base.redis': [],
   // AI / LLM
   '@n8n/n8n-nodes-langchain.openAi': ['openAi'],
