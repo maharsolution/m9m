@@ -250,13 +250,35 @@ func (n *KafkaNode) backendFor(params map[string]interface{}) (kafkaBackend, err
 			}
 		}
 		topic := strings.TrimSpace(fmt.Sprintf("%v", params["topic"]))
+		saslMech := strings.TrimSpace(fmt.Sprintf("%v", params["saslMechanism"]))
+		if saslMech == "" || saslMech == "<nil>" {
+			// Credential envelope often sets `authentication: true`
+			// without naming a mechanism. Aiven / Confluent / most
+			// managed brokers default to PLAIN when username+password
+			// are present, so use that as the safe fallback.
+			saslMech = "PLAIN"
+		}
+		tlsEnabled := boolParam(params, "tls", false)
+		caCert := strings.TrimSpace(fmt.Sprintf("%v", params["ca"]))
+		if caCert == "<nil>" {
+			caCert = ""
+		}
+		// If the credential supplied a CA chain the broker is almost
+		// certainly TLS-only (Aiven is the canonical case). Without
+		// this auto-enable, the operator would have to set
+		// `tls: true` *and* paste the CA into both the credential
+		// and the node parameter form, which is fragile.
+		if caCert != "" {
+			tlsEnabled = true
+		}
 		client, err := NewKafkaNativeClient(KafkaNativeConfig{
 			Brokers:       brokers,
 			Topic:         topic,
-			SASLMechanism: strings.TrimSpace(fmt.Sprintf("%v", params["saslMechanism"])),
+			SASLMechanism: saslMech,
 			SASLUsername:  fmt.Sprintf("%v", params["saslUsername"]),
 			SASLPassword:  fmt.Sprintf("%v", params["saslPassword"]),
-			TLS:           boolParam(params, "tls", false),
+			TLS:           tlsEnabled,
+			CACert:        caCert,
 			ClientID:      "m9m-kafka-producer",
 		})
 		if err != nil {
@@ -462,6 +484,11 @@ func ApplyKafkaCredentialAuth(params map[string]interface{}) {
 		// "true"/"1" from the credential envelope flip the TLS flag on
 		// without requiring a second code path.
 		params["tls"] = stringFromAnyMap(params, "kafka_tls")
+	}
+	if c := stringFromAnyMap(params, "kafka_ca"); c != "" && isEmpty(params, "ca") {
+		// CA cert is wired into the native dialer as a TLS root pool
+		// (see kafka_native.go::dialer).
+		params["ca"] = c
 	}
 	// REST-proxy-mode fields.
 	if u := stringFromAnyMap(params, "kafka_restProxyUrl"); u != "" && isEmpty(params, "restProxyUrl") {

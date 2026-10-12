@@ -3,6 +3,7 @@ package messaging
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
@@ -33,6 +34,7 @@ type KafkaNativeConfig struct {
 	SASLUsername  string
 	SASLPassword  string
 	TLS           bool   // enable TLS dial
+	CACert        string // PEM-encoded CA cert chain (Aiven / Confluent Cloud)
 	ClientID      string // optional, surfaced in broker logs
 }
 
@@ -122,7 +124,15 @@ func (c *KafkaNativeClient) dialer() (*kafka.Dialer, error) {
 		// `host:port` string). Cert verification is on by default;
 		// the Aiven brokers use public CA-signed certs, so this
 		// works without an extra root-pool file.
-		d.TLS = &tls.Config{MinVersion: tls.VersionTLS12}
+		tlsCfg := &tls.Config{MinVersion: tls.VersionTLS12}
+		if c.cfg.CACert != "" {
+			pool := x509.NewCertPool()
+			if !pool.AppendCertsFromPEM([]byte(c.cfg.CACert)) {
+				return nil, errors.New("kafka native: CACert is set but did not contain any valid PEM blocks")
+			}
+			tlsCfg.RootCAs = pool
+		}
+		d.TLS = tlsCfg
 	}
 	return d, nil
 }
