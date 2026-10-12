@@ -5,7 +5,7 @@
 | Document | `bug-fix.MD` — canonical bug register and triage rules |
 | Version | `0.4.0-draft+1` |
 | Status | **Living document** — updated as bugs are opened, triaged, and closed |
-| Last updated | 2026-10-12 (Kafka SASL credential + 5×P5 hygiene + JWT fuzz + 25-node Properties migration) |
+| Last updated | 2026-10-12 (Kafka SASL credential + 5×P5 hygiene + JWT fuzz + 25-node Properties migration + 8 BUG-DOC batch reconciliation) |
 | Owner | Mahar Solution (current maintainer) |
 | Repository | <https://github.com/maharsolution/m9m> |
 | Companion docs | `m9m.MD` (PRD), `parity/parity_gaps.json` (machine-readable parity backlog), `workflow-test.MD` (live parity report), `gap-current-vs-doc.MD` (docs drift), `n8n-nodes.MD` (node parity reference) |
@@ -35,14 +35,14 @@ Legend: **P0** = wire-compat / correctness blocker · **P1** = engine correctnes
 | BUG-2026-10-12-003 | Pre-built Windows `.exe` binaries committed to repo (7 files) | P5 | **RESOLVED** (2026-10-12, already gitignored — never tracked) | TBD | — | 2026-10-12 |
 | BUG-2026-10-12-004 | `pyvenv.cfg` committed at repo root (Python venv leak) | P5 | **RESOLVED** (2026-10-12) | TBD | — | 2026-10-12 |
 | BUG-2026-10-12-005 | `Supervised conf` left as `supervisord.conf` in repo root (deploy artefact) | P5 | **RESOLVED** (2026-10-12) | TBD | — | 2026-10-12 |
-| BUG-DOC-2026-09-11-001 | 12 node types registered in code but missing from `documentation/docs/nodes/` | P5 | OPEN (per `gap-current-vs-doc.MD` Phase 1) | TBD | — | 2026-09-11 |
-| BUG-DOC-2026-09-11-002 | ~20 API endpoints in `internal/api/routes.go` missing from `documentation/docs/api/` | P5 | OPEN (Phase 2) | TBD | — | 2026-09-11 |
-| BUG-DOC-2026-09-11-003 | OTel surface severely under-documented (1 line in `index.md`) | P5 | OPEN (Phase 4) | TBD | — | 2026-09-11 |
-| BUG-DOC-2026-09-11-004 | Sync bridge (`sync-service/sync.py`) entirely undocumented | P5 | OPEN (Phase 3) | TBD | — | 2026-09-11 |
-| BUG-DOC-2026-09-11-005 | In-app AI assistant (`internal/ai/`, `Settings → AI`) not in `documentation/docs/` | P5 | OPEN (Phase 1d) | TBD | — | 2026-09-11 |
-| BUG-DOC-2026-09-11-006 | Recent engine work (EdgesTaken, debug mode, retry-node, sslMode) not in docs | P5 | OPEN (Phase 5) | TBD | — | 2026-09-11 |
-| BUG-DOC-2026-09-11-007 | `migrate-from-n8n.md` parity claim stale (still says "95% backend parity") | P5 | OPEN (Phase 5c) | TBD | — | 2026-09-11 |
-| BUG-DOC-2026-09-11-008 | OTel env-var docs drift vs `internal/otel/env.go` (8 names off) | P5 | OPEN (Ticket 5 of `gap-current-vs-doc.MD` Phase 8) | TBD | — | 2026-09-11 |
+| BUG-DOC-2026-09-11-001 | 12 node types registered in code but missing from `documentation/docs/nodes/` | P5 | **RESOLVED** (2026-09-11, `gap-current-vs-doc.MD` Phase 1 — see `nodes/{core,transform,triggers,database,messaging,email,vcs}.md` + new `nodes/{productivity,code}.md` + updated `nodes/index.md` count of 42) | TBD | — | 2026-09-11 |
+| BUG-DOC-2026-09-11-002 | ~20 API endpoints in `internal/api/routes.go` missing from `documentation/docs/api/` | P5 | **RESOLVED** (2026-09-11, Phase 2 — see `api/{executions,node-types,dlq,telemetry,ai,workflows,schedules}.md`) | TBD | — | 2026-09-11 |
+| BUG-DOC-2026-09-11-003 | OTel surface severely under-documented (1 line in `index.md`) | P5 | **RESOLVED** (2026-09-11, Phase 4 — see `observability/index.md` and Ticket 5 of Phase 8) | TBD | — | 2026-09-11 |
+| BUG-DOC-2026-09-11-004 | Sync bridge (`sync-service/sync.py`) entirely undocumented | P5 | **RESOLVED** (2026-09-11, Phase 3 — see `integrations/n8n-sync.md`) | TBD | — | 2026-09-11 |
+| BUG-DOC-2026-09-11-005 | In-app AI assistant (`internal/ai/`, `Settings → AI`) not in `documentation/docs/` | P5 | **RESOLVED** (2026-09-11, Phase 1d — see `nodes/ai.md` + `api/ai.md`) | TBD | — | 2026-09-11 |
+| BUG-DOC-2026-09-11-006 | Recent engine work (EdgesTaken, debug mode, retry-node, sslMode) not in docs | P5 | **RESOLVED** (2026-09-11, Phase 5 — see `workflows/{debug-and-retry,execution-edges}.md` + `sslMode=disable` note in `nodes/database.md`) | TBD | — | 2026-09-11 |
+| BUG-DOC-2026-09-11-007 | `migrate-from-n8n.md` parity claim stale (still says "95% backend parity") | P5 | **RESOLVED** (2026-09-11, Phase 5c — see `migrate-from-n8n.md` line 26: "19/19 webhook parity") | TBD | — | 2026-09-11 |
+| BUG-DOC-2026-09-11-008 | OTel env-var docs drift vs `internal/otel/env.go` (8 names off) | P5 | **RESOLVED** (2026-09-11, Phase 8 Ticket 5 — see `observability/index.md` + `api/telemetry.md` + `configuration/environment.md`) | TBD | — | 2026-09-11 |
 | BUG-UI-2026-09-09-001 | `INodeTypeDescription.properties` only populated for top-10 + MongoDB | P3 | **PARTIAL** (2026-10-12, ~25 nodes now have structured Properties; remaining ~10 use the raw-JSON fallback) | TBD | — | 2026-10-06 |
 | BUG-UI-2026-09-09-002 | NDV: per-node `Settings` tab and per-node retry controls — partial | P3 | **PARTIAL** (2026-10-12, Settings tab now renders for every node via raw-JSON fallback) | TBD | — | 2026-10-06 |
 | BUG-CAP-2026-09-09-001 | Capability gap: tracking flow / debugger visualisation | P6 | OPEN | TBD | Sheet row 1 | 2026-09-09 |
@@ -68,7 +68,7 @@ Legend: **P0** = wire-compat / correctness blocker · **P1** = engine correctnes
 | BUG-RFC-2026-09-11-002 | `plugins/README.md` referenced `github.com/maharsolution/m9m-plugins` (404) | P5 | **RESOLVED** | — | — | 2026-09-11 |
 | BUG-RFC-2026-09-11-003 | `M9M_COPILOT_*` legacy env vars lacked deprecation warning | P5 | **RESOLVED** (`internal/ai/config.go::warnCopilotLegacy`) | — | — | 2026-09-11 |
 
-Counts (2026-10-12 cycle): **0 open P0**, **0 open P1**, **0 open P2**, **0 open P3 (now PARTIAL)**, **7 open P5**, **5 open P6**, **3 open P4 (arch)**, **3 open P4 (sec)**, **1 open P3 (UI)**, **14 resolved (P0/P3/P4/P5)**.
+Counts (2026-10-12, after 0.4.0 cycle + docs reconciliation): **0 open P0**, **0 open P1**, **0 open P2**, **0 fully-open P3 (2 PARTIAL: BUG-UI-001, BUG-UI-002)**, **0 open P5 (all 13 closed)**, **12 open P6 (5 BUG-CAP + 7 BUG-ARCH, all back-burner)**, **3 open P4 (sec: OAuth2, SSO, RBAC — milestone 0.6.0)**, **1 PARTIAL P4 (SEC-001 JWT fuzz)**, **25 resolved/PARTIAL (3 P0 + 1 P3-Kafka + 2 P3-UI + 1 P4-SEC + 13 P5 + 5 P5-RFC)**.
 
 ---
 
@@ -396,7 +396,7 @@ No open P2 bugs. Continue to monitor via:
 | Field | Value |
 | --- | --- |
 | Severity | **P3** (UX, not a wire-compat blocker) |
-| Status | OPEN |
+| Status | **PARTIAL** (2026-10-12, ~25 nodes now populate `Properties`; remaining ~10 long-tail nodes use the raw-JSON fallback in the Settings tab — see §9.12) |
 | Source | `n8n-nodes.MD` §5.2, `gap-current-vs-doc.MD` Phase 1 |
 | Discovered | 2026-10-06 |
 | Owner | TBD |
@@ -426,7 +426,7 @@ No open P2 bugs. Continue to monitor via:
 | Field | Value |
 | --- | --- |
 | Severity | **P3** (UX) |
-| Status | OPEN |
+| Status | **PARTIAL** (2026-10-12, Settings tab now renders for every node via the raw-JSON fallback in `web/src/views/ExecutionDetail.vue`; per-node retry API exists but the "Retry from here" button wiring in the Vue canvas is still partial — see §9.12) |
 | Source | `n8n-nodes.MD` §5.3, commit `91c2d9e` (partial), `commit 2ede796` (per-node retry API) |
 | Discovered | 2026-10-06 |
 | Owner | TBD |
@@ -570,7 +570,7 @@ workflow actually exercises it.
 | Field | Value |
 | --- | --- |
 | Severity | **P5** |
-| Status | OPEN |
+| Status | **RESOLVED** (2026-10-12 — see §9.11) |
 | Discovered | 2026-10-12 |
 | Source | `README.md` "A sanitised `.env.example` is checked in; the typo'd local `,env` is git-ignored." |
 | Files | `,env` (1108 bytes at repo root) |
@@ -591,7 +591,7 @@ workflow actually exercises it.
 | Field | Value |
 | --- | --- |
 | Severity | **P5** (bloat; possibly a real artefact that should not be in git) |
-| Status | OPEN |
+| Status | **RESOLVED** (2026-10-12 — see §9.11) |
 | Discovered | 2026-10-12 |
 | Files | `Unconfirmed 467040.crdownload` (112,961,172 bytes; created 2026-09-05) |
 | Owner | TBD |
@@ -611,7 +611,7 @@ workflow actually exercises it.
 | Field | Value |
 | --- | --- |
 | Severity | **P5** (bloat + confusion) |
-| Status | OPEN |
+| Status | **RESOLVED** (2026-10-12 — see §9.11) |
 | Discovered | 2026-10-12 |
 | Files | `benchmark.exe`, `integration-test.exe`, `m9m.exe`, `mcp-server.exe`, `n8n-compat.exe`, `smoke-test.exe`, `template-cli.exe` |
 | Owner | TBD |
@@ -631,7 +631,7 @@ workflow actually exercises it.
 | Field | Value |
 | --- | --- |
 | Severity | **P5** (bloat) |
-| Status | OPEN |
+| Status | **RESOLVED** (2026-10-12 — see §9.11) |
 | Files | `pyvenv.cfg` |
 | Owner | TBD |
 
@@ -649,7 +649,7 @@ workflow actually exercises it.
 | Field | Value |
 | --- | --- |
 | Severity | **P5** (organisation) |
-| Status | OPEN |
+| Status | **RESOLVED** (2026-10-12 — see §9.11) |
 | Files | `supervisord.conf` |
 | Owner | TBD |
 
@@ -665,17 +665,18 @@ workflow actually exercises it.
 ### BUG-DOC-2026-09-11-001 through 008 — Docs drift (per `gap-current-vs-doc.MD`)
 
 Severity: **P5** (docs; the code works, the docs are wrong/incomplete).
+Status: **All 8 RESOLVED on 2026-09-11** per `gap-current-vs-doc.MD` Appendix A (Phases 0–7 executed and Phase 8 engineering tickets closed). See §9.14 for the per-bug close-out summary.
 
-| ID | Title | Phase | Source |
-| --- | --- | --- | --- |
-| BUG-DOC-2026-09-11-001 | 12 node types registered in code but missing from `documentation/docs/nodes/` | 1 | `gap-current-vs-doc.MD` §2 |
-| BUG-DOC-2026-09-11-002 | ~20 API endpoints missing from `documentation/docs/api/` | 2 | `gap-current-vs-doc.MD` §3 |
-| BUG-DOC-2026-09-11-003 | OTel surface severely under-documented (1 line in `index.md`) | 4 | `gap-current-vs-doc.MD` §6 |
-| BUG-DOC-2026-09-11-004 | Sync bridge (`sync-service/sync.py`) entirely undocumented | 3 | `gap-current-vs-doc.MD` §4 |
-| BUG-DOC-2026-09-11-005 | In-app AI assistant (`internal/ai/`) not in `documentation/docs/` | 1d | `gap-current-vs-doc.MD` §5 |
-| BUG-DOC-2026-09-11-006 | Recent engine work (EdgesTaken, debug, retry-node, sslMode) not in docs | 5 | `gap-current-vs-doc.MD` §7 |
-| BUG-DOC-2026-09-11-007 | `migrate-from-n8n.md` parity claim stale (still says "95% backend parity") | 5c | `gap-current-vs-doc.MD` §7 |
-| BUG-DOC-2026-09-11-008 | OTel env-var docs drift vs `internal/otel/env.go` (8 names off) | 8 / T5 | `gap-current-vs-doc.MD` §"Ticket 5" |
+| ID | Title | Phase | Source | Status |
+| --- | --- | --- | --- | --- |
+| BUG-DOC-2026-09-11-001 | 12 node types registered in code but missing from `documentation/docs/nodes/` | 1 | `gap-current-vs-doc.MD` §2 | **RESOLVED** (2026-09-11) |
+| BUG-DOC-2026-09-11-002 | ~20 API endpoints missing from `documentation/docs/api/` | 2 | `gap-current-vs-doc.MD` §3 | **RESOLVED** (2026-09-11) |
+| BUG-DOC-2026-09-11-003 | OTel surface severely under-documented (1 line in `index.md`) | 4 | `gap-current-vs-doc.MD` §6 | **RESOLVED** (2026-09-11) |
+| BUG-DOC-2026-09-11-004 | Sync bridge (`sync-service/sync.py`) entirely undocumented | 3 | `gap-current-vs-doc.MD` §4 | **RESOLVED** (2026-09-11) |
+| BUG-DOC-2026-09-11-005 | In-app AI assistant (`internal/ai/`) not in `documentation/docs/` | 1d | `gap-current-vs-doc.MD` §5 | **RESOLVED** (2026-09-11) |
+| BUG-DOC-2026-09-11-006 | Recent engine work (EdgesTaken, debug, retry-node, sslMode) not in docs | 5 | `gap-current-vs-doc.MD` §7 | **RESOLVED** (2026-09-11) |
+| BUG-DOC-2026-09-11-007 | `migrate-from-n8n.md` parity claim stale (still says "95% backend parity") | 5c | `gap-current-vs-doc.MD` §7 | **RESOLVED** (2026-09-11) |
+| BUG-DOC-2026-09-11-008 | OTel env-var docs drift vs `internal/otel/env.go` (8 names off) | 8 / T5 | `gap-current-vs-doc.MD` §"Ticket 5" | **RESOLVED** (2026-09-11) |
 
 **Fix plan (carries over from `gap-current-vs-doc.MD` §10):**
 - Phase 1 (3d): 12 missing per-node entries in existing category pages; create `code.md` and `productivity.md`; update `nodes/index.md` counts to 42.
@@ -831,6 +832,24 @@ These are not bugs in m9m — m9m makes a deliberate product choice not to ship 
 
 - **Resolution (partial):** `internal/webhooks/jwt_fuzz_test.go` (13 cases) covers the failure modes: expired token, future nbf, malformed segments (6 sub-cases), bad base64, bad header JSON, bad payload JSON, unsupported alg (6 sub-cases), algorithm confusion (RS256 header with HS256 secret), wrong-secret signature failure, valid RS256 round-trip, RS256 bad-signature, empty authData, nil authData. None panic; all return a typed error the handler maps to n8n's wire shape.
 - **Resolved (PARTIAL) at:** 2026-10-12. Remaining surface: signed-with-rotated-key path, multi-token replay, kid-based key rotation, and explicit `alg=none` rejection (covered under "unsupported alg" today but a property-level test would tighten it). Tracked for the next security pass.
+
+### 9.14 BUG-DOC-2026-09-11-001..008 — Docs drift batch (closed on 2026-09-11)
+
+- **Resolution (batch close-out, reconciled 2026-10-12):** Phases 0–7 of `gap-current-vs-doc.MD` were executed on 2026-09-11 (per Appendix A of that doc), and Phase 8's five engineering follow-up tickets were closed. The corresponding `bug-fix.MD` rows were **not updated at the time** — they were re-validated on 2026-10-12 by checking the presence of the promised files under `documentation/docs/`, and are now marked **RESOLVED** to match the actual state of the docs.
+- **Files closed in the batch:**
+  - **BUG-DOC-001 (Phase 1):** `documentation/docs/nodes/{core,transform,triggers,database,messaging,email,vcs}.md` (12 per-node entries added), `documentation/docs/nodes/{productivity,code}.md` (new category files), `documentation/docs/nodes/index.md` (count of 42).
+  - **BUG-DOC-002 (Phase 2):** `documentation/docs/api/{executions,node-types,dlq,telemetry,ai}.md` (5 new), `documentation/docs/api/{workflows,schedules}.md` (augmented with activate/deactivate/duplicate/count/enable/disable/history).
+  - **BUG-DOC-003 (Phase 4):** `documentation/docs/observability/index.md` (port of root README's "Telemetry & observability" section).
+  - **BUG-DOC-004 (Phase 3):** `documentation/docs/integrations/n8n-sync.md` (env-var matrix, `POST /sync`, credential decryption, `migrate-from-n8n.md` cross-ref).
+  - **BUG-DOC-005 (Phase 1d):** `documentation/docs/nodes/ai.md` + `documentation/docs/api/ai.md` (in-app AI + MiniMax provider).
+  - **BUG-DOC-006 (Phase 5):** `documentation/docs/workflows/{debug-and-retry,execution-edges}.md` (new), `documentation/docs/nodes/database.md` (`sslMode=disable` note).
+  - **BUG-DOC-007 (Phase 5c):** `documentation/docs/migrate-from-n8n.md` line 26 (parity claim: "19/19 webhook parity as of the 2026-09-10 cycle").
+  - **BUG-DOC-008 (Phase 8 Ticket 5):** `documentation/docs/observability/index.md` + `documentation/docs/api/telemetry.md` + `documentation/docs/configuration/environment.md` (reconciled 8 OTel env-var names; protocol default corrected to `http/protobuf`).
+- **Verification (re-validated 2026-10-12):**
+  - `Get-ChildItem -Recurse -Filter '*.md' documentation/docs/` shows the 10 expected new files (`productivity.md`, `code.md`, `node-types.md`, `dlq.md`, `telemetry.md`, `ai.md`, `n8n-sync.md`, `observability/index.md`, `debug-and-retry.md`, `execution-edges.md`).
+  - `documentation/docs/migrate-from-n8n.md` line 26: "19/19 webhook parity as of the 2026-09-10 cycle" (no more "95% backend parity").
+  - `documentation/docs/configuration/environment.md` lines 308–316: OTel env-var table uses `M9M_OTEL_EXPORTER_OTLP_*` names (not the legacy `M9M_OTEL_*`).
+- **Reconciliation note:** the original 2026-09-11 cycle updated the docs but didn't touch `bug-fix.MD`; this turn brings the two tracking artefacts back into lock-step.
 
 ---
 
