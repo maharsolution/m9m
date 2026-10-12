@@ -114,6 +114,14 @@ func (c *KafkaNativeClient) dialer() (*kafka.Dialer, error) {
 	}
 
 	if c.cfg.TLS {
+		// Build a TLS config with the minimum protocol version
+		// pinned to TLS 1.2 (Aiven's brokers reject TLS 1.0/1.1
+		// handshakes) and leave `ServerName` unset so segmentio/
+		// kafka-go's pool fills it in from the broker address on
+		// first dial (matches the behaviour of `tls.Dial` to a
+		// `host:port` string). Cert verification is on by default;
+		// the Aiven brokers use public CA-signed certs, so this
+		// works without an extra root-pool file.
 		d.TLS = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
 	return d, nil
@@ -132,6 +140,42 @@ func (c *KafkaNativeClient) writerLazy() (*kafka.Writer, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Build a custom Dial function that does the TLS handshake
+	// inline (rather than relying on `kafka.Transport.TLS` to do
+	// it after the plaintext dial). The two-step approach in
+	// segmentio's transport pool has historically been a source
+	// of "unexpected EOF: broker appears to be expecting TLS"
+	// errors on Aiven / Confluent Cloud brokers when the
+	// underlying connection from `defaultDialer.DialContext`
+	// completes the TCP handshake but is then re-wrapped with
+	// `tls.Client` on a connection that the broker has already
+	// partially closed for being plaintext. Doing the TLS dial
+	// ourselves guarantees the very first byte on the wire is
+	// the TLS ClientHello.
+	dialFn := func(ctx context.Context, network, address string) (net.Conn, error) {
+		rawConn, dialErr := (&net.Dialer{
+			Timeout:   d.Timeout,
+			DualStack: true,
+		}).DialContext(ctx, network, address)
+		if dialErr != nil {
+			return nil, dialErr
+		}
+		if d.TLS == nil {
+			return rawConn, nil
+		}
+		// Clone so we can fill in ServerName without mutating
+		// the shared *tls.Config that other Writer instances
+		// may also reference.
+		tlsCfg := d.TLS.Clone()
+		if tlsCfg.ServerName == "" {
+			host, _, splitErr := net.SplitHostPort(address)
+			if splitErr != nil {
+				host = address
+			}
+			tlsCfg.ServerName = host
+		}
+		return tls.Client(rawConn, tlsCfg), nil
+	}
 	w := &kafka.Writer{
 		Addr:                   kafka.TCP(c.cfg.Brokers...),
 		Topic:                  c.cfg.Topic,
@@ -146,14 +190,15 @@ func (c *KafkaNativeClient) writerLazy() (*kafka.Writer, error) {
 		AllowAutoTopicCreation: true,
 		WriteTimeout:           10 * time.Second,
 		ReadTimeout:            10 * time.Second,
-		// Transport applies TLS + SASL. segmentio/kafka-go's
-		// kafka.Transport has no Dialer field; it uses
-		// net.Dialer.DialContext by default. We expose the dial
-		// timeout via DialTimeout on the Transport so connections
-		// to a dead broker fail fast instead of hanging.
+		// Transport carries the SASL / ClientID metadata. We
+		// own the actual dial + TLS handshake via the custom
+		// `Dial` function above, so we leave `TLS` nil here
+		// (otherwise the pool would re-wrap our already-TLS
+		// connection in another `tls.Client` and double-encrypt
+		// the handshake).
 		Transport: &kafka.Transport{
+			Dial:        dialFn,
 			DialTimeout: d.Timeout,
-			TLS:         d.TLS,
 			SASL:        d.SASLMechanism,
 			ClientID:    d.ClientID,
 		},
