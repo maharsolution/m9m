@@ -7,6 +7,25 @@ import "github.com/neul-labs/m9m/internal/nodes/base"
 // arbitrary SELECT/INSERT/UPDATE/DELETE on a configured
 // connection).
 
+// sqlProperties returns the shared MySQL / PostgreSQL / SQLite
+// parameter descriptors. postgresProperties delegates here.
+func sqlProperties() []base.NodeProperty {
+	ops := []base.Option{
+		{Name: "Execute Query", Value: "executeQuery"},
+		{Name: "Insert", Value: "insert"},
+		{Name: "Update", Value: "update"},
+		{Name: "Delete", Value: "delete"},
+	}
+	props := []base.NodeProperty{
+		base.StringProp("Connection URL", "connectionUrl", "", "Database connection URL. Overrides host and database when set.", "", false),
+		base.StringProp("Host", "host", "", "Database host.", "localhost", false),
+		base.StringProp("Database", "database", "", "Database name.", "", false),
+		base.StringOpt("Operation", "operation", "executeQuery", "SQL operation to perform.", ops, true),
+		base.TextProp("Query", "query", "", "SQL query. Required for executeQuery.", "SELECT 1", 6),
+	}
+	return append(props, base.CommonSettings()...)
+}
+
 func sqlConnectorProperties() []base.NodeProperty {
 	ops := []base.Option{
 		{Name: "Select", Value: "select"},

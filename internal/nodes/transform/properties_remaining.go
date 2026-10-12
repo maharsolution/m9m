@@ -12,6 +12,22 @@ import "github.com/neul-labs/m9m/internal/nodes/base"
 // splitInBatchesProperties returns the SplitInBatches node's
 // parameter descriptors. Mirrors n8n's
 // `n8n-nodes-base.splitInBatches` properties.
+// loopProperties returns the Loop node's parameter descriptors.
+// Names match LoopNode.Execute: mode, times, condition, maxIterations.
+func loopProperties() []base.NodeProperty {
+	props := []base.NodeProperty{
+		base.StringOpt("Mode", "mode", "each", "How the loop runs.", []base.Option{
+			{Name: "Each item", Value: "each"},
+			{Name: "Times", Value: "times"},
+			{Name: "While", Value: "while"},
+		}, true),
+		base.NumberProp("Times", "times", 1, "Iterations when mode is times.", false),
+		base.TextProp("Condition", "condition", "", "JavaScript expression for while mode. $index and $item are in scope.", "", 4),
+		base.NumberProp("Max Iterations", "maxIterations", 1000, "Safety cap for while mode.", false),
+	}
+	return append(props, base.CommonSettings()...)
+}
+
 func splitInBatchesProperties() []base.NodeProperty {
 	props := []base.NodeProperty{
 		base.NumberProp("Batch Size", "batchSize", 1, "Number of items per iteration.", true),

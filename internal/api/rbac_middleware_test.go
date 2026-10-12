@@ -263,7 +263,8 @@ func TestRBAC_DefaultProvider_MissingAuth(t *testing.T) {
 func TestRBAC_DefaultProvider_EmptySubject(t *testing.T) {
 	store := NewRBACStore()
 	p := &DefaultUserProvider{Store: store}
-	req := httptest.NewRequest("GET", "/x", nil).WithContext(ContextWithAuth(req.Context(), &AuthContext{}))
+	req := httptest.NewRequest("GET", "/x", nil)
+	req = req.WithContext(ContextWithAuth(req.Context(), &AuthContext{}))
 	if _, err := p.UserForRequest(req); err == nil {
 		t.Fatal("expected error on empty subject")
 	}

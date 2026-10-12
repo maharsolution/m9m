@@ -23,7 +23,6 @@ package api
 // the key material — no `coreos/go-oidc` dependency.
 
 import (
-	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rsa"
@@ -463,19 +462,4 @@ func extractGroups(claims jwt.MapClaims, claimName string) []string {
 		return []string{arr}
 	}
 	return nil
-}
-
-// TestOIDCProvider_Verify_HappyPath is a hermetic test
-// against a fake discovery + JWKS endpoint. We mint the
-// ID token with a real RSA key, then point the provider
-// at a `httptest.NewServer` that serves the same key.
-//
-// The hermeticity is what makes this test stable across
-// network conditions.
-func TestOIDCProvider_Verify_HappyPath(t *testing.T) {
-	// Build an RSA key, JWKS, discovery doc, and a signed
-	// ID token — all in-process.
-	// Implementation lives in `oidc_test.go` because it
-	// needs the same fixtures.
-	_ = context.Background
 }

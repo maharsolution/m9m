@@ -92,8 +92,7 @@ func setupOIDC(t *testing.T, mutate func(claims jwt.MapClaims)) *oidcFixture {
 	}
 	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	tok.Header["kid"] = kid
-	signed, err := tok.SignedString(priv)
-	if err != nil {
+	if _, err = tok.SignedString(priv); err != nil {
 		t.Fatalf("sign: %v", err)
 	}
 
