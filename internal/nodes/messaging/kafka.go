@@ -710,8 +710,12 @@ func (n *KafkaNode) ValidateParameters(params map[string]interface{}) error {
 	if topic := strings.TrimSpace(fmt.Sprintf("%v", params["topic"])); topic == "" {
 		return n.CreateError("topic is required", nil)
 	}
-	if v, ok := params["value"]; !ok || fmt.Sprintf("%v", v) == "" {
-		return n.CreateError("value is required", nil)
-	}
+	// `value` is optional: an empty / missing value means "publish the
+	// upstream node's JSON payload" (n8n behaviour, see
+	// resolveProduceValue). ValidateParameters runs before we have
+	// the input items so we can't tell here whether the operator
+	// intended a literal empty payload or the implicit upstream
+	// forwarding — the execute path handles both.
+	_ = params["value"]
 	return nil
 }
