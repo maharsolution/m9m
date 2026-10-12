@@ -120,17 +120,6 @@ func dataTableProperties() []base.NodeProperty {
 		{Name: "Upsert", Value: "upsert"},
 		{Name: "Delete", Value: "delete"},
 	}
-	conds := []base.Option{
-		{Name: "equals", Value: "equals"},
-		{Name: "notEquals", Value: "notEquals"},
-		{Name: "contains", Value: "contains"},
-		{Name: "greaterThan", Value: "greaterThan"},
-		{Name: "lessThan", Value: "lessThan"},
-		{Name: "isTrue", Value: "isTrue"},
-		{Name: "isFalse", Value: "isFalse"},
-		{Name: "exists", Value: "exists"},
-		{Name: "notExists", Value: "notExists"},
-	}
 	matchTypes := []base.Option{
 		{Name: "All Conditions (AND)", Value: "allConditions"},
 		{Name: "Any Condition (OR)", Value: "anyCondition"},

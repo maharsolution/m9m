@@ -179,7 +179,7 @@ func ExampleStreamingHandler(w http.ResponseWriter, _ *http.Request) error {
 	if err != nil {
 		return err
 	}
-	_ = stream.WriteString("event: start\n")
+	_, _ = stream.WriteString("event: start\n")
 	_ = stream.WriteSSE("chunk", "{\"i\":1}")
 	_ = stream.WriteSSE("chunk", "{\"i\":2}")
 	return stream.WriteSSE("end", "done")

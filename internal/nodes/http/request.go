@@ -608,6 +608,24 @@ func flattenHeaderSpec(raw interface{}) []map[string]interface{} {
 // fields are missing (silent-fail would be a worse outcome than
 // a clear 4xx — the user can see the missing-field message in
 // the execution record).
+// stringFromMap reads a string parameter injected by the credential
+// envelope. Non-string values are ignored so a numeric field cannot
+// accidentally become an Authorization header.
+func stringFromMap(params map[string]interface{}, key string) string {
+	if params == nil {
+		return ""
+	}
+	value, ok := params[key]
+	if !ok || value == nil {
+		return ""
+	}
+	str, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return str
+}
+
 func applyCredentialAuth(req *http.Request, params map[string]interface{}) error {
 	user := stringFromMap(params, "httpBasicAuth_user")
 	pass := stringFromMap(params, "httpBasicAuth_password")

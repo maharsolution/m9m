@@ -167,9 +167,9 @@ func writeForbidden(w http.ResponseWriter, _ User, want ...Permission) {
 	})
 }
 
-type contextKey string
+type rbacContextKey string
 
-const rbacUserKey contextKey = "rbac_user"
+const rbacUserKey rbacContextKey = "rbac_user"
 
 // UserFromContext returns the user the middleware stashed
 // in the request context, or `false` if the request didn't
