@@ -347,6 +347,137 @@ def push_credential_to_m9m(cred_envelope, source="manual"):
 
 
 # ---------------------------------------------------------------------------
+# Data Table sync (added 2026-10-12, see BUG-DATATABLE-2026-10-12-001)
+#
+# n8n's "Data Tables" feature is a user-defined key/value table store
+# living in n8n's Postgres `data_table` and `data_table_row` tables.
+# The schema has shifted across n8n minor releases, so this code is
+# defensive: it tries the current (v1.0+) `data_table_row` table
+# first, then falls back to the legacy `data_table_rows` table.
+#
+# On the m9m side, the matching REST surface is at
+#   GET    /api/v1/data-tables
+#   GET    /api/v1/data-tables/{id}/rows
+#   POST   /api/v1/data-tables/{id}/rows      (bulk insert / upsert)
+#   DELETE /api/v1/data-tables/{id}/rows/{rowId}
+# ---------------------------------------------------------------------------
+
+def fetch_n8n_data_tables():
+    """Read all data tables + their rows directly from n8n's Postgres.
+
+    Returns a list of `(tableId, name, [row])` tuples. The
+    tableId is the opaque n8n id (e.g. `STeu50G0h27glAL8`); the
+    name is for logging only. Row payloads are the JSON
+    `data` blob n8n stores on each row.
+    """
+    if not N8N_PG_HOST:
+        print("[sync] N8N_PG_HOST is not set; cannot query n8n Postgres for data tables")
+        return []
+
+    try:
+        import psycopg2
+        import psycopg2.extras
+    except ImportError:
+        print("[sync] psycopg2 not installed; cannot query n8n Postgres for data tables")
+        return []
+
+    try:
+        conn = psycopg2.connect(
+            host=N8N_PG_HOST,
+            port=N8N_PG_PORT,
+            user=N8N_PG_USER,
+            password=N8N_PG_PASSWORD,
+            dbname=N8N_PG_DATABASE,
+            connect_timeout=5,
+        )
+    except Exception as e:
+        print(f"[sync] n8n Postgres connect failed: {e}")
+        return []
+
+    tables = {}  # tableId -> {"name": ..., "rows": [...]}
+
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # Phase A — table metadata. Optional: skip if the
+            # table doesn't exist on this n8n version.
+            try:
+                cur.execute('SELECT id, name FROM "data_table" ORDER BY name')
+                for r in cur.fetchall():
+                    tables[r["id"]] = {"name": r.get("name", ""), "rows": []}
+            except Exception as e:
+                # data_table missing — n8n version that doesn't
+                # have data tables at all. Nothing to sync.
+                conn.rollback()
+                print(f"[sync] n8n has no 'data_table' table ({e}); skipping data table sync")
+                return []
+
+            # Phase B — rows. Try the modern table first
+            # (data_table_row), fall back to the legacy
+            # (data_table_rows) for older n8n versions.
+            row_query = None
+            for candidate in (
+                'SELECT id, "dataTableId" AS table_id, data FROM "data_table_row"',
+                'SELECT id, "dataTableId" AS table_id, data FROM "data_table_rows"',
+            ):
+                try:
+                    cur.execute(candidate)
+                    row_query = candidate
+                    break
+                except Exception:
+                    conn.rollback()
+                    continue
+            if row_query is None:
+                print("[sync] n8n has neither 'data_table_row' nor 'data_table_rows' table; skipping")
+                return []
+
+            for r in cur.fetchall():
+                tbl = tables.setdefault(r["table_id"], {"name": "", "rows": []})
+                raw = r.get("data") or "{}"
+                if isinstance(raw, (dict, list)):
+                    payload = raw
+                else:
+                    try:
+                        payload = json.loads(raw)
+                    except Exception:
+                        payload = {}
+                tbl["rows"].append({"id": str(r["id"]), "row": payload})
+    except Exception as e:
+        print(f"[sync] n8n Postgres query failed: {e}")
+        return []
+    finally:
+        conn.close()
+
+    out = [(tid, info["name"], info["rows"]) for tid, info in tables.items()]
+    print(f"[sync] fetched {len(out)} data tables "
+          f"({sum(len(rows) for _, _, rows in out)} rows total) from n8n Postgres")
+    return out
+
+
+def push_data_table_to_m9m(table_id, table_name, rows, source="manual"):
+    """Bulk-insert (or overwrite) the rows of one table into m9m.
+
+    m9m's POST is idempotent on `id` — re-running the same
+    cycle just refreshes the row contents. We never DELETE on
+    sync: rows the user removed in n8n stay in m9m until the
+    operator clears them via the m9m UI or a manual DELETE.
+    """
+    if not rows:
+        return "skipped", 0, None
+
+    headers = {"Content-Type": "application/json"}
+    body = {"rows": rows}
+    url = f"{M9M_BASE_URL}/api/v1/data-tables/{table_id}/rows"
+    status, resp_body = http_json("POST", url, headers, body)
+    if 200 <= status < 300:
+        print(f"[sync:{source}] pushed data table '{table_name}' ({table_id}) "
+              f"({len(rows)} rows) -> m9m, status {status}")
+        return "created", status, resp_body
+    print(f"[sync:{source}] failed to push data table '{table_name}' ({table_id}): "
+          f"status {status}, body: {resp_body}")
+    return "failed", status, resp_body
+
+
+# ---------------------------------------------------------------------------
 # Async cycle (one poll = one manual = same code path)
 # ---------------------------------------------------------------------------
 
@@ -360,6 +491,45 @@ async def run_cycle(source: str = "poll") -> dict:
     results = []
 
     try:
+        # Phase 0 — data tables. Runs FIRST so a workflow
+        # that uses `n8n-nodes-base.dataTable` finds its
+        # table when the engine starts executing. The
+        # table is just KV storage, so missing rows only
+        # manifest as empty `get` results — the workflow
+        # still runs. We push it first anyway so the
+        # order of operations in /status is
+        # data-tables → credentials → workflows.
+        try:
+            data_tables = await asyncio.to_thread(fetch_n8n_data_tables)
+        except Exception as e:
+            print(f"[sync:{source}] data table fetch crashed: {e}")
+            data_tables = []
+        for table_id, table_name, rows in data_tables:
+            try:
+                verdict, status, _body = await asyncio.to_thread(
+                    push_data_table_to_m9m, table_id, table_name, rows, source
+                )
+                results.append({
+                    "kind": "dataTable",
+                    "id": table_id,
+                    "name": table_name,
+                    "rowCount": len(rows),
+                    "status": verdict,
+                    "http_status": status,
+                })
+                if verdict == "failed":
+                    print(f"[sync:{source}] data table '{table_name}' ({table_id}) push failed: "
+                          f"status {status}")
+            except Exception as e:
+                print(f"[sync:{source}] data table '{table_name}' crashed: {e}")
+                results.append({
+                    "kind": "dataTable",
+                    "id": table_id,
+                    "name": table_name,
+                    "status": "failed",
+                    "detail": str(e),
+                })
+
         # Phase 1 — credentials. Workflows that reference a credential
         # need that credential to exist in m9m's store BEFORE the
         # webhook handler resolves it at request time. Skipping this
@@ -444,8 +614,10 @@ async def run_cycle(source: str = "poll") -> dict:
         "duration_ms": duration_ms,
         "results": results,
     }
-    print(f"[sync:{source}] cycle done: {len(results)} workflows processed in {duration_ms}ms "
-          f"(created={sum(1 for r in results if r['status'] == 'created')} "
+    print(f"[sync:{source}] cycle done: {len(results)} items processed in {duration_ms}ms "
+          f"(data_tables={sum(1 for r in results if r.get('kind') == 'dataTable')} "
+          f"workflows={sum(1 for r in results if r.get('kind') != 'dataTable' and 'id' in r)} "
+          f"created={sum(1 for r in results if r['status'] == 'created')} "
           f"updated={sum(1 for r in results if r['status'] == 'updated')} "
           f"skipped={sum(1 for r in results if r['status'] == 'skipped')} "
           f"filtered={sum(1 for r in results if r['status'] == 'filtered')} "
@@ -534,6 +706,11 @@ def index():
         "  GET  /health  -> liveness probe\n"
         "  GET  /status  -> last-cycle summary\n"
         "  POST /sync    -> run one sync cycle now\n"
+        "\n"
+        "Sync phases (per cycle, in order):\n"
+        "  0. data tables  (n8n Postgres -> m9m /api/v1/data-tables/{id}/rows)\n"
+        "  1. credentials  (n8n Postgres -> m9m /api/v1/credentials)\n"
+        "  2. workflows    (n8n REST    -> m9m /api/v1/workflows)\n"
     )
 
 
@@ -560,6 +737,43 @@ async def sync_endpoint():
     if any(r.get("status") == "failed" for r in summary["results"]):
         return JSONResponse(status_code=502, content=summary)
     return summary
+
+
+@app.post("/sync/data-tables")
+async def sync_data_tables_endpoint():
+    """Run ONLY the data-tables phase. Useful for one-shot
+    backfills without re-pushing every credential + workflow.
+    """
+    async with _cycle_lock:
+        try:
+            data_tables = await asyncio.to_thread(fetch_n8n_data_tables)
+        except Exception as e:
+            return JSONResponse(status_code=502, content={"error": str(e)})
+        results = []
+        for table_id, table_name, rows in data_tables:
+            try:
+                verdict, status, body = await asyncio.to_thread(
+                    push_data_table_to_m9m, table_id, table_name, rows, "manual"
+                )
+                results.append({
+                    "kind": "dataTable",
+                    "id": table_id,
+                    "name": table_name,
+                    "rowCount": len(rows),
+                    "status": verdict,
+                    "http_status": status,
+                })
+            except Exception as e:
+                results.append({
+                    "kind": "dataTable",
+                    "id": table_id,
+                    "name": table_name,
+                    "status": "failed",
+                    "detail": str(e),
+                })
+    if any(r.get("status") == "failed" for r in results):
+        return JSONResponse(status_code=502, content={"results": results})
+    return {"results": results}
 
 
 if __name__ == "__main__":

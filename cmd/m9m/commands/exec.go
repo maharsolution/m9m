@@ -21,6 +21,7 @@ import (
 	"github.com/neul-labs/m9m/internal/nodes/cloud/gcp"
 	"github.com/neul-labs/m9m/internal/nodes/code"
 	"github.com/neul-labs/m9m/internal/nodes/core"
+	"github.com/neul-labs/m9m/internal/nodes/data"
 	"github.com/neul-labs/m9m/internal/nodes/database"
 	"github.com/neul-labs/m9m/internal/nodes/email"
 	"github.com/neul-labs/m9m/internal/nodes/file"
@@ -31,6 +32,7 @@ import (
 	"github.com/neul-labs/m9m/internal/nodes/transform"
 	"github.com/neul-labs/m9m/internal/nodes/trigger"
 	"github.com/neul-labs/m9m/internal/nodes/vcs"
+	"github.com/neul-labs/m9m/internal/storage"
 )
 
 var (
@@ -344,6 +346,15 @@ func RegisterAllNodes(eng engine.WorkflowEngine, wfLookup core.WorkflowLookup) {
 	// Additional core nodes
 	eng.RegisterNodeExecutor("n8n-nodes-base.noOp", core.NewNoOpNode())
 	eng.RegisterNodeExecutor("n8n-nodes-base.wait", core.NewWaitNode())
+
+	// Data nodes — only register when the active storage
+	// backend is the full WorkflowStorage (not just the
+	// narrower WorkflowLookup used by Execute Workflow). The
+	// dataTable node needs SaveRaw / GetRaw / ListKeys /
+	// DeleteRaw; the lookup interface only exposes GetWorkflow.
+	if dataStore, ok := wfLookup.(storage.WorkflowStorage); ok {
+		eng.RegisterNodeExecutor("n8n-nodes-base.dataTable", data.NewDataTableNode(dataStore))
+	}
 	// Execute Workflow uses the same MySQL/Postgres storage as the parent
 	// workflow so `workflowId: {"value": "<id>"}` resolves correctly. The
 	// adapter's LookupFn closes over `store` from the outer scope when

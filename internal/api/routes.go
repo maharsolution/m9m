@@ -67,6 +67,14 @@ func (s *APIServer) RegisterRoutes(router *mux.Router) {
 	api.HandleFunc("/credentials/{id}/test", s.TestCredential).Methods("POST", "OPTIONS")
 	api.HandleFunc("/credentials/{id}/transfer", s.TransferCredential).Methods("PUT", "OPTIONS")
 
+	// Data Tables (n8n-compatible). Storage-backed by the same
+	// `dataTable:{tableId}:{rowId}` keys the executor uses, so
+	// what sync-service writes here is what the engine reads.
+	api.HandleFunc("/data-tables", s.ListDataTables).Methods("GET", "OPTIONS")
+	api.HandleFunc("/data-tables/{id}/rows", s.ListDataTableRows).Methods("GET", "OPTIONS")
+	api.HandleFunc("/data-tables/{id}/rows", s.BulkInsertDataTableRows).Methods("POST", "OPTIONS")
+	api.HandleFunc("/data-tables/{id}/rows/{rowId}", s.DeleteDataTableRow).Methods("DELETE", "OPTIONS")
+
 	api.HandleFunc("/node-types", s.ListNodeTypes).Methods("GET", "OPTIONS")
 	api.HandleFunc("/node-types/{name}", s.GetNodeType).Methods("GET", "OPTIONS")
 
