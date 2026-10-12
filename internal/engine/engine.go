@@ -331,7 +331,7 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		return nil, fmt.Errorf("error checking for workflow cycles: %w", err)
 	}
 
-	if hasCycles && !connections.WorkflowUsesSplitInBatches(workflow) {
+	if hasCycles && !connections.WorkflowUsesSplitInBatches(workflow) && !connections.WorkflowUsesIfRetryLoop(workflow) {
 		return nil, fmt.Errorf("workflow contains cycles - cannot execute")
 	}
 
@@ -437,6 +437,18 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 			nodesHandledByLoopDriver[name] = true
 		}
 		for _, name := range doneOrder {
+			nodesHandledByLoopDriver[name] = true
+		}
+	}
+
+	// Detect If-retry loops (`attempt < maxAttempts` guard
+	// with a back-edge into the body). Like splitInBatches,
+	// the body nodes need to be skipped from the top-level
+	// topological loop — the engine drives the iteration when
+	// it reaches the guard node.
+	ifRetryLoops := connections.DetectIfRetryLoops(workflow)
+	for i := range ifRetryLoops {
+		for _, name := range ifRetryLoops[i].BodyNodes {
 			nodesHandledByLoopDriver[name] = true
 		}
 	}
@@ -547,6 +559,33 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 				return &ExecutionResult{
 					Data:  nil,
 					Error: fmt.Errorf("error executing splitInBatches loop %s: %w", node.Name, err),
+				}, nil
+			}
+			continue
+		}
+
+		// If-retry loop guard: this If node's condition is
+		// `attempt < maxAttempts` and its true branch points
+		// back into the loop body. The body nodes have already
+		// been removed from the top-level loop via
+		// `nodesHandledByLoopDriver`, so the engine needs to
+		// drive the body here. We run the body up to
+		// MaxIterations times, stopping early when the guard's
+		// condition is false (i.e. the If would route to its
+		// main[1] "false" branch on this iteration).
+		if loop := connections.IfRetryLoopForGuard(workflow, node.Name); loop != nil {
+			if err := e.executeIfRetryLoop(
+				ctx,
+				workflow,
+				node,
+				*loop,
+				nodeResults,
+				e.runExecutionData,
+				inputDataForNode,
+			); err != nil {
+				return &ExecutionResult{
+					Data:  nil,
+					Error: fmt.Errorf("error executing If-retry loop %s: %w", node.Name, err),
 				}, nil
 			}
 			continue
@@ -1135,6 +1174,370 @@ func (e *workflowEngineImpl) runLoopBodyChain(
 	// "deepest process branch" anchor.
 	terminal := bodyOrder[len(bodyOrder)-1]
 	return nodeResults[terminal], nil
+}
+
+// executeIfRetryLoop drives the iteration for an
+// `attempt < maxAttempts` retry loop. The guard is an `If` node
+// whose main[0] (true) branch is a back-edge to the body entry;
+// the main[1] (false) branch is the loop's "give up" exit (e.g.
+// "Respond Failed" in the Finnet workflow).
+//
+// Algorithm:
+//
+//  1. Run the body chain from the back-edge target up to (but
+//     not including) the guard. The body nodes' outputs feed
+//     back into the body's entry on each iteration via
+//     `nodeResults[backEdgeTarget]`.
+//  2. After each iteration, evaluate the guard's condition
+//     against the body's terminal output. If false (i.e. the
+//     condition no longer holds — e.g. a response document was
+//     found in Mongo) we stop iterating.
+//  3. Cap iterations at `loop.MaxIterations` (default 10) to
+//     prevent runaway loops.
+//
+// The body is executed with a per-iteration `runIndex` slot so
+// expressions like `$("Set Counter").all()` reflect the
+// running iteration count.
+//
+// The guard's main[0] (true) target is treated as the "re-loop"
+// edge; the engine deliberately does NOT route the body's
+// terminal output back into `nodeResults[backEdgeTarget]`
+// between iterations via the connection router (which would
+// also re-route to the false-branch targets). Instead the
+// driver re-seeds the body entry directly so the next
+// iteration starts with the same input shape.
+func (e *workflowEngineImpl) executeIfRetryLoop(
+	ctx context.Context,
+	workflow *model.Workflow,
+	guardNode *model.Node,
+	loop connections.IfRetryLoop,
+	nodeResults map[string][]model.DataItem,
+	runData *expressions.RunExecutionData,
+	inputData []model.DataItem,
+) error {
+	if loop.MaxIterations <= 0 {
+		loop.MaxIterations = 10
+	}
+
+	// If we received no input, skip the loop entirely. This
+	// mirrors the splitInBatches behavior: a guard with no
+	// upstream items should not produce output.
+	if len(inputData) == 0 {
+		nodeResults[guardNode.Name] = []model.DataItem{}
+		return nil
+	}
+
+	// The body chain, in execution order. We use the
+	// pre-computed order from the detector (canvas position
+	// order, which is stable and matches the natural left-to-
+	// right reading order of n8n's UI).
+	bodyOrder := loop.BodyNodes
+
+	// Build a node lookup so we can resolve each body node
+	// quickly.
+	nodeMap := make(map[string]*model.Node, len(workflow.Nodes))
+	for i := range workflow.Nodes {
+		nodeMap[workflow.Nodes[i].Name] = &workflow.Nodes[i]
+	}
+
+	// Seed the body entry with the input data the first time
+	// around. On subsequent iterations, the body's own output
+	// is what we want to feed back in; we re-publish it to
+	// `nodeResults[backEdgeTarget]` below.
+	if nodeResults[loop.BackEdgeTarget] == nil {
+		nodeResults[loop.BackEdgeTarget] = inputData
+	}
+
+	for iter := 0; iter < loop.MaxIterations; iter++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		// Per-iteration runIndex slot. The first iteration
+		// reuses the top-level slot; subsequent iterations
+		// push one slot so `$("Set Counter").all()` reflects
+		// the running history.
+		iterRunIndex := e.runIndex + 1 + iter
+
+		// Run the body chain.
+		bodyOutput, err := e.runIfRetryBodyChain(
+			ctx,
+			workflow,
+			guardNode,
+			loop,
+			nodeResults,
+			runData,
+			bodyOrder,
+			nodeMap,
+			iterRunIndex,
+		)
+		if err != nil {
+			return fmt.Errorf("iteration %d: %w", iter, err)
+		}
+
+		// Evaluate the guard's condition. If it returns
+		// false (i.e. the loop should stop), break.
+		shouldContinue, err := e.evaluateIfRetryGuard(ctx, workflow, guardNode, bodyOutput)
+		if err != nil {
+			return fmt.Errorf("iteration %d guard evaluation: %w", iter, err)
+		}
+		if !shouldContinue {
+			nodeResults[guardNode.Name] = bodyOutput
+			return nil
+		}
+
+		// Loop again: seed the body entry with the
+		// iteration's terminal output so the next
+		// iteration's first node sees the right input.
+		if iter < loop.MaxIterations-1 {
+			nodeResults[loop.BackEdgeTarget] = bodyOutput
+		}
+	}
+
+	// Exhausted all iterations without the guard going
+	// false. Return the last body output and let the engine
+	// continue (the false-branch downstream — e.g. "Respond
+	// Failed" — will not fire because we never published
+	// anything for it; the engine's existing per-node
+	// "received no items → skip" guard handles this).
+	if nodeResults[loop.BackEdgeTarget] != nil {
+		nodeResults[guardNode.Name] = nodeResults[loop.BackEdgeTarget]
+	} else {
+		nodeResults[guardNode.Name] = inputData
+	}
+	return nil
+}
+
+// runIfRetryBodyChain executes the body of an If-retry loop for
+// one iteration. The body is `loop.BodyNodes` in canvas order;
+// each node's output is routed via the connection router. The
+// loop's back-edge (the guard's main[0] target) is filtered
+// out — the driver re-seeds the body entry between iterations
+// rather than letting the connection router auto-loop.
+func (e *workflowEngineImpl) runIfRetryBodyChain(
+	ctx context.Context,
+	workflow *model.Workflow,
+	guardNode *model.Node,
+	loop connections.IfRetryLoop,
+	nodeResults map[string][]model.DataItem,
+	runData *expressions.RunExecutionData,
+	bodyOrder []string,
+	nodeMap map[string]*model.Node,
+	runIndexSlot int,
+) ([]model.DataItem, error) {
+	if len(bodyOrder) == 0 {
+		return nil, nil
+	}
+
+	for _, name := range bodyOrder {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		bodyNode := nodeMap[name]
+		if bodyNode == nil {
+			return nil, fmt.Errorf("body node %q not found in workflow", name)
+		}
+
+		// Publish the *current* iteration input at this
+		// node's per-iteration slot before the node runs.
+		// This is what `$("Find Respond").item.json` should
+		// see during the body — the live items the loop is
+		// currently processing, not the cumulative history.
+		inputSnapshot := nodeResults[name]
+		if runData != nil && runData.ResultData != nil {
+			results := runData.ResultData.NodeData[name]
+			for len(results) <= runIndexSlot {
+				results = append(results, expressions.NodeExecutionResult{})
+			}
+			results[runIndexSlot] = expressions.NodeExecutionResult{
+				Data:      inputSnapshot,
+				StartTime: time.Now(),
+			}
+			runData.ResultData.NodeData[name] = results
+		}
+
+		// Skip decorative / trigger-only nodes.
+		if isDecorativeNodeType(bodyNode.Type) {
+			nodeResults[name] = []model.DataItem{}
+			continue
+		}
+		if isTriggerOnlyNodeType(bodyNode.Type) {
+			nodeResults[name] = []model.DataItem{}
+			continue
+		}
+
+		// Look up the executor.
+		executor, err := e.GetNodeExecutor(bodyNode.Type)
+		if err != nil {
+			return nil, fmt.Errorf("body node %q: %w", name, err)
+		}
+
+		// Inject credentials.
+		finalParams := bodyNode.Parameters
+		if e.credentialManager != nil {
+			finalParams, err = e.credentialManager.InjectCredentialsIntoNodeParameters(bodyNode.ID, bodyNode.Parameters)
+			if err != nil {
+				return nil, fmt.Errorf("body node %q credential injection: %w", name, err)
+			}
+		}
+		if err := executor.ValidateParameters(finalParams); err != nil {
+			return nil, fmt.Errorf("body node %q validation: %w", name, err)
+		}
+
+		// Execute the node.
+		if len(inputSnapshot) == 0 && !isTriggerOnlyNodeType(bodyNode.Type) {
+			nodeResults[name] = []model.DataItem{}
+			continue
+		}
+		outputData, err := executor.Execute(inputSnapshot, finalParams)
+		if err != nil {
+			return nil, fmt.Errorf("body node %q execution: %w", name, err)
+		}
+
+		// Strip routing metadata that the engine
+		// understands (_ifResult, _switchRuleIndex) so
+		// downstream body nodes don't see leaked tags.
+		outputData = stripRoutingMetadata(outputData)
+
+		nodeResults[name] = outputData
+
+		// Route the output to all downstream nodes, except
+		// the back-edge target (the body entry). The
+		// driver re-seeds the body entry explicitly between
+		// iterations, so the connection router should not
+		// also auto-loop.
+		routed, err := e.connectionRouter.RouteData(name, workflow, outputData)
+		if err != nil {
+			return nil, fmt.Errorf("body node %q routing: %w", name, err)
+		}
+		for target, data := range routed {
+			if target == loop.BackEdgeTarget {
+				// Suppress the back-edge: the driver
+				// controls body re-entry. Without this,
+				// the connection router would re-seed
+				// the body entry and the driver would
+				// see the loop as having completed
+				// prematurely.
+				continue
+			}
+			if nodeResults[target] == nil {
+				nodeResults[target] = data
+			} else {
+				nodeResults[target] = append(nodeResults[target], data...)
+			}
+		}
+	}
+
+	// Terminal output is the last body node's result.
+	return nodeResults[bodyOrder[len(bodyOrder)-1]], nil
+}
+
+// isInBody reports whether `target` is a node in the body chain.
+// Retained for potential future use (the body chain driver
+// currently allows routing to non-body nodes so the main engine
+// can pick up items routed out of the body, e.g. into the
+// "Respond to Webhook" exit branch).
+func isInBody(bodyOrder []string, target string) bool {
+	for _, n := range bodyOrder {
+		if n == target {
+			return true
+		}
+	}
+	return false
+}
+
+// evaluateIfRetryGuard evaluates the guard's condition against
+// the items produced by the most recent body iteration. Returns
+// true when the loop should continue (the guard's true branch
+// would be taken).
+//
+// The body's terminal node is typically an `If` node itself
+// (e.g. `Check Key Exists1` in the Finnet workflow) which tags
+// items with `_ifResult`. We pre-filter to only the items that
+// would be routed to the guard (i.e. `_ifResult=false` — the
+// items the body explicitly routed into the loop's back-edge),
+// so the guard's `attempt < maxAttempts` check is run against
+// the right set of items.
+func (e *workflowEngineImpl) evaluateIfRetryGuard(
+	ctx context.Context,
+	workflow *model.Workflow,
+	guardNode *model.Node,
+	bodyOutput []model.DataItem,
+) (bool, error) {
+	if guardNode.Type != "n8n-nodes-base.if" {
+		return false, fmt.Errorf("guard %q is not an If node", guardNode.Name)
+	}
+
+	// Filter to items the body routed to the guard (those
+	// that didn't take the body's exit branch). The body's
+	// terminal node tags every item with `_ifResult`; the
+	// items with `_ifResult=false` are the ones routed to
+	// the guard.
+	guardItems := filterIfRetryGuardItems(bodyOutput)
+	if len(guardItems) == 0 {
+		// The body found what it was looking for (routed
+		// every item to the exit branch). Don't loop.
+		return false, nil
+	}
+
+	// The IF node executor is registered under its n8n type.
+	executor, err := e.GetNodeExecutor(guardNode.Type)
+	if err != nil {
+		return false, err
+	}
+	finalParams := guardNode.Parameters
+	if e.credentialManager != nil {
+		finalParams, err = e.credentialManager.InjectCredentialsIntoNodeParameters(guardNode.ID, guardNode.Parameters)
+		if err != nil {
+			return false, err
+		}
+	}
+	if err := executor.ValidateParameters(finalParams); err != nil {
+		return false, err
+	}
+
+	// Evaluate. The IF node returns items tagged with
+	// _ifResult; we look for any item that the guard would
+	// route to its true (loop) branch.
+	output, err := executor.Execute(guardItems, finalParams)
+	if err != nil {
+		return false, err
+	}
+	for _, item := range output {
+		if v, ok := item.JSON["_ifResult"].(bool); ok && v {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// filterIfRetryGuardItems returns the items from `items` that
+// the body's terminal `If` node routed to the guard (i.e. the
+// items with `_ifResult=false`). When no items carry an
+// `_ifResult` tag (the body's terminal node wasn't an If node),
+// we fall back to returning all items — the guard will then
+// evaluate the body's full output.
+func filterIfRetryGuardItems(items []model.DataItem) []model.DataItem {
+	if len(items) == 0 {
+		return nil
+	}
+	hasTags := false
+	for _, item := range items {
+		if _, ok := item.JSON["_ifResult"]; ok {
+			hasTags = true
+			break
+		}
+	}
+	if !hasTags {
+		return items
+	}
+	var out []model.DataItem
+	for _, item := range items {
+		if v, ok := item.JSON["_ifResult"].(bool); ok && !v {
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 // runLoopDoneChain executes the once-per-loop done branch

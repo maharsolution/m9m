@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/neul-labs/m9m/internal/connections"
 	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
 )
@@ -56,7 +57,7 @@ func (e *EnhancedWorkflowEngine) ExecuteWorkflowWithExpressions(
 	if err != nil {
 		return nil, fmt.Errorf("error checking for workflow cycles: %w", err)
 	}
-	if hasCycles {
+	if hasCycles && !connections.WorkflowUsesSplitInBatches(workflow) && !connections.WorkflowUsesIfRetryLoop(workflow) {
 		return nil, fmt.Errorf("workflow contains cycles - cannot execute")
 	}
 
