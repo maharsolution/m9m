@@ -85,6 +85,7 @@ func NewXmlNode() *XmlNode {
 			Name:        xmlNodeTypeName,
 			Description: "Convert between XML and JSON",
 			Category:    "Data Transformation",
+			Properties:  xmlProperties(),
 		}),
 	}
 }

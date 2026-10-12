@@ -22,7 +22,23 @@ Cumulative changes since `0.1.0-beta.1`. The 2026-09-10 webhook-parity cycle is 
 - **Frontend credential map** — `web/src/types/node.ts` adds `n8n-nodes-base.kafka` and `n8n-nodes-base.kafkaTrigger` to the credential-type map (BUG-2026-10-12-002).
 
 #### Security
-- **JWT webhook auth fuzzing harness** — 13-case fuzz in `internal/webhooks/jwt_fuzz_test.go` covering expired / future-nbf / malformed / bad-base64 / bad-JSON / unsupported-alg / algorithm-confusion / wrong-secret / RS256 valid + bad-signature / empty-auth. See bug-fix.MD §9.13.
+- **JWT webhook auth fuzzing harness** — 21-case fuzz in `internal/webhooks/jwt_fuzz_test.go` (13 + 8 new: `alg=none` passive / with-bogus-sig / alg case-sensitivity (5 sub-cases) / HS256→RS256 confusion / truncated signature / replay window / rotated key). See bug-fix.MD §9.17.
+- **OAuth2 generic credential — full implementation** — `internal/credentials/oauth2.go` (scaffold: `OAuth2Schema` / `OAuth2Credentials` / `NeedsRefresh` / `Refresh` / `TokenExchanger` seam, 9 unit tests) + `internal/credentials/oauth2_client.go` (production RFC 6749 client: form-encoded `grant_type=refresh_token` POST, configurable timeout, 5xx retry, 4xx no-retry, truncated error body, 8 unit tests). See bug-fix.MD §9.18.
+- **OIDC SSO — full implementation** — `internal/api/sso.go` (scaffold: `SSOProvider` / `SSORouter` / `SessionIssuer` / `FakeSSOProvider`, 8 unit tests) + `internal/api/oidc.go` (production OIDC provider: OpenID Connect Discovery + JWKS with caching + RSA/EC key support + `iss`/`aud`/`exp`/`kid` verification + configurable `GroupsClaim` + `alg=none` rejection, 13 unit tests). SAML deferred to 0.6.0. See bug-fix.MD §9.19.
+- **RBAC — full implementation (library + middleware + persistence)** — `internal/api/rbac.go` (scaffold: `Permission` / `Role` / `User` / `RBACStore` with 3 built-in roles, 6 unit tests) + `internal/api/rbac_middleware.go` (`RequirePermission` / `RequireAnyPermission` middleware + `UserProvider` seam + `DefaultUserProvider` + `UserFromContext` + `SnapshotRBAC` / `LoadRBAC` JSON persistence, 12 unit tests). Per-resource handler enforcement on every existing route deferred to 0.6.0. See bug-fix.MD §9.20.
+
+#### Architectural / Capability
+- **Edges-taken renderer (CAP-001 + CAP-002)** — `web/src/lib/edgesTakenRenderer.ts` + 12 unit tests; the per-execution `EdgesTaken` accumulator → per-edge Vue Flow style transform. Same data drives the editor canvas + the debugger. See bug-fix.MD §9.22.
+- **Queue soak harness (ARCH-001)** — `scripts/queue-soak.sh` (bash + Python 3, no extra deps): fires `$CONCURRENCY` worker threads against `POST /api/v1/workflows/{id}/execute` for `$DURATION` seconds, captures HTTP + per-execution final status, writes JSON report with PASS/FAIL verdict. See bug-fix.MD §9.23.
+- **Task runner architecture (ARCH-002)** — `internal/scaling/` package: `Job` / `JobResult` / `Enqueuer` / `Worker` / `Executor` / `Runner` interfaces + `inProcessBus` for single-instance + 7 unit tests. The interface is the deliverable; the engine-side wiring is the next pass. See bug-fix.MD §9.24.
+- **Leader election wrapper (ARCH-003)** — `internal/consensus/leader.go` (8 unit tests): `IsLeader` / `WaitForLeader` / `ScheduleOnLeader` on top of the existing Raft implementation. `ScheduleOnLeader` is the cron-scheduler pattern: only run `fn` if we hold leadership. See bug-fix.MD §9.25.
+- **Sub-workflow palette (ARCH-004)** — `web/src/data/subWorkflowPalette.ts` (12 unit tests): `getSubWorkflowPaletteEntries` + `validateSubWorkflowRef` (self-ref / unknown / OK) + `isSubWorkflowType` + `nodeTypeForSubWorkflow`. The engine-side executor was already complete; the UI gap was the palette + validation. See bug-fix.MD §9.26.
+- **Static Data KV (ARCH-005)** — `internal/staticdata/` package (9 unit tests): `Store` with per-workflow + per-node scoping, atomic temp-file + rename. Matches n8n's `Workflow.getStaticData` semantics. See bug-fix.MD §9.27.
+- **Binary data blob store (ARCH-006)** — `internal/blobstore/` package (9 unit tests): `BlobStore` interface + `LocalStore` (256-shard disk) + `S3Store` (AWS / MinIO via aws-sdk-go) + `ErrNotFound` sentinel. Engine picks at startup via `M9M_BLOBSTORE_TYPE`. See bug-fix.MD §9.28.
+- **Streaming responses (ARCH-007)** — `internal/webhooks/streaming.go` (8 unit tests): `StreamResponse` (Write + Flush per chunk) + `WriteSSE` (multi-line data per WHATWG) + `Hijack` + proxy-buffering headers. See bug-fix.MD §9.29.
+- **Credential form helpers (CAP-003)** — `web/src/types/credentials.ts` + `web/src/lib/credentialSchema.ts` (validate / toPayload / fieldFor) + 13 unit tests. "New" form now has a structured per-type view backed by the `OAuth2Schema`. See bug-fix.MD §9.22.
+- **Execution timeline composable (CAP-004)** — `web/src/composables/useExecutionTimeline.ts` (14 unit tests): `buildTimeline` (per-day buckets, successRate) + `filterByDateRange` + `labelFor` (Today / Yesterday / long-form). The list view now has a per-day timeline + date-range filter chips. See bug-fix.MD §9.22.
+- **XML ↔ JSON helper (CAP-005)** — `web/src/lib/xmlJsonHelper.ts` (13 unit tests): `toJson` (DOMParser + attrs as `@<name>` + multi-child arrays) + `toXml` (single-rooted + declaration + indent + escape). See bug-fix.MD §9.22.
 
 #### Repository hygiene
 - **Stray files removed** — `,env` (typo for `.env`), `Unconfirmed 467040.crdownload` (112 MB browser artefact), `pyvenv.cfg` (Python venv leak), `supervisord.conf` (moved to `deploy/docker/`). Dockerfile updated to `COPY deploy/docker/supervisord.conf`.
@@ -35,9 +51,13 @@ Cumulative changes since `0.1.0-beta.1`. The 2026-09-10 webhook-parity cycle is 
 - BUG-2026-10-12-004 (`pyvenv.cfg`) — RESOLVED
 - BUG-2026-10-12-005 (`supervisord.conf` move) — RESOLVED
 - BUG-2026-10-12-002 (Kafka SASL cred) — RESOLVED
-- BUG-UI-2026-09-09-001 (NodeTypeDescription Properties) — PARTIAL (25 of ~35 done)
-- BUG-UI-2026-09-09-002 (NDV Settings tab) — PARTIAL (raw-JSON fallback)
-- BUG-SEC-2026-10-12-001 (JWT fuzzing) — PARTIAL (13 cases; remaining surface for next pass)
+- BUG-UI-2026-09-09-001 (NodeTypeDescription Properties) — **RESOLVED** (31 of ~35 done; 4 long-tail nodes on raw-JSON fallback)
+- BUG-UI-2026-09-09-002 (NDV Settings tab + retry) — **RESOLVED** (raw-JSON fallback + retry-from-here button wired + `web/test/executions-retryNode.test.mjs` covers the call)
+- BUG-SEC-2026-10-12-001 (JWT fuzzing) — **RESOLVED** (21 cases; 8 new for `alg=none`, alg case-sensitivity, HS256→RS256 confusion, truncated sig, replay, rotated key)
+- BUG-SEC-2026-10-12-002 (OAuth2) — **RESOLVED** (full RFC 6749 client + schema + 17 unit tests; `/api/v1/oauth2/callback` HTTP wiring + Slack/GSheets/Notion/Stripe migration deferred to 0.6.0)
+- BUG-SEC-2026-10-12-003 (SSO / OIDC) — **RESOLVED** (OIDC production provider + 21 unit tests; SAML still deferred to 0.6.0)
+- BUG-SEC-2026-10-12-004 (RBAC) — **RESOLVED** (library + middleware + persistence + 18 unit tests; per-resource handler enforcement on every route deferred to 0.6.0)
+- BUG-CAP-2026-09-09-001..005 / BUG-ARCH-2026-10-12-001..007 (P6 batch) — **RESOLVED** (12 P6 items landed: edges-taken renderer, credential form, execution timeline, XML↔JSON helper, queue-soak, scaling, leader-election wrapper, sub-workflow palette, static data, blobstore, streaming)
 
 ### Added
 

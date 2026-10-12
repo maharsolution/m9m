@@ -274,3 +274,140 @@ func TestVerifyJWT_Fuzz_EmptyAuth(t *testing.T) {
 		t.Fatal("expected error (nil authData), got nil")
 	}
 }
+
+// TestVerifyJWT_Fuzz_AlgNone_Passive — `alg=none` with an empty
+// signature segment MUST be rejected. This is the classic
+// CVE-2018-1000531 regression. We mint a syntactically-valid
+// `alg=none` token and confirm verifyJWT does not return nil.
+func TestVerifyJWT_Fuzz_AlgNone_Passive(t *testing.T) {
+	hb, _ := json.Marshal(map[string]string{"alg": "none", "typ": "JWT"})
+	cb, _ := json.Marshal(map[string]interface{}{"sub": "attacker", "exp": time.Now().Add(time.Hour).Unix()})
+	tok := base64.RawURLEncoding.EncodeToString(hb) + "." +
+		base64.RawURLEncoding.EncodeToString(cb) + "."
+	if err := verifyJWT(tok, map[string]interface{}{"algorithm": "HS256", "secret": "any"}); err == nil {
+		t.Fatal("expected alg=none rejection, got nil (CVE-2018-1000531)")
+	}
+}
+
+// TestVerifyJWT_Fuzz_AlgNone_WithBogusSignature — same as
+// above but the attacker appends a non-empty signature. Must
+// STILL be rejected.
+func TestVerifyJWT_Fuzz_AlgNone_WithBogusSignature(t *testing.T) {
+	hb, _ := json.Marshal(map[string]string{"alg": "none", "typ": "JWT"})
+	cb, _ := json.Marshal(map[string]interface{}{"sub": "attacker"})
+	sig := base64.RawURLEncoding.EncodeToString([]byte("notreallyasignature"))
+	tok := base64.RawURLEncoding.EncodeToString(hb) + "." +
+		base64.RawURLEncoding.EncodeToString(cb) + "." + sig
+	if err := verifyJWT(tok, map[string]interface{}{"algorithm": "HS256", "secret": "any"}); err == nil {
+		t.Fatal("expected alg=none rejection even with bogus signature, got nil")
+	}
+}
+
+// TestVerifyJWT_Fuzz_AlgCaseSensitivity — the spec says alg
+// is case-sensitive, but attackers try `hs256`, `HS256 ` (trailing
+// space), `HS256\n`. All must be rejected — the verifier must
+// only accept the exact byte sequence.
+func TestVerifyJWT_Fuzz_AlgCaseSensitivity(t *testing.T) {
+	cases := []string{"hs256", "HS256 ", "HS256\n", "Hs256", "HS256\x00"}
+	secret := "shared-secret"
+	for _, alg := range cases {
+		hb, _ := json.Marshal(map[string]string{"alg": alg, "typ": "JWT"})
+		cb, _ := json.Marshal(map[string]interface{}{"sub": "x", "exp": time.Now().Add(time.Hour).Unix()})
+		signingInput := base64.RawURLEncoding.EncodeToString(hb) + "." +
+			base64.RawURLEncoding.EncodeToString(cb)
+		mac := hmac.New(sha256.New, []byte(secret))
+		mac.Write([]byte(signingInput))
+		sig := mac.Sum(nil)
+		tok := signingInput + "." + base64.RawURLEncoding.EncodeToString(sig)
+		if err := verifyJWT(tok, map[string]interface{}{"algorithm": "HS256", "secret": secret}); err == nil {
+			t.Errorf("expected rejection for alg=%q, got nil", alg)
+		}
+	}
+}
+
+// TestVerifyJWT_Fuzz_HS256ToRS256Confusion — the attacker
+// mints a token whose header claims `alg=HS256` and signs it
+// with the RSA public key bytes as if it were an HMAC secret.
+// (CVE-2016-10555 in raw form.) m9m dispatches on the
+// `authData.algorithm` field, which is server-controlled, so
+// the attacker cannot switch the verifier into HS256 mode from
+// the wire. This test asserts the dispatch decision.
+func TestVerifyJWT_Fuzz_HS256ToRS256Confusion(t *testing.T) {
+	priv, _ := rsa.GenerateKey(rand.Reader, 2048)
+	claims := map[string]interface{}{"sub": "attacker", "exp": time.Now().Add(time.Hour).Unix()}
+	hb, _ := json.Marshal(map[string]string{"alg": "HS256", "typ": "JWT"})
+	cb, _ := json.Marshal(claims)
+	signingInput := base64.RawURLEncoding.EncodeToString(hb) + "." +
+		base64.RawURLEncoding.EncodeToString(cb)
+	// Sign with the public key as if it were an HMAC secret.
+	pubBytes, _ := x509.MarshalPKIXPublicKey(&priv.PublicKey)
+	mac := hmac.New(sha256.New, pubBytes)
+	mac.Write([]byte(signingInput))
+	sig := mac.Sum(nil)
+	tok := signingInput + "." + base64.RawURLEncoding.EncodeToString(sig)
+
+	// Verifier is configured for RS256. It must dispatch into
+	// the RSA branch and fail because the signature is an
+	// HMAC, not an RSA signature.
+	pemPub := makeRSAPublicKeyPEM(t, &priv.PublicKey)
+	if err := verifyJWT(tok, map[string]interface{}{"algorithm": "RS256", "publicKey": pemPub}); err == nil {
+		t.Fatal("expected rejection (RS256 verifier with HS256-formatted token), got nil")
+	}
+}
+
+// TestVerifyJWT_Fuzz_TruncatedSignature — the signature
+// segment is one byte short. HMAC verification must error,
+// not panic.
+func TestVerifyJWT_Fuzz_TruncatedSignature(t *testing.T) {
+	secret := "shared-secret-32-bytes-aaaaaaaa"
+	tok := makeHS256(t, map[string]interface{}{"sub": "x", "exp": time.Now().Add(time.Hour).Unix()}, secret)
+	// Drop the last char of the signature.
+	parts := strings.Split(tok, ".")
+	if len(parts) != 3 {
+		t.Fatalf("setup: expected 3 parts, got %d", len(parts))
+	}
+	truncated := parts[0] + "." + parts[1] + "." + parts[2][:len(parts[2])-1]
+	if err := verifyJWT(truncated, map[string]interface{}{"algorithm": "HS256", "secret": secret}); err == nil {
+		t.Fatal("expected error on truncated signature, got nil")
+	}
+}
+
+// TestVerifyJWT_Fuzz_ReplayWindow — the same token verified
+// twice in succession must succeed both times. We don't have a
+// nonce store yet, so we can only assert "the verifier does
+// not flag the second call as a replay". A future nonce store
+// (BUG-CAP-2026-10-12-002) will layer on top of this.
+func TestVerifyJWT_Fuzz_ReplayWindow(t *testing.T) {
+	secret := "this-is-a-32-char-shared-secret!"
+	tok := makeHS256(t, map[string]interface{}{
+		"sub": "alice",
+		"exp": time.Now().Add(time.Hour).Unix(),
+	}, secret)
+	authData := map[string]interface{}{"algorithm": "HS256", "secret": secret}
+	for i := 0; i < 3; i++ {
+		if err := verifyJWT(tok, authData); err != nil {
+			t.Fatalf("replay #%d: expected nil, got %v", i, err)
+		}
+	}
+}
+
+// TestVerifyJWT_Fuzz_RotatedKey — the operator rotates the
+// HS256 secret. A token signed with the OLD secret must fail.
+// (For RSA, rotation would be `kid`-driven; see
+// BUG-CAP-2026-10-12-001 for that workstream.)
+func TestVerifyJWT_Fuzz_RotatedKey(t *testing.T) {
+	oldSecret := "old-32-byte-shared-secret-aaaa"
+	newSecret := "new-32-byte-shared-secret-bbbb"
+	tok := makeHS256(t, map[string]interface{}{
+		"sub": "alice",
+		"exp": time.Now().Add(time.Hour).Unix(),
+	}, oldSecret)
+	if err := verifyJWT(tok, map[string]interface{}{"algorithm": "HS256", "secret": newSecret}); err == nil {
+		t.Fatal("expected error after secret rotation, got nil")
+	}
+	// And the new secret does accept a token it signed itself.
+	newTok := makeHS256(t, map[string]interface{}{"sub": "alice", "exp": time.Now().Add(time.Hour).Unix()}, newSecret)
+	if err := verifyJWT(newTok, map[string]interface{}{"algorithm": "HS256", "secret": newSecret}); err != nil {
+		t.Fatalf("expected nil for new-secret token, got %v", err)
+	}
+}

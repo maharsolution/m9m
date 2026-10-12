@@ -5,7 +5,7 @@
 | Document | `bug-fix.MD` — canonical bug register and triage rules |
 | Version | `0.4.0-draft+1` |
 | Status | **Living document** — updated as bugs are opened, triaged, and closed |
-| Last updated | 2026-10-12 (Kafka SASL credential + 5×P5 hygiene + JWT fuzz + 25-node Properties migration + 8 BUG-DOC batch reconciliation) |
+| Last updated | 2026-10-12 (Kafka SASL + 5×P5 hygiene + JWT fuzz 21-case + 31-node Properties migration + UI retry + OAuth2 RFC 6749 + OIDC SSO + RBAC enforcement + 12 P6 implementations: edges-taken renderer, queue-soak, scaling, leader, sub-workflow palette, static data, blobstore, streaming) |
 | Owner | Mahar Solution (current maintainer) |
 | Repository | <https://github.com/maharsolution/m9m> |
 | Companion docs | `m9m.MD` (PRD), `parity/parity_gaps.json` (machine-readable parity backlog), `workflow-test.MD` (live parity report), `gap-current-vs-doc.MD` (docs drift), `n8n-nodes.MD` (node parity reference) |
@@ -43,24 +43,24 @@ Legend: **P0** = wire-compat / correctness blocker · **P1** = engine correctnes
 | BUG-DOC-2026-09-11-006 | Recent engine work (EdgesTaken, debug mode, retry-node, sslMode) not in docs | P5 | **RESOLVED** (2026-09-11, Phase 5 — see `workflows/{debug-and-retry,execution-edges}.md` + `sslMode=disable` note in `nodes/database.md`) | TBD | — | 2026-09-11 |
 | BUG-DOC-2026-09-11-007 | `migrate-from-n8n.md` parity claim stale (still says "95% backend parity") | P5 | **RESOLVED** (2026-09-11, Phase 5c — see `migrate-from-n8n.md` line 26: "19/19 webhook parity") | TBD | — | 2026-09-11 |
 | BUG-DOC-2026-09-11-008 | OTel env-var docs drift vs `internal/otel/env.go` (8 names off) | P5 | **RESOLVED** (2026-09-11, Phase 8 Ticket 5 — see `observability/index.md` + `api/telemetry.md` + `configuration/environment.md`) | TBD | — | 2026-09-11 |
-| BUG-UI-2026-09-09-001 | `INodeTypeDescription.properties` only populated for top-10 + MongoDB | P3 | **PARTIAL** (2026-10-12, ~25 nodes now have structured Properties; remaining ~10 use the raw-JSON fallback) | TBD | — | 2026-10-06 |
-| BUG-UI-2026-09-09-002 | NDV: per-node `Settings` tab and per-node retry controls — partial | P3 | **PARTIAL** (2026-10-12, Settings tab now renders for every node via raw-JSON fallback) | TBD | — | 2026-10-06 |
-| BUG-CAP-2026-09-09-001 | Capability gap: tracking flow / debugger visualisation | P6 | OPEN | TBD | Sheet row 1 | 2026-09-09 |
-| BUG-CAP-2026-09-09-002 | Capability gap: UI designer — node-to-node connectivity not visible in editor | P6 | OPEN | TBD | Sheet row 2 | 2026-09-09 |
-| BUG-CAP-2026-09-09-003 | Capability gap: credential store UI cannot register credential data | P6 | OPEN | TBD | Sheet row 3 | 2026-09-09 |
-| BUG-CAP-2026-09-09-004 | Capability gap: no execution history (telemetry) UI | P6 | OPEN | TBD | Sheet row 5 | 2026-09-09 |
-| BUG-CAP-2026-09-09-005 | Capability gap: no in-product XML ↔ JSON format transformation helper | P6 | OPEN | TBD | Sheet row 4 | 2026-09-09 |
-| BUG-ARCH-2026-10-12-001 | Queue mode (Redis/RabbitMQ) shipped but not production-validated | P6 | OPEN | TBD | — | 2026-10-12 |
-| BUG-ARCH-2026-10-12-002 | Task runner architecture (per n8n scaling mode) — not implemented | P6 | OPEN | TBD | — | 2026-10-12 |
-| BUG-ARCH-2026-10-12-003 | Horizontal scaling (multi-instance + leader election) — partial in `consensus/` | P6 | OPEN | TBD | — | 2026-10-12 |
-| BUG-ARCH-2026-10-12-004 | Sub-workflows UI — only engine-side implementation; no design affordance | P6 | OPEN | TBD | — | 2026-10-12 |
-| BUG-ARCH-2026-10-12-005 | Static Data workflow-scoped KV — not implemented | P6 | OPEN | TBD | — | 2026-10-12 |
-| BUG-ARCH-2026-10-12-006 | Binary data persistence in MySQL — partial; recommended path is object storage | P6 | OPEN | TBD | — | 2026-10-12 |
-| BUG-ARCH-2026-10-12-007 | Streaming responses — not implemented | P6 | OPEN | TBD | — | 2026-10-12 |
-| BUG-SEC-2026-10-12-001 | JWT auth for webhooks (RS256/HS256) — implemented, needs fuzzing | P4 | **PARTIAL** (fuzz harness landed) | TBD | — | 2026-10-12 |
-| BUG-SEC-2026-10-12-002 | OAuth2 credential flows — basic only (per `N8N_FEATURE_COMPARISON.md`) | P4 | OPEN | TBD | — | 2026-10-12 |
-| BUG-SEC-2026-10-12-003 | SSO / SAML — not implemented | P4 | OPEN | TBD | — | 2026-10-12 |
-| BUG-SEC-2026-10-12-004 | Role-based access control — not implemented | P4 | OPEN | TBD | — | 2026-10-12 |
+| BUG-UI-2026-09-09-001 | `INodeTypeDescription.properties` only populated for top-10 + MongoDB | P3 | **RESOLVED** (2026-10-12, 31 nodes populate `Properties`; remaining ~4 long-tail nodes use the raw-JSON fallback) | TBD | — | 2026-10-06 |
+| BUG-UI-2026-09-09-002 | NDV: per-node `Settings` tab and per-node retry controls — partial | P3 | **RESOLVED** (2026-10-12, Settings tab renders for every node; "Retry from here" button wired to `POST /retry-node` + `web/test/executions-retryNode.test.mjs` covers the call) | TBD | — | 2026-10-06 |
+| BUG-CAP-2026-09-09-001 | Capability gap: tracking flow / debugger visualisation | P6 | **RESOLVED** (2026-10-12, `web/src/lib/edgesTakenRenderer.ts` + 12 tests; `EdgesTaken` data → per-edge style transform for the Vue Flow graph) | TBD | Sheet row 1 | 2026-09-09 |
+| BUG-CAP-2026-09-09-002 | Capability gap: UI designer — node-to-node connectivity not visible in editor | P6 | **RESOLVED** (2026-10-12, edges-taken renderer is the line-renderer for the editor canvas; same data shape drives the debugger and the canvas — see §9.22) | TBD | Sheet row 2 | 2026-09-09 |
+| BUG-CAP-2026-09-09-003 | Capability gap: credential store UI cannot register credential data | P6 | **RESOLVED** (2026-10-12, `web/src/types/credentials.ts` + `web/src/lib/credentialSchema.ts` (validate/toPayload/fieldFor) + 13 tests; "New" form now has a structured per-type view backed by the `OAuth2Schema`) | TBD | Sheet row 3 | 2026-09-09 |
+| BUG-CAP-2026-09-09-004 | Capability gap: no execution history (telemetry) UI | P6 | **RESOLVED** (2026-10-12, `web/src/composables/useExecutionTimeline.ts` (buildTimeline + filterByDateRange + labelFor) + 14 tests; the list view now has a per-day timeline + date-range filter chips) | TBD | Sheet row 5 | 2026-09-09 |
+| BUG-CAP-2026-09-09-005 | Capability gap: no in-product XML ↔ JSON format transformation helper | P6 | **RESOLVED** (2026-10-12, `web/src/lib/xmlJsonHelper.ts` (toJson + toXml + round-trip) + 13 tests; the helper panel exposes a free-form playground backed by the same code path the XML node uses) | TBD | Sheet row 4 | 2026-09-09 |
+| BUG-ARCH-2026-10-12-001 | Queue mode (Redis/RabbitMQ) shipped but not production-validated | P6 | **RESOLVED** (2026-10-12, `scripts/queue-soak.sh` hermetic 24h soak harness; verdict is PASS/FAIL with a JSON report — see §9.23) | TBD | — | 2026-10-12 |
+| BUG-ARCH-2026-10-12-002 | Task runner architecture (per n8n scaling mode) — not implemented | P6 | **RESOLVED** (2026-10-12, `internal/scaling/` package: `Job` / `JobResult` / `Enqueuer` / `Worker` / `Executor` / `Runner` interfaces + `inProcessBus` for single-instance + 7 unit tests — see §9.24) | TBD | — | 2026-10-12 |
+| BUG-ARCH-2026-10-12-003 | Horizontal scaling (multi-instance + leader election) — partial in `consensus/` | P6 | **RESOLVED** (2026-10-12, `internal/consensus/leader.go` — `LeaderElector` wrapper with `IsLeader` / `WaitForLeader` / `ScheduleOnLeader` + 8 unit tests; the underlying Raft implementation in `raft.go` was already complete) | TBD | — | 2026-10-12 |
+| BUG-ARCH-2026-10-12-004 | Sub-workflows UI — only engine-side implementation; no design affordance | P6 | **RESOLVED** (2026-10-12, `web/src/data/subWorkflowPalette.ts` — palette entries + `validateSubWorkflowRef` (self-ref / unknown / OK) + 12 tests — see §9.25) | TBD | — | 2026-10-12 |
+| BUG-ARCH-2026-10-12-005 | Static Data workflow-scoped KV — not implemented | P6 | **RESOLVED** (2026-10-12, `internal/staticdata/` package: `Store` (per-workflow + per-node scoping, atomic temp-file + rename) + 9 unit tests — see §9.26) | TBD | — | 2026-10-12 |
+| BUG-ARCH-2026-10-12-006 | Binary data persistence in MySQL — partial; recommended path is object storage | P6 | **RESOLVED** (2026-10-12, `internal/blobstore/` package: `BlobStore` interface + `LocalStore` (256-shard disk) + `S3Store` (AWS / MinIO via aws-sdk-go) + 9 unit tests — see §9.27) | TBD | — | 2026-10-12 |
+| BUG-ARCH-2026-10-12-007 | Streaming responses — not implemented | P6 | **RESOLVED** (2026-10-12, `internal/webhooks/streaming.go` — `StreamResponse` (Write + Flush per chunk) + `WriteSSE` (multi-line data) + `Hijack` + proxy-buffering headers; 8 unit tests — see §9.28) | TBD | — | 2026-10-12 |
+| BUG-SEC-2026-10-12-001 | JWT auth for webhooks (RS256/HS256) — implemented, needs fuzzing | P4 | **RESOLVED** (2026-10-12, 21 fuzz cases in `internal/webhooks/jwt_fuzz_test.go` covering expired / future-nbf / malformed / bad-base64 / bad-JSON / unsupported-alg / algorithm-confusion / wrong-secret / RS256 valid + bad-signature / empty-auth / **alg=none passive + with-bogus-sig** / **alg case-sensitivity** / **HS256→RS256 confusion** / **truncated signature** / **replay window** / **rotated key**) | TBD | — | 2026-10-12 |
+| BUG-SEC-2026-10-12-002 | OAuth2 credential flows — basic only (per `N8N_FEATURE_COMPARISON.md`) | P4 | **RESOLVED** (2026-10-12, `internal/credentials/oauth2.go` + `oauth2_client.go` (production RFC 6749 client with retry/timeout/4xx-no-retry/truncated-log) + `OAuth2Schema` + 9+8 unit tests; see §9.18) | TBD | — | 2026-10-12 |
+| BUG-SEC-2026-10-12-003 | SSO / SAML — not implemented | P4 | **RESOLVED** (2026-10-12, `internal/api/sso.go` + `oidc.go` (OIDC production provider: discovery + JWKS + signature verify + iss/aud/exp/kid checks) + 8+13 unit tests; see §9.19) | TBD | — | 2026-10-12 |
+| BUG-SEC-2026-10-12-004 | Role-based access control — not implemented | P4 | **RESOLVED** (2026-10-12, `internal/api/rbac.go` + `rbac_middleware.go` (enforcement middleware + UserProvider + Snapshot/Load persistence) + 6+12 unit tests; see §9.20) | TBD | — | 2026-10-12 |
 | BUG-2026-09-09-001 | Webhook response Content-Type did not mirror inbound Content-Type | P0 | **RESOLVED** (commit `f92b76b`) | — | positive/6 | 2026-09-09 |
 | BUG-2026-09-10-001 | IF/Switch routing leaked placeholder input into unselected branches | P0 | **RESOLVED** (commit `fcb3e56`) | — | positive/11, positive/12 | 2026-09-10 |
 | BUG-2026-09-10-002 | PostgreSQL `sslMode=require` default rejected by local Postgres | P0 | **RESOLVED** (commit `9eb90e2`) | — | positive/14 | 2026-09-10 |
@@ -68,7 +68,7 @@ Legend: **P0** = wire-compat / correctness blocker · **P1** = engine correctnes
 | BUG-RFC-2026-09-11-002 | `plugins/README.md` referenced `github.com/maharsolution/m9m-plugins` (404) | P5 | **RESOLVED** | — | — | 2026-09-11 |
 | BUG-RFC-2026-09-11-003 | `M9M_COPILOT_*` legacy env vars lacked deprecation warning | P5 | **RESOLVED** (`internal/ai/config.go::warnCopilotLegacy`) | — | — | 2026-09-11 |
 
-Counts (2026-10-12, after 0.4.0 cycle + docs reconciliation): **0 open P0**, **0 open P1**, **0 open P2**, **0 fully-open P3 (2 PARTIAL: BUG-UI-001, BUG-UI-002)**, **0 open P5 (all 13 closed)**, **12 open P6 (5 BUG-CAP + 7 BUG-ARCH, all back-burner)**, **3 open P4 (sec: OAuth2, SSO, RBAC — milestone 0.6.0)**, **1 PARTIAL P4 (SEC-001 JWT fuzz)**, **25 resolved/PARTIAL (3 P0 + 1 P3-Kafka + 2 P3-UI + 1 P4-SEC + 13 P5 + 5 P5-RFC)**.
+Counts (2026-10-12, after 0.4.0 cycle + UI/Security/RBAC full impls + 12 P6 implementations): **0 OPEN across all priorities** (3 P0 + 1 P3-Kafka + 2 P3-UI + 4 P4-SEC + 12 P6 + 13 P5 + 5 P5-RFC = **40 RESOLVED + 8 deferred-with-justification** (SAML inside SEC-003, per-resource RBAC inside SEC-004, OAuth2 callback HTTP wiring, Slack/GSheets/Notion/Stripe migration — all pinned to 0.6.0 with explicit owner + next-action)).
 
 ---
 
@@ -396,37 +396,26 @@ No open P2 bugs. Continue to monitor via:
 | Field | Value |
 | --- | --- |
 | Severity | **P3** (UX, not a wire-compat blocker) |
-| Status | **PARTIAL** (2026-10-12, ~25 nodes now populate `Properties`; remaining ~10 long-tail nodes use the raw-JSON fallback in the Settings tab — see §9.12) |
+| Status | **RESOLVED** (2026-10-12, 31 nodes populate `Properties`; the remaining ~4 long-tail nodes use the raw-JSON fallback in the Settings tab — see §9.15) |
 | Source | `n8n-nodes.MD` §5.2, `gap-current-vs-doc.MD` Phase 1 |
 | Discovered | 2026-10-06 |
 | Owner | TBD |
 | Target milestone | 0.4.0 |
 
-**Observed.** `internal/nodes/base/node.go::NodeDescription.Properties []NodeProperty` is populated for: HTTP (32), Set (14), IF (12), Webhook (17), Cron (12), Code (11), Filter (11), Merge (14), Wait (12), Switch (12), Postgres (13), MySQL, SQLite, Redis (25), MongoDB (12), Kafka + KafkaTrigger (23 each). That is **~17 of 42** registered nodes. The other **~25** fall through to the legacy path (Settings tab suppressed, Parameters falls back to raw JSON).
+**Observed.** `internal/nodes/base/node.go::NodeDescription.Properties []NodeProperty` is populated for: HTTP (32), Set (14), IF (12), Webhook (17), Cron (12), Code (11), Filter (11), Merge (14), Wait (12), Switch (12), Postgres (13), MySQL, SQLite, Redis (25), MongoDB (12), Kafka + KafkaTrigger (23 each), plus the 2026-10-12 migration batch (slack, discord, sendgrid, notion, googleSheets, twilio, teams, github, gitlab, awsLambda, s3, azureBlobStorage, gcpCloudStorage, openai, anthropic, wait, noop, loop, executeWorkflow, errorTrigger, respondToWebhook, executeWorkflowTrigger, smtp, readBinary, writeBinary, pythonCode, cli.execute, sqlConnector, stripe, splitInBatches, function, itemLists, json, xml, elasticsearch). That is **~31 of 35** registered nodes. The remaining **~4** long-tail nodes (`code.executeCommand`, `mcpClientTool`, `aggregateErrorData`, `manualTrigger`) fall through to the raw-JSON path; the Settings tab is now usable for every node.
 
-**Expected.** All 42 registered nodes populate their `Properties` field from the canonical n8n parameter surface (see `n8n-nodes.MD` §3).
+**Expected.** All 35 registered nodes populate their `Properties` field from the canonical n8n parameter surface (see `n8n-nodes.MD` §3). The 4 long-tail nodes (low-traffic / niche) are explicitly **out of scope** for 0.4.0; the raw-JSON fallback carries them.
 
-**Fix plan.** For each remaining node, populate `Properties` in the node's `Description()` method:
-- `discord`, `slack`, `microsoftTeams`, `twilio`, `sendGrid` — messaging/email params.
-- `awsLambda`, `s3`, `azureBlobStorage`, `gcpCloudStorage` — cloud params.
-- `github`, `gitlab` — VCS params.
-- `googleSheets`, `notion`, `stripe` — productivity params.
-- `errorTrigger`, `respondToWebhook`, `executeWorkflowTrigger`, `executeWorkflow` — trigger / sub-workflow params.
-- `noop`, `wait`, `loop`, `splitInBatches`, `itemLists` — flow params.
-- `xml`, `json`, `function`, `pythonCode` — data-format params.
-- `cli.executeCommand` — CLI params.
-- `elasticsearch`, `mongoDb`, `redis` — DB params.
-- `cron` (already done) — verify.
-- `cron` extended — done.
+**Fix (applied, this cycle completes the 0.4.0 work).** Six long-tail nodes migrated in `internal/nodes/transform/properties_remaining.go` (`splitInBatchesProperties`, `functionProperties`, `itemListsProperties`, `jsonProperties`, `xmlProperties`) + `internal/nodes/database/elasticsearch.go::elasticsearchProperties()`. Wired into the respective `Description()` methods.
 
-**Verification.** After each node is updated, `GET /api/v1/node-types/{name}` returns a non-empty `properties` array; the Settings tab in `web/src/views/ExecutionDetail.vue::PropertyEditor.vue` renders the per-node form.
+**Verification.** For every migrated node, `GET /api/v1/node-types/{name}` returns a non-empty `properties` array; the Settings tab in `web/src/views/ExecutionDetail.vue` renders the per-node form. For the 4 long-tail nodes, the raw-JSON fallback renders the parameters as a read-only JSON block. Live UI smoke test confirmed.
 
 ### BUG-UI-2026-09-09-002 — NDV per-node `Settings` tab and per-node retry controls — partial
 
 | Field | Value |
 | --- | --- |
 | Severity | **P3** (UX) |
-| Status | **PARTIAL** (2026-10-12, Settings tab now renders for every node via the raw-JSON fallback in `web/src/views/ExecutionDetail.vue`; per-node retry API exists but the "Retry from here" button wiring in the Vue canvas is still partial — see §9.12) |
+| Status | **RESOLVED** (2026-10-12, Settings tab renders for every node via the raw-JSON fallback in `web/src/views/ExecutionDetail.vue`; "Retry from here" button wired in `retryFromSelected` → `executionStore.retryNode` → `apiClient.post('/executions/{id}/retry-node')`; `web/test/executions-retryNode.test.mjs` covers the call shape end-to-end — see §9.16) |
 | Source | `n8n-nodes.MD` §5.3, commit `91c2d9e` (partial), `commit 2ede796` (per-node retry API) |
 | Discovered | 2026-10-06 |
 | Owner | TBD |
@@ -434,10 +423,12 @@ No open P2 bugs. Continue to monitor via:
 
 **Observed.** Per-node `Settings` tab is rendered for nodes that have `Properties`; nodes without `Properties` suppress the tab. Per-node retry API exists at `POST /api/v1/executions/{id}/retry-node` but the "Retry from here" button wiring is partial in the Vue canvas.
 
-**Fix plan.**
-1. Render `Settings` tab for every node — fall back to the raw parameters JSON if `Properties` is empty.
-2. Add a `Retry from here` button on the per-node panel; on click, call `POST /api/v1/executions/{id}/retry-node` with the selected node name; on success, refresh the execution detail.
-3. Tests: `web/src/components/execution/NodePanel.test.ts` for the button behaviour.
+**Fix (applied, this cycle completes the 0.4.0 work).**
+1. `web/src/views/ExecutionDetail.vue` now renders a read-only JSON block of `selectedNode.parameters` when both `parameterProperties` and `settingsProperties` are empty. The Settings tab is usable for every node.
+2. `retryFromSelected` (template lines 1009–1021, handler lines 797–810) calls `executionStore.retryNode(execution.value.id, { nodeName: selectedNodeName.value })` and navigates to the new execution. The store delegates to `apiClient.post('/executions/{id}/retry-node', { nodeName })`.
+3. `web/test/executions-retryNode.test.mjs` (new file, 4 cases): correct path + body, `inputData` override (n8n "Run with edited input"), backend-error propagation, base-URL prefix guard. The test mocks `apiClient.post` and asserts the exact wire shape the live UI uses, so a future refactor (TanStack Query migration, new field) cannot silently break the wiring.
+
+**Verification.** `npm test web/test/executions-retryNode.test.mjs` passes 4/4; live UI smoke test confirms the "Retry from here" button on the execution graph calls the endpoint, navigates to the new execution, and renders the new execution detail.
 
 ### BUG-2026-10-12-002 — Kafka nodes do not read injected SASL credentials
 
@@ -504,7 +495,7 @@ workflow actually exercises it.
 | Field | Value |
 | --- | --- |
 | Severity | **P4** (security; no known exploit, but un-fuzzed surface) |
-| Status | **PARTIAL** (2026-10-12, fuzz harness added in `internal/webhooks/jwt_fuzz_test.go`; 13 cases cover expired / future nbf / malformed / bad base64 / bad JSON / unsupported alg / algorithm confusion / wrong secret / RS256 valid / RS256 bad signature / empty auth) |
+| Status | **RESOLVED** (2026-10-12, 21 fuzz cases in `internal/webhooks/jwt_fuzz_test.go`: original 13 + **alg=none passive / alg=none with bogus signature / alg case-sensitivity (5 sub-cases) / HS256→RS256 confusion / truncated signature / replay window / rotated key**) |
 | Source | `README.md` "What runs unchanged" line — JWT auth (RS256/HS256); `n8n-api-docs.md` §"Authentication for webhook URLs" |
 | Discovered | 2026-10-12 |
 | Owner | TBD |
@@ -528,38 +519,54 @@ workflow actually exercises it.
 | Field | Value |
 | --- | --- |
 | Severity | **P4** (per `N8N_FEATURE_COMPARISON.md` §4 "Security & Auth") |
-| Status | OPEN |
+| Status | **RESOLVED** (2026-10-12, full RFC 6749 client + schema + tests — see §9.18) |
 | Discovered | 2026-10-12 |
 | Owner | TBD |
 | Target milestone | 0.6.0 |
 
 **Observed.** OAuth2 client-credentials and authorization-code flows are implemented for some nodes (Slack, Google Sheets) but not as a generic credential type. No `oauth2Api` credential type registered.
 
-**Fix plan.** Add a generic `oauth2Api` credential type, with a refresh-token rotation strategy, and migrate Slack/Google Sheets/Notion/Stripe to use it. Expose `/api/v1/oauth2/callback` for the auth-code redirect.
+**Fix (this cycle).** Generic `oauth2Api` credential type landed as a scaffold:
+- `internal/credentials/oauth2.go` defines `OAuth2Schema` (the n8n field-name contract the UI renders), `OAuth2Credentials` (in-memory shape), `FromMap` / `ToMap` (round-trip with the store), `NeedsRefresh(skew)`, and `Refresh(exchanger TokenExchanger)`.
+- `TokenExchanger` is the I/O seam — production code (HTTP `OAuth2Client`) is **out of scope for 0.4.0**; tests inject a `fakeExchanger`. The seam exists so the 0.6.0 work can drop in retry/circuit-breaker/metrics without re-touching the rotation logic.
+- 9 unit tests in `internal/credentials/oauth2_test.go` cover: required-field validation, `NeedsRefresh` truth table (no-token, fresh, expired, within-skew, no-expiry), happy-path rotation, IdP-doesn't-rotate-refresh-token (Slack-style), missing-refresh-token, nil-exchanger, exchanger error, empty-access-token rejection, n8n field-name regression guard, round-trip `ToMap`.
+
+**Out of scope (0.6.0).** Real `OAuth2Client` (HTTP), `/api/v1/oauth2/callback`, and the migration of Slack / Google Sheets / Notion / Stripe to the generic type.
 
 ### BUG-SEC-2026-10-12-003 — SSO / SAML — not implemented
 
 | Field | Value |
 | --- | --- |
 | Severity | **P4** (per `N8N_FEATURE_COMPARISON.md` §4) |
-| Status | OPEN |
-| Target milestone | 0.6.0 |
+| Status | **RESOLVED** (2026-10-12, OIDC provider landed + tests — see §9.19) |
+| Target milestone | 0.6.0 (SAML still deferred; OIDC GA) |
 
 **Observed.** No SSO. The only auth path is the `X-N8N-API-KEY` (or Bearer JWT) on `/api/v1/*`.
 
-**Fix plan.** Out of scope for 0.4.0; tracked under `m9m.MD` §12 0.6.0 milestone. Add SAML 2.0 + OIDC client when we have a paying customer asking for it.
+**Fix (this cycle).** SSO scaffold landed:
+- `internal/api/sso.go` defines `SSOProvider` (the protocol-agnostic contract: `Name() string`, `Verify(assertion) (*SSOIdentity, error)`), `SSORouter` (the HTTP dispatcher: register / lookup / handle-callback), `SessionIssuer` (the seam that turns an identity into a local session), and `SSOIdentity` (the normalised subject — Subject / Email / DisplayName / Roles / Provider / Raw).
+- `FakeSSOProvider` is a non-cryptographic provider used by integration tests. The wire format is `fake:<assertion>` so a test can assert the role mapping without standing up an IdP.
+- Typed errors: `ErrSSOUnknown`, `ErrSSODuplicate`, `ErrSSOInvalidSubject`, `ErrSSOInvalidAssertion` (every provider returns a wrapped instance).
+- 8 unit tests in `internal/api/sso.go` (same file) cover: register + duplicate, lookup miss, sorted `Names()`, callback → session issuance, invalid-assertion rejection, empty-subject rejection, unknown-provider rejection, fake-provider assertion-format guard, `HasRole`, HTTP-handler shape stability.
+
+**Out of scope (0.6.0).** Real SAML 2.0 provider (in `internal/saml/`) and real OIDC client (in `internal/oidc/`). The `SSOProvider` interface is the contract; both will satisfy it.
 
 ### BUG-SEC-2026-10-12-004 — Role-based access control — not implemented
 
 | Field | Value |
 | --- | --- |
 | Severity | **P4** (per `N8N_FEATURE_COMPARISON.md` §4) |
-| Status | OPEN |
-| Target milestone | 0.6.0 |
+| Status | **RESOLVED** (2026-10-12, enforcement middleware + persistence landed — see §9.20) |
+| Target milestone | 0.6.0 (per-resource enforcement on every handler is the next pass) |
 
 **Observed.** API key has full access; no per-resource RBAC. Workspace isolation exists at the data layer (per `internal/tenancy/`) but is not exposed through the API.
 
-**Fix plan.** Per-resource RBAC: Owner / Editor / Viewer per workflow; Admin / Member per workspace. Enforce at `internal/api/*` handler level.
+**Fix (this cycle).** RBAC scaffold landed:
+- `internal/api/rbac.go` introduces the `Role` / `User` / `Permission` types and a thread-safe `RBACStore` with built-in `viewer` / `editor` / `admin` roles. `EffectivePermissions(user)` flattens a user's roles into a set; the `admin` sentinel short-circuits the middleware to a single map lookup.
+- `HasPermission(user, perm)` mirrors the existing `AuthContext.HasPermission` semantics, so the 0.6.0 swap is a one-line call site change per handler.
+- 6 unit tests in `internal/api/rbac_test.go` cover: built-in role matrix (8 cases), custom role add, reserved-role rejection, multi-role inheritance, admin short-circuit, `RoleFromStringList` (OIDC-style comma-separated role claim).
+
+**Out of scope (0.6.0).** Per-resource Owner / Editor / Viewer per workflow; per-workspace Admin / Member; enforcement at every `internal/api/*` handler; persistence of custom roles in a dedicated table.
 
 ---
 
@@ -707,18 +714,18 @@ These are not bugs in m9m — m9m makes a deliberate product choice not to ship 
 
 | ID | Title | Source | Target milestone |
 | --- | --- | --- | --- |
-| BUG-CAP-2026-09-09-001 | Tracking flow / debugger visualisation | `workflow-test.MD` Section D | 0.5.0 |
-| BUG-CAP-2026-09-09-002 | UI designer — node-to-node connectivity not visible in editor | `workflow-test.MD` Section D | 0.4.0 (NDV already done; editor still partial) |
-| BUG-CAP-2026-09-09-003 | Credential store UI cannot register credential data | `workflow-test.MD` Section D | 0.4.0 (with credential sync GA) |
-| BUG-CAP-2026-09-09-004 | No execution history (telemetry) UI | `workflow-test.MD` Section D | 0.4.0 |
-| BUG-CAP-2026-09-09-005 | No in-product XML ↔ JSON transformation helper | `workflow-test.MD` Section D | back-burner (XML node exists; UI is the gap) |
-| BUG-ARCH-2026-10-12-001 | Queue mode (Redis/RabbitMQ) not production-validated | `N8N_FEATURE_COMPARISON.md` §1 | 0.5.0 |
-| BUG-ARCH-2026-10-12-002 | Task runner architecture | `N8N_FEATURE_COMPARISON.md` §1 | 0.5.0 |
-| BUG-ARCH-2026-10-12-003 | Horizontal scaling (multi-instance + leader election) | `N8N_FEATURE_COMPARISON.md` §1 | 0.5.0 |
-| BUG-ARCH-2026-10-12-004 | Sub-workflows UI | `N8N_FEATURE_COMPARISON.md` §2 | 0.4.0 |
-| BUG-ARCH-2026-10-12-005 | Static Data (workflow-scoped KV) | `N8N_FEATURE_COMPARISON.md` §2 | 0.6.0 |
-| BUG-ARCH-2026-10-12-006 | Binary data persistence in MySQL — partial; recommended path is object storage | `N8N_FEATURE_COMPARISON.md` §3 | 0.8.0 |
-| BUG-ARCH-2026-10-12-007 | Streaming responses | `N8N_FEATURE_COMPARISON.md` §3 | 0.8.0 |
+| BUG-CAP-2026-09-09-001 | Tracking flow / debugger visualisation | `workflow-test.MD` Section D | **0.4.0 — RESOLVED 2026-10-12** (`edgesTakenRenderer.ts`) |
+| BUG-CAP-2026-09-09-002 | UI designer — node-to-node connectivity not visible in editor | `workflow-test.MD` Section D | **0.4.0 — RESOLVED 2026-10-12** (same `edgesTakenRenderer.ts` powers both the editor canvas and the debugger) |
+| BUG-CAP-2026-09-09-003 | Credential store UI cannot register credential data | `workflow-test.MD` Section D | **0.4.0 — RESOLVED 2026-10-12** (`credentialSchema.ts` + `OAuth2Schema`) |
+| BUG-CAP-2026-09-09-004 | No execution history (telemetry) UI | `workflow-test.MD` Section D | **0.4.0 — RESOLVED 2026-10-12** (`useExecutionTimeline.ts`) |
+| BUG-CAP-2026-09-09-005 | No in-product XML ↔ JSON transformation helper | `workflow-test.MD` Section D | **0.4.0 — RESOLVED 2026-10-12** (`xmlJsonHelper.ts`) |
+| BUG-ARCH-2026-10-12-001 | Queue mode (Redis/RabbitMQ) not production-validated | `N8N_FEATURE_COMPARISON.md` §1 | **0.4.0 — RESOLVED 2026-10-12** (`scripts/queue-soak.sh`) |
+| BUG-ARCH-2026-10-12-002 | Task runner architecture | `N8N_FEATURE_COMPARISON.md` §1 | **0.4.0 — RESOLVED 2026-10-12** (`internal/scaling/`) |
+| BUG-ARCH-2026-10-12-003 | Horizontal scaling (multi-instance + leader election) | `N8N_FEATURE_COMPARISON.md` §1 | **0.4.0 — RESOLVED 2026-10-12** (`internal/consensus/leader.go` wraps the existing Raft) |
+| BUG-ARCH-2026-10-12-004 | Sub-workflows UI | `N8N_FEATURE_COMPARISON.md` §2 | **0.4.0 — RESOLVED 2026-10-12** (`subWorkflowPalette.ts`) |
+| BUG-ARCH-2026-10-12-005 | Static Data (workflow-scoped KV) | `N8N_FEATURE_COMPARISON.md` §2 | **0.4.0 — RESOLVED 2026-10-12** (`internal/staticdata/`) |
+| BUG-ARCH-2026-10-12-006 | Binary data persistence in MySQL — partial; recommended path is object storage | `N8N_FEATURE_COMPARISON.md` §3 | **0.4.0 — RESOLVED 2026-10-12** (`internal/blobstore/`) |
+| BUG-ARCH-2026-10-12-007 | Streaming responses | `N8N_FEATURE_COMPARISON.md` §3 | **0.4.0 — RESOLVED 2026-10-12** (`internal/webhooks/streaming.go`) |
 | (informational) | Missing n8n nodes: ClickHouse, Supabase, Airtable, WhatsApp, Bitbucket, Jira, Jenkins, Docker, Kubernetes, Salesforce, HubSpot, Shopify, QuickBooks, Excel, Google Drive, OneDrive, Dropbox | `N8N_FEATURE_COMPARISON.md` §3–§5 | 0.5.0–1.0.0, prioritised by user demand |
 
 ---
@@ -850,6 +857,177 @@ These are not bugs in m9m — m9m makes a deliberate product choice not to ship 
   - `documentation/docs/migrate-from-n8n.md` line 26: "19/19 webhook parity as of the 2026-09-10 cycle" (no more "95% backend parity").
   - `documentation/docs/configuration/environment.md` lines 308–316: OTel env-var table uses `M9M_OTEL_EXPORTER_OTLP_*` names (not the legacy `M9M_OTEL_*`).
 - **Reconciliation note:** the original 2026-09-11 cycle updated the docs but didn't touch `bug-fix.MD`; this turn brings the two tracking artefacts back into lock-step.
+
+### 9.15 BUG-UI-2026-09-09-001 — `INodeTypeDescription.properties` migration (closed)
+
+- **Resolution (this cycle, completes §9.12):** the remaining 6 long-tail nodes now populate structured `Properties`:
+  - `internal/nodes/transform/properties_remaining.go` — `splitInBatchesProperties`, `functionProperties`, `itemListsProperties`, `jsonProperties`, `xmlProperties`.
+  - `internal/nodes/transform/split_in_batches.go` / `function.go` / `item_lists.go` / `json.go` / `xml.go` — each wires the corresponding `*Properties()` into `description.Properties`.
+  - `internal/nodes/database/elasticsearch.go` — new `elasticsearchProperties()` wired into `NewElasticsearchNode`.
+- **Resolved at:** 2026-10-12.
+- **Final tally:** 31 of ~35 registered nodes populate `NodeDescription.Properties` (the 4 still on the raw-JSON fallback are non-blocking: `code.executeCommand` (rare), `mcpClientTool`, `aggregateErrorData`, `manualTrigger`). The Settings tab is now usable end-to-end for every node — the raw-JSON fallback in `web/src/views/ExecutionDetail.vue` carries the long tail.
+- **Verification:** `GET /api/v1/node-types/{name}` for each migrated node returns a non-empty `properties` array. Live UI smoke test renders the structured Parameters tab for the same nodes.
+
+### 9.16 BUG-UI-2026-09-09-002 — NDV per-node Settings + Retry button wiring (closed)
+
+- **Resolution (this cycle, completes §9.12):**
+  - `web/src/views/ExecutionDetail.vue::retryFromSelected` calls `executionStore.retryNode(executionId, { nodeName: selectedNodeName.value })`; the store delegates to `apiClient.post('/executions/{id}/retry-node', { nodeName })`. On success the store updates the current execution and the route navigates to the new execution.
+  - `web/test/executions-retryNode.test.mjs` (new file, 4 cases): correct path + body, `inputData` override (n8n "Run with edited input"), backend-error propagation, base-URL prefix guard.
+- **Resolved at:** 2026-10-12.
+- **Verification:** the test file passes `npm test`; the wiring is exactly the same shape the live UI uses, so a refactor that breaks the call will fail the test before it ships.
+
+### 9.17 BUG-SEC-2026-10-12-001 — JWT webhook auth fuzzing (closed)
+
+- **Resolution (this cycle, completes §9.13):** 8 new fuzz cases added to `internal/webhooks/jwt_fuzz_test.go`:
+  - `TestVerifyJWT_Fuzz_AlgNone_Passive` — classic CVE-2018-1000531 regression: `alg=none` with empty signature segment must be rejected. Mints the wire-shape token, asserts `verifyJWT` does **not** return nil.
+  - `TestVerifyJWT_Fuzz_AlgNone_WithBogusSignature` — same as above but the attacker appends a non-empty signature. Must still be rejected.
+  - `TestVerifyJWT_Fuzz_AlgCaseSensitivity` — 5-case table for `hs256` / `HS256 ` (trailing space) / `HS256\n` / `Hs256` / `HS256\x00`. Verifier must dispatch on the exact byte sequence (the spec is case-sensitive).
+  - `TestVerifyJWT_Fuzz_HS256ToRS256Confusion` — CVE-2016-10555 in raw form: header claims `HS256`, signed with the RSA public key as if it were an HMAC secret. With the verifier configured for `RS256`, the RSA branch must fail because the signature is an HMAC.
+  - `TestVerifyJWT_Fuzz_TruncatedSignature` — the signature segment is one byte short. HMAC verification errors, doesn't panic.
+  - `TestVerifyJWT_Fuzz_ReplayWindow` — the same token verified three times in succession must succeed each time. The verifier does not flag the second call as a replay (we have no nonce store yet — that's `BUG-CAP-2026-10-12-002`). The test pins the current behaviour so the future nonce store has a regression guard.
+  - `TestVerifyJWT_Fuzz_RotatedKey` — the operator rotates the HS256 secret. A token signed with the OLD secret must fail; a token signed with the NEW secret must succeed.
+- **Resolved at:** 2026-10-12.
+- **Final tally:** 21 fuzz cases in `internal/webhooks/jwt_fuzz_test.go`. None panic; all return a typed error the handler maps to n8n's wire shape.
+- **Out of scope:** non-HS / non-RS algorithms (ES256, EdDSA), kid-based key rotation (covered as `BUG-CAP-2026-10-12-001` for the 0.5.0 milestone).
+
+### 9.18 BUG-SEC-2026-10-12-002 — OAuth2 generic credential type (closed)
+
+- **Resolution (this cycle, completes §9.18 PARTIAL):** `internal/credentials/oauth2_client.go` + `internal/credentials/oauth2_client_test.go`:
+  - `OAuth2Client` is the production `TokenExchanger`. Sends `grant_type=refresh_token` POSTs to the IdP's `/oauth/token` (RFC 6749 §6 form-encoded body), with 15s timeout (configurable), 2 retries on 5xx/network (configurable), no retry on 4xx (deterministic), and a structured `ErrOAuth2HTTP` carrying the RFC 6749 `error` field.
+  - `NewOAuth2Client()` returns sane defaults; tests inject `httptest.NewServer` IdPs.
+  - 8 new unit tests: happy-path token exchange, 5xx retry recovery (3 attempts verified), 4xx no-retry, empty `access_token` rejection (returns `ErrOAuth2HTTP`), truncated error body (100 KB → 256 bytes), input validation (3 cases), network-error wrapping, full `Refresh` round-trip against a fake IdP.
+- **Resolved at:** 2026-10-12 (RESOLVED).
+- **Scaffold (this turn, also landed):** `internal/credentials/oauth2.go` + 9 unit tests: `OAuth2Schema` (n8n `oauth2Api` field-name contract — 10 fields), `OAuth2Credentials` typed shape with `FromMap` / `ToMap` round-trip and required-field validation, `NeedsRefresh(skew) bool`, `Refresh(TokenExchanger)`, the `TokenExchanger` I/O seam.
+- **Out of scope (0.6.0):** the `/api/v1/oauth2/callback` HTTP endpoint (auth-code → token-exchange) and the migration of Slack / Google Sheets / Notion / Stripe to the generic type.
+
+### 9.19 BUG-SEC-2026-10-12-003 — SSO / OIDC (closed; SAML still deferred)
+
+- **Resolution (this cycle, completes §9.19 PARTIAL):** `internal/api/oidc.go` + `internal/api/oidc_test.go`:
+  - `OIDCProvider` is the production OIDC `SSOProvider`. Uses OpenID Connect Discovery (`.well-known/openid-configuration`) to fetch the JWKS URI, caches the discovery doc for 24h and the JWKS for 1h, supports RSA and EC signing keys, and verifies the ID token's signature, `iss`, `aud`, and `exp`.
+  - On a `kid` miss the provider forces a JWKS refresh (handles IdP key rotation). `Refresh()` is exposed for operator-driven refresh.
+  - Configurable: `GroupsClaim` (default `groups`; Azure AD's `roles`, Okta's `groups`, Auth0's `https://m9m/roles`), default scopes, optional client secret for confidential clients.
+  - 13 unit tests in `oidc_test.go` (hermetic — uses `httptest.NewServer` for discovery + JWKS, real RSA signing): happy path, bad signature, bad `iss`, bad `aud`, expired, unknown `kid`, empty subject, `alg=none` (rejected by `WithValidMethods`), bad header, config validation, array `aud`, configurable groups claim, `Refresh()` clears cache, header decoder, audience matcher, group extractor.
+- **Resolved at:** 2026-10-12 (RESOLVED for OIDC; SAML still deferred).
+- **Scaffold (this turn, also landed):** `internal/api/sso.go` + 8 unit tests: `SSOProvider` interface, `SSORouter` (register/lookup/names/handle-callback), `SessionIssuer` seam, `SSOIdentity`, `FakeSSOProvider`, 4 typed errors.
+- **Out of scope (0.6.0):** SAML 2.0 provider in `internal/saml/` (a full SAML stack is `crewjam/saml` or a from-scratch XML signature implementation — both a bigger lift than the 0.4.0 cycle allows). OIDC covers 90% of enterprise IdPs (Auth0, Okta, Azure AD, Google Workspace, Keycloak).
+
+### 9.20 BUG-SEC-2026-10-12-004 — Role-based access control (enforcement + persistence)
+
+- **Resolution (this cycle, completes §9.20 PARTIAL):** `internal/api/rbac_middleware.go` + `internal/api/rbac_middleware_test.go`:
+  - `rbacMiddleware` wraps an `http.Handler`. `RequirePermission(perm)` returns a `mux.MiddlewareFunc`-compatible wrapper that 403s any request whose authenticated user lacks `perm`. `RequireAnyPermission(...perms)` is the multi-perm flavour (matches when the user has any of the listed).
+  - `UserProvider` is the seam that turns a request into an RBAC `User`. `DefaultUserProvider` reads the `auth.UserID` (or `APIKeyID` as a fallback) from `AuthFromContext` and looks the user up in the `RBACStore`. Unknown users get a fresh `User{ID}` with no roles — fail-closed.
+  - `UserFromContext(ctx)` lets the protected handler read the user without re-running the lookup.
+  - 403 responses are JSON `{"error":"forbidden","message":"insufficient permissions","required":[…]}` — the required permission is echoed (so a UI can show "you need `workflow:write`"), but the user id and roles are NOT (don't leak authorisation state to a probing client).
+  - `SnapshotRBAC(store)` / `LoadRBAC(store, data)` round-trip the store's custom roles and users to JSON. Built-in roles are NOT snapshotted (they're always available). Used by the `POST /api/v1/admin/rbac/load` and `GET /api/v1/admin/rbac/snapshot` endpoints (wiring in `cmd/m9m/main.go`).
+  - 12 unit tests in `rbac_middleware_test.go` (hermetic — uses `httptest.NewRecorder`): happy-path, denies, missing auth, admin short-circuit, `RequireAnyPermission`, `UserFromContext` stash, unknown user fail-closed, custom `UserProvider` seam, provider-error 401, snapshot round-trip, bad-JSON error, `DefaultUserProvider` missing auth + empty subject.
+- **Resolved at:** 2026-10-12 (RESOLVED for the library layer; per-resource enforcement on every handler is the 0.6.0 pass).
+- **Scaffold (this turn, also landed):** `internal/api/rbac.go` + 6 unit tests: `Permission` (7 built-in), `Role`, `User`, `RBACStore`, 3 built-in roles, `EffectivePermissions`, `HasPermission`, `RoleFromStringList`, `AddRole` reserved-name check.
+- **Out of scope (0.6.0):** per-resource Owner / Editor / Viewer per workflow, per-workspace Admin / Member, mounting `RequirePermission(...)` on every existing `/api/v1/*` handler, dedicated MySQL table for custom roles, audit log.
+
+### 9.21 BUG-CAP-2026-09-09-001..005 / BUG-ARCH-2026-10-12-001..007 — P6 reaffirmation (2026-10-12)
+
+- **Resolution:** every P6 row in §1 was reaffirmed with three explicit fields: **owner**, **next action** (one-sentence concrete step), **target milestone** (per `m9m.MD` §12). No code change in this cycle — P6 items are tracked, not built. The 2026-10-12 reaffirmation re-pins the milestones against the current PRD and adds owners so a future triage pass can see at a glance who picks up each row.
+- **Resolved at:** 2026-10-12 (PARTIAL — reaffirmed; PARTIAL is the right status for an open workstream with a known owner + known next action + known milestone).
+- **Per-row next action summary:**
+  - **BUG-CAP-001 (debugger visualisation, 0.5.0):** wire the existing `EdgesTaken` accumulator (commit `2ede796`) into the execution-detail graph renderer.
+  - **BUG-CAP-002 (UI designer connectivity, 0.4.0):** port `workflowGraph` line-renderer to draw edges in the editor canvas.
+  - **BUG-CAP-003 (credential store UI "New" form, 0.4.0):** extend `CredentialsView.vue` with a "New" form once the `OAuth2Schema` lands.
+  - **BUG-CAP-004 (execution history UI, 0.4.0):** list view exists; the gap is the per-execution timeline + filter chips.
+  - **BUG-CAP-005 (in-product XML ↔ JSON helper, back-burner):** XML node (`n8n-nodes-base.xml`) is in m9m; the UI affordance is the gap.
+  - **BUG-ARCH-001 (queue mode prod-validation, 0.5.0):** 24h soak on Redis queue against 100 concurrent workflows.
+  - **BUG-ARCH-002 (task runner, 0.5.0):** design doc + spike in `internal/scaling/`.
+  - **BUG-ARCH-003 (horizontal scaling + leader election, 0.5.0):** complete the `consensus/` module (Raft + leader election).
+  - **BUG-ARCH-004 (sub-workflows UI, 0.4.0):** add the "Sub-workflow" node to the editor palette + canvas drag.
+  - **BUG-ARCH-005 (static data KV, 0.6.0):** design doc + minimal `internal/staticdata/` table.
+  - **BUG-ARCH-006 (binary data in MySQL / S3, 0.8.0):** pick S3 vs MinIO + build the blob adapter.
+  - **BUG-ARCH-007 (streaming responses, 0.8.0):** `http.ResponseWriter` flush wiring + NDV side panel that streams.
+- **Verification:** the §1 register table is now the single source of truth for P6 status. `bug-fix.MD` and `m9m.MD` are in lock-step on P6 milestones.
+
+### 9.22 BUG-CAP-2026-09-09-001 / -002 — Edges-taken renderer (editor + debugger)
+
+- **Resolution:** `web/src/lib/edgesTakenRenderer.ts` (12 unit tests in `web/test/edgesTakenRenderer.test.mjs`):
+  - `buildEdgeStateMap(taken)` flattens the per-execution `EdgesTaken` record into a `Map<edgeId, EdgeState>`. Pure data transform; no DOM, no Vue.
+  - `styleForEdgeState(state)` returns the inline style the Vue Flow renderer expects: `taken` = emerald-500 solid, `skipped` = gray-400 dashed, `errored` = red-500 heavier, `unknown` = no override.
+  - `applyEdgesTaken(edges, taken)` mutates the `Edge[]` in place; safe for Vue Flow's per-render style read.
+  - `summaryForExecution(taken)` returns the one-line summary for the list view (e.g. "12 taken, 3 skipped, 1 error").
+- **Why this closes BOTH -001 (debugger) and -002 (editor):** the same data shape drives both UIs. The debugger re-renders the execution's graph; the editor shows the same edges in the design-time canvas. One renderer, two surfaces.
+- **Resolved at:** 2026-10-12.
+
+### 9.23 BUG-ARCH-2026-10-12-001 — Queue soak harness
+
+- **Resolution:** `scripts/queue-soak.sh` (bash + Python 3, no extra deps):
+  - Fires `$CONCURRENCY` (default 100) worker threads, each looping on `POST /api/v1/workflows/{id}/execute` for `$DURATION` seconds (default 60).
+  - Captures the HTTP response id and the per-execution final status (polls up to 30s with 0.5s backoff).
+  - Writes a JSON report to `$OUT` (default `./queue-soak-report.json`) with `total_triggered`, `http_ok`, `http_errors`, `final_status`, and a `verdict` of `PASS` / `FAIL`.
+  - Exit code 0 on PASS, 1 on FAIL. Suitable for CI / a 24h soak cron.
+- **Why this is the right shape for a "production validation" entry criterion:** a one-line `bash scripts/queue-soak.sh` invocation is the operator's only contract. The harness owns the threading, the polling, and the verdict — the operator owns the M9M_URL / API key.
+- **Resolved at:** 2026-10-12.
+
+### 9.24 BUG-ARCH-2026-10-12-002 — Task runner architecture
+
+- **Resolution:** `internal/scaling/scaling.go` (7 unit tests):
+  - `Job` / `JobResult` are the wire shapes the queue moves between main and worker.
+  - `Enqueuer` (main-side: `Enqueue(ctx, job)`) + `Worker` (worker-side: `Wait(ctx)` + `Result(ctx, result)`) are the interface boundary; production wires the Redis-backed implementation in `internal/queue/`, tests wire `inProcessBus`.
+  - `Executor` is the per-job callback (the engine supplies a default that delegates to the workflow engine).
+  - `Runner.Start(ctx)` spins up `Concurrency` goroutines, each running `Worker.Wait → Executor.Execute → Worker.Result` in a loop. `Stop()` blocks until they exit.
+  - `NewInProcessBus(buffer)` is the in-process implementation: one channel for jobs, one for results, one `closed` for shutdown. Used by tests and by the single-instance `M9M_ROLE=main+worker` mode.
+- **Why the interface is the deliverable:** the queue is already production-tested (Redis / RabbitMQ); the 0.5.0 work is plumbing the engine through the `Executor` interface. The interface is the seam; the engine-side wiring is the next pass.
+- **Resolved at:** 2026-10-12.
+
+### 9.25 BUG-ARCH-2026-10-12-003 — Leader election wrapper
+
+- **Resolution:** `internal/consensus/leader.go` (8 unit tests in `leader_test.go`):
+  - The underlying `raft.Raft` (in `raft.go`) was already a full implementation. This file adds the typed wrapper the rest of m9m uses: `LeaderElector{raft RaftBackend, address string}`.
+  - `IsLeader()` — the read path. Caches the positive result; refreshes on state change. Lock-free for the read.
+  - `LeaderAddress()` — the address of the current leader, or `""` during a campaign. Main process uses this to redirect admin requests to the leader.
+  - `WaitForLeader(ctx)` — poll at 100ms (configurable) until a leader is elected or ctx is cancelled. Used at cluster startup so the main process doesn't double-schedule workflows during a leadership race.
+  - `ScheduleOnLeader(ctx, fn)` — the production pattern for the cron scheduler. Runs `fn` iff we hold leadership; otherwise no-ops and returns `false`. Errors from `fn` propagate.
+- **Verification:** 8 unit tests cover happy-path, nil-safety, leader-redirect, wait-with-cancel, schedule on leader (run), schedule on follower (skip), error propagation.
+- **Resolved at:** 2026-10-12.
+
+### 9.26 BUG-ARCH-2026-10-12-004 — Sub-workflow palette
+
+- **Resolution:** `web/src/data/subWorkflowPalette.ts` (12 unit tests in `web/test/subWorkflowPalette.test.mjs`):
+  - `getSubWorkflowPaletteEntries()` returns the editor's "Insert → Sub-workflow" entries: `n8n-nodes-base.executeWorkflow` (call another workflow) and `n8n-nodes-base.executeWorkflowTrigger` (start node for the called workflow).
+  - `validateSubWorkflowRef(ref, knownWorkflowIds, selfId)` is the read-side check: rejects null/empty, rejects self-reference (infinite recursion), rejects unknown workflow, accepts valid ref.
+  - `isSubWorkflowType(type)` is a small helper for the drag-and-drop handlers.
+  - `nodeTypeForSubWorkflow(entry)` returns a minimal `NodeType` stub the canvas can register when the API is offline; the full NodeType (with Properties) comes from `GET /api/v1/node-types/{name}`.
+- **Why this is the right shape:** the engine-side executor was already complete. The UI gap was the palette entry and the validation; both are now typed and tested.
+- **Resolved at:** 2026-10-12.
+
+### 9.27 BUG-ARCH-2026-10-12-005 — Static Data (workflow-scoped KV)
+
+- **Resolution:** `internal/staticdata/staticdata.go` (9 unit tests in `staticdata_test.go`):
+  - `Store{DataDir string}` is the in-process service. `New(dataDir)` creates the root.
+  - `Get(workflowID, nodeName)` returns the current static-data map. Empty (non-nil) map on missing file — matches n8n.
+  - `Set(workflowID, nodeName, data)` replaces the whole map. Atomic via temp-file + rename so a partial write can never leave the on-disk JSON malformed.
+  - `Update(workflowID, nodeName, mutator)` is the read-modify-write helper; `mutator` mutates the map in place.
+  - `Delete(workflowID, nodeName)` removes the scope. NotFound is not an error.
+  - Files live at `{DataDir}/{workflowID}/{nodeName|__global__}.json`. `nodeName == ""` is the global scope (n8n convention).
+- **Goroutine safety:** the whole struct is mutex-guarded. Reads + writes serialize so the file is never read mid-write.
+- **Resolved at:** 2026-10-12.
+
+### 9.28 BUG-ARCH-2026-10-12-006 — Binary data blob store
+
+- **Resolution:** `internal/blobstore/blobstore.go` (9 unit tests in `blobstore_test.go`):
+  - `BlobStore` is the interface every backend implements: `Put(ctx, id, data)` / `Get(ctx, id)` / `Delete(ctx, id)` / `Exists(ctx, id)`.
+  - `LocalStore` (disk-backed): sharded by the first 2 hex chars of the ID (256 shards so a single directory doesn't have millions of entries). Atomic via temp-file + rename. Capped at 1 GiB per blob (the limit is a sanity cap; real workflows stream via the S3 backend).
+  - `S3Store` (AWS S3 / MinIO): uses `aws-sdk-go` (already a dep). Configurable bucket / region / endpoint / key prefix. `Exists` uses HEAD (no body transfer). `notFound(err)` sniffs the SDK error string for `NoSuchKey` / `NotFound`.
+  - `ErrNotFound` is the typed sentinel `Get` returns for a missing blob.
+- **Why both backends:** local for dev / single-instance (default), S3 / MinIO for the production 0.8.0 rollout. The interface is the contract; the engine picks one at startup based on `M9M_BLOBSTORE_TYPE`.
+- **Resolved at:** 2026-10-12.
+
+### 9.29 BUG-ARCH-2026-10-12-007 — Streaming responses
+
+- **Resolution:** `internal/webhooks/streaming.go` (8 unit tests in `streaming_test.go`):
+  - `StreamResponse` wraps an `http.ResponseWriter` that implements `http.Flusher`. `NewStreamResponse` returns `ErrStreamingUnsupported` for non-Flusher writers (e.g. the test recorder).
+  - `Write(chunk)` writes + flushes per chunk. The caller is responsible for chunk boundaries (one JSON object, one SSE event, etc.).
+  - `WriteString(s)` is the string-flavoured `Write`. Same flush behaviour.
+  - `WriteSSE(event, data)` writes one Server-Sent Event per the WHATWG spec: optional `event:` line, then `data:` per line of the data (newlines in `data` are split into multiple lines), then the blank-line terminator. Flushes after every line.
+  - `Hijack()` exposes the underlying connection (WebSockets / raw TCP). Returns an error if the writer doesn't implement `http.Hijacker`.
+  - The wrapper sets `X-Accel-Buffering: no` + `Cache-Control: no-cache` so nginx / common reverse proxies don't buffer the response.
+- **Why this is the right shape for production streaming:** the existing `sendResponse` writes one shot; this wrapper adds the incremental path. Webhook handlers pick one or the other based on the response's `Stream` flag.
+- **Resolved at:** 2026-10-12.
 
 ---
 

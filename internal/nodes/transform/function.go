@@ -22,8 +22,9 @@ func NewFunctionNode() *FunctionNode {
 		Name:        "Function",
 		Description: "Executes custom JavaScript code",
 		Category:    "Data Transformation",
+		Properties:  functionProperties(),
 	}
-	
+
 	return &FunctionNode{
 		BaseNode: base.NewBaseNode(description),
 	}

@@ -21,8 +21,9 @@ func NewItemListsNode() *ItemListsNode {
 		Name:        "Item Lists",
 		Description: "Splits or combines items in a list",
 		Category:    "Data Transformation",
+		Properties:  itemListsProperties(),
 	}
-	
+
 	return &ItemListsNode{
 		BaseNode: base.NewBaseNode(description),
 	}

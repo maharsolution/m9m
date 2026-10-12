@@ -21,6 +21,7 @@ func NewJSONNode() *JSONNode {
 		Name:        "JSON",
 		Description: "Parse, stringify and manipulate JSON data",
 		Category:    "Data Transformation",
+		Properties:  jsonProperties(),
 	}
 
 	return &JSONNode{

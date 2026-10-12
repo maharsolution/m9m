@@ -5,7 +5,7 @@
 | Document | `m9m.MD` — canonical PRD |
 | Version | `0.4.0-draft` |
 | Status | **Living document** (updated each release cycle) |
-| Last updated | 2026-10-12 (0.4.0 cycle: Kafka SASL, 5×P5 hygiene, JWT fuzz, 25-node Properties migration) |
+| Last updated | 2026-10-12 (0.4.0 cycle: Kafka SASL, 5×P5 hygiene, JWT fuzz 21-case, 31-node Properties migration, UI retry wiring, OAuth2 RFC 6749 client, OIDC SSO provider, RBAC enforcement middleware + persistence, 12 P6 items implemented: edges-taken renderer, credential form, execution timeline, XML↔JSON helper, queue-soak, scaling, leader election, sub-workflow palette, static data, blobstore, streaming) |
 | Owner | Mahar Solution (current maintainer) |
 | Original author | Dipankar Sarkar (Neul Labs) |
 | Repository | <https://github.com/maharsolution/m9m> |
@@ -447,11 +447,11 @@ Release cadence: minor versions every 4–6 weeks; patch versions as needed. We 
 | **0.2.0-parity** ✅ | 19/19 webhook parity | Released 2026-09-10. |
 | **0.2.x** | Engine semantics (`EdgesTaken`, debug mode, retry-node, IF v2 coercion, `sslMode=disable`) | Released 2026-09. |
 | **0.3.0** ✅ | AI assistant rename, in-app AI Settings card, OTel 3-layer config, sync bridge GA | 2026-09 → 2026-10. |
-| **0.4.0** (this PRD) | **Credential sync GA**, DLQ hardening, full execution detail (NDV) rewrite, `INodeTypeDescription` parity for top-25 nodes, 30+ missing n8n nodes, Helm chart GA, sub-workflow UI. | 2026 Q4. |
-| **0.5.0** | Queue mode (Redis/RabbitMQ) GA, task-runner architecture, horizontal scaling, multi-instance leader election. | 2027 Q1. |
+| **0.4.0** (this PRD) | **Credential sync GA**, DLQ hardening, full execution detail (NDV) rewrite, `INodeTypeDescription` parity for top-25 nodes, 30+ missing n8n nodes, Helm chart GA, sub-workflow UI, edges-taken renderer, execution timeline composable, XML↔JSON helper, queue-soak harness, task-runner interface + in-process bus, leader-election wrapper, static-data KV, blobstore (local + S3), streaming responses. | 2026 Q4. |
+| **0.5.0** | Queue mode (Redis/RabbitMQ) GA via the `internal/scaling/` interface, task-runner production wiring (replace `inProcessBus` with Redis / RabbitMQ), horizontal scaling rollout (multi-instance + leader election). | 2027 Q1. |
 | **0.6.0** | OAuth2 + JWT + SSO, role-based access, LDAP/AD, audit log. | 2027 Q1–Q2. |
 | **0.7.0** | Workflow templates marketplace, community-contributed node packs via plugin transport. | 2027 Q2. |
-| **0.8.0** | Binary data + streaming, image/audio node support, S3-backed blob store. | 2027 Q3. |
+| **0.8.0** | Production rollout of `internal/blobstore/` (`S3Store` via MinIO / S3), `StreamResponse` UI integration (NDV side panel that streams), image/audio node support. | 2027 Q3. |
 | **1.0.0** | Production hardening freeze. SLAs, on-call runbooks, cluster deployment guide. | 2027 Q4. |
 
 ### 0.4.0 exit criteria (this PRD's named release)

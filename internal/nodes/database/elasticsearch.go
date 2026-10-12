@@ -30,6 +30,7 @@ func NewElasticsearchNode() *ElasticsearchNode {
 			Name:        "Elasticsearch",
 			Description: "Perform operations on Elasticsearch indices",
 			Category:    "Database",
+			Properties:  elasticsearchProperties(),
 		}),
 		client: &http.Client{},
 	}
@@ -257,5 +258,33 @@ func (n *ElasticsearchNode) ValidateParameters(params map[string]interface{}) er
 		return n.CreateError(fmt.Sprintf("invalid operation: %s", operation), nil)
 	}
 
-	return nil
+		return nil
+}
+
+// elasticsearchProperties returns the Elasticsearch node's
+// parameter descriptors. BUG-UI-2026-09-09-001 (final 6-node
+// Properties migration).
+func elasticsearchProperties() []base.NodeProperty {
+	ops := []base.Option{
+		{Name: "Index Document", Value: "index"},
+		{Name: "Update Document", Value: "update"},
+		{Name: "Delete Document", Value: "delete"},
+		{Name: "Search", Value: "search"},
+		{Name: "Get", Value: "get"},
+		{Name: "Count", Value: "count"},
+		{Name: "Bulk", Value: "bulk"},
+	}
+	props := []base.NodeProperty{
+		base.StringOpt("Operation", "operation", "search", "Elasticsearch operation.", ops, true),
+		base.StringProp("Base URL", "baseUrl", "", "Elasticsearch base URL (e.g. http://es:9200).", "http://elasticsearch:9200", true),
+		base.StringProp("Index", "index", "", "Index name.", "", true),
+		base.StringProp("Document ID", "documentId", "", "Document ID (index, update, delete, get).", "", false),
+		base.JsonProp("Document Body", "documentBody", "{}", "Document body (index, update)."),
+		base.JsonProp("Query", "query", "{\"query\":{\"match_all\":{}}}", "Query DSL (search, count)."),
+		base.NumberProp("Size", "size", 10, "Max hits to return (search).", false),
+		base.StringProp("Sort", "sort", "", "Optional sort JSON (search).", "", false),
+		base.BoolProp("Refresh", "refresh", false, "Refresh the affected shards after the operation (index/update/delete)."),
+		base.JsonProp("Bulk Operations", "bulkOperations", "[]", "Array of {action, body} objects (bulk)."),
+	}
+	return append(props, base.CommonSettings()...)
 }

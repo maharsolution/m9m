@@ -41,6 +41,7 @@ func NewSplitInBatchesNode() *SplitInBatchesNode {
 		Name:        "Split In Batches",
 		Description: "Splits items into batches of specified size",
 		Category:    "Data Transformation",
+		Properties:  splitInBatchesProperties(),
 	}
 
 	return &SplitInBatchesNode{
