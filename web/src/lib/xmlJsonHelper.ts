@@ -27,11 +27,13 @@ export interface XmlToJsonOptions {
 
 // toJson is a browser-friendly XML→JSON converter.
 // Uses `DOMParser` in the browser; tests inject a
-// parser via the `parse` parameter.
+// parser via the `parse` parameter. The parser MUST
+// return a `Document` (or any object with a
+// `documentElement: Element | null` field).
 export function toJson(
   xml: string,
   options: XmlToJsonOptions = {},
-  parse: (xml: string) => Element = defaultParse
+  parse: (xml: string) => { documentElement: Element | null } = defaultParse
 ): Record<string, unknown> {
   const includeAttributes = options.includeAttributes !== false
   const includeText = options.includeText !== false
@@ -172,13 +174,13 @@ function escape(s: string): string {
 // defaultParse uses the browser's DOMParser. In Node
 // tests (vitest) we inject a JSDOM-backed parser —
 // for now the test passes a string-built fake.
-function defaultParse(xml: string): Element {
+function defaultParse(xml: string): { documentElement: Element | null } {
   if (typeof DOMParser === 'undefined') {
     throw new Error('xmlJsonHelper: no DOMParser; inject one via the parse parameter')
   }
-  const doc = new DOMParser().parseFromString(xml, 'text/xml')
+  const doc: Document = new DOMParser().parseFromString(xml, 'text/xml')
   if (doc.getElementsByTagName('parsererror').length > 0) {
     throw new Error('xmlJsonHelper: malformed XML')
   }
-  return doc.documentElement
+  return doc
 }
