@@ -25,7 +25,7 @@ type WriteBinaryFileNode struct {
 // NewWriteBinaryFileNode creates a new WriteBinaryFileNode instance
 func NewWriteBinaryFileNode() *WriteBinaryFileNode {
 	return &WriteBinaryFileNode{
-		BaseNode:          base.NewBaseNode(base.NodeDescription{Name: "Write Binary File", Description: "n8n-nodes-base.writeBinaryFile", Category: "core"}),
+		BaseNode:          base.NewBaseNode(base.NodeDescription{Name: "Write Binary File", Description: "n8n-nodes-base.writeBinaryFile", Category: "core", Properties: writeBinaryProperties()}),
 		evaluator:         expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 		allowedDirectories: []string{"/tmp", "/var/tmp", "./data", "./uploads", "./output"}, // Default allowed directories
 		maxFileSize:       100 * 1024 * 1024, // 100MB default limit

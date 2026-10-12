@@ -82,6 +82,13 @@ jobs:
         id: build_date
         run: echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
+      - name: Repo hygiene gate
+        # BUG-2026-10-12-001..005 — fail the build if stray .exe /
+        # .crdownload / pyvenv.cfg / ,env artefacts slipped into
+        # the working tree. Wired into the GHA pipeline so the
+        # regression class can't reappear in a future cycle.
+        run: bash scripts/check_repo_hygiene.sh
+
       - name: Build & push image (linux/amd64, tag = latest)
         uses: docker/build-push-action@v5
         with:

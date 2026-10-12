@@ -23,6 +23,7 @@ func NewGitHubNode() *GitHubNode {
 			Name:        "GitHub",
 			Description: "Interact with GitHub API for repositories, issues, pull requests, and more",
 			Category:    "vcs",
+			Properties:  githubProperties(),
 		}),
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,

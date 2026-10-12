@@ -62,6 +62,7 @@ func NewRespondToWebhookNode() *RespondToWebhookNode {
 			Name:        "Respond to Webhook",
 			Description: "Returns data from the workflow back to the webhook caller (responseMode: responseNode)",
 			Category:    "Trigger",
+			Properties:  respondToWebhookProperties(),
 		}),
 		evaluator: expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 	}

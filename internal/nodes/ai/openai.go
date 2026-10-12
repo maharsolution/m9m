@@ -36,6 +36,7 @@ func NewOpenAINode() *OpenAINode {
 			Name:        "OpenAI",
 			Description: "Use OpenAI's GPT models for text generation and completion",
 			Category:    "ai",
+			Properties:  openAIProperties(),
 		}),
 		httpClient: &http.Client{
 			Timeout: 60 * time.Second,

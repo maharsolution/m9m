@@ -27,6 +27,7 @@ func NewGitLabNode() *GitLabNode {
 			Name:        "GitLab",
 			Description: "Interact with GitLab API for repository management, CI/CD, and more",
 			Category:    "vcs",
+			Properties:  gitlabProperties(),
 		}),
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,

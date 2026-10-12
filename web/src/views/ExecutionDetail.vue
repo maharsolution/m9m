@@ -448,6 +448,35 @@ const settingsProperties = computed<NodeProperty[]>(() => {
   )
 })
 
+// rawParameters / rawParametersText — fallback when the node's
+// type doesn't expose a structured `properties` array. Returns
+// the raw parameters object the workflow authored so the Settings
+// tab still has something to show (BUG-UI-2026-09-09-002).
+const rawParameters = computed<Record<string, unknown> | undefined>(() => {
+  // Try several shapes: the live `selectedNode.parameters` (set
+  // by the user on the canvas), the persisted
+  // `selectedNodeType.parameters` (the workflow's saved view),
+  // or any `{...node.parameters}` snapshot the execution row
+  // captured. We prefer the live canvas state so the operator
+  // sees what they actually authored right now.
+  const node: any = selectedNode.value
+  if (!node) return undefined
+  if (node.parameters && Object.keys(node.parameters).length > 0) {
+    return node.parameters
+  }
+  return undefined
+})
+
+const rawParametersText = computed<string>(() => {
+  const p = rawParameters.value
+  if (!p) return ''
+  try {
+    return JSON.stringify(p, null, 2)
+  } catch {
+    return '[unserializable parameters]'
+  }
+})
+
 // ---------------------------------------------------------------------------
 // Per-node data slices for Input/Output tabs
 // ---------------------------------------------------------------------------
@@ -1167,6 +1196,30 @@ function downloadData() {
               </div>
               <div v-if="parameterProperties.length === 0 && settingsProperties.length === 0 && (!selectedNode.credentials || Object.keys(selectedNode.credentials).length === 0)" class="text-xs text-slate-400 italic">
                 This node does not expose any parameters or settings.
+              </div>
+              <!--
+                Raw-parameters fallback (BUG-UI-2026-09-09-002).
+
+                If the backend has not yet populated a structured
+                `INodeTypeDescription.properties` for this node
+                type (e.g. an older node, or a long-tail one we
+                haven't migrated to base.NodeProperty yet), the
+                Settings tab would otherwise render empty. Show
+                the raw parameters map as a read-only JSON block
+                so the operator can still see what the workflow
+                authored. The Properties migration is tracked per
+                node in bug-fix.MD §5 BUG-UI-2026-09-09-001.
+              -->
+              <div v-if="rawParameters && Object.keys(rawParameters).length > 0 && parameterProperties.length === 0 && settingsProperties.length === 0">
+                <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">
+                  Raw Parameters
+                </h3>
+                <pre class="text-[11px] leading-relaxed font-mono bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded p-3 overflow-x-auto whitespace-pre-wrap break-all">{{ rawParametersText }}</pre>
+                <p class="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                  This node type does not yet expose a structured
+                  parameter schema. The map above is the raw
+                  parameters object the workflow authored.
+                </p>
               </div>
             </div>
             <!-- Multi-branch output (IF / Switch): render one

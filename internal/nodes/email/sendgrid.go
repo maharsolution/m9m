@@ -29,6 +29,7 @@ func NewSendGridNode() *SendGridNode {
 			Name:        "SendGrid",
 			Description: "Send emails via SendGrid",
 			Category:    "Email",
+			Properties:  sendGridProperties(),
 		}),
 		client: &http.Client{},
 	}
@@ -185,4 +186,33 @@ func (n *SendGridNode) ValidateParameters(params map[string]interface{}) error {
 	}
 
 	return nil
+}
+
+// sendGridProperties returns the SendGrid node's parameter
+// descriptors. BUG-UI-2026-09-09-001.
+func sendGridProperties() []base.NodeProperty {
+	props := []base.NodeProperty{
+		base.StringOpt("Resource", "resource", "mail", "SendGrid resource to use.", []base.Option{
+			{Name: "Mail (send)", Value: "mail"},
+			{Name: "Contact (list)", Value: "contact"},
+		}, true),
+		base.StringOpt("Operation", "operation", "send", "What to do with the resource.", []base.Option{
+			{Name: "Send", Value: "send"},
+			{Name: "Add", Value: "add"},
+			{Name: "Get List", Value: "getList"},
+		}, true),
+		base.StringProp("From Email", "fromEmail", "", "Sender email (verified single sender or domain).", "noreply@example.com", true),
+		base.StringProp("From Name", "fromName", "", "Sender display name.", "", false),
+		base.StringProp("To", "toEmail", "", "Recipient email (comma-separated for multiple).", "user@example.com", true),
+		base.StringProp("Subject", "subject", "", "Email subject line.", "", true),
+		base.TextProp("Body (HTML)", "html", "", "Email body (HTML).", "<p>Hello from m9m!</p>", 6),
+		base.TextProp("Body (Text)", "text", "", "Plain-text fallback.", "Hello from m9m!", 4),
+		base.StringProp("Reply To", "replyTo", "", "Reply-To email address.", "", false),
+		base.JsonProp("Attachments", "attachments", "[]", "Optional attachments array."),
+		base.StringOpt("Template ID", "templateId", "", "Dynamic Template ID (overrides subject + body).", []base.Option{
+			{Name: "(none)", Value: ""},
+			{Name: "d-xxxx", Value: "d-xxxx"},
+		}, false),
+	}
+	return append(props, base.CommonSettings()...)
 }

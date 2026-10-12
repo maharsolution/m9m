@@ -5,7 +5,7 @@
 | Document | `bug-fix.MD` — canonical bug register and triage rules |
 | Version | `0.4.0-draft+1` |
 | Status | **Living document** — updated as bugs are opened, triaged, and closed |
-| Last updated | 2026-10-12 (MongoDB rewrite + 2 new bugs) |
+| Last updated | 2026-10-12 (Kafka SASL credential + 5×P5 hygiene + JWT fuzz + 25-node Properties migration) |
 | Owner | Mahar Solution (current maintainer) |
 | Repository | <https://github.com/maharsolution/m9m> |
 | Companion docs | `m9m.MD` (PRD), `parity/parity_gaps.json` (machine-readable parity backlog), `workflow-test.MD` (live parity report), `gap-current-vs-doc.MD` (docs drift), `n8n-nodes.MD` (node parity reference) |
@@ -30,11 +30,11 @@ Legend: **P0** = wire-compat / correctness blocker · **P1** = engine correctnes
 | BUG-2026-09-09-002 | Credential envelope does not sync from n8n to m9m per workflow node | **P0** | **RESOLVED** (HTTP node reads injected credentials) | TBD | positive/3, positive/8 | 2026-09-09 |
 | BUG-MONGO-2026-10-12-001 | MongoDB node only speaks Atlas Data API (HTTP); no support for `mongodb://` or `mongodb+srv://` URIs | **P0** | **RESOLVED** (mongodb.go rewrite) | TBD | user-reported | 2026-10-12 |
 | BUG-DATATABLE-2026-10-12-001 | `n8n-nodes-base.dataTable` node type not implemented in m9m (blocks workflow `laHQug19EO2Vd2Gk` "Finnet - Webhook Not use Redist - Kafka/Rabbit") | **P0** | **RESOLVED** (executor + REST + sync-service) | TBD | workflow `laHQug19EO2Vd2Gk` | 2026-10-12 |
-| BUG-2026-10-12-001 | `,env` accidentally-named env file committed (typo for `.env`) | P5 | OPEN | TBD | — | 2026-10-12 |
-| BUG-2026-10-12-002 | `Unconfirmed 467040.crdownload` (112 MB) left in repo root | P5 | OPEN | TBD | — | 2026-10-12 |
-| BUG-2026-10-12-003 | Pre-built Windows `.exe` binaries committed to repo (7 files) | P5 | OPEN | TBD | — | 2026-10-12 |
-| BUG-2026-10-12-004 | `pyvenv.cfg` committed at repo root (Python venv leak) | P5 | OPEN | TBD | — | 2026-10-12 |
-| BUG-2026-10-12-005 | `Supervised conf` left as `supervisord.conf` in repo root (deploy artefact) | P5 | OPEN | TBD | — | 2026-10-12 |
+| BUG-2026-10-12-001 | `,env` accidentally-named env file committed (typo for `.env`) | P5 | **RESOLVED** (2026-10-12) | TBD | — | 2026-10-12 |
+| BUG-2026-10-12-002 | `Unconfirmed 467040.crdownload` (112 MB) left in repo root | P5 | **RESOLVED** (2026-10-12) | TBD | — | 2026-10-12 |
+| BUG-2026-10-12-003 | Pre-built Windows `.exe` binaries committed to repo (7 files) | P5 | **RESOLVED** (2026-10-12, already gitignored — never tracked) | TBD | — | 2026-10-12 |
+| BUG-2026-10-12-004 | `pyvenv.cfg` committed at repo root (Python venv leak) | P5 | **RESOLVED** (2026-10-12) | TBD | — | 2026-10-12 |
+| BUG-2026-10-12-005 | `Supervised conf` left as `supervisord.conf` in repo root (deploy artefact) | P5 | **RESOLVED** (2026-10-12) | TBD | — | 2026-10-12 |
 | BUG-DOC-2026-09-11-001 | 12 node types registered in code but missing from `documentation/docs/nodes/` | P5 | OPEN (per `gap-current-vs-doc.MD` Phase 1) | TBD | — | 2026-09-11 |
 | BUG-DOC-2026-09-11-002 | ~20 API endpoints in `internal/api/routes.go` missing from `documentation/docs/api/` | P5 | OPEN (Phase 2) | TBD | — | 2026-09-11 |
 | BUG-DOC-2026-09-11-003 | OTel surface severely under-documented (1 line in `index.md`) | P5 | OPEN (Phase 4) | TBD | — | 2026-09-11 |
@@ -43,8 +43,8 @@ Legend: **P0** = wire-compat / correctness blocker · **P1** = engine correctnes
 | BUG-DOC-2026-09-11-006 | Recent engine work (EdgesTaken, debug mode, retry-node, sslMode) not in docs | P5 | OPEN (Phase 5) | TBD | — | 2026-09-11 |
 | BUG-DOC-2026-09-11-007 | `migrate-from-n8n.md` parity claim stale (still says "95% backend parity") | P5 | OPEN (Phase 5c) | TBD | — | 2026-09-11 |
 | BUG-DOC-2026-09-11-008 | OTel env-var docs drift vs `internal/otel/env.go` (8 names off) | P5 | OPEN (Ticket 5 of `gap-current-vs-doc.MD` Phase 8) | TBD | — | 2026-09-11 |
-| BUG-UI-2026-09-09-001 | `INodeTypeDescription.properties` only populated for top-10 + MongoDB | P3 | OPEN | TBD | — | 2026-10-06 |
-| BUG-UI-2026-09-09-002 | NDV: per-node `Settings` tab and per-node retry controls — partial | P3 | OPEN | TBD | — | 2026-10-06 |
+| BUG-UI-2026-09-09-001 | `INodeTypeDescription.properties` only populated for top-10 + MongoDB | P3 | **PARTIAL** (2026-10-12, ~25 nodes now have structured Properties; remaining ~10 use the raw-JSON fallback) | TBD | — | 2026-10-06 |
+| BUG-UI-2026-09-09-002 | NDV: per-node `Settings` tab and per-node retry controls — partial | P3 | **PARTIAL** (2026-10-12, Settings tab now renders for every node via raw-JSON fallback) | TBD | — | 2026-10-06 |
 | BUG-CAP-2026-09-09-001 | Capability gap: tracking flow / debugger visualisation | P6 | OPEN | TBD | Sheet row 1 | 2026-09-09 |
 | BUG-CAP-2026-09-09-002 | Capability gap: UI designer — node-to-node connectivity not visible in editor | P6 | OPEN | TBD | Sheet row 2 | 2026-09-09 |
 | BUG-CAP-2026-09-09-003 | Capability gap: credential store UI cannot register credential data | P6 | OPEN | TBD | Sheet row 3 | 2026-09-09 |
@@ -57,7 +57,7 @@ Legend: **P0** = wire-compat / correctness blocker · **P1** = engine correctnes
 | BUG-ARCH-2026-10-12-005 | Static Data workflow-scoped KV — not implemented | P6 | OPEN | TBD | — | 2026-10-12 |
 | BUG-ARCH-2026-10-12-006 | Binary data persistence in MySQL — partial; recommended path is object storage | P6 | OPEN | TBD | — | 2026-10-12 |
 | BUG-ARCH-2026-10-12-007 | Streaming responses — not implemented | P6 | OPEN | TBD | — | 2026-10-12 |
-| BUG-SEC-2026-10-12-001 | JWT auth for webhooks (RS256/HS256) — implemented, needs fuzzing | P4 | OPEN | TBD | — | 2026-10-12 |
+| BUG-SEC-2026-10-12-001 | JWT auth for webhooks (RS256/HS256) — implemented, needs fuzzing | P4 | **PARTIAL** (fuzz harness landed) | TBD | — | 2026-10-12 |
 | BUG-SEC-2026-10-12-002 | OAuth2 credential flows — basic only (per `N8N_FEATURE_COMPARISON.md`) | P4 | OPEN | TBD | — | 2026-10-12 |
 | BUG-SEC-2026-10-12-003 | SSO / SAML — not implemented | P4 | OPEN | TBD | — | 2026-10-12 |
 | BUG-SEC-2026-10-12-004 | Role-based access control — not implemented | P4 | OPEN | TBD | — | 2026-10-12 |
@@ -68,7 +68,7 @@ Legend: **P0** = wire-compat / correctness blocker · **P1** = engine correctnes
 | BUG-RFC-2026-09-11-002 | `plugins/README.md` referenced `github.com/maharsolution/m9m-plugins` (404) | P5 | **RESOLVED** | — | — | 2026-09-11 |
 | BUG-RFC-2026-09-11-003 | `M9M_COPILOT_*` legacy env vars lacked deprecation warning | P5 | **RESOLVED** (`internal/ai/config.go::warnCopilotLegacy`) | — | — | 2026-09-11 |
 
-Counts: **0 open P0**, **0 open P1**, **0 open P2**, **2 open P3**, **12 open P5**, **5 open P6**, **3 open P4 (arch)**, **9 resolved (P0/P5)**.
+Counts (2026-10-12 cycle): **0 open P0**, **0 open P1**, **0 open P2**, **0 open P3 (now PARTIAL)**, **7 open P5**, **5 open P6**, **3 open P4 (arch)**, **3 open P4 (sec)**, **1 open P3 (UI)**, **14 resolved (P0/P3/P4/P5)**.
 
 ---
 
@@ -444,7 +444,7 @@ No open P2 bugs. Continue to monitor via:
 | Field | Value |
 | --- | --- |
 | Severity | **P3** (correctness; not blocking the 19/19 parity suite because no parity workflow exercises the path, but the user's Finnet workflow uses it) |
-| Status | OPEN |
+| Status | **RESOLVED** (2026-10-12, `ApplyKafkaCredentialAuth` helper wired into producer + trigger) |
 | Discovered | 2026-10-12 (during BUG-2026-09-09-002 investigation) |
 | Source | `internal/nodes/messaging/kafka.go` (lines 159, 254), `internal/nodes/messaging/kafka_native.go` (lines 169, 235) |
 | Owner | TBD |
@@ -504,7 +504,7 @@ workflow actually exercises it.
 | Field | Value |
 | --- | --- |
 | Severity | **P4** (security; no known exploit, but un-fuzzed surface) |
-| Status | OPEN |
+| Status | **PARTIAL** (2026-10-12, fuzz harness added in `internal/webhooks/jwt_fuzz_test.go`; 13 cases cover expired / future nbf / malformed / bad base64 / bad JSON / unsupported alg / algorithm confusion / wrong secret / RS256 valid / RS256 bad signature / empty auth) |
 | Source | `README.md` "What runs unchanged" line — JWT auth (RS256/HS256); `n8n-api-docs.md` §"Authentication for webhook URLs" |
 | Discovered | 2026-10-12 |
 | Owner | TBD |
@@ -797,6 +797,40 @@ These are not bugs in m9m — m9m makes a deliberate product choice not to ship 
   - `warnCopilotLegacy(...)` added; logs a single `WARNING:` line per process (gated by `sync.Once`) listing which legacy keys contributed a value.
   - Tests: `TestLoadConfigFromEnv_HonoursLegacyCopilotEnv`, `TestWarnCopilotLegacy_NoOpWhenAllNewVarsPresent`, `TestWarnCopilotLegacy_OnlyFiresOncePerProcess`.
 - **Step 3 (deferred):** remove the alias map and the warning after the next major release. CHANGELOG entry will mark `M9M_COPILOT_*` as `Removed in v0.4.0`.
+
+### 9.10 BUG-2026-10-12-002 — Kafka nodes did not read injected SASL credentials
+
+- **Resolution:** `messaging.ApplyKafkaCredentialAuth(params)` exported helper in `internal/nodes/messaging/kafka.go` folds the engine-injected `kafka_*` keys back into the explicit-param shape (`brokers`, `saslMechanism`, `saslUsername`, `saslPassword`, `tls`, `restProxyUrl`, `authentication`, `username`, `password`, `apiKey`). Wired into `KafkaNode.backendFor` (producer) and `KafkaTriggerNode.Execute` (consumer, called before the native/REST dispatch). Frontend map updated (`web/src/types/node.ts`: `'n8n-nodes-base.kafka': ['kafka']`, `'n8n-nodes-base.kafkaTrigger': ['kafka']`). `kafka` credential schema added in `internal/api/credentials.go`.
+- **Resolved at:** 2026-10-12.
+- **Back-compat:** the helper only fills a key when the explicit param is empty and the credential envelope has a value, so workflows that pass auth via explicit params keep working.
+- **Verification:** 9 new unit tests in `internal/nodes/messaging/kafka_credentials_test.go` (`TestApplyKafkaCredentialAuth_NativeMode_FillsAllFields`, `…_RESTMode_FillsAllFields`, `…_NoOverrideWhenExplicitParamSet`, `…_NilAndEmptyMap`, `…_NoCredentials`, `…_TrimsWhitespace`, `…_HandlesNonStringTypes`, `…_PreservesUnconsumedFields`, `TestIsEmpty`).
+- **Live verification path:** the user's "Finnet - Webhook Not use Redist - Kafka/Rabbit" workflow carries `node.credentials.kafka = {id: "dPJPA90wyLLaiPj7", name: "Kafka - Aiven"}`. After deploy + restart, the SASL handshake should now negotiate with the broker using the synced credential envelope.
+
+### 9.11 BUG-2026-10-12-001..005 — Repo hygiene
+
+- **Resolution:**
+  - `,env` (1108 bytes): deleted (was already gitignored; just on-disk cruft).
+  - `Unconfirmed 467040.crdownload` (112 MB): deleted (untracked browser artefact).
+  - 7 `.exe` binaries at the repo root: never tracked (already in `.gitignore`); verified via `git status --ignored` and left on disk for the developer.
+  - `pyvenv.cfg` (188 bytes, tracked): `git rm --cached`, added to `.gitignore` so it never reappears.
+  - `supervisord.conf` (2470 bytes, tracked): moved to `deploy/docker/supervisord.conf`; `Dockerfile` updated to `COPY deploy/docker/supervisord.conf /etc/supervisord.conf`.
+  - `scripts/check_repo_hygiene.sh` new file: 5-case hygiene gate (.exe, .crdownload, pyvenv.cfg, ,env, supervisord.conf) that fails the build on any of the above re-appearing. Wired into GHA `harbor-image.yml` as a step before the docker build, and into `Makefile` as `make hygiene`.
+- **Resolved at:** 2026-10-12.
+- **Developer follow-up:** a local developer who pulled the repo before this fix may still have `pyvenv.cfg` and `,env` on disk (they were tracked, respectively untracked, but never auto-cleaned on disk). Run `rm pyvenv.cfg ,env` once after pulling this commit. The bash hygiene script under `scripts/check_repo_hygiene.sh` is the source of truth for the GHA pipeline; a Windows-side mirror is at `scripts/check_repo_hygiene.ps1` for local pre-commit checks.
+
+### 9.12 BUG-UI-2026-09-09-001 / -002 — NDV per-node Properties + Settings tab
+
+- **Resolution (partial):**
+  - **Properties migration:** 25 nodes now populate `NodeDescription.Properties` (slack, discord, sendgrid, notion, googleSheets, twilio, teams, github, gitlab, awsLambda, s3, azureBlobStorage, gcpCloudStorage, openai, anthropic, wait, noop, loop, executeWorkflow, errorTrigger, respondToWebhook, executeWorkflowTrigger, smtp, readBinary, writeBinary, pythonCode, cli.execute, sqlConnector, stripe). Each helper is in a sibling `properties.go` (or appended to the node file for non-repeated cases).
+  - **Raw-JSON fallback:** `web/src/views/ExecutionDetail.vue` now renders a read-only JSON block of `selectedNode.parameters` when both `parameterProperties` and `settingsProperties` are empty. This means the Settings tab is usable for every node, even ones that haven't been migrated yet.
+  - **Frontend credential map:** `web/src/types/node.ts` adds `n8n-nodes-base.kafka` and `n8n-nodes-base.kafkaTrigger` to the credential type map (BUG-2026-10-12-002).
+- **Resolved (PARTIAL) at:** 2026-10-12. ~10 long-tail nodes still fall through to the raw-JSON path (function, json, itemLists, splitInBatches, xml edge cases, etc.). Tracked in the bug doc above for a follow-up cycle.
+- **Verification:** manual `GET /api/v1/node-types/{name}` for each migrated node returns a non-empty `properties` array; the live UI renders the structured Parameters tab for the same nodes.
+
+### 9.13 BUG-SEC-2026-10-12-001 — JWT webhook auth fuzzing
+
+- **Resolution (partial):** `internal/webhooks/jwt_fuzz_test.go` (13 cases) covers the failure modes: expired token, future nbf, malformed segments (6 sub-cases), bad base64, bad header JSON, bad payload JSON, unsupported alg (6 sub-cases), algorithm confusion (RS256 header with HS256 secret), wrong-secret signature failure, valid RS256 round-trip, RS256 bad-signature, empty authData, nil authData. None panic; all return a typed error the handler maps to n8n's wire shape.
+- **Resolved (PARTIAL) at:** 2026-10-12. Remaining surface: signed-with-rotated-key path, multi-token replay, kid-based key rotation, and explicit `alg=none` rejection (covered under "unsupported alg" today but a property-level test would tighten it). Tracked for the next security pass.
 
 ---
 

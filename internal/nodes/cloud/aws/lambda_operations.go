@@ -117,7 +117,7 @@ type LambdaConfiguration struct {
 // NewLambdaOperationsNode creates a new Lambda operations node
 func NewLambdaOperationsNode() *LambdaOperationsNode {
 	return &LambdaOperationsNode{
-		BaseNode:  base.NewBaseNode(base.NodeDescription{Name: "AWS Lambda", Description: "AWS Lambda function operations", Category: "cloud"}),
+		BaseNode:  base.NewBaseNode(base.NodeDescription{Name: "AWS Lambda", Description: "AWS Lambda function operations", Category: "cloud", Properties: lambdaProperties()}),
 		evaluator: expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 	}
 }

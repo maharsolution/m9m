@@ -25,6 +25,7 @@ func NewGoogleSheetsNode() *GoogleSheetsNode {
 			Name:        "Google Sheets",
 			Description: "Read, write, and manipulate Google Sheets data",
 			Category:    "productivity",
+			Properties:  googleSheetsProperties(),
 		}),
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,

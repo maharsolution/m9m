@@ -17,6 +17,7 @@ func NewNoOpNode() *NoOpNode {
 			Name:        "NoOp",
 			Description: "Does nothing, passes data through unchanged",
 			Category:    "Core",
+			Properties:  noopProperties(),
 		}),
 	}
 }

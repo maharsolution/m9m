@@ -116,7 +116,7 @@ RUN cp /app/sync-service/sync.py /usr/local/bin/sync.py && \
 
 # Drop in the supervisor config. This file defines the two programs that
 # run in the container (see supervisord.conf for the full content).
-COPY supervisord.conf /etc/supervisord.conf
+COPY deploy/docker/supervisord.conf /etc/supervisord.conf
 
 # Create directories for data persistence, logs, and the supervisor pidfile.
 # /app/logs is what supervisord writes stdout/stderr to for both programs.

@@ -24,6 +24,7 @@ func NewSlackNode() *SlackNode {
 			Name:        "Slack",
 			Description: "Send messages and interact with Slack",
 			Category:    "communication",
+			Properties:  slackProperties(),
 		}),
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
@@ -161,4 +162,35 @@ func (n *SlackNode) sendViaAPI(token, channel, text string) error {
 	}
 
 	return nil
+}
+
+// slackProperties returns the Slack node's parameter descriptors.
+// Mirrors n8n's `INodeTypeDescription.properties` for
+// `n8n-nodes-base.slack`. BUG-UI-2026-09-09-001 — populates the
+// Properties field so the Settings tab renders the structured
+// form instead of falling back to raw JSON.
+func slackProperties() []base.NodeProperty {
+	authModes := []base.Option{
+		{Name: "OAuth2 (token)", Value: "token"},
+		{Name: "Incoming Webhook", Value: "webhook"},
+	}
+	props := []base.NodeProperty{
+		base.StringOpt("Authentication", "authentication", "token", "How to authenticate with Slack.", authModes, true),
+		base.StringProp("Webhook URL", "webhookUrl", "", "Slack incoming webhook URL (https://hooks.slack.com/...).", "", false),
+		base.StringProp("OAuth Token", "token", "", "Slack OAuth token (xoxb-... or xoxp-...).", "", false),
+		base.StringOpt("Channel Type", "channelType", "channel", "Target a public channel, private channel, direct message, or by ID.", []base.Option{
+			{Name: "Channel", Value: "channel"},
+			{Name: "Group", Value: "group"},
+			{Name: "Direct Message", Value: "im"},
+			{Name: "By ID", Value: "id"},
+		}, true),
+		base.StringProp("Channel", "channel", "", "Channel name (#general), user (@alice), or channel ID (C0123).", "#general", true),
+		base.TextProp("Message", "text", "", "Message body. Newlines render as line breaks.", "Hello from m9m!", 4),
+		base.BoolProp("As User", "asUser", false, "Send the message as the authenticated user (legacy)."),
+		base.StringProp("Username", "username", "", "Override the bot's display name.", "m9m Bot", false),
+		base.StringProp("Icon Emoji", "iconEmoji", "", "Override the bot's icon (e.g. :robot_face:).", ":robot_face:", false),
+		base.BoolProp("Link Names", "linkNames", true, "Auto-link @mentions in the message body."),
+		base.BoolProp("Thread Reply", "threadTs", false, "Reply to a thread instead of posting a new message."),
+	}
+	return append(props, base.CommonSettings()...)
 }

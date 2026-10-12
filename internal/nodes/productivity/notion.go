@@ -29,6 +29,7 @@ func NewNotionNode() *NotionNode {
 			Name:        "Notion",
 			Description: "Create, read, and update Notion pages and databases",
 			Category:    "Productivity",
+			Properties:  notionProperties(),
 		}),
 		client: &http.Client{},
 	}
@@ -202,4 +203,47 @@ func (n *NotionNode) ValidateParameters(params map[string]interface{}) error {
 	}
 
 	return nil
+}
+
+// notionProperties returns the Notion node's parameter
+// descriptors. BUG-UI-2026-09-09-001.
+func notionProperties() []base.NodeProperty {
+	resources := []base.Option{
+		{Name: "Page", Value: "page"},
+		{Name: "Database", Value: "database"},
+		{Name: "Block", Value: "block"},
+	}
+	pageOps := []base.Option{
+		{Name: "Create", Value: "create"},
+		{Name: "Get", Value: "get"},
+		{Name: "Update", Value: "update"},
+		{Name: "Archive", Value: "archive"},
+		{Name: "Search", Value: "search"},
+	}
+	databaseOps := []base.Option{
+		{Name: "Get", Value: "get"},
+		{Name: "Query", Value: "query"},
+		{Name: "Create", Value: "create"},
+		{Name: "Update", Value: "update"},
+	}
+	blockOps := []base.Option{
+		{Name: "Append", Value: "append"},
+		{Name: "Get", Value: "get"},
+		{Name: "Update", Value: "update"},
+		{Name: "Delete", Value: "delete"},
+	}
+	props := []base.NodeProperty{
+		base.StringOpt("Resource", "resource", "page", "Notion resource to operate on.", resources, true),
+		base.StringOpt("Operation", "operation", "create", "Operation on the resource.", pageOps, true),
+		base.StringProp("Page ID", "pageId", "", "Notion page ID (UUID with dashes).", "", false),
+		base.StringProp("Database ID", "databaseId", "", "Notion database ID (UUID with dashes).", "", false),
+		base.StringProp("Block ID", "blockId", "", "Notion block ID (UUID with dashes).", "", false),
+		base.StringProp("Title", "title", "", "Title for the new page (when resource=page, operation=create).", "", false),
+		base.JsonProp("Properties", "properties", "{}", "Notion properties map (page properties or database schema)."),
+		base.JsonProp("Children", "children", "[]", "Block children array."),
+		base.JsonProp("Filter", "filter", "{}", "Notion query filter (database query)."),
+		base.JsonProp("Sorts", "sorts", "[]", "Notion query sorts (database query)."),
+		base.NumberProp("Page Size", "pageSize", 100, "Number of results per page (1-100).", false),
+	}
+	return append(props, base.CommonSettings()...)
 }

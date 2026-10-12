@@ -23,6 +23,7 @@ func NewPythonCodeNode() *PythonCodeNode {
 			Name:        "PythonCode",
 			Description: "Execute Python code with n8n compatibility",
 			Category:    "code",
+			Properties:  pythonCodeProperties(),
 		}),
 	}
 

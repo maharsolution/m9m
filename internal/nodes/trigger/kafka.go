@@ -103,6 +103,10 @@ func kafkaTriggerProperties() []base.NodeProperty {
 // native path opens a segmentio/kafka-go reader and returns
 // whatever the broker fetched in the poll window.
 func (n *KafkaTriggerNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
+	// Apply the engine-injected credential envelope (BUG-2026-10-12-002)
+	// BEFORE dispatching so both `pollNative` and `pollREST` see the
+	// resolved `kafka_*` keys folded back into the explicit-param shape.
+	messaging.ApplyKafkaCredentialAuth(nodeParams)
 	mode := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", nodeParams["mode"])))
 	if mode == "" {
 		mode = "rest"

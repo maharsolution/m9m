@@ -49,6 +49,12 @@ coverage-html:
 fmt:
 	go fmt ./...
 
+# Repo-hygiene gate. Fails the build if stray .exe / .crdownload /
+# pyvenv.cfg / ,env artefacts are in the tree. See BUG-2026-10-12-001..005.
+.PHONY: hygiene
+hygiene:
+	bash scripts/check_repo_hygiene.sh
+
 # Vet code
 .PHONY: vet
 vet:

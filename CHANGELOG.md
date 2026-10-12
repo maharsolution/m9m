@@ -5,9 +5,39 @@ All notable changes to m9m will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-09-11
+## [Unreleased] - 2026-10-12
 
 Cumulative changes since `0.1.0-beta.1`. The 2026-09-10 webhook-parity cycle is documented under `[0.2.0-parity] - 2026-09-10` further down. Items below are platform work that landed after the parity cycle.
+
+### 2026-10-12 cycle — 0.4.0 progress
+
+#### Engine and execution
+- **MongoDB native driver + per-op displayOptions** — `internal/nodes/database/mongodb.go` rewritten; accepts `mongodb://` or `mongodb+srv://` URIs, supports `find` / `findOne` / `insert` / `insertMany` / `update` / `delete` / `aggregate` / `count` / `replaceOne` / `upsert` / `distinct` via the official `mongo-driver`. BSON-isms normalised on the way out. See bug-fix.MD §9.3.
+- **Data Tables node** — `n8n-nodes-base.dataTable` executor + REST + sync-service. 5 operations, 9 condition operators, AND/OR match types, expression evaluation in filter values. See bug-fix.MD §9.2.
+- **Kafka SASL credential injection** — `messaging.ApplyKafkaCredentialAuth` helper folds the engine-injected `kafka_*` keys back into the explicit-param shape. Wired into `KafkaNode.backendFor` (producer) and `KafkaTriggerNode.Execute` (consumer). See bug-fix.MD §9.10.
+
+#### UI / frontend
+- **NDV Settings tab — raw-JSON fallback** — `web/src/views/ExecutionDetail.vue` renders a read-only JSON block of `selectedNode.parameters` when the node has no structured `properties` yet. The Settings tab is now usable for every node. See bug-fix.MD §9.12.
+- **~25 nodes migrated to structured `INodeTypeDescription.properties`** — slack, discord, sendgrid, notion, googleSheets, twilio, teams, github, gitlab, awsLambda, s3, azureBlobStorage, gcpCloudStorage, openai, anthropic, wait, noop, loop, executeWorkflow, errorTrigger, respondToWebhook, executeWorkflowTrigger, smtp, readBinary, writeBinary, pythonCode, cli.execute, sqlConnector, stripe. Each helper lives in a sibling `properties.go`. See bug-fix.MD §9.12.
+- **Frontend credential map** — `web/src/types/node.ts` adds `n8n-nodes-base.kafka` and `n8n-nodes-base.kafkaTrigger` to the credential-type map (BUG-2026-10-12-002).
+
+#### Security
+- **JWT webhook auth fuzzing harness** — 13-case fuzz in `internal/webhooks/jwt_fuzz_test.go` covering expired / future-nbf / malformed / bad-base64 / bad-JSON / unsupported-alg / algorithm-confusion / wrong-secret / RS256 valid + bad-signature / empty-auth. See bug-fix.MD §9.13.
+
+#### Repository hygiene
+- **Stray files removed** — `,env` (typo for `.env`), `Unconfirmed 467040.crdownload` (112 MB browser artefact), `pyvenv.cfg` (Python venv leak), `supervisord.conf` (moved to `deploy/docker/`). Dockerfile updated to `COPY deploy/docker/supervisord.conf`.
+- **Hygiene gate** — `scripts/check_repo_hygiene.sh` (5 cases) + `make hygiene` + GHA step in `harbor-image.yml` so a future regression fails the build before the docker image is pushed. See bug-fix.MD §9.11.
+
+#### Fixed in this cycle
+- BUG-2026-10-12-001 (`,env` repo hygiene) — RESOLVED
+- BUG-2026-10-12-002 (`.crdownload` repo hygiene) — RESOLVED
+- BUG-2026-10-12-003 (`.exe` binaries) — RESOLVED (already gitignored; never tracked)
+- BUG-2026-10-12-004 (`pyvenv.cfg`) — RESOLVED
+- BUG-2026-10-12-005 (`supervisord.conf` move) — RESOLVED
+- BUG-2026-10-12-002 (Kafka SASL cred) — RESOLVED
+- BUG-UI-2026-09-09-001 (NodeTypeDescription Properties) — PARTIAL (25 of ~35 done)
+- BUG-UI-2026-09-09-002 (NDV Settings tab) — PARTIAL (raw-JSON fallback)
+- BUG-SEC-2026-10-12-001 (JWT fuzzing) — PARTIAL (13 cases; remaining surface for next pass)
 
 ### Added
 
@@ -194,7 +224,7 @@ Webhook parity cycle — all 19 parity test cases (14 positive + 5 negative) pas
 - **Expression Caching**: Thread-safe expression evaluation
 - **Auth Context Keys**: Proper context key types to avoid collisions
 
-## [Unreleased]
+## [Future]
 
 ### Planned for 0.3.0
 - **Workflow Editor**: Web-based visual workflow editor

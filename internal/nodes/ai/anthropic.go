@@ -36,6 +36,7 @@ func NewAnthropicNode() *AnthropicNode {
 			Name:        "Anthropic",
 			Description: "Use Anthropic's Claude models for text generation and analysis",
 			Category:    "ai",
+			Properties:  anthropicProperties(),
 		}),
 		httpClient: &http.Client{
 			Timeout: 60 * time.Second,

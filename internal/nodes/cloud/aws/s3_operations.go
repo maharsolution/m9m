@@ -147,7 +147,7 @@ type S3OperationResult struct {
 // NewS3OperationsNode creates a new S3 operations node
 func NewS3OperationsNode() *S3OperationsNode {
 	return &S3OperationsNode{
-		BaseNode:  base.NewBaseNode(base.NodeDescription{Name: "AWS S3", Description: "Amazon S3 storage operations", Category: "cloud"}),
+		BaseNode:  base.NewBaseNode(base.NodeDescription{Name: "AWS S3", Description: "Amazon S3 storage operations", Category: "cloud", Properties: s3Properties()}),
 		evaluator: expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 	}
 }

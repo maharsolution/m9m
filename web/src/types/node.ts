@@ -162,6 +162,9 @@ const NODE_CREDENTIAL_TYPE_MAP: Record<string, string[]> = {
   'n8n-nodes-base.sqlite': [],
   'n8n-nodes-base.mongoDb': ['mongoDb'],
   'n8n-nodes-base.redis': [],
+  // Messaging
+  'n8n-nodes-base.kafka': ['kafka'],
+  'n8n-nodes-base.kafkaTrigger': ['kafka'],
   // AI / LLM
   '@n8n/n8n-nodes-langchain.openAi': ['openAi'],
   '@n8n/n8n-nodes-langchain.anthropic': ['anthropic'],

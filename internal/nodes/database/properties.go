@@ -2,24 +2,26 @@ package database
 
 import "github.com/neul-labs/m9m/internal/nodes/base"
 
-// sqlProperties is the shared property descriptor set for the SQL
-// database nodes (Postgres, MySQL, SQLite). The shape mirrors
-// n8n's INodeTypeDescription.properties so the n8n-style Parameters
-// tab renders the same form across all three.
-func sqlProperties() []base.NodeProperty {
-	operations := []base.Option{
-		{Name: "Execute Query", Value: "executeQuery"},
+// BUG-UI-2026-09-09-001 — populate the `Properties` field for
+// the SQL Database connector node (the catch-all that runs an
+// arbitrary SELECT/INSERT/UPDATE/DELETE on a configured
+// connection).
+
+func sqlConnectorProperties() []base.NodeProperty {
+	ops := []base.Option{
+		{Name: "Select", Value: "select"},
 		{Name: "Insert", Value: "insert"},
 		{Name: "Update", Value: "update"},
 		{Name: "Delete", Value: "delete"},
-		{Name: "Select", Value: "select"},
+		{Name: "Execute (raw)", Value: "execute"},
 	}
 	props := []base.NodeProperty{
-		base.StringOpt("Operation", "operation", "executeQuery", "Which SQL operation to perform.", operations, true),
-		base.TextProp("Query", "query", "", "SQL query to run. Use `?` placeholders for parameters.", "SELECT * FROM users WHERE id = ?", 6),
-		base.CollectionProp("Query Parameters", "queryParameters", "Positional or named parameters for the query.", nil),
-		base.NumberProp("Connection timeout (s)", "options.connectionTimeout", 10, "How long to wait when opening the connection.", false),
-		base.NumberProp("Query timeout (s)", "options.queryTimeout", 60, "Maximum query runtime before the connection is killed.", false),
+		base.StringOpt("Operation", "operation", "select", "SQL operation to perform.", ops, true),
+		base.StringProp("Connection String", "connectionString", "", "Override the connection string (defaults to the credential's).", "", false),
+		base.StringProp("Database", "database", "", "Database name (defaults to the credential's).", "", false),
+		base.TextProp("Query", "query", "", "SQL query to execute. May use n8n expressions.", "SELECT * FROM users WHERE id = {{ $json.id }}", 6),
+		base.JsonProp("Params", "params", "[]", "Bind parameters (array)."),
+		base.NumberProp("Limit", "limit", 0, "Row limit (0 = no limit, select only).", false),
 	}
 	return append(props, base.CommonSettings()...)
 }

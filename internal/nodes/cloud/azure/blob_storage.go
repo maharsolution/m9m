@@ -147,7 +147,7 @@ type BlobOperationResult struct {
 // NewBlobStorageNode creates a new Blob Storage operations node
 func NewBlobStorageNode() *BlobStorageNode {
 	return &BlobStorageNode{
-		BaseNode:      base.NewBaseNode(base.NodeDescription{Name: "Azure Blob Storage", Description: "Azure Blob Storage operations", Category: "cloud"}),
+		BaseNode:      base.NewBaseNode(base.NodeDescription{Name: "Azure Blob Storage", Description: "Azure Blob Storage operations", Category: "cloud", Properties: blobStorageProperties()}),
 		evaluator:     expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 		containerURLs: make(map[string]*azblob.ContainerURL),
 		ctx:           context.Background(),

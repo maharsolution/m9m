@@ -39,6 +39,14 @@ go.work
 *.tmp
 *.temp
 
+# Browser / download artefacts (Chrome .crdownload etc.)
+*.crdownload
+
+# Repo-root Python venv leak — bind into a project's own
+# venv (e.g. `cd sync-service && python -m venv .venv`) instead
+# of polluting the repo root.
+pyvenv.cfg
+
 # Log files
 *.log
 

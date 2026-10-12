@@ -29,7 +29,7 @@ type ReadBinaryFileNode struct {
 // NewReadBinaryFileNode creates a new ReadBinaryFileNode instance
 func NewReadBinaryFileNode() *ReadBinaryFileNode {
 	return &ReadBinaryFileNode{
-		BaseNode:          base.NewBaseNode(base.NodeDescription{Name: "Read Binary File", Description: "n8n-nodes-base.readBinaryFile", Category: "core"}),
+		BaseNode:          base.NewBaseNode(base.NodeDescription{Name: "Read Binary File", Description: "n8n-nodes-base.readBinaryFile", Category: "core", Properties: readBinaryProperties()}),
 		evaluator:         expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 		allowedDirectories: []string{"/tmp", "/var/tmp", "./data", "./uploads"}, // Default allowed directories
 		maxFileSize:       100 * 1024 * 1024, // 100MB default limit

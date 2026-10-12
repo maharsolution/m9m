@@ -218,6 +218,14 @@ func (n *KafkaNode) backendFor(params map[string]interface{}) (kafkaBackend, err
 	if mode == "" {
 		mode = "rest"
 	}
+	// Apply the engine-injected credential envelope (BUG-2026-10-12-002).
+	// When a `kafka` credential is attached to the workflow node the
+	// engine writes `<credType>_<field>` keys (e.g. `kafka_brokers`,
+	// `kafka_saslUsername`) into the params map. This helper folds them
+	// back into the same shape the explicit-param code path already
+	// reads, so the rest of `backendFor` doesn't need to branch on
+	// "did the operator set params or did the engine inject them?".
+	ApplyKafkaCredentialAuth(params)
 	switch mode {
 	case "native":
 		brokersRaw := strings.TrimSpace(fmt.Sprintf("%v", params["brokers"]))
@@ -334,6 +342,132 @@ type kafkaAuth struct {
 	Username string
 	Password string
 	APIKey   string
+}
+
+// ApplyKafkaCredentialAuth reads the engine-injected `<credType>_<field>`
+// keys for a `kafka` credential envelope and folds them back into the
+// same explicit-param keys the rest of this file reads.
+//
+// Why this exists: BUG-2026-10-12-002. The engine's
+// `InjectCredentialsIntoNodeParameters` writes the resolved credential
+// envelope under keys shaped `<credType>_<field>` — for a `kafka`
+// credential, that's `kafka_brokers`, `kafka_saslMechanism`,
+// `kafka_saslUsername`, `kafka_saslPassword`, `kafka_tls`,
+// `kafka_restProxyUrl`, `kafka_authentication`, `kafka_username`,
+// `kafka_password`, `kafka_apiKey`. Without this helper the credentials
+// are silently dropped and the node runs with no auth — exactly the
+// "Finnet" workflow symptom (broker connection either fails or goes out
+// anonymous).
+//
+// Behaviour:
+//   - Only fills a key when the explicit param is empty AND the
+//     credential-injected value is non-empty. This keeps back-compat with
+//     workflows that pass auth via explicit params (the long-standing
+//     pre-credential path).
+//   - For `tls`, a missing explicit value + a `kafka_tls` value
+//     ("true"/"1"/...) is honoured. Same boolean-parsing convention as
+//     the rest of this file.
+//   - For `saslMechanism`, the empty string is also valid (no SASL) and
+//     is preserved — we only override when the credential has a real
+//     mechanism.
+//
+// The helper is intentionally mutating the input map (the same shape
+// the HTTP node's `applyCredentialAuth` already takes). The engine
+// passes a fresh copy of params per Execute call (see
+// `engine.go::InjectCredentialsIntoNodeParameters`), so there is no
+// cross-pollution risk.
+//
+// Exported so the trigger package's `KafkaTriggerNode.Execute` can call
+// it before dispatching to `pollNative` / `pollREST` (otherwise the
+// trigger's REST path would still see the credential envelope as raw
+// `kafka_*` keys and the SASL handshake would not happen).
+func ApplyKafkaCredentialAuth(params map[string]interface{}) {
+	if params == nil {
+		return
+	}
+	// Native-mode fields.
+	if brokers := stringFromAnyMap(params, "kafka_brokers"); brokers != "" && isEmpty(params, "brokers") {
+		params["brokers"] = brokers
+	}
+	if mech := stringFromAnyMap(params, "kafka_saslMechanism"); mech != "" && isEmpty(params, "saslMechanism") {
+		params["saslMechanism"] = mech
+	}
+	if u := stringFromAnyMap(params, "kafka_saslUsername"); u != "" && isEmpty(params, "saslUsername") {
+		params["saslUsername"] = u
+	}
+	if p := stringFromAnyMap(params, "kafka_saslPassword"); p != "" && isEmpty(params, "saslPassword") {
+		params["saslPassword"] = p
+	}
+	if _, ok := params["kafka_tls"]; ok && isEmpty(params, "tls") {
+		// Honour the same string-vs-bool convention as `boolParam` so
+		// "true"/"1" from the credential envelope flip the TLS flag on
+		// without requiring a second code path.
+		params["tls"] = stringFromAnyMap(params, "kafka_tls")
+	}
+	// REST-proxy-mode fields.
+	if u := stringFromAnyMap(params, "kafka_restProxyUrl"); u != "" && isEmpty(params, "restProxyUrl") {
+		params["restProxyUrl"] = u
+	}
+	if a := stringFromAnyMap(params, "kafka_authentication"); a != "" && isEmpty(params, "authentication") {
+		params["authentication"] = a
+	}
+	if u := stringFromAnyMap(params, "kafka_username"); u != "" && isEmpty(params, "username") {
+		params["username"] = u
+	}
+	if p := stringFromAnyMap(params, "kafka_password"); p != "" && isEmpty(params, "password") {
+		params["password"] = p
+	}
+	if k := stringFromAnyMap(params, "kafka_apiKey"); k != "" && isEmpty(params, "apiKey") {
+		params["apiKey"] = k
+	}
+}
+
+// isEmpty returns true when the value at key is missing, nil, or an
+// empty string after trim. Used by ApplyKafkaCredentialAuth to decide
+// whether the credential envelope should override the explicit param.
+func isEmpty(m map[string]interface{}, key string) bool {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return true
+	}
+	switch t := v.(type) {
+	case string:
+		return strings.TrimSpace(t) == ""
+	case bool:
+		return false // a bool is never "empty" — false is a real choice
+	case int, int64, float64:
+		return false
+	}
+	return false
+}
+
+// stringFromAnyMap returns the string at `key`, regardless of whether
+// the underlying type is a string, a number, or a bool (mirroring the
+// `fmt.Sprintf("%v", …)` pattern used elsewhere in this file when
+// reading explicit params). Returns "" when the key is missing or
+// nil. Used by applyKafkaCredentialAuth to read the credential envelope
+// without caring about the JSON-decoded type.
+func stringFromAnyMap(m map[string]interface{}, key string) string {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return ""
+	}
+	switch t := v.(type) {
+	case string:
+		return strings.TrimSpace(t)
+	case bool:
+		if t {
+			return "true"
+		}
+		return "false"
+	case float64:
+		return strings.TrimSpace(strings.TrimRight(strings.TrimRight(fmt.Sprintf("%v", t), "0"), "."))
+	case int:
+		return fmt.Sprintf("%d", t)
+	case int64:
+		return fmt.Sprintf("%d", t)
+	}
+	return strings.TrimSpace(fmt.Sprintf("%v", v))
 }
 
 func (a kafkaAuth) apply(req *http.Request) {

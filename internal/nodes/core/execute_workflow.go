@@ -106,6 +106,7 @@ func NewExecuteWorkflowNode(executor WorkflowExecutor, lookup WorkflowLookup) *E
 			Name:        "Execute Workflow",
 			Description: "Executes another workflow as a sub-workflow",
 			Category:    "Core",
+			Properties:  executeWorkflowProperties(),
 		}),
 		executor: executor,
 		lookup:   lookup,

@@ -38,6 +38,7 @@ func NewExecuteWorkflowTriggerNode() *ExecuteWorkflowTriggerNode {
 			Name:        "Execute Workflow Trigger",
 			Description: "Trigger node for sub-workflows called via the Execute Workflow node",
 			Category:    "Trigger",
+			Properties:  executeWorkflowTriggerProperties(),
 			Inputs:      []string{},
 			Outputs:     []string{"main"},
 		}),

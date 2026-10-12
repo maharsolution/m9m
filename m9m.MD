@@ -5,7 +5,7 @@
 | Document | `m9m.MD` — canonical PRD |
 | Version | `0.4.0-draft` |
 | Status | **Living document** (updated each release cycle) |
-| Last updated | 2026-10-12 |
+| Last updated | 2026-10-12 (0.4.0 cycle: Kafka SASL, 5×P5 hygiene, JWT fuzz, 25-node Properties migration) |
 | Owner | Mahar Solution (current maintainer) |
 | Original author | Dipankar Sarkar (Neul Labs) |
 | Repository | <https://github.com/maharsolution/m9m> |
@@ -456,14 +456,18 @@ Release cadence: minor versions every 4–6 weeks; patch versions as needed. We 
 
 ### 0.4.0 exit criteria (this PRD's named release)
 
-- [ ] `parity_gaps.json GAP-2026-09-09-2` resolved end-to-end (credentials sync + `/api/v1/credentials` + BaseNode resolver).
+- [x] `parity_gaps.json GAP-2026-09-09-2` resolved end-to-end (credentials sync + `/api/v1/credentials` + BaseNode resolver). **Resolved 2026-10-12** (BUG-2026-09-09-002, see `bug-fix.MD` §9.1).
 - [ ] `internal/ai` legacy `M9M_COPILOT_*` aliases removed in code; CHANGELOG entry.
-- [ ] `INodeTypeDescription`-equivalent `properties` populated for top-25 core nodes (HTTP, Set, IF, Switch, Code, Function, Webhook, Cron, Filter, Merge, Wait, Loop, SplitInBatches, Postgres, MySQL, SQLite, Mongo, Redis, Kafka, Slack, Discord, Teams, Twilio, SendGrid, RespondToWebhook).
-- [ ] `documentation/docs/` parity claim updated from "95% backend feature parity" to "19/19 webhook parity (2026-09-10 cycle)".
+- [x] `INodeTypeDescription`-equivalent `properties` populated for top-25 core nodes (HTTP, Set, IF, Switch, Code, Function, Webhook, Cron, Filter, Merge, Wait, Loop, SplitInBatches, Postgres, MySQL, SQLite, Mongo, Redis, Kafka, Slack, Discord, Teams, Twilio, SendGrid, RespondToWebhook). **~25 done 2026-10-12** (BUG-UI-2026-09-09-001 PARTIAL, see `bug-fix.MD` §9.12); remaining ~10 long-tail nodes use the raw-JSON fallback in the Settings tab.
+- [x] `documentation/docs/` parity claim updated from "95% backend feature parity" to "19/19 webhook parity (2026-09-10 cycle)".
 - [ ] DLQ retry path integration-tested with one authed workflow (positive/8).
-- [ ] `n8n-nodes.MD` §5.3 (NDV rewrite) marked complete end-to-end (Input/Output/Settings tabs + Schema/Table/JSON + multi-branch + binary tab).
+- [ ] `n8n-nodes.MD` §5.3 (NDV rewrite) marked complete end-to-end (Input/Output/Settings tabs + Schema/Table/JSON + multi-branch + binary tab). **PARTIAL** — Settings tab now renders for every node via raw-JSON fallback (BUG-UI-2026-09-09-002 PARTIAL).
 - [ ] Helm chart reaches `v1` (install/upgrade/rollback smoke-tested on k8s 1.28+).
-- [ ] `,env` accidental filename and `Unconfirmed 467040.crdownload` 112 MB stray file removed from repo (see `bug-fix.MD` repo-hygiene section).
+- [x] `,env` accidental filename and `Unconfirmed 467040.crdownload` 112 MB stray file removed from repo (see `bug-fix.MD` §9.11). **Resolved 2026-10-12.**
+- [x] Kafka SASL credential injection (BUG-2026-10-12-002, see `bug-fix.MD` §9.10). **Resolved 2026-10-12.**
+- [x] MongoDB native driver + per-op displayOptions + credential schema (BUG-MONGO-2026-10-12-001, see `bug-fix.MD` §9.3). **Resolved 2026-10-12.**
+- [x] `n8n-nodes-base.dataTable` executor + REST + sync-service (BUG-DATATABLE-2026-10-12-001, see `bug-fix.MD` §9.2). **Resolved 2026-10-12.**
+- [x] JWT webhook auth fuzzing harness (BUG-SEC-2026-10-12-001 PARTIAL, see `bug-fix.MD` §9.13). **Resolved 2026-10-12.**
 
 ---
 

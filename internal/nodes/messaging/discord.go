@@ -24,6 +24,7 @@ func NewDiscordNode() *DiscordNode {
 			Name:        "Discord",
 			Description: "Send messages and interact with Discord",
 			Category:    "communication",
+			Properties:  discordProperties(),
 		}),
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
@@ -89,4 +90,26 @@ func (n *DiscordNode) Execute(inputData []model.DataItem, nodeParams map[string]
 	}
 
 	return results, nil
+}
+
+// discordProperties returns the Discord node's parameter
+// descriptors. BUG-UI-2026-09-09-001 — populates Properties so the
+// Settings tab renders the structured form.
+func discordProperties() []base.NodeProperty {
+	authModes := []base.Option{
+		{Name: "Webhook URL", Value: "webhook"},
+		{Name: "Bot Token", Value: "bot"},
+	}
+	props := []base.NodeProperty{
+		base.StringOpt("Authentication", "authentication", "webhook", "Send via a Discord webhook URL or via a bot token.", authModes, true),
+		base.StringProp("Webhook URL", "webhookUrl", "", "Discord webhook URL.", "", false),
+		base.StringProp("Bot Token", "botToken", "", "Discord bot token (from the developer portal).", "", false),
+		base.StringProp("Channel ID", "channelId", "", "Target channel ID (when using Bot Token auth).", "", false),
+		base.TextProp("Content", "content", "", "Message body (up to 2000 characters).", "Hello from m9m!", 4),
+		base.StringProp("Username", "username", "", "Override the bot's display name.", "m9m Bot", false),
+		base.StringProp("Avatar URL", "avatarUrl", "", "Override the bot's avatar (https URL).", "", false),
+		base.BoolProp("TTS", "tts", false, "Send the message with text-to-speech enabled."),
+		base.JsonProp("Embeds", "embeds", "[]", "Optional embeds array (max 10)."),
+	}
+	return append(props, base.CommonSettings()...)
 }

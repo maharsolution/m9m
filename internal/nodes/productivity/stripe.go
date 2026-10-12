@@ -30,6 +30,7 @@ func NewStripeNode() *StripeNode {
 			Name:        "Stripe",
 			Description: "Create customers and payment intents via Stripe",
 			Category:    "Productivity",
+			Properties:  stripeProperties(),
 		}),
 		client: &http.Client{},
 	}

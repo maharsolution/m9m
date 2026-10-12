@@ -19,6 +19,7 @@ func NewErrorTriggerNode() *ErrorTriggerNode {
 			Name:        "Error Trigger",
 			Description: "Triggers when a workflow error occurs",
 			Category:    "Trigger",
+			Properties:  errorTriggerProperties(),
 		}),
 	}
 }

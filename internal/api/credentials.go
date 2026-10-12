@@ -375,6 +375,32 @@ var credentialSchemas = map[string]CredentialTypeSchema{
 		},
 		Required: []string{},
 	},
+	"kafka": {
+		Type:        "kafka",
+		DisplayName: "Kafka",
+		Properties: []SchemaProperty{
+			// Native-mode fields. Either `brokers` (comma-separated) is
+			// required, or `restProxyUrl` is required (REST-proxy mode).
+			// Both can be supplied; the node picks based on `mode`.
+			{Name: "brokers", DisplayName: "Bootstrap Servers", Type: "string", Required: false, Description: "Comma-separated broker list (e.g. broker1:9092,broker2:9092)."},
+			{Name: "clientId", DisplayName: "Client ID", Type: "string", Required: false, Default: "m9m-kafka"},
+			{Name: "saslMechanism", DisplayName: "SASL Mechanism", Type: "options", Options: []string{"PLAIN", "SCRAM-SHA-256", "SCRAM-SHA-512", ""}, Required: false, Default: "", Description: "SASL mechanism for the native broker connection. Leave empty for no SASL."},
+			{Name: "saslUsername", DisplayName: "SASL Username", Type: "string", Required: false},
+			{Name: "saslPassword", DisplayName: "SASL Password", Type: "password", Required: false},
+			{Name: "tls", DisplayName: "TLS", Type: "boolean", Default: false, Description: "Enable TLS for the native broker connection."},
+			// REST-proxy mode fields. Picked when the node's `mode` is
+			// `rest` (the default).
+			{Name: "restProxyUrl", DisplayName: "REST Proxy URL", Type: "string", Required: false, Description: "Confluent-compatible REST Proxy base URL (e.g. http://kafka-rest:8082)."},
+			{Name: "authentication", DisplayName: "Authentication", Type: "options", Options: []string{"none", "basic", "apiKey"}, Required: false, Default: "none"},
+			{Name: "username", DisplayName: "Username", Type: "string", Required: false, Description: "Username for Basic auth against the REST Proxy."},
+			{Name: "password", DisplayName: "Password", Type: "password", Required: false, Description: "Password for Basic auth against the REST Proxy."},
+			{Name: "apiKey", DisplayName: "API Key", Type: "password", Required: false, Description: "API key (alternative to Basic) for the REST Proxy."},
+		},
+		// Either `brokers` (native) or `restProxyUrl` (REST) is required.
+		// We can't express the OR in the per-field schema, so callers
+		// validate at Execute time.
+		Required: []string{},
+	},
 	"slack": {
 		Type:        "slack",
 		DisplayName: "Slack",
