@@ -225,7 +225,7 @@ func (n *KafkaNode) backendFor(params map[string]interface{}) (kafkaBackend, err
 	// "did the operator set params or did the engine inject them?".
 	ApplyKafkaCredentialAuth(params)
 	mode := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", params["mode"])))
-	if mode == "" {
+	if mode == "" || mode == "<nil>" {
 		// Auto-detect transport: if the credential or params give us
 		// brokers, prefer native (segmentio/kafka-go over TLS) — that
 		// is what a typical Aiven / Confluent Cloud credential looks
@@ -688,7 +688,7 @@ func (n *KafkaNode) ValidateParameters(params map[string]interface{}) error {
 		fmt.Fprintf(os.Stderr, "}\n")
 	}
 	mode := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", params["mode"])))
-	if mode == "" {
+	if mode == "" || mode == "<nil>" {
 		// Mirror backendFor: prefer native when brokers are
 		// present, fall back to REST proxy otherwise.
 		if b := strings.TrimSpace(fmt.Sprintf("%v", params["brokers"])); b != "" {
