@@ -214,10 +214,6 @@ func (n *KafkaNode) backendFor(params map[string]interface{}) (kafkaBackend, err
 	if n.backend != nil {
 		return n.backend, nil
 	}
-	mode := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", params["mode"])))
-	if mode == "" {
-		mode = "rest"
-	}
 	// Apply the engine-injected credential envelope (BUG-2026-10-12-002).
 	// When a `kafka` credential is attached to the workflow node the
 	// engine writes `<credType>_<field>` keys (e.g. `kafka_brokers`,
@@ -226,6 +222,18 @@ func (n *KafkaNode) backendFor(params map[string]interface{}) (kafkaBackend, err
 	// reads, so the rest of `backendFor` doesn't need to branch on
 	// "did the operator set params or did the engine inject them?".
 	ApplyKafkaCredentialAuth(params)
+	mode := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", params["mode"])))
+	if mode == "" {
+		// Auto-detect transport: if the credential or params give us
+		// brokers, prefer native (segmentio/kafka-go over TLS) — that
+		// is what a typical Aiven / Confluent Cloud credential looks
+		// like. Otherwise fall back to REST proxy.
+		if strings.TrimSpace(fmt.Sprintf("%v", params["brokers"])) != "" {
+			mode = "native"
+		} else {
+			mode = "rest"
+		}
+	}
 	switch mode {
 	case "native":
 		brokersRaw := strings.TrimSpace(fmt.Sprintf("%v", params["brokers"]))
@@ -593,9 +601,22 @@ func (n *KafkaNode) ValidateParameters(params map[string]interface{}) error {
 	if params == nil {
 		return n.CreateError("parameters cannot be nil", nil)
 	}
+	// Apply the engine-injected credential envelope BEFORE
+	// resolving mode. The engine flattens credential fields as
+	// `<credType>_<key>` (e.g. `kafka_brokers`); without this
+	// fold, ValidateParameters sees an empty brokers map and
+	// defaults to REST mode even when the credential provided
+	// native broker addresses.
+	ApplyKafkaCredentialAuth(params)
 	mode := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", params["mode"])))
 	if mode == "" {
-		mode = "rest"
+		// Mirror backendFor: prefer native when brokers are
+		// present, fall back to REST proxy otherwise.
+		if b := strings.TrimSpace(fmt.Sprintf("%v", params["brokers"])); b != "" {
+			mode = "native"
+		} else {
+			mode = "rest"
+		}
 	}
 	switch mode {
 	case "native":
