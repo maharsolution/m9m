@@ -320,7 +320,14 @@ func (r *connectionRouterImpl) GetExecutionOrder(workflow *model.Workflow) ([]st
 	// (e.g. `Process Item → Loop Over Items`) and should be ignored
 	// for ordering purposes — the engine runs the loop node's body
 	// to completion before producing output.
-	tolerateCycles := WorkflowUsesSplitInBatches(workflow)
+	//
+	// Same treatment applies to the `attempt < maxAttempts` If-retry
+	// loop pattern (see if_retry_loop.go). The back-edge from the
+	// guard's main[0] branch to the body entry is also a loop edge;
+	// dropping it lets the engine drive the body to completion
+	// manually instead of failing the topological sort.
+	tolerateCycles := WorkflowUsesSplitInBatches(workflow) || WorkflowUsesIfRetryLoop(workflow)
+	ifRetryLoops := DetectIfRetryLoops(workflow)
 
 	// Build dependency graph
 	dependencies := make(map[string][]string) // node -> list of dependencies
@@ -337,11 +344,26 @@ func (r *connectionRouterImpl) GetExecutionOrder(workflow *model.Workflow) ([]st
 	// pattern and are skipped when computing execution order; the
 	// engine instead executes the loop to completion before yielding
 	// to the next node.
+	//
+	// The If-retry back-edge is dropped for the same reason: the
+	// engine drives the loop manually.
+	ifRetryBackEdgeTargets := make(map[string]bool)
+	if tolerateCycles {
+		for _, l := range ifRetryLoops {
+			ifRetryBackEdgeTargets[l.BackEdgeTarget] = true
+		}
+	}
 	for sourceNode, connections := range workflow.Connections {
 		for _, typeConnections := range connections.Main {
 			for _, connection := range typeConnections {
 				targetNode := connection.Node
 				if tolerateCycles && isSplitInBatchesNode(workflow, targetNode) {
+					continue
+				}
+				// Drop the If-retry back-edge (guard → body
+				// entry) for ordering; the engine re-injects
+				// it via the loop driver.
+				if tolerateCycles && isIfRetryBackEdge(ifRetryLoops, sourceNode, targetNode) {
 					continue
 				}
 				dependencies[targetNode] = append(dependencies[targetNode], sourceNode)
@@ -465,6 +487,21 @@ func isSplitInBatchesNode(workflow *model.Workflow, nodeName string) bool {
 	for _, node := range workflow.Nodes {
 		if node.Name == nodeName {
 			return node.Type == "n8n-nodes-base.splitInBatches"
+		}
+	}
+	return false
+}
+
+// isIfRetryBackEdge reports whether the `source → target` edge
+// is the back-edge of an If-retry loop (the guard's main[0] true
+// branch targeting the body entry). Such edges are dropped when
+// computing execution order so the topological sort can produce
+// a valid linear order; the engine then re-executes the body
+// via the loop driver.
+func isIfRetryBackEdge(loops []IfRetryLoop, source, target string) bool {
+	for _, l := range loops {
+		if l.GuardNode == source && l.BackEdgeTarget == target {
+			return true
 		}
 	}
 	return false
