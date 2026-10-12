@@ -1,193 +1,566 @@
-# m9m — PRD (Product Requirements Document)
+# m9m — Product Requirements Document (PRD)
 
-**Versi:** 1.2 — 2026-10-06 — implementasi P0 + P1 selesai (credential live, redis native, kafka, plugin JS, NodeData, Properties)
-**Source:** `README.md`, `docs/*`, `n8n-nodes.MD`, `documentation/docs/integrations/n8n-sync.md`, `cmd/m9m/commands/exec.go` (45 executors), `internal/webhooks/*`, `internal/plugins/*`, `internal/nodes/messaging/kafka.go`, `internal/nodes/trigger/kafka.go`
-**Tagline:** The n8n alternative without the bugs — faster, more reliable workflow automation.
-
----
-
-## 1. Capability — Inventory Lengkap
-
-### 1.1 Core Engine
-- Workflow JSON n8n unchanged. DAG, `connections.main`, parallel, conditional branch.
-- Engine: `internal/engine` — `WorkflowEngine`, `ExecuteWorkflowWithContext`, `RunAwareNodeExecutor`, `EdgesTaken`, `NodeOutputs`.
-- Expression: `{{ $json }}`, `{{ $node["name"].data }}`, `$(NodeName)`, `runIndex`, 60+ funcs, Goja sandbox.
-- Triggers: webhook prod/test, cron/schedule, errorTrigger, executeWorkflowTrigger, start, wait.
-- Mode: `manual`, `trigger`, `test`. `WithExecutionMode`, `WithExecutionID`.
-
-### 1.2 Node Catalog — 42 Executors (`RegisterAllNodes`)
-
-| Kategori | Type ID | Status |
-|---|---|---|
-| Transform | `set`, `filter`, `code`, `merge`, `splitInBatches`, `itemLists`, `switch`, `function`, `json`, `xml`, `if`, `loop` | Done |
-| HTTP | `httpRequest` | Done |
-| Trigger | `webhook`, `respondToWebhook`, `errorTrigger`, `executeWorkflowTrigger` | Done |
-| Timer | `cron` | Done |
-| Code | `executeCommand`, `pythonCode` | Done |
-| File | `readBinaryFile`, `writeBinaryFile` | Done |
-| Database | `postgres`, `mySql`, `sqlite`, `elasticsearch`, `redis`, `mongoDb` | Done (redis dual-mode: native + http — §3) |
-| Messaging | `slack`, `discord`, `twilio`, `microsoftTeams`, `kafka`, `kafkaTrigger` | Done (kafka dual-mode: rest + native — §4.1) |
-| AI | `@n8n/n8n-nodes-langchain.openAi`, `anthropic` | Done |
-| Core | `start`, `noOp`, `wait`, `executeWorkflow` | Done |
-| Cloud | `awsLambda`, `s3`, `azureBlobStorage`, `gcpCloudStorage` | Done S3/Lambda/Blob/GCS only |
-| VCS | `github`, `gitlab` | Done |
-| Productivity | `googleSheets`, `notion`, `stripe` | Done |
-| Email | `sendEmail`, `sendGrid` | Done |
-
-Gap builtin vs n8n 400+ nodes: Salesforce, HubSpot, Shopify, Jira, Supabase, Airtable, WhatsApp, Dropbox/Drive — belum. Kafka + Redis native + JS plugin loader sudah landed 2026-10-06. Community `n8n-nodes-*` (npm) covered via Goja JS loader (`--plugin-dir`) — lihat §1.9 + §4.5.
-
-### 1.3 Webhook Surface — Parity 19/19 (2026-09-10)
-- Routes `/webhook/{path:.*}`, `/webhook-test/{path:.*}`, `/api/v1/webhooks*`.
-- Auth `none`/`basic`/`apiKey`/`header`/`jwt` (RS256/HS256, 403 `jwt expired`/`jwt not yet valid`).
-- ResponseMode `onReceived` async `{"message":"Workflow was started"}`, `lastNode`, `responseNode` BFS `respondWith`.
-- ResponseData `firstEntryJson`/`allEntries`/`noData`. Content-Type `options.responseHeaders.entries` > inbound XML/text mirror > `application/json`.
-- Error wire `{code,message,hint}` 404/401/422. OTel `otelExtract` traceparent.
-
-### 1.4 API & Storage
-- REST n8n-compat: `/api/v1/workflows`, `/credentials`, `/executions`, `/node-types`, `/webhooks`, `/schedules`.
-- Storage MySQL/Postgres/SQLite/memory. `node_data`, `edges_taken`. Debug flag per-workflow, retry `POST /executions/:id/retry-node`.
-
-### 1.5 Sync Bridge (n8n↔m9m) — `documentation/docs/integrations/n8n-sync.md`
-- FastAPI `:8001` di `m9m-backend` via `supervisord`, poll `GET /api/v1/workflows` (`X-N8N-API-KEY`) tiap `POLL_INTERVAL_SECONDS=30`, hash dedupe, `typeVersion` float→int, active-filter.
-- Credential decrypt direct Postgres `credentials_entity.data` AES-256-CBC `Salted__`+EVP_BytesToKey, `N8N_ENCRYPTION_KEY`/`GEN_ENCRYPTION_KEY`, re-encrypt via `POST/PUT /api/v1/credentials`.
-- Endpoints: `GET /` banner, `GET /health` `{status:ok}`, `GET /status` `{last_cycle_at, source, count, is_running}`, `POST /sync` cycle sync `{results[], started_at, duration_ms}` (502 jika ada failed).
-- Env: `N8N_BASE_URL`, `N8N_API_KEY`, `M9M_BASE_URL`, `N8N_ENCRYPTION_KEY`, `N8N_PG_*`, `SYNC_ONLY_ACTIVE=true`, `SYNC_PORT=8001`.
-- Disable: comment `supervisord` block atau `POLL_INTERVAL_SECONDS=0`. Workflow community node tanpa executor → sync OK tapi exec fail graceful (butuh §4.5).
-
-### 1.6 AI Assistant (in-app)
-- Settings→AI: OpenAI/Anthropic/MiniMax/Ollama, baseURL, key, model, maxTokens, temp. Mutex-guarded, shared workflow nodes.
-
-### 1.7 Telemetry
-- Prometheus `:9090/metrics` — `m9m_workflow_*`, `m9m_node_*`, `m9m_queue_*`, `m9m_webhook_*`, `m9m_ai_tokens_total`.
-- Tracing OTLP gRPC+HTTP 3-layer: UI toggle > DB `otel_config` > env `OTEL_*`/`M9M_OTEL_*`. Span `workflow.execute`→`node.execute`→`agent.generate`.
-- Health `/healthz`, `/readyz`.
-
-### 1.8 Ecosystem
-- CLI `m9m exec|serve|node list|benchmark|demo`, MCP 37 tools, Go/Node/Python SDK, Docker `harbor.solutiontech.id/m9m/m9m-core:latest`, K8s Helm.
-
-### 1.9 Community Nodes `n8n-nodes-*` — Status & Gap (`n8n-nodes.MD` + `docs/PLUGIN_ARCHITECTURE.md`)
-- **Hari ini:** 0 community nodes. `RegisterAllNodes` static compile — tambah node butuh recompile+redeploy. `n8n-nodes-*` npm tidak jalan.
-- **Gap NDV/execution:** `base.NodeDescription` hanya `Name/DisplayName/Description/Category` — tanpa `Properties []NodeProperty` (`INodeTypeDescription.properties`). Akibat: `GET /api/v1/node-types` tanpa schema, Settings panel dump raw JSON, tanpa Schema/Table/JSON switcher, tanpa multi-branch tab (IF/Switch/Merge), tanpa Binary tab, `execution.NodeData` tidak populate per-node (hanya workflow-level `data`).
-- **Infra siap:** Goja JS runtime (`internal/runtime/javascript_runtime.go`), Python runtime, expression evaluator 60+ funcs — bisa jadi plugin runtime tanpa dependensi baru.
-- **Opsi plugin (evaluated):** 1) JS Goja ⭐ recommended LOW 1-2d, 2) Go `.so` plugin (fragile, no Windows), 3) gRPC external (HIGH), 4) WASM (HIGH cutting-edge), 5) REST HTTP node (LOW), 6) Hybrid JS+Go+REST ⭐ best balance. Target Phase 1 = JS Goja.
+| Field | Value |
+| --- | --- |
+| Document | `m9m.MD` — canonical PRD |
+| Version | `0.4.0-draft` |
+| Status | **Living document** (updated each release cycle) |
+| Last updated | 2026-10-12 |
+| Owner | Mahar Solution (current maintainer) |
+| Original author | Dipankar Sarkar (Neul Labs) |
+| Repository | <https://github.com/maharsolution/m9m> |
+| License | MIT |
+| Source artefacts | `README.md`, `CLAUDE.md`, `CHANGELOG.md`, `docs/roadmap.md`, `docs/technical-spec.md`, `docs/N8N_FEATURE_COMPARISON.md`, `workflow-test.MD`, `parity/parity_gaps.json`, `credentials_n8n_api.MD`, `n8n-nodes.MD`, `gap-current-vs-doc.MD` |
 
 ---
 
-## 2. What Has Been Done
+## 1. One-line summary
 
-- **2026-09 cycle:** 19/19 webhook parity, engine semantics `$(NodeName)`/`RunAwareNodeExecutor`/splitInBatches/Binary, webhook manager `IsAsyncResponseMode`/`ExecuteWebhookAsync`/`recordWorkflowExecution` NDV Input/Output/Settings+`EdgesTaken`.
-- Credential bridge sync Postgres, telemetry 3-layer live toggle, AI Settings wiring, per-workflow debug+retry, Vue `dist` embed, Harbor pipeline.
-- **Docs ready:** `n8n-nodes.MD` canonical per-node-type parameter surfaces (HTTP Request/Set/IF/Switch/Code/Webhook/Postgres/Cron/Filter/Merge/Wait/Loop) + gap matrix + phases 7a-7g. `PLUGIN_ARCHITECTURE.md` 6 opsi plugin + loader/registry/wrapper spec + hot-reload + sandbox limits. `n8n-sync.md` bridge spec lengkap.
-- **2026-10-06 P0+P1 implementasi:**
-  - **B-01+B-02 (Credential live fix + bypass)**: `Webhook.CredentialID` field + `liveAuthData()` re-read `workflowStorage.GetCredential` per request. `handler.go:authenticateRequest` hard-fail 401 jika `CredentialID` set tapi live nil (anti-bypass). Legacy `CredentialID==""` masih preserve fallback.
-  - **B-03 (Redis native)**: `internal/nodes/database/redis.go` refactor dual-mode `redisBackend` — `nativeBackend` (TCP/RESP, AUTH+SELECT, reconnect, RESP3 simple/bulk/int/array/error/nil) + `httpBackend` (REST gateway). 12 ops (get/set/delete/keys/hget/hset/lpush/rpush/lrange/incr/expire/publish). Default `mode=native` no-proxy required.
-  - **B-04 (Kafka)**: `internal/nodes/messaging/kafka.go` producer + `internal/nodes/trigger/kafka.go` consumer via Confluent REST Proxy (`POST /topics/{topic}/produce`, `/consumers/{group}`). Auth basic/apiKey/none. Properties `restProxyUrl/topic/key/value/headers/auth`. `materialiseValue` evaluate `={{ $json.x }}`.
-  - **B-08 (NodeData capture)**: `internal/engine/execution_node_data.go` `BuildExecutionNodeData(workflow, result)` → start+last (Debug=OFF) atau all (Debug=ON) → `model.WorkflowExecution.NodeData`. `result.NodeOutputs` populated per node di engine loop. `recordWorkflowExecution` callers wired.
-  - **B-09 (Properties top-10)**: `internal/nodes/base/{node,properties}.go` `Properties []NodeProperty` (`displayName/name/type/default/options/required/typeOptions/displayOptions/placeholder`). Populated di HTTP/Set/IF/Switch/Code/Webhook/Cron/Filter/Merge/Wait/Postgres/MySQL/SQLite/Redis. `GET /api/v1/node-types` return schema → NDV render ready.
-  - **B-10 (JS plugin loader)**: `internal/plugins/loader.go` (Goja VM, eval/Function disabled, 30s interrupt, `module.exports` shim), `registry.go` (LoadDir, RegisterAll, List, Reload, multi-error), `wrapper.go` (NodeExecutor adapter, Goja VM serialized via mutex, JS→DataItem conversion incl binary/pairedItem). Flag `--plugin-dir` di `cmd/m9m/commands/serve.go` + `M9M_PLUGIN_DIR` env. Default nodeType `n8n-nodes-base.<basename>`.
-  - **45 executors** (was 42): +`kafka` +`kafkaTrigger` +plugin community.
+> **m9m is the n8n alternative without the bugs — faster, more reliable workflow automation, written in Go, ships as a single 30 MB static binary with zero runtime dependencies.**
 
----
+### Tagline (verbatim, from `README.md`)
 
-## 3. Temuan Saat Ini
+> *The n8n alternative without the bugs — faster, more reliable workflow automation.*
 
-| # | Temuan | Severity | Dampak |
-|---|---|---|---|
-| T-01 | Credential per-node stale snapshot — `webhook.AuthData` snapshot → edit Credentials tidak honoured. Fix WIP `Webhook.CredentialID`+`liveAuthData()` | P0 Bug | Rotate auth gagal |
-| T-02 | Redis bukan native driver — `RedisHTTPClient` HTTP gateway, bukan `go-redis` | P1 Gap | Tanpa proxy fail |
-| T-03 | Kafka node missing total — `kafka`+`kafkaTrigger` tidak ada | P1 Gap | Event streaming blocked |
-| T-04 | Auth fallback bypass — credential miss → `well-formed header` PASS | P1 Security | Bypass |
-| T-05 | `apiKey` map `httpHeaderAuth` hack | P2 | Drift |
-| T-06 | `readRespondToWebhookHeaders` lower-case lossy | P3 | Minor |
-| T-07 | `N8N_FEATURE_COMPARISON.md` stale 2024-09-22 | P2 | Mislead |
-| **T-08** | **`NodeDescription` tanpa `Properties`** — tanpa `INodeTypeDescription` parity, NDV tidak bisa render per-node form, Schema/Table/JSON switcher, branch picker. `ExecutionDetail.vue` hanya raw JSON dump | **P0 Gap** | Parity UX n8n gagal, `n8n-nodes.MD` §5.2 blocking |
-| **T-09** | **`execution.NodeData` tidak populate** — engine tidak isi per-node I/O, NDV Input/Output kosong walau `model.Workflow.NodeData` ada | **P0 Bug** | Debug unusable `n8n-nodes.MD` §5.1 blocking |
-| **T-10** | **Community `n8n-nodes-*` tidak support** — workflow import dengan `n8n-nodes-base.*` langka OK, tapi `n8n-nodes-xxx.*` community fail `failed to get executor` | P1 Gap | Migrasi enterprise blocked |
+### Pillars
 
-Detail T-01/T-04 → `bug-fix.MD`. T-08/T-09/T-10 → §4.5-4.6.
+1. **Faster** — 5–10× faster workflow execution, ~6× faster cold start, 70% lower memory.
+2. **More reliable** — single static Go binary, deterministic execution, no npm transitive-dep CVEs, no JS heap leaks.
+3. **Drop-in n8n compatible** — runs n8n workflow JSON, expression syntax, credentials, and webhook wire shape unchanged.
+4. **Agent-native** — built-in MCP server (37 tools) for Claude Code / Cursor / other AI coding agents.
 
 ---
 
-## 4. Kebutuhan Capability Baru
+## 2. Mission & vision
 
-### 4.1 Node Kafka (Baru)
-- Executor `n8n-nodes-base.kafka`+`n8n-nodes-base.kafkaTrigger`. Ops `send`/`sendAndWait`/`consume`. Params `topic`/`key`/`value`/`headers`/`acks`/`partition`/`clientId`/`groupId`/`fromBeginning`/`sasl`/`ssl`. Lib `github.com/segmentio/kafka-go` (pure Go). Credential `kafka`. Trigger emit `{topic,partition,offset,key,value,headers,timestamp}`. Register + compose `kafka/kraft` dev. Acceptance `m9m exec` publish→`kcat` verify, `m9m node list` tampil.
+### Mission
 
-### 4.2 Node Redis — Upgrade Native Driver
-- Refactor `redis.go`: `go-redis/v9` + keep `RedisHTTPClient` fallback jika `baseUrl` http. Params `host`/`port`/`database`/`password` via cred `redis`/`tls`. 11 ops existing + `publish` optional → map `go-redis`. Backward compat http. Test `miniredis` 11 ops PASS, compose `redis:6379` roundtrip.
+Deliver a workflow automation platform that is wire-compatible with n8n at the protocol level but is operationally superior — cheaper to run, easier to deploy, harder to break — so existing n8n users can migrate without rewriting workflows and new users get a system that is "boring" in the best sense of the word.
 
-### 4.3 Credentials Bisa Save di Node (Fix T-01)
-- Persist `PUT /api/v1/workflows/{id}` `credentials:{type:{id,name}}` sudah. Wiring `CredentialID`+`liveAuthData()` re-read `GetCredential` tiap request (WIP merge). Lazy invalidate cukup (eager iterate `activeHooks` opsional). Migrasi backfill `CredentialID` ListWebhooks. Test rotation old 401 new 200 tanpa re-save.
+### Vision (12-month horizon)
 
-### 4.4 Non-Functional Kafka/Redis
-- Metrics `m9m_node_duration_seconds`, `CreateError` wrap, TLS/SASL, constant-time compare.
+m9m becomes the **default self-hosted workflow engine** for teams that have outgrown Zapier/Make pricing, find n8n too fragile in production, and are unwilling to give up the n8n ecosystem (workflows, expressions, credentials, UI). Concretely:
 
-### 4.5 Support `n8n-nodes-*` Community Nodes (Baru — `n8n-nodes.MD` §5-§8 + `PLUGIN_ARCHITECTURE.md`)
+- 100% webhook parity with n8n for the 19 canonical cases (already at 19/19 as of 2026-09-10).
+- A first-class credential bridge (`sync-service/`) so a n8n design instance and an m9m execution instance run side-by-side in lock-step.
+- A self-hosted, AI-assisted workflow editor that uses the same in-app AI runtime already wired through `internal/ai/`.
+- Observable in production by default — Prometheus metrics, OpenTelemetry tracing, structured logs, health/readiness probes, all without paid add-ons.
 
-**Goal:** Workflow yang pakai `n8n-nodes-*` community (400+ npm) bisa import+exec tanpa recompile m9m binary. Parity NDV `n8n-nodes.MD` §2-§4.
+### Why we say "without the bugs"
 
-**Scope V1 — JS Goja Plugin (90% use-case, LOW 1-2 minggu):**
+Three concrete properties that fall out of the Go runtime choice (per `README.md`):
 
-**4.5.1 Plugin Loader (`internal/plugins/loader.go`)**
-- `LoadJavaScriptPlugin(filePath)` → `goja.New()` run `module.exports = {description, execute, validateParameters, permissions}`. Disable `eval`/`Function`, timeout `vm.Interrupt` 30s.
-- Params `description` → `base.NodeDescription` + `Properties []NodeProperty` (mirror `INodeProperties`: `displayName,name,type,default,options,displayOptions,required,typeOptions`).
-- `permissions: {network, filesystem, env}` gate.
-
-**4.5.2 Registry (`internal/plugins/registry.go`)**
-- `LoadPluginsFromDirectory(dir)` `filepath.Glob("*.js")`, `RegisterWithEngine(engine)` wrapper. Flag `--plugin-dir ./plugins` di `main.go`.
-- Hot reload `fsnotify` watch write → `ReloadPlugin`. Hitung `Loaded N plugins` log. Backoff jika fail (jangan crash engine).
-
-**4.5.3 Wrapper (`internal/plugins/wrapper.go`)**
-- `JavaScriptNodeWrapper.Execute(inputData, params)` call JS `execute`, convert `[]DataItem`. `Description()` return plugin description.
-
-**4.5.4 NodeDescription Parity (Blocking `n8n-nodes.MD` §5.2)**
-- Extend `internal/nodes/base/node.go`: `Properties []NodeProperty` + `Inputs/Outputs` meta. Populate di `NewXxxNode()` untuk top-10 dulu: HTTP, Set, IF, Switch, Code, Webhook, Cron, Filter, Merge, Wait, Postgres/MySQL/SQLite. API `GET /api/v1/node-types` + `GET /api/v1/node-types/{name}` return `properties`. Plugin JS `description.properties` langsung jadi sumber — tidak perlu Go rebuild.
-
-**4.5.5 Per-Node I/O Capture (Blocking §5.1)**
-- Engine after each node `execution.NodeData[node.Name]=output` (sukses+gagal). Storage persist `NodeData` sama seperti webhook `recordWorkflowExecution` (sudah ada `BuildExecutionNodeData` tapi belum wired di engine utama — wire sekarang). Sync bridge workflow yang sync dari n8n tetap dapat NodeData setelah exec pertama di m9m.
-
-**4.5.6 ExecutionDetail NDV Rebuild (§5.3-5.5) — Frontend `web/src/views/ExecutionDetail.vue`**
-- Ganti collapsible Output/Parameters → 3 tabs `Input | Output | Settings(Parameters)` default Output. Sub-toolbar `Schema · Table · JSON` persist `localStorage`. Composables `useSchemaView`/`useTableView`/`useJsonView` (`vue-virtual-scroller` >100 rows). Render params via `properties` schema (known label, unknown fallback Raw JSON). Multi-branch picker (IF 2, Switch N, Merge 2) pull `nodeData[branch]`. Binary 4th tab jika `item.binary`. Edge `sourceHandle/targetHandle` `output-N`/`input-N` match handle id (sudah fix di `WorkflowCanvas.vue` — verifikasi live).
-
-**4.5.7 Sync Bridge untuk Community Nodes**
-- Workflow dengan `type: n8n-nodes-xxx.foo` sync OK via `sync.py` (hash+typeVersion). Jika executor belum install, `Engine.ExecuteWorkflow` return error `unknown node type: n8n-nodes-xxx.foo — install plugin ke --plugin-dir` (jangan panic). `POST /sync` result `failed` dengan hint `place n8n-nodes-xxx-foo.js in plugins/`. Tidak perlu decrypt tambahan.
-
-**4.5.8 Opsi Lanjut (Phase 2-3, `PLUGIN_ARCHITECTURE.md`)**
-- Go `.so` plugin (MEDIUM, Linux/macOS only, ABI fragile) — hanya untuk CPU-intensive (image/crypto).
-- gRPC external (HIGH, language-agnostic, isolasi) — enterprise.
-- WASM (HIGH cutting-edge).
-- REST API node (LOW) — microservice existing.
-- Hybrid final: JS default + Go native + REST.
-
-**Acceptance V1:**
-- `cp plugins/my-custom-node.js plugins/` + `m9m serve --plugin-dir ./plugins` → `m9m node list` tampil custom node, `m9m exec workflow-custom.json` PASS tanpa recompile.
-- HTTP/Set/IF/Switch/Code/Webhook top-10 `GET /api/v1/node-types/{name}` return `properties[]` non-empty.
-- `exec_xxx` `nodeData` terisi per-node, NDV tabs Input/Output/Settings + Schema/Table/JSON + branch picker work live (verified screenshot).
-- Community workflow `n8n-nodes-telegram` port sebagai JS plugin → exec PASS.
-- Overhead JS <2× native, load <100ms, hot reload <1s (`PLUGIN_ARCHITECTURE.md` success metrics).
-
-### 4.6 NDV Polish & Community Marketplace (Phase 2 — Out of V1)
-- Pinned/mocked data, Expression CodeMirror, marketplace `m9m plugin install n8n-nodes-xxx`, `registry` search. Effort 1-2 minggu setelah V1.
+1. **No JavaScript-runtime memory leaks.** Go's GC and value semantics eliminate the long-tail heap growth that requires regular n8n process restarts.
+2. **Deterministic execution.** Same input → same output, every time. No event-loop ordering surprises.
+3. **Smaller attack surface.** Single static binary; CVEs in n8n's ~1,000-package npm tree do not apply to the runtime path.
 
 ---
 
-## 5. Roadmap Singkat
+## 3. Target users & personas
 
-| Phase | Item | ETA | Ref |
-|---|---|---|---|
-| P0 Week 1 | Merge T-01 credential live fix + T-04 bypass fix + rotation test | 2d | `bug-fix.MD` B-01/B-02 |
-| P0 Week 1 | Redis native `go-redis/v9` dual-mode + `miniredis` test | 3d | §4.2 |
-| **P0 Week 1-2** | **Engine `NodeData` capture + `NodeDescription.Properties` extend + top-10 populate** (blocking NDV) | **3d** | `n8n-nodes.MD` §5.1-5.2 |
-| P1 Week 2 | Kafka send+trigger `kafka-go` + compose | 5d | §4.1 |
-| **P1 Week 2** | **JS plugin loader/registry/wrapper + `--plugin-dir` + hot reload + sandbox** | **4d** | §4.5.1-4.5.3 |
-| P1 Week 3 | ExecutionDetail NDV rebuild tabs Schema/Table/JSON + branch picker + Binary | 5d | §4.5.6 |
-| P1 Week 3 | Compose dev kafka+redis + parity scripts | 1d | — |
-| P2 Week 4 | Docs sync `N8N_FEATURE_COMPARISON.md`/`technical-spec.md` + marketplace POC + community node port 2 contoh (REST API + data aggregator) | 5d | §4.6 |
+| Persona | Job to be done | Why m9m |
+| --- | --- | --- |
+| **Platform engineer** running a self-hosted n8n today | Tame n8n's memory leaks, restart cycles, and event-loop stalls. | Single static binary, 5–10× faster, no Node.js to babysit. |
+| **Backend engineer** integrating SaaS → DB pipelines | Build durable integrations without hand-rolled cron + queue + retry code. | n8n workflow JSON, durable MySQL/Postgres storage, DLQ, retry-node. |
+| **AI engineer** orchestrating LLM agents | Chain Claude/OpenAI calls, scrape, summarise, route by sentiment — and inspect the trace. | Built-in MCP server, in-app AI assistant, OpenTelemetry, AI cost metrics. |
+| **Solutions architect** migrating off Zapier/Make | Move from per-task SaaS pricing to a single self-hosted engine. | MIT-licensed, no fair-use clauses, can run inside a customer's VPC. |
+| **AI coding agent** (Claude Code, Cursor) | Discover, author, run, and debug workflows without leaving the editor. | MCP server with 37 tools, native `m9m exec` for headless runs. |
+
+### Anti-personas (we explicitly do not optimise for)
+
+- Users who need the full n8n Cloud feature set (managed multi-tenant SaaS, AI credits marketplace, SSO via n8n's IdP).
+- Users who depend on community `n8n-nodes-*` npm packages — not supported in m9m.
+- Users who need the n8n visual editor 1:1 — m9m ships its own Vue editor, with a growing subset of n8n UX (Schema/Table/JSON, branch-aware NDV, per-node I/O capture).
 
 ---
 
-## 6. Out of Scope (Update)
-- n8n Cloud-specific features, m9m Web UI drag-drop sudah ada (bukan n8n UI), SSO/SAML, `n8n-nodes-*` **Go binary rebuild path** untuk 95% cases (JS plugin cukup — Go `.so` hanya perf-critical opt-in). gRPC/WASM external nodes Phase 2 enterprise.
+## 4. Use cases
 
-## 7. Referensi
-- `README.md` parity 19/19, `docs/roadmap.md`, `docs/technical-spec.md`, `docs/PLUGIN_ARCHITECTURE.md` (opsi plugin + wrapper code), `n8n-nodes.MD` (§1-§9 core nodes + NDV + gap matrix + 2026-09-09 live verification), `documentation/docs/integrations/n8n-sync.md` (bridge endpoints+decrypt+env), `internal/webhooks/*.go` diff 2026-10-06, `m9m node list` 42 executors.
+| Use case | Notes |
+| --- | --- |
+| **AI agent orchestration** | Chain Claude / OpenAI calls, run sandboxed `cli.executeCommand` for agentic tools, route by sentiment. |
+| **Data operations** | Scheduled DB sync, conflict resolution, multi-source report merge, pre-write validation. |
+| **Business automation** | New-signup routing, lead scoring, invoice approval routing. |
+| **Scheduled jobs** | Nightly S3 backups, weekly report emails, API health-checks → Slack alerts. |
+| **Webhook fan-out** | Public HTTP entry points (basic auth, header auth, JWT) that fan out to multiple downstream systems. |
+| **Hybrid n8n ↔ m9m** | Design in n8n (rich editor), execute on m9m (cheap, fast) via `sync-service/`. |
+
+---
+
+## 5. Goals & non-goals
+
+### 5.1 Goals (in priority order)
+
+| # | Goal | Measure of success |
+| --- | --- | --- |
+| G1 | **Wire-compat with n8n** for the 19 canonical webhook cases. | 19/19 PASS on every parity cycle (`workflow-test.MD`). |
+| G2 | **Drop-in credential sync** so a n8n design instance and m9m execution instance stay in lock-step. | `sync-service/` keeps `node.credentials` envelopes identical post-cycle; positive/3 and positive/8 PASS via real auth. |
+| G3 | **Production-grade observability** without paid tiers. | Prometheus metrics, OTel tracing, structured logs, `/healthz` + `/readyz` all green out-of-the-box. |
+| G4 | **Performance dominance vs n8n.** | 5–10× execution, 70% lower memory, 6× faster cold start, on the same hardware. |
+| G5 | **Single-binary deployment.** | One statically-linked Go binary, ~30 MB, zero npm, no Node.js. |
+| G6 | **Agent-native operation.** | Built-in MCP server (≥37 tools), in-app AI assistant, `m9m exec` for headless orchestration. |
+| G7 | **Reliable engine semantics.** | Deterministic execution, `RunAwareNodeExecutor` for `$(NodeName)`, IF v2 boolean coercion, `splitInBatches` anchor + done-branch, sticky-note skipping. |
+| G8 | **DX parity for debugging.** | n8n-style NDV (Input/Output/Settings tabs), Schema/Table/JSON views, per-node retry, branch-coloured execution edges. |
+
+### 5.2 Non-goals (explicit)
+
+| # | Non-goal | Why |
+| --- | --- | --- |
+| N1 | n8n Cloud feature parity (managed billing, AI marketplace, n8n's own SSO). | We are self-hosted OSS, MIT. |
+| N2 | Running `n8n-nodes-*` community npm packages. | Incompatible with "single static binary" goal. Plugin system (`internal/plugins/`) is the supported extension path. |
+| N3 | Sharing the live DB with a running n8n instance. | Schema divergence. `sync-service/` is the bridge. |
+| N4 | 1:1 n8n UI clone. | We have our own Vue editor with a focused subset; full n8n UI is out of scope. |
+| N5 | Browser-based "click to design, click to deploy" SaaS. | We are an engine + a self-hosted editor, not a hosted service. |
+
+---
+
+## 6. Core capabilities (current state, 2026-10-12)
+
+### 6.1 Runtime
+
+- Go 1.21+, single static binary, ~30 MB.
+- Modular, interface-driven design (see `internal/` packages: `engine`, `nodes`, `api`, `queue`, `monitoring`, `credentials`, `expressions`, `runtime`, `webhooks`, `scheduler`, `consensus`, `tenancy`, `versioning`, `audit`, `reliability`, `storage`).
+- Queue backends: in-memory, Redis, RabbitMQ.
+- Storage backends: in-memory, MySQL (default), Postgres, SQLite.
+- Deterministic execution semantics: `RunAwareNodeExecutor`, `$(NodeName)` reads most recent `runIndex`, IF v2 boolean coercion, `splitInBatches` anchor + done-branch.
+
+### 6.2 Node catalogue — 42 registered executors (`cmd/m9m/commands/exec.go::RegisterAllNodes`)
+
+| Category | Count | Nodes |
+| --- | --- | --- |
+| Core | 7 | `start`, `set`, `if`, `switch`, `filter`, `merge`, `noOp`, `wait`, `itemLists`, `executeWorkflow`, `code`, `function`, `json` |
+| Transform | + | `if`, `switch`, `loop`, `splitInBatches`, `itemLists`, `xml`, `code`, `function` |
+| Trigger | 8 | `webhook`, `cron`, `errorTrigger`, `executeWorkflowTrigger`, `respondToWebhook`, `kafkaTrigger`, `kafka`, `respond_to_webhook` |
+| HTTP | 1 | `httpRequest` |
+| Database | 8 | `postgres`, `mySql`, `sqlite`, `redis`, `mongoDb`, `elasticsearch`, plus helpers |
+| Messaging | 5 | `slack`, `discord`, `twilio`, `microsoftTeams`, `kafka`, `kafka_native` |
+| Email | 3 | `sendEmail`, `sendGrid`, `smtp` |
+| AI / LLM | 2 | `@n8n/n8n-nodes-langchain.openAi`, `@n8n/n8n-nodes-langchain.anthropic` |
+| Cloud | 4 | `awsLambda`, `s3`, `azureBlobStorage`, `gcpCloudStorage` |
+| VCS | 2 | `github`, `gitlab` |
+| Productivity | 3 | `googleSheets`, `notion`, `stripe` |
+| Code | 1 | `pythonCode` |
+| File | 2 | `readBinaryFile`, `writeBinaryFile` |
+| CLI | 1 | `executeCommand` |
+
+(`m9m node list` is the authoritative count.)
+
+### 6.3 HTTP / API surface (n8n-compatible)
+
+- **Workflows** — CRUD + activate/deactivate + duplicate + history + tags + transfer.
+- **Executions** — list / get / cancel / retry / retry-node / count / recent.
+- **Schedules** — CRUD + enable/disable + history.
+- **Credentials** — list / get / create / update / delete / test / schema (per `credentials_n8n_api.MD`).
+- **Node types** — list + get-one, returning `INodeTypeDescription`-equivalent `properties` arrays.
+- **AI assistant** — `generate`, `suggest`, `explain`, `fix`, `chat`, plus provider config GET/PUT/DELETE/test.
+- **OTel telemetry** — `GET/PUT/DELETE /api/v1/otel` for live config; standard env-var + DB-override stack.
+- **DLQ** — list / get / retry / discard / stats.
+- **Settings** — global, license, LDAP.
+- **Performance / push** — `GET /api/v1/performance`, `GET /api/v1/push` (WebSocket).
+- **Health** — `/healthz`, `/readyz`, `/health/detailed`, `/metrics`.
+
+### 6.4 Integrations (current)
+
+- **AI**: OpenAI, Anthropic, MiniMax (Anthropic-compatible wire shape), Ollama (local).
+- **DB**: PostgreSQL (sslMode=disable default to match n8n), MySQL, SQLite, MongoDB, Redis, Elasticsearch.
+- **Messaging**: Slack, Discord, Microsoft Teams, Twilio, Kafka.
+- **Email**: SMTP (`sendEmail`), SendGrid.
+- **Cloud**: AWS S3, AWS Lambda, Azure Blob, GCP Cloud Storage.
+- **VCS**: GitHub, GitLab.
+- **Productivity**: Notion, Stripe, Google Sheets.
+- **CLI agents**: Claude Code, Codex, Aider (sandboxed via `executeCommand`).
+- **Data formats**: JSON, XML (`jsonToxml` / `xmlTojson`).
+- **Files**: Read/Write Binary File.
+
+### 6.5 Tooling
+
+- **CLI** — `m9m serve`, `m9m exec`, `m9m node list`, `m9m demo`, `m9m benchmark`, `m9m config validate`, `m9m workflow ...`.
+- **MCP server** — 37 tools for Claude Code / Cursor; resources for live node-type catalogue.
+- **SDKs** — Go (`pkg.go.dev/github.com/maharsolution/m9m`), Node.js (`m9m-cli` on npm), Python (`m9m-cli` on PyPI).
+- **Docker** — `ghcr.io/maharsolution/m9m` and `maharsolution/m9m` (Docker Hub). Compose stack at `docker-compose.yml` for m9m + n8n + sync bridge.
+- **Helm** — `deploy/helm/`.
+
+### 6.6 Observability
+
+- **Metrics** — Prometheus text exposition on `:9090/metrics` (workflow, node, queue, scheduler, webhook, AI token counters).
+- **Traces** — OpenTelemetry OTLP gRPC + HTTP/protobuf. Three-layer config (UI toggle → DB-stored override → env). Span tree: `workflow.execute` → `node.execute` → (`agent.generate` | `db.query` | `http.request`).
+- **Logs** — structured (JSON in prod, text in dev). Correlation IDs.
+- **Health** — `/healthz` (liveness), `/readyz` (readiness), `/health/detailed`, `/metrics`.
+
+### 6.7 Sync service (n8n ↔ m9m bridge)
+
+`sync-service/sync.py` is a Python FastAPI bridge that lives inside the `m9m-backend` container (managed by `supervisord.conf`). It:
+
+- Polls n8n every `POLL_INTERVAL_SECONDS` (default 30).
+- On each cycle, GETs active workflows, GETs/POSTs/PUTs to m9m via `X-N8N-API-KEY`.
+- Decrypts n8n's AES-256-CBC + EVP_BytesToKey credential envelopes using `N8N_ENCRYPTION_KEY` and re-encrypts under m9m's envelope.
+- Exposes `POST /sync` (manual cycle), `GET /status`, `GET /health` on port 8001.
+- Idempotent — POST first, PUT-on-409 fallback.
+- Per-workflow failures do not stop the cycle (logged and surfaced in the JSON response).
+
+---
+
+## 7. Functional requirements
+
+### FR-1. Workflow execution
+- m9m MUST accept n8n workflow JSON without conversion (`m9m exec my-n8n-workflow.json`).
+- m9m MUST evaluate n8n expression syntax `{{ $json.field }}`, `{{ $node["name"].item.json }}`, and built-in functions.
+- m9m MUST honour `RunAwareNodeExecutor` semantics for `$(NodeName)`.
+- m9m MUST route IF / Switch outputs by the rules n8n produces, including IF v2 boolean coercion.
+- m9m MUST skip nodes whose input is empty (n8n's "0 items → don't run" semantics).
+- m9m MUST skip decorative nodes (Sticky Notes, comments).
+
+### FR-2. Webhook surface
+- m9m MUST register webhook paths exactly as n8n does (`/{path}` or `/webhook/{path}`, plus `/webhook-test/{path}` for editor).
+- m9m MUST support HTTP methods `GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS`.
+- m9m MUST support `none | basicAuth | headerAuth | JWT` webhook authentication.
+- m9m MUST emit Content-Type per the priority: per-node `options.responseContentType` → inbound `Content-Type` → `application/json`.
+- m9m MUST honour `Respond: Immediately` (return `{"message":"Workflow got started"}`), `lastNode` (return last node's data), and `responseNode` (use Respond to Webhook).
+- m9m MUST clamp payload size to `N8N_PAYLOAD_SIZE_MAX` (16 MB) by default.
+
+### FR-3. Credentials
+- m9m MUST expose n8n-compatible credential REST endpoints (`/api/v1/credentials[/{id}|/test|/schema/{type}]`).
+- m9m MUST resolve `node.credentials[typeName]` at execution time and pass the resolved secret set to the node's `Execute`.
+- m9m MUST fail loudly with an n8n-style error if a credential is missing (e.g. `No credentials found for type 'httpBasicAuth'`) — never fall back to anonymous.
+- m9m MUST decrypt n8n Postgres `credentials_entity.data` blobs using `N8N_ENCRYPTION_KEY` during sync and re-encrypt at rest under m9m's envelope.
+
+### FR-4. Sync bridge
+- m9m MUST expose a sync service on `:8001` with `POST /sync`, `GET /status`, `GET /health`.
+- The sync bridge MUST upsert credentials BEFORE workflows that reference them.
+- The sync bridge MUST surface per-workflow failures without aborting the cycle.
+
+### FR-5. API surface
+- m9m MUST mirror n8n's public REST surface: workflows, executions, credentials, schedules, tags, users, etc.
+- m9m MUST accept `X-N8N-API-KEY` (or Bearer JWT) on `/api/v1/*`.
+- m9m MUST emit the same error envelope shape n8n uses for 4xx/5xx.
+
+### FR-6. Editor & UX
+- m9m MUST ship its own Vue editor with: visual canvas, drag-to-connect, parameter panels, credential picker, run button.
+- m9m MUST render execution detail (NDV) with **Input / Output / Settings** tabs.
+- m9m MUST render Input/Output in **Schema / Table / JSON** modes.
+- m9m MUST colour execution edges per state (taken, skipped, errored) using `EdgesTaken`.
+- m9m MUST support per-workflow debug mode (capture all node I/O when ON, last-node-only when OFF).
+- m9m MUST support per-node retry (`POST /executions/{id}/retry-node` + "Retry from here" button).
+
+### FR-7. AI assistant
+- m9m MUST expose an in-app AI assistant (Settings → AI card) with provider/model/base-URL/API-key/max-tokens/temperature.
+- m9m MUST support OpenAI, Anthropic, MiniMax (Anthropic-compatible), Ollama.
+- m9m MUST support `generate`, `suggest`, `explain`, `fix`, `chat` endpoints.
+- m9m MUST hot-reload AI config without restart (mutex-guarded).
+
+### FR-8. Observability
+- m9m MUST emit Prometheus metrics on `:9090/metrics` when started with `--metrics-port`.
+- m9m MUST emit OpenTelemetry traces when enabled, defaulting to a workflow → node → AI-agent span tree.
+- m9m MUST honour three-layer OTel config (UI toggle → DB override → env).
+- m9m MUST answer `/healthz` and `/readyz` correctly (liveness vs readiness).
+- m9m MUST include OTel pipeline health in `/readyz`.
+
+### FR-9. Multi-tenancy & workspaces
+- m9m MUST isolate workflows/credentials/executions by workspace.
+- m9m MUST support per-workspace API key scoping.
+
+### FR-10. Plugin extension
+- m9m MUST support three plugin transports: JavaScript (Goja), gRPC, REST.
+- m9m MUST auto-discover plugins from a directory at startup.
+- m9m MUST register each plugin under `n8n-nodes-base.<name>` so existing n8n workflows that reference the same name can use it.
+
+---
+
+## 8. Non-functional requirements
+
+### 8.1 Performance (target, vs n8n)
+
+| Metric | Target | How measured |
+| --- | --- | --- |
+| Cold start | < 1 s | `time m9m serve` to `/healthz` 200 |
+| Memory (idle) | < 200 MB | RSS after 5 min idle |
+| Workflow execution (small) | 15K workflows/sec | `m9m benchmark` |
+| Workflow execution (medium) | 9K workflows/sec | `m9m benchmark` |
+| Workflow execution (complex) | 5K workflows/sec | `m9m benchmark` |
+| Expression evaluation | 170K ops/sec | `m9m benchmark` expression suite |
+| Container size | < 350 MB | `docker images m9m` |
+| Binary size | < 35 MB | `ls -la m9m.exe` |
+| Concurrent workflows | ≥ 500 | load test harness in `test-workflows/` |
+
+### 8.2 Reliability
+
+- Deterministic execution — same input always produces same output bytes.
+- No JS heap growth — long-running m9m process must not need periodic restarts.
+- Engine MUST survive a webhook crash (panic-recovery middleware, structured error response).
+- DLQ MUST capture terminal workflow failures with full input context for replay.
+- `/readyz` MUST return non-200 when any dependency is down (storage, queue, OTel pipeline).
+
+### 8.3 Security
+
+- Credentials encrypted at rest (AES-256-GCM, see `internal/credentials/n8n_cipher.go`).
+- Webhook auth via basic / header / JWT, secrets never logged.
+- No secrets in trace attributes; trace `http.request` span must redact `Authorization` header.
+- Sandbox JavaScript (Goja) and Python (sandboxed) — no `eval`, no `Function`, no unrestricted FS.
+- CodeQL / gosec / govulncheck gates in CI.
+- Coordinated disclosure per `SECURITY.md` (`me@dipankar.name`, 48h ack SLA).
+
+### 8.4 Operability
+
+- One static binary, one config file, one env file.
+- Health/readiness probes out of the box.
+- Structured JSON logs in prod, text in dev.
+- Per-workflow, per-node, per-AI-token metrics and traces.
+- Upgrade path: replace binary, restart — no data migration in the happy path.
+
+### 8.5 Portability
+
+- Target platforms: macOS (Intel + Apple Silicon), Linux (AMD64 + ARM64), Windows (AMD64).
+- Storage: MySQL 8, PostgreSQL 13+, SQLite 3.
+- Queue: in-memory (dev), Redis, RabbitMQ.
+- Container base: distroless or alpine; no Node.js in the runtime image.
+
+### 8.6 Compatibility contract
+
+The contract m9m targets is "behaves like n8n for the documented inputs":
+
+- Workflow JSON (structure + keys).
+- Expression syntax + built-in function set.
+- Credential envelope shape (minus `data` for parity testing).
+- REST API surface (paths, methods, status codes, error shapes).
+- Webhook wire shape (paths, methods, headers, Content-Type priority, response modes).
+- Auth (X-N8N-API-KEY, JWT, basic, header).
+- Node `type` and `typeVersion` integer per `INodeTypeDescription`.
+
+If n8n changes any of the above in a way that breaks parity, m9m opens a parity-gap ticket (`parity/parity_gaps.json`) and a fix lands before the next release.
+
+---
+
+## 9. Architecture overview
+
+```
+                    ┌───────────────────────────────────────────┐
+                    │  n8n Editor (:5678)                       │
+                    │  — design workflows                       │
+                    │  — has its own Postgres                   │
+                    └─────────────┬─────────────────────────────┘
+                                  │ REST + X-N8N-API-KEY
+                                  ▼
+┌──────────────────────────────────────────────────────────────┐
+│  m9m-backend container (single image, supervisord-managed)  │
+│  ┌────────────────────────┐  ┌────────────────────────────┐  │
+│  │  m9m serve (:8080)     │  │  sync-service/sync.py      │  │
+│  │  — engine              │  │  (:8001)                   │  │
+│  │  — 42 node executors   │◄─┤  — poll n8n every 30s      │  │
+│  │  — REST API            │  │  — decrypt n8n creds       │  │
+│  │  — webhooks            │  │  — POST/PUT to m9m         │  │
+│  │  — schedules           │  └────────────────────────────┘  │
+│  │  — OTel / Prometheus   │                                  │
+│  │  — AI runtime          │                                  │
+│  │  — DLQ                 │                                  │
+│  │  — MCP server (:??? )  │                                  │
+│  └─────┬──────────────────┘                                  │
+└────────│─────────────────────────────────────────────────────┘
+         │
+   ┌─────┼──────────┐
+   ▼     ▼          ▼
+┌──────┐ ┌──────┐ ┌────────────────┐
+│MySQL │ │Redis │ │Object storage  │
+│:3306 │ │:6379 │ │(S3 / OSS / GCS)│
+└──────┘ └──────┘ └────────────────┘
+```
+
+Subsystems (Go packages, see `internal/`):
+
+- `engine` — workflow execution, node orchestration, edge routing, retry.
+- `nodes/*` — 42 executors across 13 categories.
+- `api` — REST handlers, request/response shapes, auth, pagination.
+- `webhooks` — webhook manager, content-type priority table, header passthrough.
+- `expressions` — Goja-based expression engine, n8n function library.
+- `runtime` — sandboxed JS (Goja) and Python.
+- `credentials` — envelope store, n8n AES-256-CBC + EVP_BytesToKey decoder, m9m AES-256-GCM encoder.
+- `queue` — in-memory / Redis / RabbitMQ drivers.
+- `scheduler` — cron + interval, schedule history.
+- `storage` — MySQL / Postgres / SQLite / in-memory backends.
+- `monitoring` + `otel` — Prometheus metrics, OpenTelemetry tracing, health probes.
+- `ai` — in-app AI runtime, provider catalog, mutex-guarded hot reload.
+- `mcp` — Model Context Protocol server, 37 tools.
+- `plugins` — JS / gRPC / REST plugin transports.
+- `reliability` — DLQ, retry policies, circuit breakers.
+- `tenancy` + `workspace` — multi-tenant isolation.
+- `versioning` — workflow version history.
+- `audit` — audit log.
+- `consensus` — leader election for queue mode.
+- `sandbox` — execution sandbox policies.
+
+---
+
+## 10. Compatibility contract (formal)
+
+m9m targets the following n8n surfaces. Any drift is a bug; see `bug-fix.MD`.
+
+| Surface | Reference | Status |
+| --- | --- | --- |
+| Workflow JSON | `workflow_n8n_api.MD` | ✅ |
+| Credential envelope | `credentials_n8n_api.MD` | ⚠️ envelope shape matched; `data` stripped for parity |
+| REST API | `n8n-api-docs.md` | ✅ paths, methods, status codes |
+| Expression syntax | `docs/expressions/` | ✅ |
+| 19 webhook cases | `workflow-test.MD` Section B/C | ✅ 19/19 |
+| Node types (42 of n8n's ~250) | `docs/N8N_FEATURE_COMPARISON.md` | ⚠️ 42 registered, more in backlog |
+| `INodeTypeDescription.properties` | `n8n-nodes.MD` §5.2 | ✅ top-10 core nodes + Postgres / MySQL / SQLite / Redis / Mongo / Kafka; legacy fallback for the rest |
+| Content-Type priority | `workflow-test.MD` GAP-2026-09-09-1 | ✅ (commit `f92b76b`) |
+
+---
+
+## 11. Ecosystem & integrations
+
+### 11.1 Distribution
+
+- **GitHub Releases** — prebuilt binaries for `darwin/amd64`, `darwin/arm64`, `linux/amd64`, `linux/arm64`, `windows/amd64`.
+- **Homebrew** — `brew tap maharsolution/tap && brew install m9m`.
+- **Go install** — `go install github.com/maharsolution/m9m/cmd/m9m@latest`.
+- **npm / PyPI** — `m9m-cli` SDK packages.
+- **Docker** — `ghcr.io/maharsolution/m9m` and `maharsolution/m9m` (Docker Hub); image also pushed to Harbor by `.github/workflows/harbor-image.yml`.
+- **Helm** — `deploy/helm/`.
+
+### 11.2 Distribution channels
+
+- Internal Harbor at `harbor.solutiontech.id/m9m/m9m-core` (per `docker-compose.yml` `REGISTRY_IMAGE_URL`).
+
+### 11.3 Adjacent projects (same maintainer)
+
+| Project | Role |
+| --- | --- |
+| [brat](https://github.com/neul-labs/brat) | Multi-agent harness for AI coding tools. |
+| [ringlet](https://github.com/neul-labs/ringlet) | One CLI to rule all your coding agents. |
+| [fastworker](https://github.com/neul-labs/fastworker) | Background tasks in Python, no Redis/RabbitMQ. |
+| [conductor](https://github.com/neul-labs/conductor) | Multi-agent CLI orchestrator. |
+
+---
+
+## 12. Milestones & release plan
+
+Release cadence: minor versions every 4–6 weeks; patch versions as needed. We follow semver:
+
+- **MAJOR** — breaking change to workflow JSON, REST API, or credential envelope shape.
+- **MINOR** — new node, new endpoint (additive), new feature, parity cycle.
+- **PATCH** — bug fix, perf improvement, doc fix, dependency bump.
+
+### Roadmap (forward-looking)
+
+| Version | Theme | Anchor |
+| --- | --- | --- |
+| **0.2.0-parity** ✅ | 19/19 webhook parity | Released 2026-09-10. |
+| **0.2.x** | Engine semantics (`EdgesTaken`, debug mode, retry-node, IF v2 coercion, `sslMode=disable`) | Released 2026-09. |
+| **0.3.0** ✅ | AI assistant rename, in-app AI Settings card, OTel 3-layer config, sync bridge GA | 2026-09 → 2026-10. |
+| **0.4.0** (this PRD) | **Credential sync GA**, DLQ hardening, full execution detail (NDV) rewrite, `INodeTypeDescription` parity for top-25 nodes, 30+ missing n8n nodes, Helm chart GA, sub-workflow UI. | 2026 Q4. |
+| **0.5.0** | Queue mode (Redis/RabbitMQ) GA, task-runner architecture, horizontal scaling, multi-instance leader election. | 2027 Q1. |
+| **0.6.0** | OAuth2 + JWT + SSO, role-based access, LDAP/AD, audit log. | 2027 Q1–Q2. |
+| **0.7.0** | Workflow templates marketplace, community-contributed node packs via plugin transport. | 2027 Q2. |
+| **0.8.0** | Binary data + streaming, image/audio node support, S3-backed blob store. | 2027 Q3. |
+| **1.0.0** | Production hardening freeze. SLAs, on-call runbooks, cluster deployment guide. | 2027 Q4. |
+
+### 0.4.0 exit criteria (this PRD's named release)
+
+- [ ] `parity_gaps.json GAP-2026-09-09-2` resolved end-to-end (credentials sync + `/api/v1/credentials` + BaseNode resolver).
+- [ ] `internal/ai` legacy `M9M_COPILOT_*` aliases removed in code; CHANGELOG entry.
+- [ ] `INodeTypeDescription`-equivalent `properties` populated for top-25 core nodes (HTTP, Set, IF, Switch, Code, Function, Webhook, Cron, Filter, Merge, Wait, Loop, SplitInBatches, Postgres, MySQL, SQLite, Mongo, Redis, Kafka, Slack, Discord, Teams, Twilio, SendGrid, RespondToWebhook).
+- [ ] `documentation/docs/` parity claim updated from "95% backend feature parity" to "19/19 webhook parity (2026-09-10 cycle)".
+- [ ] DLQ retry path integration-tested with one authed workflow (positive/8).
+- [ ] `n8n-nodes.MD` §5.3 (NDV rewrite) marked complete end-to-end (Input/Output/Settings tabs + Schema/Table/JSON + multi-branch + binary tab).
+- [ ] Helm chart reaches `v1` (install/upgrade/rollback smoke-tested on k8s 1.28+).
+- [ ] `,env` accidental filename and `Unconfirmed 467040.crdownload` 112 MB stray file removed from repo (see `bug-fix.MD` repo-hygiene section).
+
+---
+
+## 13. Success metrics
+
+| Metric | Q4 2026 | Q1 2027 | Q2 2027 |
+| --- | --- | --- | --- |
+| Webhook parity (canonical 19) | 19/19 | 19/19 | 19/19 |
+| `m9m node list` count | 50 | 80 | 120 |
+| `INodeTypeDescription` coverage (top-25) | 25/25 | 25/25 | 25/25 |
+| n8n node coverage (of ~250) | 50/250 | 100/250 | 150/250 |
+| Docker image size | < 350 MB | < 320 MB | < 300 MB |
+| Cold start | < 1 s | < 0.8 s | < 0.6 s |
+| Memory (idle) | < 200 MB | < 180 MB | < 160 MB |
+| Concurrent workflows (single instance) | 500 | 750 | 1000 |
+| Open P0/P1 bugs (see `bug-fix.MD`) | < 5 | < 3 | 0 |
+| Mean time to parity-gap close | < 7 days | < 3 days | < 24h |
+| CI pipeline runtime | < 12 min | < 10 min | < 8 min |
+| Test coverage (Go) | ≥ 75% | ≥ 80% | ≥ 85% |
+| Doc coverage (`documentation/docs/` vs `internal/`) | ≥ 90% | ≥ 95% | ≥ 98% |
+
+---
+
+## 14. Risks & mitigations
+
+| Risk | Likelihood | Impact | Mitigation |
+| --- | --- | --- | --- |
+| n8n changes a wire shape (REST path, JSON key, status code) without notice. | High | High | Parity test suite runs in CI on every PR; `parity/parity_gaps.json` is the live backlog; `workflow-test.MD` Section H is the published scoreboard. |
+| n8n deprecates `X-N8N-API-KEY` in favour of something else. | Low | High | Watch the upstream OpenAPI spec; m9m accepts `X-N8N-API-KEY`, `Authorization: Bearer`, and `n8n-auth` cookie today. |
+| Credential envelope decryption mismatch (n8n rotates its cipher). | Medium | High | `internal/credentials/n8n_cipher.go` is isolated; a unit test vectors file is checked in. New ciphers are additive. |
+| Go runtime memory leak in a third-party library (e.g. a MongoDB driver under sustained load). | Medium | High | Add `go test -race` + `pprof` snapshots to the smoke-test pipeline; weekly memory-leak soak test (`test-workflows/soak/`). |
+| AI provider rate-limit / outage. | High | Medium | In-app AI is mutex-guarded; circuit breaker in `internal/reliability/`. |
+| Sub-workflow recursion blows the stack. | Low | Medium | Engine has a recursion-depth cap (`EngineOptions.MaxSubWorkflowDepth`, default 8). |
+| User loses `N8N_ENCRYPTION_KEY` → all synced credentials unreadable. | Medium | Critical | Document the key in `SECURITY.md`; recommend a backup strategy; sync service aborts on missing key. |
+| Docs drift (already 12 months behind per `gap-current-vs-doc.MD`). | High | Medium | Doc-only PRs are exempt from CI; one named owner per doc; `mkdocs build` regenerates `documentation/site/` after every docs change. |
+| Repo URL drift (`neul-labs/m9m` vs `maharsolution/m9m`). | Medium | Low | Bulk-rewrite in docs already done (Phase 0 of `gap-current-vs-doc.MD`); CI grep check for stale URLs. |
+| m9m vs n8n license confusion (Sustainable Use vs MIT). | Low | High | README is explicit (MIT). `LICENSE` file is canonical. |
+
+---
+
+## 15. Out of scope (definitively)
+
+1. **n8n Cloud features** (managed billing, AI credits marketplace, n8n's SSO).
+2. **Custom `n8n-nodes-*` npm packages** — use the plugin system instead.
+3. **1:1 n8n UI clone** — we have our own editor with a focused subset.
+4. **Live DB sharing with a running n8n instance** — use `sync-service/`.
+5. **Browser-only "design in the cloud" SaaS** — m9m is engine + self-hosted editor.
+6. **Mobile app** — the Vue editor is desktop-first; mobile is web-responsive.
+
+---
+
+## 16. Open questions
+
+| # | Question | Owner | Target date |
+| --- | --- | --- | --- |
+| OQ-1 | Do we add a `M9M_EXECUTION_MODE=queue` flag for the queue backend, or auto-detect from env? | TBD | 0.5.0 |
+| OQ-2 | How do we version credential envelopes — per-write key rotation, or per-instance? | TBD | 0.4.0 (with credential sync GA) |
+| OQ-3 | Should the in-app AI assistant route to the user's own API key (BYOK), or to a Mahar Solution proxy? | TBD | 0.4.0 |
+| OQ-4 | Do we expose `m9m exec --replay <execution-id>` for one-click replay from the UI? | TBD | 0.4.0 |
+| OQ-5 | Helm chart values: how do we let ops pin `M9M_MYSQL_DSN` without templating the entire `.env`? | TBD | 0.4.0 |
+| OQ-6 | Should the plugin transport support WASM (in addition to JS/gRPC/REST)? | TBD | 0.6.0 |
+| OQ-7 | Multi-tenant isolation — row-level security in MySQL, or schema-per-tenant? | TBD | 0.5.0 |
+| OQ-8 | Do we ship a "lite" build (no OTel, no AI, no MCP) for embedded use? | TBD | 0.6.0 |
+
+---
+
+## 17. References
+
+- README — <https://github.com/maharsolution/m9m/blob/main/README.md>
+- `CLAUDE.md` — agent working notes for the codebase.
+- `CHANGELOG.md` — release notes.
+- `docs/roadmap.md` — original 16-week roadmap (now superseded by §12 above).
+- `docs/technical-spec.md` — original technical spec (now superseded by §6–§9 above).
+- `docs/N8N_FEATURE_COMPARISON.md` — feature gap analysis, last updated 2026-10-07.
+- `docs/REFRACTOR_PLAN.md` — module decomposition plan.
+- `docs/PLUGIN_SYSTEM.md` — plugin architecture.
+- `docs/PLUGIN_ARCHITECTURE.md` — plugin design.
+- `n8n-api-docs.md` — captured n8n public API + webhook reference.
+- `workflow_n8n_api.MD` — n8n workflow OpenAPI 3.0.1 dump.
+- `credentials_n8n_api.MD` — n8n credentials API reference.
+- `n8n-nodes.MD` — n8n core nodes reference for m9m.
+- `workflow-test.MD` — live n8n ↔ m9n parity test report.
+- `parity/parity_gaps.json` — live parity-gap backlog.
+- `gap-current-vs-doc.MD` — docs vs code drift analysis.
+- `SECURITY.md` — coordinated disclosure.
+- `CONTRIBUTING.md` — contribution guide.
+
+---
+
+## 18. Sign-off
+
+This PRD is a **living document**. It is updated:
+
+- At the start of each release cycle.
+- When a new node or endpoint lands.
+- When a parity gap is opened or closed.
+- When a milestone slips.
+
+Owner of the PRD: the maintainer (`Mahar Solution`).
+Review cadence: every 4 weeks or before each minor release.
