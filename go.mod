@@ -20,23 +20,6 @@ require (
 	// Database Drivers
 	github.com/go-sql-driver/mysql v1.9.3
 
-	// MongoDB native client (pure Go via mongo-driver, no CGO).
-	// Powers `n8n-nodes-base.mongoDb` in native mode — direct
-	// TCP / BSON wire protocol, no proxy required. Apache-2.0,
-	// pulls in `golang.org/x/crypto` (already in our tree for
-	// SCRAM) and `github.com/xdg-go/scram` / `xdg-go/pbkdf2`
-	// (already indirect).
-	go.mongodb.org/mongo-driver v1.17.4
-
-	// Kafka client (native TCP / SASL / TLS — pure Go, no CGO).
-	// Selected over confluent-kafka-go because the Docker build
-	// already needs CGO only for sqlite3; pulling librdkafka would
-	// bloat the image. segmentio/kafka-go is MIT-licensed, supports
-	// PLAIN/SCRAM SASL, TLS, and consumer groups, and is the
-	// dependency of choice for the `n8n-nodes-base.kafka` /
-	// `n8n-nodes-base.kafkaTrigger` native transport.
-	github.com/segmentio/kafka-go v0.4.47
-
 	// Authentication & Security
 	github.com/golang-jwt/jwt/v4 v4.5.1
 
@@ -54,13 +37,29 @@ require (
 	// Scheduling
 	github.com/robfig/cron/v3 v3.0.1
 
+	// Kafka client (native TCP / SASL / TLS — pure Go, no CGO).
+	// Selected over confluent-kafka-go because the Docker build
+	// already needs CGO only for sqlite3; pulling librdkafka would
+	// bloat the image. segmentio/kafka-go is MIT-licensed, supports
+	// PLAIN/SCRAM SASL, TLS, and consumer groups, and is the
+	// dependency of choice for the `n8n-nodes-base.kafka` /
+	// `n8n-nodes-base.kafkaTrigger` native transport.
+	github.com/segmentio/kafka-go v0.4.47
+
 	// CLI
 	github.com/spf13/cobra v1.9.1
 
 	// Testing
 	github.com/stretchr/testify v1.11.1
+
+	// MongoDB native client (pure Go via mongo-driver, no CGO).
+	// Powers `n8n-nodes-base.mongoDb` in native mode — direct
+	// TCP / BSON wire protocol, no proxy required. Apache-2.0,
+	// pulls in `golang.org/x/crypto` (already in our tree for
+	// SCRAM) and `github.com/xdg-go/scram` / `xdg-go/pbkdf2`
+	// (already indirect).
+	go.mongodb.org/mongo-driver v1.17.4
 	go.opentelemetry.io/otel v1.38.0
-	go.opentelemetry.io/otel/exporters/jaeger v1.17.0
 	go.opentelemetry.io/otel/sdk v1.38.0
 	go.opentelemetry.io/otel/trace v1.38.0
 	golang.org/x/crypto v0.42.0
@@ -78,6 +77,7 @@ require (
 	go.nanomsg.org/mangos/v3 v3.4.2
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.38.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.38.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.38.0
 	golang.org/x/text v0.29.0
 	google.golang.org/api v0.214.0
 	google.golang.org/grpc v1.75.0
@@ -88,10 +88,6 @@ require (
 	cloud.google.com/go v0.116.0 // indirect
 	cloud.google.com/go/auth v0.13.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.6 // indirect
-	github.com/pierrec/lz4/v4 v4.1.15 // indirect
-	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
-	github.com/xdg-go/scram v1.1.2 // indirect
-	github.com/xdg-go/stringprep v1.0.4 // indirect
 	cloud.google.com/go/compute/metadata v0.7.0 // indirect
 	cloud.google.com/go/iam v1.2.2 // indirect
 	cloud.google.com/go/monitoring v1.21.2 // indirect
@@ -127,6 +123,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
+	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/flatbuffers v25.2.10+incompatible // indirect
 	github.com/google/pprof v0.0.0-20240727154555-813a5fbdbec8 // indirect
 	github.com/google/s2a-go v0.1.8 // indirect
@@ -147,7 +144,9 @@ require (
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-ieproxy v0.0.1 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
+	github.com/montanaflynn/stats v0.7.1 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/pierrec/lz4/v4 v4.1.15 // indirect
 	github.com/pjbgf/sha1cd v0.3.2 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
@@ -159,13 +158,16 @@ require (
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.5.0 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
+	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
+	github.com/xdg-go/scram v1.1.2 // indirect
+	github.com/xdg-go/stringprep v1.0.4 // indirect
+	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	github.com/zeebo/errs v1.4.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/detectors/gcp v1.36.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.54.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.54.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.38.0 // indirect
 	go.opentelemetry.io/otel/metric v1.38.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.38.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.7.1 // indirect
