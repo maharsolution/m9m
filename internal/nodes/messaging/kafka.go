@@ -156,7 +156,7 @@ func (n *KafkaNode) Execute(inputData []model.DataItem, nodeParams map[string]in
 
 	result := make([]model.DataItem, 0, len(inputData))
 	for _, item := range inputData {
-		value := materialiseValue(nodeParams["value"], item)
+		value := resolveProduceValue(nodeParams["value"], item)
 		key := materialiseValue(nodeParams["key"], item)
 
 		// Encode the value as a base64 string (Confluent REST
@@ -339,6 +339,55 @@ func materialiseValue(raw interface{}, item model.DataItem) interface{} {
 		}
 	}
 	return s
+}
+
+// resolveProduceValue mirrors n8n's behaviour for the producer's
+// `value` parameter. In n8n the operator typically leaves the field
+// empty so the entire input item is forwarded to the topic; a
+// literal `="some string"` or `={{ $json.x }}` overrides that. This
+// helper distinguishes the three cases:
+//
+//   1. `raw` is nil, missing, or an empty string → return the
+//      upstream item's JSON, marshalled. Without this, a synced
+//      n8n workflow that uses the empty-value-as-upstream convention
+//      (the user's "Finnet - Webhook use Redist - Kafka/Rabbit"
+//      workflow on the `finnet-queue` node) would publish an empty
+//      record to Kafka and the consumer-side `Set Counter` /
+//      `Find Respond` retry loop would spin on a missing key.
+//
+//   2. `raw` is a non-empty string starting with `=` or `{{` →
+//      evaluate the n8n expression against `item`. Same convention
+//      as `materialiseValue`.
+//
+//   3. Any other non-empty value → return it as-is (literal string,
+//      number, bool, etc.).
+//
+// The serialised upstream item is returned as a `[]byte` so the
+// existing `switch v := value.(type)` block in `Execute` picks it
+// up in the `case []byte:` arm and ships it byte-for-byte to the
+// broker. This preserves any binary data inside the input item.
+func resolveProduceValue(raw interface{}, item model.DataItem) interface{} {
+	if raw == nil {
+		return upstreamValue(item)
+	}
+	if s, ok := raw.(string); ok {
+		if strings.TrimSpace(s) == "" {
+			return upstreamValue(item)
+		}
+	}
+	return materialiseValue(raw, item)
+}
+
+// upstreamValue returns the current input item's JSON marshalled
+// to a `[]byte`. Returning `[]byte` instead of a `string` keeps
+// the broker's view of the payload independent of any Go-side
+// string encoding (UTF-8 vs. binary safety, NUL bytes, etc.).
+func upstreamValue(item model.DataItem) []byte {
+	if item.JSON == nil {
+		return nil
+	}
+	b, _ := json.Marshal(item.JSON)
+	return b
 }
 
 // kafkaAuth is the REST Proxy authentication envelope. The Mode
