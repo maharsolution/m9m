@@ -35,6 +35,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -650,6 +652,22 @@ func (n *KafkaNode) ValidateParameters(params map[string]interface{}) error {
 	if params == nil {
 		return n.CreateError("parameters cannot be nil", nil)
 	}
+	// TEMP DEBUG (BUG-2026-10-12-003): print the parameter envelope
+	// before folding so we can confirm whether `kafka_brokers` was
+	// actually injected by the engine. Remove once #webhook/post_balance
+	// matches n8n.
+	if log := os.Getenv("M9M_DEBUG_KAFKA_VALIDATE"); log != "" {
+		keys := make([]string, 0, len(params))
+		for k := range params {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		fmt.Fprintf(os.Stderr, "[kafka.ValidateParameters] params: {\n")
+		for _, k := range keys {
+			fmt.Fprintf(os.Stderr, "  %q: %v\n", k, params[k])
+		}
+		fmt.Fprintf(os.Stderr, "}\n")
+	}
 	// Apply the engine-injected credential envelope BEFORE
 	// resolving mode. The engine flattens credential fields as
 	// `<credType>_<key>` (e.g. `kafka_brokers`); without this
@@ -657,6 +675,18 @@ func (n *KafkaNode) ValidateParameters(params map[string]interface{}) error {
 	// defaults to REST mode even when the credential provided
 	// native broker addresses.
 	ApplyKafkaCredentialAuth(params)
+	if log := os.Getenv("M9M_DEBUG_KAFKA_VALIDATE"); log != "" {
+		keys := make([]string, 0, len(params))
+		for k := range params {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		fmt.Fprintf(os.Stderr, "[kafka.ValidateParameters] after fold: {\n")
+		for _, k := range keys {
+			fmt.Fprintf(os.Stderr, "  %q: %v\n", k, params[k])
+		}
+		fmt.Fprintf(os.Stderr, "}\n")
+	}
 	mode := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", params["mode"])))
 	if mode == "" {
 		// Mirror backendFor: prefer native when brokers are
