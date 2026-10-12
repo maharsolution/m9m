@@ -127,7 +127,8 @@ func (c *KafkaNativeClient) dialer() (*kafka.Dialer, error) {
 		tlsCfg := &tls.Config{MinVersion: tls.VersionTLS12}
 		if c.cfg.CACert != "" {
 			pool := x509.NewCertPool()
-			if !pool.AppendCertsFromPEM([]byte(c.cfg.CACert)) {
+			pemBytes := normalizePEM(c.cfg.CACert)
+			if !pool.AppendCertsFromPEM(pemBytes) {
 				return nil, errors.New("kafka native: CACert is set but did not contain any valid PEM blocks")
 			}
 			tlsCfg.RootCAs = pool
@@ -424,3 +425,31 @@ func (keyBasedBalancer) Balance(msg kafka.Message, partitions ...int) int {
 }
 
 var keyRoundRobin atomic.Int64
+
+// normalizePEM takes a PEM-encoded certificate (possibly with
+// arbitrary whitespace inserted between base64 characters — the
+// n8n credential envelope ships it that way after JSON-encoding
+// a multi-line string) and returns a clean, line-broken form that
+// `x509.CertPool.AppendCertsFromPEM` will accept.
+//
+// Without this, segments like "MIIERDCCA qygAwIBAgIU" get rejected
+// because the parser only honours newlines / carriage-returns /
+// tabs as whitespace inside the base64 payload, not plain spaces.
+func normalizePEM(pem string) []byte {
+	// Strip all whitespace (spaces, tabs, newlines).
+	var stripped strings.Builder
+	stripped.Grow(len(pem))
+	for _, r := range pem {
+		if r == ' ' || r == '\t' || r == '\n' || r == '\r' {
+			continue
+		}
+		stripped.WriteRune(r)
+	}
+	// Re-emit with a CRLF after each BEGIN/END header so the parser
+	// sees a well-formed block boundary.
+	clean := strings.ReplaceAll(stripped.String(), "-----BEGINCERTIFICATE-----", "-----BEGIN CERTIFICATE-----\n")
+	clean = strings.ReplaceAll(clean, "-----ENDCERTIFICATE-----", "\n-----END CERTIFICATE-----\n")
+	clean = strings.ReplaceAll(clean, "-----BEGINPRIVATEKEY-----", "-----BEGIN PRIVATE KEY-----\n")
+	clean = strings.ReplaceAll(clean, "-----ENDPRIVATEKEY-----", "\n-----END PRIVATE KEY-----\n")
+	return []byte(clean)
+}
