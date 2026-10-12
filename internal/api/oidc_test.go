@@ -78,13 +78,13 @@ func setupOIDC(t *testing.T, mutate func(claims jwt.MapClaims)) *oidcFixture {
 	}
 
 	claims := jwt.MapClaims{
-		"iss":   server.URL,
-		"aud":   clientID,
-		"sub":   "user-123",
-		"email": "user@example.com",
-		"name":  "Test User",
-		"exp":   time.Now().Add(time.Hour).Unix(),
-		"iat":   time.Now().Unix(),
+		"iss":    server.URL,
+		"aud":    clientID,
+		"sub":    "user-123",
+		"email":  "user@example.com",
+		"name":   "Test User",
+		"exp":    time.Now().Add(time.Hour).Unix(),
+		"iat":    time.Now().Unix(),
 		"groups": []string{"editors", "viewers"},
 	}
 	if mutate != nil {
@@ -92,8 +92,7 @@ func setupOIDC(t *testing.T, mutate func(claims jwt.MapClaims)) *oidcFixture {
 	}
 	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	tok.Header["kid"] = kid
-	signed, err := tok.SignedString(priv)
-	if err != nil {
+	if _, err := tok.SignedString(priv); err != nil {
 		t.Fatalf("sign: %v", err)
 	}
 

@@ -3,29 +3,11 @@ package core
 import "github.com/neul-labs/m9m/internal/nodes/base"
 
 // BUG-UI-2026-09-09-001 — populate the `Properties` field for
-// the core nodes (wait, noop, loop, executeWorkflow). Each
-// helper mirrors n8n's `INodeTypeDescription.properties` for
-// the corresponding `n8n-nodes-base.<node>` type.
-
-func waitProperties() []base.NodeProperty {
-	props := []base.NodeProperty{
-		base.StringOpt("Resume", "resume", "afterTimeInterval", "When to resume the workflow.", []base.Option{
-			{Name: "After Time Interval", Value: "afterTimeInterval"},
-			{Name: "At Specified Time", Value: "atSpecifiedTime"},
-			{Name: "On Webhook Call", Value: "onWebhookCall"},
-		}, true),
-		base.NumberProp("Amount", "amount", 1, "Number of units to wait (depends on `unit`).", false),
-		base.StringOpt("Unit", "unit", "seconds", "Unit of the wait amount.", []base.Option{
-			{Name: "Seconds", Value: "seconds"},
-			{Name: "Minutes", Value: "minutes"},
-			{Name: "Hours", Value: "hours"},
-			{Name: "Days", Value: "days"},
-		}, false),
-		base.StringProp("Date Time", "dateTime", "", "ISO-8601 date-time (when resume=atSpecifiedTime).", "", false),
-		base.BoolProp("Busy", "busy", false, "Mark the workflow as busy while waiting (so the editor treats it as running)."),
-	}
-	return append(props, base.CommonSettings()...)
-}
+// the core nodes (noop, loop, executeWorkflow). Wait lives in
+// wait.go so its descriptors stay aligned with parseDuration
+// (milliseconds / seconds / minutes). Each helper mirrors n8n's
+// `INodeTypeDescription.properties` for the corresponding
+// `n8n-nodes-base.<node>` type.
 
 func noopProperties() []base.NodeProperty {
 	// No-op node has no parameters; only engine settings.
