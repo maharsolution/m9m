@@ -3,11 +3,10 @@ package database
 import "github.com/neul-labs/m9m/internal/nodes/base"
 
 // BUG-UI-2026-09-09-001 — populate the `Properties` field for
-// the SQL Database connector node (the catch-all that runs an
-// arbitrary SELECT/INSERT/UPDATE/DELETE on a configured
-// connection).
+// the SQL Database nodes (mysql, postgres, sqlite). The
+// `sqlProperties` helper is shared across the three.
 
-func sqlConnectorProperties() []base.NodeProperty {
+func sqlProperties() []base.NodeProperty {
 	ops := []base.Option{
 		{Name: "Select", Value: "select"},
 		{Name: "Insert", Value: "insert"},
@@ -24,4 +23,8 @@ func sqlConnectorProperties() []base.NodeProperty {
 		base.NumberProp("Limit", "limit", 0, "Row limit (0 = no limit, select only).", false),
 	}
 	return append(props, base.CommonSettings()...)
+}
+
+func sqlConnectorProperties() []base.NodeProperty {
+	return sqlProperties()
 }

@@ -28,7 +28,6 @@ package webhooks
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"net"
 	"net/http"
 )
@@ -163,24 +162,16 @@ func (f *flusherRecorder) Flush()                     { f.flushed++ }
 var _ http.ResponseWriter = (*flusherRecorder)(nil)
 var _ http.Flusher = (*flusherRecorder)(nil)
 
-func ExampleStreamResponse() {
-	// Demonstrates the typical webhook streaming pattern.
-	// In production this would be a `http.HandlerFunc`
-	// inside `webhooks.Handler`.
-	w := newFlusherRecorder()
-	_ = ExampleStreamingHandler(w, nil)
-	fmt.Println("flushed:", w.flushed) // 3 (one per WriteString + 1 per SSE)
-}
-
-func ExampleStreamingHandler(w http.ResponseWriter, _ *http.Request) error {
+func exampleStreamingHandler(w http.ResponseWriter, _ *http.Request) error {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.WriteHeader(http.StatusOK)
 	stream, err := NewStreamResponse(w)
 	if err != nil {
 		return err
 	}
-	_ = stream.WriteString("event: start\n")
-	_ = stream.WriteSSE("chunk", "{\"i\":1}")
-	_ = stream.WriteSSE("chunk", "{\"i\":2}")
+	stream.WriteString("event: start\n")
+	stream.WriteSSE("chunk", "{\"i\":1}")
+	stream.WriteSSE("chunk", "{\"i\":2}")
 	return stream.WriteSSE("end", "done")
 }
+

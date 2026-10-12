@@ -7,6 +7,7 @@ import (
 
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/core"
 )
 
 const defaultMaxIterations = 1000
@@ -23,7 +24,7 @@ func NewLoopNode() *LoopNode {
 			Name:        "Loop",
 			Description: "Iterates over items, a count, or a condition",
 			Category:    "Data Transformation",
-			Properties:  loopProperties(),
+			Properties:  core.LoopProperties(),
 		}),
 	}
 }

@@ -32,7 +32,7 @@ func noopProperties() []base.NodeProperty {
 	return base.CommonSettings()
 }
 
-func loopProperties() []base.NodeProperty {
+func LoopProperties() []base.NodeProperty {
 	props := []base.NodeProperty{
 		base.StringOpt("Loop Over", "loopOver", "items", "What to iterate over.", []base.Option{
 			{Name: "Items", Value: "items"},

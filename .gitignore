@@ -8,6 +8,12 @@ n8n-go
 .env
 # Common typo / Windows-created sibling of .env — never stage.
 ,env
+# Local credential notes — contain PATs / passwords / private keys.
+# Never stage. See bug-fix.MD §9.7 (BUG-2026-09-09-005) for the
+# credential-sync documentation that replaces these ad-hoc notes.
+credentials-*.MD
+*credentials*.MD
+
 # Python (repo-root) — bindings/* and packages/* already override these per-subdir
 __pycache__/
 *.pyc

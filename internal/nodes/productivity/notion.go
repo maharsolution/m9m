@@ -220,18 +220,6 @@ func notionProperties() []base.NodeProperty {
 		{Name: "Archive", Value: "archive"},
 		{Name: "Search", Value: "search"},
 	}
-	databaseOps := []base.Option{
-		{Name: "Get", Value: "get"},
-		{Name: "Query", Value: "query"},
-		{Name: "Create", Value: "create"},
-		{Name: "Update", Value: "update"},
-	}
-	blockOps := []base.Option{
-		{Name: "Append", Value: "append"},
-		{Name: "Get", Value: "get"},
-		{Name: "Update", Value: "update"},
-		{Name: "Delete", Value: "delete"},
-	}
 	props := []base.NodeProperty{
 		base.StringOpt("Resource", "resource", "page", "Notion resource to operate on.", resources, true),
 		base.StringOpt("Operation", "operation", "create", "Operation on the resource.", pageOps, true),

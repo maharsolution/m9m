@@ -23,6 +23,24 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 )
 
+// stringFromMap is a small helper that returns the string
+// value of `key` in `m`, or `def` if the key is missing /
+// not a string. Used by `applyCredentialAuth` to extract
+// credential-injected `<credType>_<field>` values from
+// the node's parameter map without panicking on type
+// mismatches (the engine injects them as map[string]any).
+func stringFromMap(m map[string]interface{}, key string) string {
+	if m == nil {
+		return ""
+	}
+	if v, ok := m[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
 // SSRF protection: blocked IP ranges and hosts
 var (
 	// blockedIPRanges contains private and special-use IP ranges that should not be accessed
