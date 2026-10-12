@@ -235,3 +235,148 @@ func TestHTTPRequestNodeExecutePostRequest(t *testing.T) {
 func TestHTTPRequestNodeImplementsNodeExecutor(t *testing.T) {
 	var _ base.NodeExecutor = (*HTTPRequestNode)(nil)
 }
+
+// TestApplyCredentialAuth_BasicAuth — verifies the engine's
+// injected `httpBasicAuth_user` / `httpBasicAuth_password` keys
+// are translated into a real `Authorization: Basic ...` header
+// on the outgoing request. This is the BUG-2026-09-09-002 fix
+// for positive/3 (webhook_callrest).
+func TestApplyCredentialAuth_BasicAuth(t *testing.T) {
+	req, _ := http.NewRequest("GET", "https://upstream.test/x", nil)
+	params := map[string]interface{}{
+		"httpBasicAuth_user":     "alice",
+		"httpBasicAuth_password": "s3cret",
+	}
+	if err := applyCredentialAuth(req, params); err != nil {
+		t.Fatalf("applyCredentialAuth: %v", err)
+	}
+	u, p, ok := req.BasicAuth()
+	if !ok {
+		t.Fatalf("expected BasicAuth to be set, got none")
+	}
+	if u != "alice" || p != "s3cret" {
+		t.Errorf("got user=%q pass=%q, want alice/s3cret", u, p)
+	}
+}
+
+// TestApplyCredentialAuth_HeaderAuth — verifies the engine's
+// injected `httpHeaderAuth_name` / `httpHeaderAuth_value` keys
+// become a real custom header (the most common shape: an API
+// key sent as `X-API-Key: ...`).
+func TestApplyCredentialAuth_HeaderAuth(t *testing.T) {
+	req, _ := http.NewRequest("GET", "https://upstream.test/x", nil)
+	params := map[string]interface{}{
+		"httpHeaderAuth_name":  "X-API-Key",
+		"httpHeaderAuth_value": "my-key",
+	}
+	if err := applyCredentialAuth(req, params); err != nil {
+		t.Fatalf("applyCredentialAuth: %v", err)
+	}
+	if got := req.Header.Get("X-API-Key"); got != "my-key" {
+		t.Errorf("X-API-Key = %q, want my-key", got)
+	}
+}
+
+// TestApplyCredentialAuth_ApiKey — verifies the bare
+// `apiKey_apiKey` field becomes `Authorization: Bearer ...`.
+func TestApplyCredentialAuth_ApiKey(t *testing.T) {
+	req, _ := http.NewRequest("GET", "https://upstream.test/x", nil)
+	params := map[string]interface{}{
+		"apiKey_apiKey": "sk-123",
+	}
+	if err := applyCredentialAuth(req, params); err != nil {
+		t.Fatalf("applyCredentialAuth: %v", err)
+	}
+	if got := req.Header.Get("Authorization"); got != "Bearer sk-123" {
+		t.Errorf("Authorization = %q, want Bearer sk-123", got)
+	}
+}
+
+// TestApplyCredentialAuth_NoCredential — anonymous request
+// must NOT error. Many HTTP Request nodes legitimately have
+// no auth.
+func TestApplyCredentialAuth_NoCredential(t *testing.T) {
+	req, _ := http.NewRequest("GET", "https://upstream.test/x", nil)
+	if err := applyCredentialAuth(req, map[string]interface{}{}); err != nil {
+		t.Errorf("anonymous request should not error, got %v", err)
+	}
+	if req.Header.Get("Authorization") != "" {
+		t.Errorf("anonymous request should not have Authorization header")
+	}
+}
+
+// TestApplyCredentialAuth_HalfPresentBasicAuth — if the engine
+// injects a half-pair (only one of user/password), we want a
+// loud failure, not a silent anonymous call.
+func TestApplyCredentialAuth_HalfPresentBasicAuth(t *testing.T) {
+	req, _ := http.NewRequest("GET", "https://upstream.test/x", nil)
+	params := map[string]interface{}{
+		"httpBasicAuth_user": "alice",
+		// httpBasicAuth_password missing on purpose.
+	}
+	if err := applyCredentialAuth(req, params); err == nil {
+		t.Errorf("expected error for half-present basic auth, got nil")
+	}
+}
+
+// TestHTTPRequestNode_AppliesBasicAuth — end-to-end check
+// against a local test server. Spins up an httptest server that
+// requires Basic auth, points an HTTP Request node at it, and
+// asserts the request reached it with the right credentials.
+func TestHTTPRequestNode_AppliesBasicAuth(t *testing.T) {
+	var seenUser, seenPass string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		u, p, _ := r.BasicAuth()
+		seenUser, seenPass = u, p
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"ok":true}`)
+	}))
+	defer server.Close()
+
+	node := NewHTTPRequestNode()
+	params := map[string]interface{}{
+		"url":                     server.URL + "/protected",
+		"method":                  "GET",
+		"httpBasicAuth_user":      "alice",
+		"httpBasicAuth_password":  "s3cret",
+	}
+	// evaluatedParams is what the engine hands to Execute;
+	// in real flows the credential inject happens upstream.
+	out, err := node.Execute([]model.DataItem{{JSON: map[string]interface{}{}}}, params)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(out) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(out))
+	}
+	if seenUser != "alice" || seenPass != "s3cret" {
+		t.Errorf("upstream saw user=%q pass=%q, want alice/s3cret", seenUser, seenPass)
+	}
+}
+
+// TestHTTPRequestNode_AppliesHeaderAuth — same as the basic
+// auth test, but exercises the `httpHeaderAuth_name` /
+// `httpHeaderAuth_value` path.
+func TestHTTPRequestNode_AppliesHeaderAuth(t *testing.T) {
+	var seenValue string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenValue = r.Header.Get("X-API-Key")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"ok":true}`)
+	}))
+	defer server.Close()
+
+	node := NewHTTPRequestNode()
+	params := map[string]interface{}{
+		"url":                 server.URL + "/protected",
+		"method":              "GET",
+		"httpHeaderAuth_name": "X-API-Key",
+		"httpHeaderAuth_value": "my-key",
+	}
+	if _, err := node.Execute([]model.DataItem{{JSON: map[string]interface{}{}}}, params); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if seenValue != "my-key" {
+		t.Errorf("upstream saw X-API-Key=%q, want my-key", seenValue)
+	}
+}

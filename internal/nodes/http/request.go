@@ -378,6 +378,18 @@ func (h *HTTPRequestNode) ExecuteWithContext(ctx context.Context, inputData []mo
 		if hp, ok := evaluatedParams["headerParameters"]; ok {
 			applyHeaderParameters(req, hp)
 		}
+
+		// Apply the per-node credential envelope (if any). The
+		// engine writes keys shaped `<credType>_<field>` into
+		// `evaluatedParams` before Execute is called; we map
+		// those to the matching HTTP auth scheme. Runs BEFORE
+		// the explicit headers so a node-level `Authorization`
+		// header (rare) can still override the credential one
+		// — but the common case is "no explicit header, just the
+		// credential", so this branch fills the gap.
+		if err := applyCredentialAuth(req, evaluatedParams); err != nil {
+			return nil, h.CreateError(fmt.Sprintf("credential auth: %v", err), nil)
+		}
 		
 		// Add body for POST, PUT, PATCH requests
 		if method == "POST" || method == "PUT" || method == "PATCH" {
@@ -559,5 +571,75 @@ func flattenHeaderSpec(raw interface{}) []map[string]interface{} {
 			return flattenHeaderSpec(list)
 		}
 	}
+	return nil
+}
+
+// applyCredentialAuth looks at the evaluated node params for the
+// four credential-injected key patterns the engine writes for
+// per-node credentials, and applies the matching auth scheme to
+// the outgoing request.
+//
+// Why this exists: the engine's `InjectCredentialsIntoNodeParameters`
+// writes the resolved credential envelope into the params map
+// under keys shaped `<credType>_<field>` — for example
+// `httpBasicAuth_user` / `httpBasicAuth_password` for an
+// `httpBasicAuth` credential, or `httpHeaderAuth_name` /
+// `httpHeaderAuth_value` for `httpHeaderAuth`. Without this
+// helper the credentials are silently dropped and the request
+// goes out anonymous — which is exactly the BUG-2026-09-09-002
+// parity gap (`positive/3 webhook_callrest` returned the
+// upstream's anonymous-echo body, not the authed one).
+//
+// Supported schemes:
+//   - `httpBasicAuth`: sets `Authorization: Basic ...` via
+//     `req.SetBasicAuth(user, password)`. Both fields required.
+//   - `httpHeaderAuth`: sets `<name>: <value>` directly. Both
+//     fields required.
+//   - `apiKey`: sets `Authorization: Bearer <apiKey>`. n8n's
+//     `apiKey` credential type is usually wired as a header
+//     pair (name + value); the most common convention is the
+//     simple "Authorization: Bearer ..." pattern. We honour
+//     the bare `apiKey` field here.
+//   - All others (oauth2, jwt, etc.): no-op. The oauth2 flow
+//     needs a refresh-token round-trip; the jwt case is for
+//     inbound webhooks, not outbound requests.
+//
+// Returns an error only if a credential is attached but its
+// fields are missing (silent-fail would be a worse outcome than
+// a clear 4xx — the user can see the missing-field message in
+// the execution record).
+func applyCredentialAuth(req *http.Request, params map[string]interface{}) error {
+	user := stringFromMap(params, "httpBasicAuth_user")
+	pass := stringFromMap(params, "httpBasicAuth_password")
+	if user != "" || pass != "" {
+		// Both halves required; the engine's inject writes
+		// both or neither for a given credential, so a
+		// half-present pair means the credential id was
+		// dangling.
+		if user == "" || pass == "" {
+			return fmt.Errorf("httpBasicAuth credential is missing one of user/password")
+		}
+		req.SetBasicAuth(user, pass)
+		return nil
+	}
+
+	name := stringFromMap(params, "httpHeaderAuth_name")
+	value := stringFromMap(params, "httpHeaderAuth_value")
+	if name != "" || value != "" {
+		if name == "" || value == "" {
+			return fmt.Errorf("httpHeaderAuth credential is missing one of name/value")
+		}
+		req.Header.Set(name, value)
+		return nil
+	}
+
+	if apiKey := stringFromMap(params, "apiKey_apiKey"); apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		return nil
+	}
+
+	// No credential attached — anonymous request. Don't error;
+	// many HTTP Request nodes legitimately have no auth
+	// (public APIs, same-origin calls, etc.).
 	return nil
 }
