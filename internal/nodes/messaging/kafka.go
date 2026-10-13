@@ -129,6 +129,12 @@ func kafkaProperties() []base.NodeProperty {
 		base.StringProp("SASL Username", "saslUsername", "", "Username for SASL.", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
 		base.StringProp("SASL Password", "saslPassword", "", "Password for SASL.", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
 		base.BoolProp("TLS", "tls", false, "Enable TLS for the native broker connection.").WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
+		// mTLS: paste a client cert + key here when the broker
+		// requires `ssl.client.auth=required` (Aiven / Confluent
+		// Cloud "mTLS only" plan, or mTLS+SASL hybrid). Both fields
+		// must be set together.
+		base.StringProp("Client Cert (PEM)", "clientCert", "", "PEM-encoded client certificate for mTLS. Leave empty to use SASL only.", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
+		base.StringProp("Client Key (PEM)", "clientKey", "", "PEM-encoded client private key for mTLS (must pair with Client Cert).", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
 		// Shared
 		base.StringProp("Topic", "topic", "", "Topic to produce to.", "events.user", true),
 		base.StringProp("Key", "key", "", "Optional message key (used for partitioning).", "{{ $json.id }}", false),
@@ -263,12 +269,20 @@ func (n *KafkaNode) backendFor(params map[string]interface{}) (kafkaBackend, err
 		if caCert == "<nil>" {
 			caCert = ""
 		}
+		clientCert := strings.TrimSpace(fmt.Sprintf("%v", params["clientCert"]))
+		if clientCert == "<nil>" {
+			clientCert = ""
+		}
+		clientKey := strings.TrimSpace(fmt.Sprintf("%v", params["clientKey"]))
+		if clientKey == "<nil>" {
+			clientKey = ""
+		}
 		// If the credential supplied a CA chain the broker is almost
 		// certainly TLS-only (Aiven is the canonical case). Without
 		// this auto-enable, the operator would have to set
 		// `tls: true` *and* paste the CA into both the credential
 		// and the node parameter form, which is fragile.
-		if caCert != "" {
+		if caCert != "" || clientCert != "" || clientKey != "" {
 			tlsEnabled = true
 		}
 		client, err := NewKafkaNativeClient(KafkaNativeConfig{
@@ -279,6 +293,8 @@ func (n *KafkaNode) backendFor(params map[string]interface{}) (kafkaBackend, err
 			SASLPassword:  fmt.Sprintf("%v", params["saslPassword"]),
 			TLS:           tlsEnabled,
 			CACert:        caCert,
+			ClientCert:    clientCert,
+			ClientKey:     clientKey,
 			ClientID:      "m9m-kafka-producer",
 		})
 		if err != nil {
@@ -489,6 +505,14 @@ func ApplyKafkaCredentialAuth(params map[string]interface{}) {
 		// CA cert is wired into the native dialer as a TLS root pool
 		// (see kafka_native.go::dialer).
 		params["ca"] = c
+	}
+	if c := stringFromAnyMap(params, "kafka_clientCert"); c != "" && isEmpty(params, "clientCert") {
+		// mTLS client certificate (PEM). Both this and `kafka_clientKey`
+		// must be set for the dialer to flip into mTLS mode.
+		params["clientCert"] = c
+	}
+	if k := stringFromAnyMap(params, "kafka_clientKey"); k != "" && isEmpty(params, "clientKey") {
+		params["clientKey"] = k
 	}
 	// REST-proxy-mode fields.
 	if u := stringFromAnyMap(params, "kafka_restProxyUrl"); u != "" && isEmpty(params, "restProxyUrl") {

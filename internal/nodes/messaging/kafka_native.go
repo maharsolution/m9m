@@ -35,6 +35,8 @@ type KafkaNativeConfig struct {
 	SASLPassword  string
 	TLS           bool   // enable TLS dial
 	CACert        string // PEM-encoded CA cert chain (Aiven / Confluent Cloud)
+	ClientCert    string // PEM-encoded client certificate (mTLS)
+	ClientKey     string // PEM-encoded client private key (mTLS, must pair with ClientCert)
 	ClientID      string // optional, surfaced in broker logs
 }
 
@@ -132,6 +134,23 @@ func (c *KafkaNativeClient) dialer() (*kafka.Dialer, error) {
 				return nil, errors.New("kafka native: CACert is set but did not contain any valid PEM blocks")
 			}
 			tlsCfg.RootCAs = pool
+		}
+		// mTLS: load a client cert+key pair from the credential
+		// envelope. Both halves must be present; partial pairs
+		// fail closed with a clear error rather than silently
+		// falling back to one-way TLS.
+		if c.cfg.ClientCert != "" || c.cfg.ClientKey != "" {
+			if c.cfg.ClientCert == "" || c.cfg.ClientKey == "" {
+				return nil, errors.New("kafka native: ClientCert and ClientKey must both be set for mTLS")
+			}
+			cert, err := tls.X509KeyPair(
+				normalizePEM(c.cfg.ClientCert),
+				normalizePEM(c.cfg.ClientKey),
+			)
+			if err != nil {
+				return nil, fmt.Errorf("kafka native: mTLS client cert load: %w", err)
+			}
+			tlsCfg.Certificates = []tls.Certificate{cert}
 		}
 		d.TLS = tlsCfg
 	}
