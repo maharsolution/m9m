@@ -124,7 +124,22 @@ func (n *KafkaTriggerNode) Execute(inputData []model.DataItem, nodeParams map[st
 	messaging.ApplyKafkaCredentialAuth(nodeParams)
 	mode := strings.ToLower(stringParam(nodeParams, "mode"))
 	if mode == "" {
-		mode = "rest"
+		// Auto-detect transport, mirroring the producer node
+		// (`messaging.KafkaNode.backendFor`): if the credential or
+		// params give us brokers, prefer native (segmentio/kafka-go
+		// over TLS) — that is what a typical Aiven / Confluent Cloud
+		// credential looks like. Otherwise fall back to REST proxy.
+		//
+		// Without this the trigger defaulted to REST and demanded a
+		// `restProxyUrl`, so a broker-only credential (brokers +
+		// username + password + CA) failed validation with
+		// "restProxyUrl is required when mode=rest" even though
+		// everything needed for a native connection was present.
+		if stringParam(nodeParams, "brokers") != "" {
+			mode = "native"
+		} else {
+			mode = "rest"
+		}
 	}
 	topic := stringParam(nodeParams, "topic")
 	groupID := stringParam(nodeParams, "groupId")
@@ -318,15 +333,27 @@ func stringParam(params map[string]interface{}, key string) string {
 // kafka-go start offset. n8n offers "first" (replay the topic from
 // the beginning) and "last" (only new messages). Anything unknown
 // falls back to `last`, which is the n8n default.
+//
+// n8n also accepts the older `options.fromBeginning` boolean, which
+// is what older workflow exports (and the n8n Kafka Trigger UI at
+// the time this workflow was authored) carry. Honour it when
+// `startPosition` is absent so those workflows replay the topic
+// instead of silently starting at the tail.
 func startOffsetFromParams(params map[string]interface{}) int64 {
 	switch strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", params["startPosition"]))) {
 	case "first", "earliest", "beginning":
 		return kafkaFirstOffset
 	case "last", "latest":
 		return kafkaLastOffset
-	default:
-		return kafkaLastOffset
 	}
+	// `startPosition` absent/unknown → fall back to n8n's
+	// `options.fromBeginning` flag.
+	if opts, ok := params["options"].(map[string]interface{}); ok {
+		if v, ok := opts["fromBeginning"].(bool); ok && v {
+			return kafkaFirstOffset
+		}
+	}
+	return kafkaLastOffset
 }
 
 // boolParam returns the bool value of `k` from the params map,
@@ -471,9 +498,25 @@ func (n *KafkaTriggerNode) ValidateParameters(params map[string]interface{}) err
 	if params == nil {
 		return fmt.Errorf("parameters cannot be nil")
 	}
+	// Apply the engine-injected credential envelope (BUG-2026-10-12-002)
+	// BEFORE resolving the mode. The engine flattens credential fields
+	// as `<credType>_<key>` (e.g. `kafka_brokers`); without this fold
+	// the validator sees an empty `brokers` map, defaults to REST mode
+	// and rejects the node with "restProxyUrl is required when
+	// mode=rest" even though the credential carried everything needed
+	// for a native TLS connection.
+	messaging.ApplyKafkaCredentialAuth(params)
 	mode := strings.ToLower(stringParam(params, "mode"))
 	if mode == "" {
-		mode = "rest"
+		// Mirror Execute's auto-detect: brokers present → native,
+		// otherwise REST proxy. Keeping the two in sync is what stops
+		// a broker-only credential from being rejected with
+		// "restProxyUrl is required when mode=rest".
+		if stringParam(params, "brokers") != "" {
+			mode = "native"
+		} else {
+			mode = "rest"
+		}
 	}
 	switch mode {
 	case "native":

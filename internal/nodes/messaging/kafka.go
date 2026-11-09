@@ -199,9 +199,18 @@ func (n *KafkaNode) Execute(inputData []model.DataItem, nodeParams map[string]in
 		}
 
 		var keyBytes []byte
-		if k, ok := key.(string); ok {
+		switch k := key.(type) {
+		case nil:
+			// No key configured → publish without a key. The old
+			// `else json.Marshal(key)` path marshalled the nil
+			// interface into the literal bytes "null", which the
+			// broker then stored as a real Kafka message key.
+			keyBytes = nil
+		case string:
 			keyBytes = []byte(k)
-		} else {
+		case []byte:
+			keyBytes = k
+		default:
 			keyBytes, _ = json.Marshal(key)
 		}
 

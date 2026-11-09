@@ -493,8 +493,37 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 			// start buttons: they have no executable side. When the
 			// workflow runs via a real trigger (Webhook, Cron, etc.)
 			// these should be skipped silently, not abort execution.
+			//
+			// The trigger still has to PASS ITS INPUT DOWNSTREAM.
+			// n8n's Manual Trigger emits one item, and the nodes
+			// after it are what actually do the work. Clearing
+			// `nodeResults` here (the old behaviour) emptied the
+			// item the starting-node seeding had just put there,
+			// so every downstream node was skipped with
+			// "SKIP empty input" and the workflow produced no
+			// output at all — a Manual Trigger → Set → Kafka
+			// workflow silently published nothing.
 			if isTriggerOnlyNodeType(node.Type) {
-				nodeResults[nodeName] = []model.DataItem{}
+				if len(nodeResults[nodeName]) == 0 {
+					nodeResults[nodeName] = inputData
+				}
+				// Route the trigger's items to its downstream nodes
+				// exactly like any other node. Without this the
+				// Manual Trigger's item never left the trigger and
+				// every node after it was skipped as "empty input".
+				triggerOutput := nodeResults[nodeName]
+				routedData, routeErr := e.connectionRouter.RouteData(nodeName, workflow, triggerOutput)
+				if routeErr != nil {
+					return nil, fmt.Errorf("error routing data from node %s: %w", node.Name, routeErr)
+				}
+				for targetNode, data := range routedData {
+					if nodeResults[targetNode] == nil {
+						nodeResults[targetNode] = data
+					} else {
+						nodeResults[targetNode] = append(nodeResults[targetNode], data...)
+					}
+				}
+				recordEdgesTaken(e.edgesTaken, node, triggerOutput, workflow)
 				continue
 			}
 			return nil, fmt.Errorf("failed to get executor for node %s: %w", node.Name, err)

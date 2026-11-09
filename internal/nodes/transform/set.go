@@ -4,6 +4,7 @@ Package transform provides data transformation node implementations for m9m.
 package transform
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -56,7 +57,7 @@ func setProperties() []base.NodeProperty {
 		base.StringOpt("Mode", "mode", "manual", "How to provide the assignments.", modes, true),
 		base.BoolProp("Duplicate item", "duplicateItem", false, "If enabled, the node emits one item per assignment instead of merging into the input."),
 		assignmentRow,
-		base.JsonProp("JSON", "json", "{}", "Raw JSON for the item, used when Mode is Raw."),
+		base.JsonProp("JSON", "jsonOutput", "{}", "Raw JSON for the item, used when Mode is Raw."),
 		base.BoolProp("Strip binary data", "options.stripBinary", true, "If enabled, binary fields on the item are removed."),
 		base.BoolProp("Dot notation", "options.dotNotation", false, "When true, assignment names like `a.b` write to nested fields instead of using dots literally."),
 	}
@@ -273,6 +274,18 @@ func (s *SetNode) ValidateParameters(params map[string]interface{}) error {
 		return s.CreateError("parameters cannot be nil", nil)
 	}
 
+	// n8n Set node in "raw" mode carries the whole item as a JSON
+	// string in `jsonOutput` and has no `assignments` at all. The
+	// manual-mode assignment validation below does not apply there,
+	// so bail out early with a JSON-parse check instead of rejecting
+	// the node with "assignments must be an array".
+	if isRawMode(params) {
+		if _, err := parseRawJSON(params); err != nil {
+			return s.CreateError(err.Error(), nil)
+		}
+		return nil
+	}
+
 	assignmentsArr := extractAssignments(params)
 	if assignmentsArr == nil {
 		return s.CreateError("assignments must be an array (or an object with an 'assignments' array)", nil)
@@ -374,10 +387,117 @@ func shouldReplaceJSONTopLevel(nodeParams map[string]interface{}) (bool, bool) {
 	return true, false
 }
 
+// isRawMode reports whether the Set node is configured for n8n's
+// "raw" mode, where the whole item body is supplied as a JSON
+// string in the `jsonOutput` parameter instead of as a list of
+// field assignments.
+//
+// n8n writes the mode under `mode: "raw"`. Older exports (and
+// n8n's `includeOtherFields` / `keepOnlySet` era) use
+// `mode: "manual"` with a `jsonOutput` string present, so the mere
+// presence of `jsonOutput` is also treated as raw mode when no
+// assignments exist.
+func isRawMode(params map[string]interface{}) bool {
+	if params == nil {
+		return false
+	}
+	if m, ok := params["mode"].(string); ok && strings.EqualFold(strings.TrimSpace(m), "raw") {
+		return true
+	}
+	// `jsonOutput` present with no `assignments` key → raw mode
+	// regardless of the declared mode.
+	if _, hasJSON := params["jsonOutput"]; hasJSON {
+		if _, hasAssignments := params["assignments"]; !hasAssignments {
+			return true
+		}
+	}
+	return false
+}
+
+// parseRawJSON parses the `jsonOutput` parameter of a Set node in
+// raw mode and returns the resulting object.
+//
+// n8n stores the raw body as a JSON *string* (e.g.
+// `"{\"my_field_1\":\"1\"}"`). It can also already be an object
+// (when the workflow was authored programmatically), which we accept
+// verbatim.
+func parseRawJSON(params map[string]interface{}) (map[string]interface{}, error) {
+	raw, ok := params["jsonOutput"]
+	if !ok || raw == nil {
+		return map[string]interface{}{}, nil
+	}
+	switch v := raw.(type) {
+	case string:
+		trimmed := strings.TrimSpace(v)
+		// n8n exports the raw JSON body in expression mode, i.e.
+		// prefixed with `=`:
+		//
+		//	"jsonOutput": "={\n  \"my_field_1\": \"1\"\n}"
+		//
+		// The `=` is n8n's "this is an expression" marker, not part
+		// of the JSON. Strip it before parsing.
+		trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "="))
+		if trimmed == "" {
+			return map[string]interface{}{}, nil
+		}
+		var parsed map[string]interface{}
+		if err := json.Unmarshal([]byte(trimmed), &parsed); err != nil {
+			return nil, fmt.Errorf("jsonOutput is not valid JSON: %v", err)
+		}
+		if parsed == nil {
+			return map[string]interface{}{}, nil
+		}
+		return parsed, nil
+	case map[string]interface{}:
+		return v, nil
+	default:
+		b, err := json.Marshal(v)
+		if err != nil {
+			return nil, fmt.Errorf("jsonOutput is not valid JSON: %v", err)
+		}
+		var parsed map[string]interface{}
+		if err := json.Unmarshal(b, &parsed); err != nil {
+			return nil, fmt.Errorf("jsonOutput is not valid JSON: %v", err)
+		}
+		return parsed, nil
+	}
+}
+
 // Execute processes the Set node operation
 func (s *SetNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
 	if len(inputData) == 0 {
 		return []model.DataItem{}, nil
+	}
+
+	// n8n Set node in raw mode replaces the whole item body with the
+	// parsed `jsonOutput` JSON — the upstream fields are dropped
+	// (n8n's "raw" mode is an explicit replace, not a merge).
+	//
+	// Without this branch the node fell through to the
+	// assignment-based path, found no `assignments` key and emitted
+	// an empty `{}` item — so a workflow like
+	// `Manual Trigger → Set (raw JSON) → Kafka Produce` published
+	// `{}` to the broker instead of the configured payload.
+	if isRawMode(nodeParams) {
+		parsed, err := parseRawJSON(nodeParams)
+		if err != nil {
+			return nil, s.CreateError(err.Error(), nil)
+		}
+		result := make([]model.DataItem, len(inputData))
+		for i, item := range inputData {
+			out := model.DataItem{JSON: parsed}
+			if item.Binary != nil {
+				out.Binary = make(map[string]model.BinaryData)
+				for k, v := range item.Binary {
+					out.Binary[k] = v
+				}
+			}
+			if item.PairedItem != nil {
+				out.PairedItem = item.PairedItem
+			}
+			result[i] = out
+		}
+		return result, nil
 	}
 
 	// Get assignments — accept both flat and nested shapes.
