@@ -41,6 +41,13 @@ type KafkaNativeConfig struct {
 	StartOffset   int64  // consumer group start position: kafka.FirstOffset / kafka.LastOffset (default LastOffset)
 }
 
+// joinGrace is the extra time the first fetch of a new consumer
+// group is allowed to spend waiting for the group join. Aiven's
+// coordinator takes ~3-4 s to answer FindCoordinator + JoinGroup +
+// SyncGroup, which regularly exceeds a 5 s poll window once the
+// TLS + SASL handshake is included.
+const joinGrace = 20 * time.Second
+
 // KafkaNativeClient is the segmentio/kafka-go-backed transport for
 // the `n8n-nodes-base.kafka` (producer) and
 // `n8n-nodes-base.kafkaTrigger` (consumer) nodes. It implements
@@ -324,6 +331,7 @@ func (c *KafkaNativeClient) Poll(ctx context.Context, timeout time.Duration, max
 		return nil, errors.New("kafka native: GroupID is required for the consumer trigger")
 	}
 	c.mu.Lock()
+	justJoined := false
 	if c.reader == nil {
 		d, err := c.dialer()
 		if err != nil {
@@ -354,6 +362,7 @@ func (c *KafkaNativeClient) Poll(ctx context.Context, timeout time.Duration, max
 			StartOffset:    startOffset,
 			CommitInterval: time.Second,
 		})
+		justJoined = true
 	}
 	r := c.reader
 	c.mu.Unlock()
@@ -367,6 +376,20 @@ func (c *KafkaNativeClient) Poll(ctx context.Context, timeout time.Duration, max
 		pollCtx, cancel := context.WithTimeout(ctx, timeout)
 		msg, err := r.FetchMessage(pollCtx)
 		cancel()
+		if err != nil && justJoined {
+			// The very first fetch of a brand-new consumer group
+			// has to wait for the group join (FindCoordinator +
+			// JoinGroup + SyncGroup), which routinely takes longer
+			// than the operator's poll interval. Without this
+			// allowance the first poll always returns zero records
+			// and the backlog is only visible one tick later —
+			// which made the "produce then consume" smoke test
+			// look flaky.
+			justJoined = false
+			joinCtx, joinCancel := context.WithTimeout(ctx, joinGrace)
+			msg, err = r.FetchMessage(joinCtx)
+			joinCancel()
+		}
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 				break
