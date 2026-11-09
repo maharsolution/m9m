@@ -135,6 +135,7 @@ func kafkaProperties() []base.NodeProperty {
 		// must be set together.
 		base.StringProp("Client Cert (PEM)", "clientCert", "", "PEM-encoded client certificate for mTLS. Leave empty to use SASL only.", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
 		base.StringProp("Client Key (PEM)", "clientKey", "", "PEM-encoded client private key for mTLS (must pair with Client Cert).", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
+		base.StringProp("CA Cert (PEM)", "ca", "", "PEM-encoded CA cert chain used to verify the broker (Aiven / Confluent Cloud). Leave empty to use the system trust store.", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
 		// Shared
 		base.StringProp("Topic", "topic", "", "Topic to produce to.", "events.user", true),
 		base.StringProp("Key", "key", "", "Optional message key (used for partitioning).", "{{ $json.id }}", false),
@@ -160,6 +161,15 @@ func (n *KafkaNode) Execute(inputData []model.DataItem, nodeParams map[string]in
 	headerMap := map[string]string{}
 	for k, v := range headers {
 		headerMap[k] = fmt.Sprintf("%v", v)
+	}
+
+	// `nodeParams["topic"].(string)` used to panic when the topic was
+	// absent (an unchecked type assertion on a nil interface). Read
+	// it defensively instead — `stringFromAnyMap` also normalises the
+	// "<nil>" string that `fmt.Sprintf("%v", nil)` produces.
+	topic := stringFromAnyMap(nodeParams, "topic")
+	if topic == "" {
+		return nil, n.CreateError("kafka produce: topic is required", nil)
 	}
 
 	result := make([]model.DataItem, 0, len(inputData))
@@ -191,7 +201,7 @@ func (n *KafkaNode) Execute(inputData []model.DataItem, nodeParams map[string]in
 		}
 
 		meta, err := be.Produce(context.Background(),
-			nodeParams["topic"].(string),
+			topic,
 			keyBytes, raw, headerMap)
 		if err != nil {
 			return nil, n.CreateError(fmt.Sprintf("kafka produce: %v", err), nil)
@@ -230,13 +240,13 @@ func (n *KafkaNode) backendFor(params map[string]interface{}) (kafkaBackend, err
 	// reads, so the rest of `backendFor` doesn't need to branch on
 	// "did the operator set params or did the engine inject them?".
 	ApplyKafkaCredentialAuth(params)
-	mode := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", params["mode"])))
-	if mode == "" || mode == "<nil>" {
+	mode := strings.ToLower(stringFromAnyMap(params, "mode"))
+	if mode == "" {
 		// Auto-detect transport: if the credential or params give us
 		// brokers, prefer native (segmentio/kafka-go over TLS) — that
 		// is what a typical Aiven / Confluent Cloud credential looks
 		// like. Otherwise fall back to REST proxy.
-		if strings.TrimSpace(fmt.Sprintf("%v", params["brokers"])) != "" {
+		if stringFromAnyMap(params, "brokers") != "" {
 			mode = "native"
 		} else {
 			mode = "rest"
@@ -244,7 +254,7 @@ func (n *KafkaNode) backendFor(params map[string]interface{}) (kafkaBackend, err
 	}
 	switch mode {
 	case "native":
-		brokersRaw := strings.TrimSpace(fmt.Sprintf("%v", params["brokers"]))
+		brokersRaw := stringFromAnyMap(params, "brokers")
 		if brokersRaw == "" {
 			return nil, fmt.Errorf("brokers is required when mode=native")
 		}
@@ -255,11 +265,8 @@ func (n *KafkaNode) backendFor(params map[string]interface{}) (kafkaBackend, err
 				brokers = append(brokers, b)
 			}
 		}
-		topic := strings.TrimSpace(fmt.Sprintf("%v", params["topic"]))
-		saslMech := strings.TrimSpace(fmt.Sprintf("%v", params["saslMechanism"]))
-		if saslMech == "<nil>" {
-			saslMech = ""
-		}
+		topic := stringFromAnyMap(params, "topic")
+		saslMech := stringFromAnyMap(params, "saslMechanism")
 		if saslMech == "" {
 			// Credential envelope often sets `authentication: true`
 			// without naming a mechanism. Aiven / Confluent / most
@@ -270,23 +277,14 @@ func (n *KafkaNode) backendFor(params map[string]interface{}) (kafkaBackend, err
 			// forcing PLAIN on a credential-less broker would turn a
 			// valid plaintext / IP-SASL connection into an
 			// "SASL username is required" error.
-			if strings.TrimSpace(fmt.Sprintf("%v", params["saslUsername"])) != "" {
+			if stringFromAnyMap(params, "saslUsername") != "" {
 				saslMech = "PLAIN"
 			}
 		}
 		tlsEnabled := boolParam(params, "tls", false)
-		caCert := strings.TrimSpace(fmt.Sprintf("%v", params["ca"]))
-		if caCert == "<nil>" {
-			caCert = ""
-		}
-		clientCert := strings.TrimSpace(fmt.Sprintf("%v", params["clientCert"]))
-		if clientCert == "<nil>" {
-			clientCert = ""
-		}
-		clientKey := strings.TrimSpace(fmt.Sprintf("%v", params["clientKey"]))
-		if clientKey == "<nil>" {
-			clientKey = ""
-		}
+		caCert := stringFromAnyMap(params, "ca")
+		clientCert := stringFromAnyMap(params, "clientCert")
+		clientKey := stringFromAnyMap(params, "clientKey")
 		// If the credential supplied a CA chain the broker is almost
 		// certainly TLS-only (Aiven is the canonical case). Without
 		// this auto-enable, the operator would have to set
@@ -299,8 +297,8 @@ func (n *KafkaNode) backendFor(params map[string]interface{}) (kafkaBackend, err
 			Brokers:       brokers,
 			Topic:         topic,
 			SASLMechanism: saslMech,
-			SASLUsername:  fmt.Sprintf("%v", params["saslUsername"]),
-			SASLPassword:  fmt.Sprintf("%v", params["saslPassword"]),
+			SASLUsername:  stringFromAnyMap(params, "saslUsername"),
+			SASLPassword:  stringFromAnyMap(params, "saslPassword"),
 			TLS:           tlsEnabled,
 			CACert:        caCert,
 			ClientCert:    clientCert,
@@ -313,15 +311,15 @@ func (n *KafkaNode) backendFor(params map[string]interface{}) (kafkaBackend, err
 		n.backend = client
 		return n.backend, nil
 	default: // "rest" or any unrecognised value (legacy behaviour)
-		restURL := strings.TrimSpace(fmt.Sprintf("%v", params["restProxyUrl"]))
+		restURL := stringFromAnyMap(params, "restProxyUrl")
 		if restURL == "" {
 			return nil, fmt.Errorf("restProxyUrl is required when mode=rest")
 		}
 		auth := kafkaAuth{
-			Mode:     fmt.Sprintf("%v", params["authentication"]),
-			Username: fmt.Sprintf("%v", params["username"]),
-			Password: fmt.Sprintf("%v", params["password"]),
-			APIKey:   fmt.Sprintf("%v", params["apiKey"]),
+			Mode:     stringFromAnyMap(params, "authentication"),
+			Username: stringFromAnyMap(params, "username"),
+			Password: stringFromAnyMap(params, "password"),
+			APIKey:   stringFromAnyMap(params, "apiKey"),
 		}
 		n.backend = &kafkaRESTProxy{baseURL: strings.TrimRight(restURL, "/"), auth: auth, client: n.httpClient}
 		return n.backend, nil
@@ -771,11 +769,11 @@ func (n *KafkaNode) ValidateParameters(params map[string]interface{}) error {
 		}
 		fmt.Fprintf(os.Stderr, "}\n")
 	}
-	mode := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", params["mode"])))
-	if mode == "" || mode == "<nil>" {
+	mode := strings.ToLower(stringFromAnyMap(params, "mode"))
+	if mode == "" {
 		// Mirror backendFor: prefer native when brokers are
 		// present, fall back to REST proxy otherwise.
-		if b := strings.TrimSpace(fmt.Sprintf("%v", params["brokers"])); b != "" {
+		if stringFromAnyMap(params, "brokers") != "" {
 			mode = "native"
 		} else {
 			mode = "rest"
@@ -783,15 +781,15 @@ func (n *KafkaNode) ValidateParameters(params map[string]interface{}) error {
 	}
 	switch mode {
 	case "native":
-		if b := strings.TrimSpace(fmt.Sprintf("%v", params["brokers"])); b == "" {
+		if stringFromAnyMap(params, "brokers") == "" {
 			return n.CreateError("brokers is required when mode=native", nil)
 		}
 	default:
-		if rest, _ := params["restProxyUrl"].(string); strings.TrimSpace(rest) == "" {
+		if stringFromAnyMap(params, "restProxyUrl") == "" {
 			return n.CreateError("restProxyUrl is required when mode=rest", nil)
 		}
 	}
-	if topic := strings.TrimSpace(fmt.Sprintf("%v", params["topic"])); topic == "" {
+	if topic := stringFromAnyMap(params, "topic"); topic == "" {
 		return n.CreateError("topic is required", nil)
 	}
 	// `value` is optional: an empty / missing value means "publish the

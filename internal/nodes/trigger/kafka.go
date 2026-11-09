@@ -122,12 +122,12 @@ func (n *KafkaTriggerNode) Execute(inputData []model.DataItem, nodeParams map[st
 	// BEFORE dispatching so both `pollNative` and `pollREST` see the
 	// resolved `kafka_*` keys folded back into the explicit-param shape.
 	messaging.ApplyKafkaCredentialAuth(nodeParams)
-	mode := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", nodeParams["mode"])))
+	mode := strings.ToLower(stringParam(nodeParams, "mode"))
 	if mode == "" {
 		mode = "rest"
 	}
-	topic := strings.TrimSpace(fmt.Sprintf("%v", nodeParams["topic"]))
-	groupID := strings.TrimSpace(fmt.Sprintf("%v", nodeParams["groupId"]))
+	topic := stringParam(nodeParams, "topic")
+	groupID := stringParam(nodeParams, "groupId")
 	if topic == "" {
 		return nil, fmt.Errorf("topic is required")
 	}
@@ -147,15 +147,15 @@ func (n *KafkaTriggerNode) Execute(inputData []model.DataItem, nodeParams map[st
 // implementation; preserved verbatim so existing workflows that
 // target a sidecar proxy keep their behaviour.
 func (n *KafkaTriggerNode) pollREST(nodeParams map[string]interface{}, topic, groupID string) ([]model.DataItem, error) {
-	restURL := strings.TrimSpace(fmt.Sprintf("%v", nodeParams["restProxyUrl"]))
+	restURL := stringParam(nodeParams, "restProxyUrl")
 	if restURL == "" {
 		return nil, fmt.Errorf("restProxyUrl is required when mode=rest")
 	}
 	auth := kafkaAuth{
-		Mode:     fmt.Sprintf("%v", nodeParams["authentication"]),
-		Username: fmt.Sprintf("%v", nodeParams["username"]),
-		Password: fmt.Sprintf("%v", nodeParams["password"]),
-		APIKey:   fmt.Sprintf("%v", nodeParams["apiKey"]),
+		Mode:     stringParam(nodeParams, "authentication"),
+		Username: stringParam(nodeParams, "username"),
+		Password: stringParam(nodeParams, "password"),
+		APIKey:   stringParam(nodeParams, "apiKey"),
 	}
 	restURL = strings.TrimRight(restURL, "/")
 
@@ -175,7 +175,7 @@ func (n *KafkaTriggerNode) pollREST(nodeParams map[string]interface{}, topic, gr
 // Reader per unique config so they don't all pay the consumer
 // group join fee.
 func (n *KafkaTriggerNode) pollNative(nodeParams map[string]interface{}, topic, groupID string) ([]model.DataItem, error) {
-	brokersRaw := strings.TrimSpace(fmt.Sprintf("%v", nodeParams["brokers"]))
+	brokersRaw := stringParam(nodeParams, "brokers")
 	if brokersRaw == "" {
 		return nil, fmt.Errorf("brokers is required when mode=native")
 	}
@@ -190,13 +190,13 @@ func (n *KafkaTriggerNode) pollNative(nodeParams map[string]interface{}, topic, 
 		Brokers:       brokers,
 		Topic:         topic,
 		GroupID:       groupID,
-		SASLMechanism: strings.TrimSpace(fmt.Sprintf("%v", nodeParams["saslMechanism"])),
-		SASLUsername:  fmt.Sprintf("%v", nodeParams["saslUsername"]),
-		SASLPassword:  fmt.Sprintf("%v", nodeParams["saslPassword"]),
+		SASLMechanism: stringParam(nodeParams, "saslMechanism"),
+		SASLUsername:  stringParam(nodeParams, "saslUsername"),
+		SASLPassword:  stringParam(nodeParams, "saslPassword"),
 		TLS:           boolParam(nodeParams, "tls", false),
-		CACert:        strings.TrimSpace(fmt.Sprintf("%v", nodeParams["ca"])),
-		ClientCert:    strings.TrimSpace(fmt.Sprintf("%v", nodeParams["clientCert"])),
-		ClientKey:     strings.TrimSpace(fmt.Sprintf("%v", nodeParams["clientKey"])),
+		CACert:        stringParam(nodeParams, "ca"),
+		ClientCert:    stringParam(nodeParams, "clientCert"),
+		ClientKey:     stringParam(nodeParams, "clientKey"),
 		ClientID:      "m9m-kafka-trigger",
 		StartOffset:   startOffsetFromParams(nodeParams),
 	}
@@ -294,6 +294,24 @@ func (n *KafkaTriggerNode) clientFor(cfg messaging.KafkaNativeConfig) (*messagin
 	}
 	n.nativeC[key] = c
 	return c, nil
+}
+
+// stringParam reads a string parameter, treating an absent key, a
+// nil value and the literal "<nil>" (what `fmt.Sprintf("%v", nil)`
+// produces) all as "not set". Without the "<nil>" guard a missing
+// `clientCert` reaches the mTLS loader as the four-character string
+// "<nil>", which fails with "tls: failed to find any PEM data in
+// certificate input".
+func stringParam(params map[string]interface{}, key string) string {
+	v, ok := params[key]
+	if !ok || v == nil {
+		return ""
+	}
+	s := strings.TrimSpace(fmt.Sprintf("%v", v))
+	if s == "<nil>" {
+		return ""
+	}
+	return s
 }
 
 // startOffsetFromParams maps the n8n `startPosition` option onto a
@@ -453,24 +471,24 @@ func (n *KafkaTriggerNode) ValidateParameters(params map[string]interface{}) err
 	if params == nil {
 		return fmt.Errorf("parameters cannot be nil")
 	}
-	mode := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", params["mode"])))
+	mode := strings.ToLower(stringParam(params, "mode"))
 	if mode == "" {
 		mode = "rest"
 	}
 	switch mode {
 	case "native":
-		if b := strings.TrimSpace(fmt.Sprintf("%v", params["brokers"])); b == "" {
+		if stringParam(params, "brokers") == "" {
 			return fmt.Errorf("brokers is required when mode=native")
 		}
 	default:
-		if v := strings.TrimSpace(fmt.Sprintf("%v", params["restProxyUrl"])); v == "" {
+		if stringParam(params, "restProxyUrl") == "" {
 			return fmt.Errorf("restProxyUrl is required when mode=rest")
 		}
 	}
-	if v := strings.TrimSpace(fmt.Sprintf("%v", params["groupId"])); v == "" {
+	if stringParam(params, "groupId") == "" {
 		return fmt.Errorf("groupId is required")
 	}
-	if v := strings.TrimSpace(fmt.Sprintf("%v", params["topic"])); v == "" {
+	if stringParam(params, "topic") == "" {
 		return fmt.Errorf("topic is required")
 	}
 	return nil
