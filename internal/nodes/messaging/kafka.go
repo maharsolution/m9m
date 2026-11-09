@@ -372,6 +372,13 @@ func materialiseValue(raw interface{}, item model.DataItem) interface{} {
 		if strings.HasPrefix(expr, "$json") {
 			path := strings.TrimPrefix(expr, "$json")
 			path = strings.TrimPrefix(path, ".")
+			// Bare `{{ $json }}` (no path) means "the whole item".
+			// Without this guard the path split yields [""] and the
+			// lookup returns nil, so the producer publishes the
+			// literal payload "null" instead of the item JSON.
+			if path == "" {
+				return item.JSON
+			}
 			cur := item.JSON
 			for _, p := range strings.Split(path, ".") {
 				if cur == nil {
@@ -395,20 +402,20 @@ func materialiseValue(raw interface{}, item model.DataItem) interface{} {
 // literal `="some string"` or `={{ $json.x }}` overrides that. This
 // helper distinguishes the three cases:
 //
-//   1. `raw` is nil, missing, or an empty string → return the
-//      upstream item's JSON, marshalled. Without this, a synced
-//      n8n workflow that uses the empty-value-as-upstream convention
-//      (the user's "Finnet - Webhook use Redist - Kafka/Rabbit"
-//      workflow on the `finnet-queue` node) would publish an empty
-//      record to Kafka and the consumer-side `Set Counter` /
-//      `Find Respond` retry loop would spin on a missing key.
+//  1. `raw` is nil, missing, or an empty string → return the
+//     upstream item's JSON, marshalled. Without this, a synced
+//     n8n workflow that uses the empty-value-as-upstream convention
+//     (the user's "Finnet - Webhook use Redist - Kafka/Rabbit"
+//     workflow on the `finnet-queue` node) would publish an empty
+//     record to Kafka and the consumer-side `Set Counter` /
+//     `Find Respond` retry loop would spin on a missing key.
 //
-//   2. `raw` is a non-empty string starting with `=` or `{{` →
-//      evaluate the n8n expression against `item`. Same convention
-//      as `materialiseValue`.
+//  2. `raw` is a non-empty string starting with `=` or `{{` →
+//     evaluate the n8n expression against `item`. Same convention
+//     as `materialiseValue`.
 //
-//   3. Any other non-empty value → return it as-is (literal string,
-//      number, bool, etc.).
+//  3. Any other non-empty value → return it as-is (literal string,
+//     number, bool, etc.).
 //
 // The serialised upstream item is returned as a `[]byte` so the
 // existing `switch v := value.(type)` block in `Execute` picks it
