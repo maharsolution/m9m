@@ -21,6 +21,7 @@
         "brokers": "kafka-2366031f-tds-024f.a.aivencloud.com:20475",
         "topic": "finnet-queue",
         "groupId": "m9m-aiven-sample-consumer",
+        "startPosition": "first",
         "saslMechanism": "PLAIN",
         "tls": true,
         "intervalSeconds": 5,

@@ -38,6 +38,7 @@ type KafkaNativeConfig struct {
 	ClientCert    string // PEM-encoded client certificate (mTLS)
 	ClientKey     string // PEM-encoded client private key (mTLS, must pair with ClientCert)
 	ClientID      string // optional, surfaced in broker logs
+	StartOffset   int64  // consumer group start position: kafka.FirstOffset / kafka.LastOffset (default LastOffset)
 }
 
 // KafkaNativeClient is the segmentio/kafka-go-backed transport for
@@ -207,8 +208,8 @@ func (c *KafkaNativeClient) writerLazy() (*kafka.Writer, error) {
 		return tls.Client(rawConn, tlsCfg), nil
 	}
 	w := &kafka.Writer{
-		Addr:                   kafka.TCP(c.cfg.Brokers...),
-		Topic:                  c.cfg.Topic,
+		Addr:  kafka.TCP(c.cfg.Brokers...),
+		Topic: c.cfg.Topic,
 		// keyBasedBalancer routes by key when Key is non-empty
 		// (preserves partitioning for ordered processing) and
 		// round-robins when Key is empty. Avoiding
@@ -233,8 +234,42 @@ func (c *KafkaNativeClient) writerLazy() (*kafka.Writer, error) {
 			ClientID:    d.ClientID,
 		},
 	}
+	// `Completion` is invoked by kafka-go once the broker has
+	// acknowledged the batch. It is the only hook that carries the
+	// broker-assigned partition / offset back to the caller —
+	// `WriteMessages` itself returns only an error. We stash the
+	// metadata on the message via `WriterData` so `Produce` can
+	// surface a real partition / offset instead of the -1
+	// placeholder (which is what n8n's Kafka node returns).
+	//
+	// `WriterData` is a pointer so that the mutation performed here
+	// is visible to the caller: kafka-go copies the `Message` struct
+	// into its internal batch, but the pointer payload survives the
+	// copy.
+	w.Completion = func(msgs []kafka.Message, err error) {
+		if err != nil {
+			return
+		}
+		for i := range msgs {
+			meta, ok := msgs[i].WriterData.(*produceMeta)
+			if !ok || meta == nil {
+				continue
+			}
+			meta.Partition = msgs[i].Partition
+			meta.Offset = msgs[i].Offset
+		}
+	}
 	c.writer = w
 	return w, nil
+}
+
+// produceMeta carries the broker-assigned partition / offset back
+// from the kafka-go `Completion` hook to the `Produce` caller. It
+// is passed by pointer through `kafka.Message.WriterData` because
+// kafka-go copies the `Message` struct into its write batch.
+type produceMeta struct {
+	Partition int
+	Offset    int64
 }
 
 // Produce writes one record to Kafka via the segmentio/kafka-go
@@ -254,27 +289,29 @@ func (c *KafkaNativeClient) Produce(ctx context.Context, topic string, key, valu
 		return kafkaProduceResult{}, err
 	}
 
+	meta := &produceMeta{Partition: -1, Offset: -1}
 	msg := kafka.Message{
-		Key:     key,
-		Value:   value,
-		Time:    time.Now(),
-		Headers: toKafkaHeaders(headers),
+		Key:        key,
+		Value:      value,
+		Time:       time.Now(),
+		Headers:    toKafkaHeaders(headers),
+		WriterData: meta,
 	}
 	if err := w.WriteMessages(ctx, msg); err != nil {
 		return kafkaProduceResult{}, fmt.Errorf("kafka native produce: %w", err)
 	}
 
-	// segmentio/kafka-go's Writer does not surface the assigned
-	// partition/offset per-message on a single-shot Write. Return
-	// `Partition: -1, Offset: -1` to signal "delivered" without
-	// inventing metadata the broker did not give us. The node-level
-	// result rendering is unchanged because the field is still
-	// emitted on the workflow output.
-	return kafkaProduceResult{
+	// The `Completion` hook (installed in `writerLazy`) fills `meta`
+	// with the broker-assigned partition / offset. Fall back to
+	// -1 / -1 only when the hook did not run (which happens on older
+	// kafka-go versions) so the caller can still tell "delivered but
+	// unknown position" from "delivered at offset N".
+	res := kafkaProduceResult{
 		Topic:     c.cfg.Topic,
-		Partition: -1,
-		Offset:    -1,
-	}, nil
+		Partition: meta.Partition,
+		Offset:    meta.Offset,
+	}
+	return res, nil
 }
 
 // Poll blocks for up to `timeout` waiting for new records on the
@@ -293,6 +330,19 @@ func (c *KafkaNativeClient) Poll(ctx context.Context, timeout time.Duration, max
 			c.mu.Unlock()
 			return nil, err
 		}
+		// `StartOffset` only applies when the consumer group has no
+		// committed offset for the partition yet. n8n exposes this
+		// as the trigger's `startPosition` option:
+		//   first  -> replay the whole topic from the beginning
+		//   last   -> only receive messages produced after the join
+		// Defaulting to `last` matches n8n, but a fresh group then
+		// never sees messages that were produced *before* the
+		// trigger started — which is the common "produce then
+		// consume" smoke-test case.
+		startOffset := c.cfg.StartOffset
+		if startOffset == 0 {
+			startOffset = kafka.LastOffset
+		}
 		c.reader = kafka.NewReader(kafka.ReaderConfig{
 			Brokers:        c.cfg.Brokers,
 			GroupID:        c.cfg.GroupID,
@@ -301,7 +351,7 @@ func (c *KafkaNativeClient) Poll(ctx context.Context, timeout time.Duration, max
 			MaxBytes:       1 << 20, // 1 MiB per fetch
 			MaxWait:        500 * time.Millisecond,
 			Dialer:         d,
-			StartOffset:    kafka.LastOffset, // ignore backlog; user can override via seek
+			StartOffset:    startOffset,
 			CommitInterval: time.Second,
 		})
 	}

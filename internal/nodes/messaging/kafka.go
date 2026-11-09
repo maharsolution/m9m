@@ -257,12 +257,22 @@ func (n *KafkaNode) backendFor(params map[string]interface{}) (kafkaBackend, err
 		}
 		topic := strings.TrimSpace(fmt.Sprintf("%v", params["topic"]))
 		saslMech := strings.TrimSpace(fmt.Sprintf("%v", params["saslMechanism"]))
-		if saslMech == "" || saslMech == "<nil>" {
+		if saslMech == "<nil>" {
+			saslMech = ""
+		}
+		if saslMech == "" {
 			// Credential envelope often sets `authentication: true`
 			// without naming a mechanism. Aiven / Confluent / most
 			// managed brokers default to PLAIN when username+password
 			// are present, so use that as the safe fallback.
-			saslMech = "PLAIN"
+			//
+			// Only default when a login is actually available —
+			// forcing PLAIN on a credential-less broker would turn a
+			// valid plaintext / IP-SASL connection into an
+			// "SASL username is required" error.
+			if strings.TrimSpace(fmt.Sprintf("%v", params["saslUsername"])) != "" {
+				saslMech = "PLAIN"
+			}
 		}
 		tlsEnabled := boolParam(params, "tls", false)
 		caCert := strings.TrimSpace(fmt.Sprintf("%v", params["ca"]))

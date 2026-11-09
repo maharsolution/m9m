@@ -15,6 +15,14 @@ import (
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
 	"github.com/neul-labs/m9m/internal/nodes/messaging"
+	"github.com/segmentio/kafka-go"
+)
+
+// Re-exported kafka-go offset constants so the trigger package does
+// not need to import kafka-go everywhere.
+const (
+	kafkaFirstOffset = kafka.FirstOffset
+	kafkaLastOffset  = kafka.LastOffset
 )
 
 // KafkaTriggerNode implements `n8n-nodes-base.kafkaTrigger`. It
@@ -94,6 +102,10 @@ func kafkaTriggerProperties() []base.NodeProperty {
 		// Shared
 		base.StringProp("Group ID", "groupId", "", "Consumer group id (used by the broker to track offsets).", "m9m-trigger", true),
 		base.StringProp("Topic", "topic", "", "Topic to subscribe to.", "events.user", true),
+		base.StringOpt("Start position", "startPosition", "last", "Where a consumer group with no committed offset starts reading.", []base.Option{
+			{Name: "First — replay from the beginning of the topic", Value: "first"},
+			{Name: "Last — only messages produced after the join", Value: "last"},
+		}, false),
 		base.NumberProp("Poll interval (s)", "intervalSeconds", 5, "How often to poll for new records.", false),
 		base.NumberProp("Max records per poll", "maxRecords", 100, "Upper bound on records returned per poll (1-1000).", false),
 	}
@@ -186,6 +198,7 @@ func (n *KafkaTriggerNode) pollNative(nodeParams map[string]interface{}, topic, 
 		ClientCert:    strings.TrimSpace(fmt.Sprintf("%v", nodeParams["clientCert"])),
 		ClientKey:     strings.TrimSpace(fmt.Sprintf("%v", nodeParams["clientKey"])),
 		ClientID:      "m9m-kafka-trigger",
+		StartOffset:   startOffsetFromParams(nodeParams),
 	}
 	// Default the SASL mechanism to PLAIN when the credential gave
 	// us a username + password but no explicit mechanism. Aiven /
@@ -269,7 +282,7 @@ func (n *KafkaTriggerNode) pollNative(nodeParams map[string]interface{}, topic, 
 // workflow does not tear it down so reconnects don't replay
 // already-committed offsets.
 func (n *KafkaTriggerNode) clientFor(cfg messaging.KafkaNativeConfig) (*messaging.KafkaNativeClient, error) {
-	key := fmt.Sprintf("%s|%s|%s|%s|%s|%v|%d|%d|%d", strings.Join(cfg.Brokers, ","), cfg.Topic, cfg.GroupID, cfg.SASLMechanism, cfg.SASLUsername, cfg.TLS, len(cfg.CACert), len(cfg.ClientCert), len(cfg.ClientKey))
+	key := fmt.Sprintf("%s|%s|%s|%s|%s|%v|%d|%d|%d|%d", strings.Join(cfg.Brokers, ","), cfg.Topic, cfg.GroupID, cfg.SASLMechanism, cfg.SASLUsername, cfg.TLS, len(cfg.CACert), len(cfg.ClientCert), len(cfg.ClientKey), cfg.StartOffset)
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	if c, ok := n.nativeC[key]; ok {
@@ -281,6 +294,21 @@ func (n *KafkaTriggerNode) clientFor(cfg messaging.KafkaNativeConfig) (*messagin
 	}
 	n.nativeC[key] = c
 	return c, nil
+}
+
+// startOffsetFromParams maps the n8n `startPosition` option onto a
+// kafka-go start offset. n8n offers "first" (replay the topic from
+// the beginning) and "last" (only new messages). Anything unknown
+// falls back to `last`, which is the n8n default.
+func startOffsetFromParams(params map[string]interface{}) int64 {
+	switch strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", params["startPosition"]))) {
+	case "first", "earliest", "beginning":
+		return kafkaFirstOffset
+	case "last", "latest":
+		return kafkaLastOffset
+	default:
+		return kafkaLastOffset
+	}
 }
 
 // boolParam returns the bool value of `k` from the params map,

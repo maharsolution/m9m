@@ -69,8 +69,13 @@ func TestApplyKafkaCredentialAuth_NoOverrideWhenExplicitParamSet(t *testing.T) {
 	ApplyKafkaCredentialAuth(p)
 	assert.Equal(t, "explicit.example.com:9092", p["brokers"], "explicit brokers should win")
 	assert.Equal(t, "explicit-user", p["saslUsername"], "explicit username should win")
-	// saslMechanism wasn't on the node, so the credential fills it.
-	assert.Equal(t, "", p["saslMechanism"], "no credential value for saslMechanism here")
+	// saslMechanism wasn't on the node and the credential carries no
+	// mechanism either, so the helper must leave the key absent.
+	// (The previous assertion expected `""`, but the helper never
+	// materialises an empty value — an absent key is what the
+	// downstream `saslMechanism == ""` checks expect.)
+	_, present := p["saslMechanism"]
+	assert.False(t, present, "saslMechanism should stay absent when neither node nor credential supplies one")
 }
 
 // TestApplyKafkaCredentialAuth_NilAndEmptyMap asserts the helper
