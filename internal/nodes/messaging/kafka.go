@@ -167,13 +167,18 @@ func (n *KafkaNode) Execute(inputData []model.DataItem, nodeParams map[string]in
 	// absent (an unchecked type assertion on a nil interface). Read
 	// it defensively instead — `stringFromAnyMap` also normalises the
 	// "<nil>" string that `fmt.Sprintf("%v", nil)` produces.
-	topic := stringFromAnyMap(nodeParams, "topic")
-	if topic == "" {
-		return nil, n.CreateError("kafka produce: topic is required", nil)
-	}
+	//
+	// The topic can also be an expression (`={{ $json.topic }}`), so
+	// resolve it per item like the key / value parameters.
+	topicParam := nodeParams["topic"]
 
 	result := make([]model.DataItem, 0, len(inputData))
 	for _, item := range inputData {
+		topic := materialiseValue(topicParam, item)
+		topicStr, ok := topic.(string)
+		if !ok || topicStr == "" {
+			return nil, n.CreateError("kafka produce: topic is required", nil)
+		}
 		value := resolveProduceValue(nodeParams["value"], item)
 		key := materialiseValue(nodeParams["key"], item)
 
@@ -201,7 +206,7 @@ func (n *KafkaNode) Execute(inputData []model.DataItem, nodeParams map[string]in
 		}
 
 		meta, err := be.Produce(context.Background(),
-			topic,
+			topicStr,
 			keyBytes, raw, headerMap)
 		if err != nil {
 			return nil, n.CreateError(fmt.Sprintf("kafka produce: %v", err), nil)
