@@ -75,8 +75,24 @@ type KafkaNode struct {
 	*base.BaseNode
 	httpClient *http.Client
 
-	mu      sync.Mutex
-	backend kafkaBackend
+	// mu guards `backends`.
+	mu sync.Mutex
+	// backends caches the transport client per *configuration*
+	// (brokers + topic + auth + TLS material), NOT one global
+	// slot. A single `KafkaNode` instance is registered ONCE per
+	// engine process and is therefore shared by every workflow that
+	// contains a Kafka node. The previous single-slot cache
+	// (`backend kafkaBackend`) meant the FIRST workflow to produce
+	// anything pinned the transport for the whole process: a later
+	// workflow with different brokers / topic / credentials silently
+	// published to the first workflow's topic — and because the
+	// produce result reported the *requested* topic, the mismatch
+	// was invisible in the node output.
+	//
+	// Keying by config keeps the "reuse one Writer across many
+	// records" optimisation (the reason the cache exists) while
+	// making each workflow's transport independent.
+	backends map[string]kafkaBackend
 }
 
 // NewKafkaNode creates a new Kafka producer node.
@@ -91,6 +107,7 @@ func NewKafkaNode() *KafkaNode {
 			Outputs:     []string{"main"},
 		}),
 		httpClient: &http.Client{Timeout: 30 * time.Second},
+		backends:   make(map[string]kafkaBackend),
 	}
 }
 
@@ -233,19 +250,16 @@ func (n *KafkaNode) Execute(inputData []model.DataItem, nodeParams map[string]in
 	return result, nil
 }
 
-// backendFor returns (and caches) the per-node transport client
-// for the configured `mode` (rest / native). The REST proxy client
-// is a thin HTTP wrapper that signs the request according to the
+// backendFor returns (and caches) the transport client for the
+// configured `mode` (rest / native). The REST proxy client is a
+// thin HTTP wrapper that signs the request according to the
 // configured auth mode; the native client opens TCP connections
-// directly to the broker list. Caching is per-instance: a workflow
-// that produces 1k items reuses the same Writer / Reader instead of
-// paying a TCP handshake on every record.
+// directly to the broker list. Caching is per-configuration: a
+// workflow that produces 1k items reuses the same Writer / Reader
+// instead of paying a TCP handshake on every record, while a
+// DIFFERENT workflow (different brokers / topic / credentials)
+// gets its own transport instead of inheriting the first one.
 func (n *KafkaNode) backendFor(params map[string]interface{}) (kafkaBackend, error) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	if n.backend != nil {
-		return n.backend, nil
-	}
 	// Apply the engine-injected credential envelope (BUG-2026-10-12-002).
 	// When a `kafka` credential is attached to the workflow node the
 	// engine writes `<credType>_<field>` keys (e.g. `kafka_brokers`,
@@ -266,6 +280,22 @@ func (n *KafkaNode) backendFor(params map[string]interface{}) (kafkaBackend, err
 			mode = "rest"
 		}
 	}
+
+	// Cache key: everything that changes the transport wiring. The
+	// topic is deliberately EXCLUDED — the native writer is
+	// topic-agnostic (the topic travels with each message), so two
+	// nodes that differ only in topic can share one Writer.
+	key := backendCacheKey(mode, params)
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.backends == nil {
+		n.backends = make(map[string]kafkaBackend)
+	}
+	if b, ok := n.backends[key]; ok {
+		return b, nil
+	}
+
 	switch mode {
 	case "native":
 		brokersRaw := stringFromAnyMap(params, "brokers")
@@ -322,8 +352,8 @@ func (n *KafkaNode) backendFor(params map[string]interface{}) (kafkaBackend, err
 		if err != nil {
 			return nil, err
 		}
-		n.backend = client
-		return n.backend, nil
+		n.backends[key] = client
+		return client, nil
 	default: // "rest" or any unrecognised value (legacy behaviour)
 		restURL := stringFromAnyMap(params, "restProxyUrl")
 		if restURL == "" {
@@ -335,9 +365,37 @@ func (n *KafkaNode) backendFor(params map[string]interface{}) (kafkaBackend, err
 			Password: stringFromAnyMap(params, "password"),
 			APIKey:   stringFromAnyMap(params, "apiKey"),
 		}
-		n.backend = &kafkaRESTProxy{baseURL: strings.TrimRight(restURL, "/"), auth: auth, client: n.httpClient}
-		return n.backend, nil
+		proxy := &kafkaRESTProxy{baseURL: strings.TrimRight(restURL, "/"), auth: auth, client: n.httpClient}
+		n.backends[key] = proxy
+		return proxy, nil
 	}
+}
+
+// backendCacheKey builds the cache key for a producer transport.
+// It covers every parameter that changes how the connection is made
+// (brokers, SASL, TLS material, REST proxy URL + auth).
+//
+// The topic is intentionally NOT part of the key: the native writer
+// is topic-agnostic (each message carries its own topic) and the
+// REST proxy client takes the topic per request, so two nodes that
+// differ only in topic can share one transport.
+func backendCacheKey(mode string, params map[string]interface{}) string {
+	return strings.Join([]string{
+		mode,
+		stringFromAnyMap(params, "brokers"),
+		stringFromAnyMap(params, "saslMechanism"),
+		stringFromAnyMap(params, "saslUsername"),
+		stringFromAnyMap(params, "saslPassword"),
+		stringFromAnyMap(params, "ca"),
+		stringFromAnyMap(params, "clientCert"),
+		stringFromAnyMap(params, "clientKey"),
+		fmt.Sprintf("%v", boolParam(params, "tls", false)),
+		stringFromAnyMap(params, "restProxyUrl"),
+		stringFromAnyMap(params, "authentication"),
+		stringFromAnyMap(params, "username"),
+		stringFromAnyMap(params, "password"),
+		stringFromAnyMap(params, "apiKey"),
+	}, "|")
 }
 
 // boolParam returns the bool value of `k` from the params map,

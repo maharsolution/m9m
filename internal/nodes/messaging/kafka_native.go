@@ -215,8 +215,20 @@ func (c *KafkaNativeClient) writerLazy() (*kafka.Writer, error) {
 		return tls.Client(rawConn, tlsCfg), nil
 	}
 	w := &kafka.Writer{
-		Addr:  kafka.TCP(c.cfg.Brokers...),
-		Topic: c.cfg.Topic,
+		Addr: kafka.TCP(c.cfg.Brokers...),
+		// `Topic` is deliberately left EMPTY. kafka-go treats
+		// `Writer.Topic` and `Message.Topic` as mutually exclusive:
+		// whichever is set wins (`Writer.chooseTopic`). Setting
+		// `Writer.Topic` here pinned the writer to the FIRST topic
+		// the node ever produced to, so a later run with a
+		// different `topic` parameter silently published to the
+		// OLD topic while the node reported the NEW one — data
+		// landing on the wrong topic with no error.
+		//
+		// The per-message topic is set in `Produce` instead, which
+		// makes the writer topic-agnostic and correct for nodes
+		// whose topic is an expression resolved per item.
+		//
 		// keyBasedBalancer routes by key when Key is non-empty
 		// (preserves partitioning for ordered processing) and
 		// round-robins when Key is empty. Avoiding
@@ -284,12 +296,8 @@ type produceMeta struct {
 // shape as the REST proxy so the node-level result rendering is
 // unchanged.
 func (c *KafkaNativeClient) Produce(ctx context.Context, topic string, key, value []byte, headers map[string]string) (kafkaProduceResult, error) {
-	if topic != "" && topic != c.cfg.Topic {
-		// The native Writer is bound to a single topic at
-		// construction. A node that targets multiple topics should
-		// either use the REST proxy or open one Writer per topic;
-		// for the common case (one topic per node) this is a no-op.
-		c.cfg.Topic = topic
+	if topic == "" {
+		return kafkaProduceResult{}, errors.New("kafka native: topic is required")
 	}
 	w, err := c.writerLazy()
 	if err != nil {
@@ -298,6 +306,12 @@ func (c *KafkaNativeClient) Produce(ctx context.Context, topic string, key, valu
 
 	meta := &produceMeta{Partition: -1, Offset: -1}
 	msg := kafka.Message{
+		// The topic travels WITH the message (the writer itself is
+		// topic-agnostic — see `writerLazy`). Setting `msg.Topic`
+		// per record is what lets one node publish to different
+		// topics across runs / per item without the writer pinning
+		// itself to the first topic it ever saw.
+		Topic:      topic,
 		Key:        key,
 		Value:      value,
 		Time:       time.Now(),
@@ -314,7 +328,7 @@ func (c *KafkaNativeClient) Produce(ctx context.Context, topic string, key, valu
 	// kafka-go versions) so the caller can still tell "delivered but
 	// unknown position" from "delivered at offset N".
 	res := kafkaProduceResult{
-		Topic:     c.cfg.Topic,
+		Topic:     topic,
 		Partition: meta.Partition,
 		Offset:    meta.Offset,
 	}
