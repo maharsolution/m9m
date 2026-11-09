@@ -530,6 +530,29 @@ func ApplyKafkaCredentialAuth(params map[string]interface{}) {
 	if k := stringFromAnyMap(params, "kafka_apiKey"); k != "" && isEmpty(params, "apiKey") {
 		params["apiKey"] = k
 	}
+	// Cross-fallback between the REST-proxy credential fields
+	// (`username` / `password`) and the native SASL fields
+	// (`saslUsername` / `saslPassword`).
+	//
+	// Aiven / Confluent Cloud credentials store the login as plain
+	// `username` + `password` (no `sasl` prefix), but the native
+	// transport reads `saslUsername` / `saslPassword`. Without this
+	// bridge the SASL handshake goes out with an empty username and
+	// the broker replies "Invalid username or password".
+	if u := stringFromAnyMap(params, "username"); u != "" && isEmpty(params, "saslUsername") {
+		params["saslUsername"] = u
+	}
+	if p := stringFromAnyMap(params, "password"); p != "" && isEmpty(params, "saslPassword") {
+		params["saslPassword"] = p
+	}
+	// And the reverse direction, for credentials that only carry the
+	// `sasl`-prefixed keys but are used against a REST proxy.
+	if u := stringFromAnyMap(params, "saslUsername"); u != "" && isEmpty(params, "username") {
+		params["username"] = u
+	}
+	if p := stringFromAnyMap(params, "saslPassword"); p != "" && isEmpty(params, "password") {
+		params["password"] = p
+	}
 }
 
 // isEmpty returns true when the value at key is missing, nil, or an

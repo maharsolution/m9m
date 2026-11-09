@@ -124,3 +124,12 @@ m9m-simple_webhook.json
 n8n-simple_webhook.json
 tmp/
 secrets/
+
+# Live broker credentials — never publish these. The samples under
+# examples/messaging/ reference the same host / username and carry
+# only a redacted password placeholder, so the workflows stay
+# importable without leaking the secret.
+aivan-sample.txt
+kafkacert.crt
+credentials-mongo+kafka.MD
+examples/messaging/aiven-kafka-credential.json

@@ -1,0 +1,140 @@
+{
+  "name": "Aiven Kafka - Produce (Native TLS + SASL)",
+  "description": "Produce a message to an Aiven Kafka topic over native TLS (segmentio/kafka-go) using the project CA and SASL/PLAIN. Trigger it with a POST to /webhook/aiven-produce.",
+  "category": "messaging",
+  "difficulty": "beginner",
+  "estimatedTime": "5 minutes",
+  "prerequisites": [
+    "An Aiven Kafka service (native endpoint on port 20475)",
+    "The service CA certificate (kafkacert.crt)",
+    "A topic that already exists in the service"
+  ],
+  "learningObjectives": [
+    "Connect to a Kafka broker over native TLS with a custom CA",
+    "Authenticate with SASL/PLAIN using a credential envelope",
+    "Publish the webhook payload to a topic and read back the produce metadata"
+  ],
+  "nodes": [
+    {
+      "parameters": {
+        "path": "/webhook/aiven-produce",
+        "httpMethod": "POST",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "aiven-produce-webhook",
+      "name": "Produce Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [-260, 300],
+      "webhookId": "aiven-kafka-produce"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-topic",
+              "name": "topic",
+              "value": "={{ $json.body.topic || 'finnet-queue' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-key",
+              "name": "key",
+              "value": "={{ $json.body.id || $json.body.key || 'sample-key' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-value",
+              "name": "value",
+              "value": "={{ $json.body }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "build-payload",
+      "name": "Build Payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "mode": "native",
+        "brokers": "kafka-2366031f-tds-024f.a.aivencloud.com:20475",
+        "topic": "={{ $json.topic }}",
+        "key": "={{ $json.key }}",
+        "value": "={{ $json.value }}",
+        "saslMechanism": "PLAIN",
+        "tls": true,
+        "options": {}
+      },
+      "id": "kafka-produce",
+      "name": "Kafka Produce",
+      "type": "n8n-nodes-base.kafka",
+      "typeVersion": 1,
+      "position": [260, 300],
+      "credentials": {
+        "kafka": {
+          "id": "aiven-kafka-credential",
+          "name": "Kafka - Aiven",
+          "type": "kafka"
+        }
+      },
+      "notes": "The credential envelope carries brokers / username / password / ca. The broker address, CA and login are also set as node parameters so the sample also works without a synced credential."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond-produce",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [520, 300]
+    }
+  ],
+  "connections": {
+    "Produce Webhook": {
+      "main": [
+        [
+          {
+            "node": "Build Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Payload": {
+      "main": [
+        [
+          {
+            "node": "Kafka Produce",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kafka Produce": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1"
+}

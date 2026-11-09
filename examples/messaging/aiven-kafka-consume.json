@@ -1,0 +1,134 @@
+{
+  "name": "Aiven Kafka - Consume (Native TLS + SASL)",
+  "description": "Consume messages from an Aiven Kafka topic over native TLS using the project CA and SASL/PLAIN, then log each record.",
+  "category": "messaging",
+  "difficulty": "beginner",
+  "estimatedTime": "5 minutes",
+  "prerequisites": [
+    "An Aiven Kafka service (native endpoint on port 20475)",
+    "The service CA certificate (kafkacert.crt)",
+    "A topic that already exists in the service"
+  ],
+  "learningObjectives": [
+    "Join a consumer group on an Aiven Kafka topic over native TLS",
+    "Verify the broker certificate against the service CA",
+    "Map the polled records into a readable log payload"
+  ],
+  "nodes": [
+    {
+      "parameters": {
+        "mode": "native",
+        "brokers": "kafka-2366031f-tds-024f.a.aivencloud.com:20475",
+        "topic": "finnet-queue",
+        "groupId": "m9m-aiven-sample-consumer",
+        "saslMechanism": "PLAIN",
+        "tls": true,
+        "intervalSeconds": 5,
+        "maxRecords": 10,
+        "options": {}
+      },
+      "id": "kafka-consume-trigger",
+      "name": "Kafka Trigger",
+      "type": "n8n-nodes-base.kafkaTrigger",
+      "typeVersion": 1,
+      "position": [-260, 300],
+      "credentials": {
+        "kafka": {
+          "id": "aiven-kafka-credential",
+          "name": "Kafka - Aiven",
+          "type": "kafka"
+        }
+      },
+      "notes": "The credential envelope carries brokers / username / password / ca. The broker address, CA and login are also set as node parameters so the sample also works without a synced credential."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-received-at",
+              "name": "receivedAt",
+              "value": "={{ $now }}",
+              "type": "string"
+            },
+            {
+              "id": "field-topic",
+              "name": "topic",
+              "value": "={{ $json.topic }}",
+              "type": "string"
+            },
+            {
+              "id": "field-partition",
+              "name": "partition",
+              "value": "={{ $json.partition }}",
+              "type": "number"
+            },
+            {
+              "id": "field-offset",
+              "name": "offset",
+              "value": "={{ $json.offset }}",
+              "type": "number"
+            },
+            {
+              "id": "field-key",
+              "name": "key",
+              "value": "={{ $json.key }}",
+              "type": "string"
+            },
+            {
+              "id": "field-value",
+              "name": "value",
+              "value": "={{ $json.value }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "format-record",
+      "name": "Format Record",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "mode": "info",
+        "message": "={{ { topic: $json.topic, partition: $json.partition, offset: $json.offset, key: $json.key, value: $json.value } }}",
+        "options": {}
+      },
+      "id": "log-record",
+      "name": "Log Record",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [260, 300]
+    }
+  ],
+  "connections": {
+    "Kafka Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Record": {
+      "main": [
+        [
+          {
+            "node": "Log Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1"
+}

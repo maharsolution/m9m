@@ -88,6 +88,9 @@ func kafkaTriggerProperties() []base.NodeProperty {
 		base.StringProp("SASL Username", "saslUsername", "", "Username for SASL.", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
 		base.StringProp("SASL Password", "saslPassword", "", "Password for SASL.", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
 		base.BoolProp("TLS", "tls", false, "Enable TLS for the native broker connection.").WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
+		base.StringProp("CA Cert (PEM)", "ca", "", "PEM-encoded CA cert chain used to verify the broker (Aiven / Confluent Cloud).", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
+		base.StringProp("Client Cert (PEM)", "clientCert", "", "PEM-encoded client certificate for mTLS. Leave empty to use SASL only.", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
+		base.StringProp("Client Key (PEM)", "clientKey", "", "PEM-encoded client private key for mTLS (must pair with Client Cert).", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
 		// Shared
 		base.StringProp("Group ID", "groupId", "", "Consumer group id (used by the broker to track offsets).", "m9m-trigger", true),
 		base.StringProp("Topic", "topic", "", "Topic to subscribe to.", "events.user", true),
@@ -179,7 +182,23 @@ func (n *KafkaTriggerNode) pollNative(nodeParams map[string]interface{}, topic, 
 		SASLUsername:  fmt.Sprintf("%v", nodeParams["saslUsername"]),
 		SASLPassword:  fmt.Sprintf("%v", nodeParams["saslPassword"]),
 		TLS:           boolParam(nodeParams, "tls", false),
+		CACert:        strings.TrimSpace(fmt.Sprintf("%v", nodeParams["ca"])),
+		ClientCert:    strings.TrimSpace(fmt.Sprintf("%v", nodeParams["clientCert"])),
+		ClientKey:     strings.TrimSpace(fmt.Sprintf("%v", nodeParams["clientKey"])),
 		ClientID:      "m9m-kafka-trigger",
+	}
+	// Default the SASL mechanism to PLAIN when the credential gave
+	// us a username + password but no explicit mechanism. Aiven /
+	// Confluent Cloud use PLAIN over TLS.
+	if cfg.SASLMechanism == "" && cfg.SASLUsername != "" {
+		cfg.SASLMechanism = "PLAIN"
+	}
+	// Any TLS material implies a TLS broker — flip the flag on so
+	// the CA / client cert are actually used. Without this the
+	// connection would attempt plaintext and the broker would drop
+	// it with "unexpected EOF: broker appears to be expecting TLS".
+	if cfg.CACert != "" || cfg.ClientCert != "" || cfg.ClientKey != "" {
+		cfg.TLS = true
 	}
 	client, err := n.clientFor(cfg)
 	if err != nil {
@@ -250,7 +269,7 @@ func (n *KafkaTriggerNode) pollNative(nodeParams map[string]interface{}, topic, 
 // workflow does not tear it down so reconnects don't replay
 // already-committed offsets.
 func (n *KafkaTriggerNode) clientFor(cfg messaging.KafkaNativeConfig) (*messaging.KafkaNativeClient, error) {
-	key := fmt.Sprintf("%s|%s|%s|%s|%s|%v", strings.Join(cfg.Brokers, ","), cfg.Topic, cfg.GroupID, cfg.SASLMechanism, cfg.SASLUsername, cfg.TLS)
+	key := fmt.Sprintf("%s|%s|%s|%s|%s|%v|%d|%d|%d", strings.Join(cfg.Brokers, ","), cfg.Topic, cfg.GroupID, cfg.SASLMechanism, cfg.SASLUsername, cfg.TLS, len(cfg.CACert), len(cfg.ClientCert), len(cfg.ClientKey))
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	if c, ok := n.nativeC[key]; ok {
