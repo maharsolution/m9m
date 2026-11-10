@@ -46,6 +46,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -135,12 +136,13 @@ func mongoProperties() []base.NodeProperty {
 
 // Execute runs the configured MongoDB operation.
 func (n *MongoDBNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
-	connStr := strings.TrimSpace(n.GetStringParameter(nodeParams, "connectionString", ""))
+	connStr, database, collection := n.resolveConnParams(nodeParams)
+	// #region agent log
+	log.Printf(`[agent-debug] {"sessionId":"31457b","hypothesisId":"H19","location":"mongodb.go:Execute","message":"mongo conn resolve","data":{"hasConn":%v,"hasDB":%v,"collection":%q,"hasFilter":%v,"hasQuery":%v},"runId":"post-fix"}`, connStr != "", database != "", collection, nodeParams["filter"] != nil, nodeParams["query"] != nil)
+	// #endregion
 	if connStr == "" {
 		return nil, n.CreateError("connectionString is required (e.g. mongodb://user:pass@host:27017 or mongodb+srv://user:pass@cluster0.x.mongodb.net/)", nil)
 	}
-	database := n.GetStringParameter(nodeParams, "database", "")
-	collection := n.GetStringParameter(nodeParams, "collection", "")
 	operation := n.GetStringParameter(nodeParams, "operation", "find")
 
 	if database == "" {
@@ -279,7 +281,59 @@ func normalizeBSONValue(v interface{}) interface{} {
 }
 
 func (n *MongoDBNode) parseFilter(params map[string]interface{}) (bson.M, error) {
-	return toBSON(params["filter"])
+	// n8n's mongoDb node uses `query`; m9m historically used `filter`.
+	raw := params["filter"]
+	if raw == nil || raw == "" || raw == "{}" {
+		if q := params["query"]; q != nil && q != "" {
+			raw = q
+		}
+	}
+	return toBSON(raw)
+}
+
+// resolveConnParams reads connectionString / database / collection from
+// either bare node parameters or the engine's credential-injected
+// `mongoDb_<field>` keys (InjectCredentialsIntoNodeParameters).
+func (n *MongoDBNode) resolveConnParams(params map[string]interface{}) (connStr, database, collection string) {
+	connStr = strings.TrimSpace(n.GetStringParameter(params, "connectionString", ""))
+	if connStr == "" {
+		connStr = strings.TrimSpace(n.GetStringParameter(params, "mongoDb_connectionString", ""))
+	}
+	if connStr == "" {
+		// n8n values-form credentials: host + port + user + password.
+		host := strings.TrimSpace(n.GetStringParameter(params, "mongoDb_host", ""))
+		if host == "" {
+			host = strings.TrimSpace(n.GetStringParameter(params, "host", ""))
+		}
+		if host != "" {
+			port := strings.TrimSpace(n.GetStringParameter(params, "mongoDb_port", ""))
+			if port == "" {
+				port = strings.TrimSpace(n.GetStringParameter(params, "port", "27017"))
+			}
+			if port == "" {
+				port = "27017"
+			}
+			user := n.GetStringParameter(params, "mongoDb_user", "")
+			if user == "" {
+				user = n.GetStringParameter(params, "user", "")
+			}
+			pass := n.GetStringParameter(params, "mongoDb_password", "")
+			if pass == "" {
+				pass = n.GetStringParameter(params, "password", "")
+			}
+			if user != "" {
+				connStr = fmt.Sprintf("mongodb://%s:%s@%s:%s", user, pass, host, port)
+			} else {
+				connStr = fmt.Sprintf("mongodb://%s:%s", host, port)
+			}
+		}
+	}
+	database = n.GetStringParameter(params, "database", "")
+	if database == "" {
+		database = n.GetStringParameter(params, "mongoDb_database", "")
+	}
+	collection = n.GetStringParameter(params, "collection", "")
+	return connStr, database, collection
 }
 
 func (n *MongoDBNode) doFind(ctx context.Context, coll *mongo.Collection, params map[string]interface{}) ([]model.DataItem, error) {
@@ -566,7 +620,8 @@ func (n *MongoDBNode) ValidateParameters(params map[string]interface{}) error {
 	if params == nil {
 		return n.CreateError("parameters cannot be nil", nil)
 	}
-	if strings.TrimSpace(n.GetStringParameter(params, "connectionString", "")) == "" {
+	connStr, database, collection := n.resolveConnParams(params)
+	if connStr == "" {
 		return n.CreateError("connectionString is required", nil)
 	}
 	operation := n.GetStringParameter(params, "operation", "find")
@@ -577,10 +632,10 @@ func (n *MongoDBNode) ValidateParameters(params map[string]interface{}) error {
 	if !validOps[operation] {
 		return n.CreateError(fmt.Sprintf("invalid operation: %s", operation), nil)
 	}
-	if n.GetStringParameter(params, "database", "") == "" {
+	if database == "" {
 		return n.CreateError("database is required", nil)
 	}
-	if n.GetStringParameter(params, "collection", "") == "" {
+	if collection == "" {
 		return n.CreateError("collection is required", nil)
 	}
 	return nil
