@@ -15,6 +15,7 @@ import (
 
 	"github.com/neul-labs/m9m/internal/engine"
 	"github.com/neul-labs/m9m/internal/model"
+	"github.com/neul-labs/m9m/internal/nodes/trigger"
 	"github.com/neul-labs/m9m/internal/otel"
 	"github.com/neul-labs/m9m/internal/storage"
 	"go.opentelemetry.io/otel/propagation"
@@ -1140,32 +1141,47 @@ func (m *WebhookManager) prepareResponseWithContext(webhook *Webhook, result *en
 			//     bare object (legacy default).
 			//   * "json" -> the node already produced a literal body
 			//     envelope; read the first item's JSON verbatim.
-			respondWith := findRespondToWebhookRespondWith(workflow, triggerNode)
+			respondWith := findRespondToWebhookRespondWithFromData(workflow, triggerNode, result)
+			evaluatedHeaders := map[string]string{}
 			switch respondWith {
 			case "allIncomingItems":
 				entries := make([]map[string]interface{}, len(data))
 				for i, item := range data {
+					if i == 0 {
+						evaluatedHeaders = takeResponseHeadersMeta(item.JSON)
+					} else {
+						_ = takeResponseHeadersMeta(item.JSON)
+					}
 					entries[i] = item.JSON
 				}
 				response.Body = entries
 			case "noData":
 				response.Body = map[string]interface{}{"message": "success"}
-			case "firstIncomingItem", "json", "":
+			case "firstIncomingItem", "json", "text", "":
 				fallthrough
 			default:
 				if len(data) == 0 {
 					response.Body = map[string]interface{}{"message": "success"}
 				} else {
+					evaluatedHeaders = takeResponseHeadersMeta(data[0].JSON)
 					response.Body = unwrapRespondToWebhookBody(data[0].JSON)
 				}
 			}
-			// Resolve Content-Type: per-node override (options.responseHeaders)
-			// wins over inbound mirroring which wins over the JSON fallback.
-			response.Headers["Content-Type"] = resolveContentType(
-				findRespondToWebhookNodeParams(workflow, triggerNode),
-				inboundContentType,
-				response.Body,
-			)
+			if ct := firstHeaderCI(evaluatedHeaders, "Content-Type"); ct != "" {
+				response.Headers["Content-Type"] = ct
+			} else {
+				response.Headers["Content-Type"] = resolveContentType(
+					findRespondToWebhookNodeParamsFromData(workflow, triggerNode, result),
+					inboundContentType,
+					response.Body,
+				)
+			}
+			for k, v := range evaluatedHeaders {
+				if strings.EqualFold(k, "Content-Type") {
+					continue
+				}
+				response.Headers[k] = v
+			}
 			return response
 		}
 		// No Respond-to-Webhook node found (or no per-node
@@ -1307,7 +1323,17 @@ func lastNodeResponseBody(workflow *model.Workflow, result *engine.ExecutionResu
 // `data`), it is returned as-is so JSON-shaped responses still pass
 // through unchanged.
 func unwrapRespondToWebhookBody(item map[string]interface{}) interface{} {
-	if len(item) != 1 {
+	if item == nil {
+		return item
+	}
+	meaningful := 0
+	for k := range item {
+		if k == trigger.ResponseHeadersMetaKey {
+			continue
+		}
+		meaningful++
+	}
+	if meaningful != 1 {
 		return item
 	}
 	raw, ok := item["data"]
@@ -1318,6 +1344,82 @@ func unwrapRespondToWebhookBody(item map[string]interface{}) interface{} {
 		return s
 	}
 	return item
+}
+
+func takeResponseHeadersMeta(item map[string]interface{}) map[string]string {
+	if item == nil {
+		return nil
+	}
+	raw, ok := item[trigger.ResponseHeadersMetaKey]
+	if !ok {
+		return nil
+	}
+	delete(item, trigger.ResponseHeadersMetaKey)
+	switch h := raw.(type) {
+	case map[string]string:
+		return h
+	case map[string]interface{}:
+		out := make(map[string]string, len(h))
+		for k, v := range h {
+			out[k] = fmt.Sprintf("%v", v)
+		}
+		return out
+	}
+	return nil
+}
+
+func firstHeaderCI(headers map[string]string, name string) string {
+	if headers == nil {
+		return ""
+	}
+	for k, v := range headers {
+		if strings.EqualFold(k, name) {
+			return v
+		}
+	}
+	return ""
+}
+
+func findRespondToWebhookRespondWithFromData(workflow *model.Workflow, triggerNode string, result *engine.ExecutionResult) string {
+	if name := respondNodeNameWithOutput(workflow, triggerNode, result); name != "" {
+		for _, n := range workflow.Nodes {
+			if n.Name == name {
+				if rw, ok := n.Parameters["respondWith"].(string); ok {
+					return rw
+				}
+				return ""
+			}
+		}
+	}
+	return findRespondToWebhookRespondWith(workflow, triggerNode)
+}
+
+func findRespondToWebhookNodeParamsFromData(workflow *model.Workflow, triggerNode string, result *engine.ExecutionResult) map[string]interface{} {
+	if name := respondNodeNameWithOutput(workflow, triggerNode, result); name != "" {
+		for _, n := range workflow.Nodes {
+			if n.Name == name {
+				return n.Parameters
+			}
+		}
+	}
+	return findRespondToWebhookNodeParams(workflow, triggerNode)
+}
+
+func respondNodeNameWithOutput(workflow *model.Workflow, triggerNode string, result *engine.ExecutionResult) string {
+	if result == nil || result.NodeOutputs == nil {
+		return ""
+	}
+	for _, name := range findRespondToWebhookNodes(workflow, triggerNode) {
+		if data, ok := result.NodeOutputs[name]; ok && len(data) > 0 {
+			return name
+		}
+	}
+	if name := findRespondToWebhookNodeByType(workflow); name != "" {
+		if data, ok := result.NodeOutputs[name]; ok && len(data) > 0 {
+			return name
+		}
+	}
+	return ""
 }
 
 func isWebhookNode(nodeType string) bool {

@@ -128,8 +128,8 @@ func TestReadRespondToWebhookHeaders_LegacyShape(t *testing.T) {
 			},
 		},
 	})
-	assert.Equal(t, "application/xml", h["content-type"])
-	assert.Equal(t, "bar", h["x-foo"])
+	assert.Equal(t, "application/xml", h["Content-Type"])
+	assert.Equal(t, "bar", h["X-Foo"])
 }
 
 // TestFirstHeaderValueCaseInsensitive verifies the helper normalises

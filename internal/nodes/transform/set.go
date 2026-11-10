@@ -14,11 +14,11 @@ import (
 	"github.com/neul-labs/m9m/internal/nodes/base"
 )
 
-// SetNode implements the Set node functionality for assigning values to fields
+// SetNode implements the Set node functionality for assigning values to fields.
+// Run context is passed per-call (never stored on the singleton).
 type SetNode struct {
 	*base.BaseNode
 	evaluator *expressions.GojaExpressionEvaluator
-	runCtx    *setRunContext
 }
 
 // setRunContext carries the live execution id / run data from the
@@ -479,12 +479,19 @@ func parseRawJSON(params map[string]interface{}) (map[string]interface{}, error)
 // RunAwareNodeExecutor call this so `$execution.id` and
 // `$("OtherNode")` resolve against the live run.
 func (s *SetNode) ExecuteWithRun(workflow *model.Workflow, runData *expressions.RunExecutionData, runIndex, itemIndex int, inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
-	s.runCtx = &setRunContext{workflow: workflow, runData: runData, runIndex: runIndex, itemIndex: itemIndex}
-	defer func() { s.runCtx = nil }()
-	return s.Execute(inputData, nodeParams)
+	return s.execute(inputData, nodeParams, &setRunContext{
+		workflow:  workflow,
+		runData:   runData,
+		runIndex:  runIndex,
+		itemIndex: itemIndex,
+	})
 }
 
 func (s *SetNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
+	return s.execute(inputData, nodeParams, nil)
+}
+
+func (s *SetNode) execute(inputData []model.DataItem, nodeParams map[string]interface{}, runCtx *setRunContext) ([]model.DataItem, error) {
 	if len(inputData) == 0 {
 		return []model.DataItem{}, nil
 	}
@@ -545,11 +552,11 @@ func (s *SetNode) Execute(inputData []model.DataItem, nodeParams map[string]inte
 		var runData *expressions.RunExecutionData
 		var wf *model.Workflow
 		runIndex, itemIndex := 0, i
-		if s.runCtx != nil {
-			runData = s.runCtx.runData
-			wf = s.runCtx.workflow
-			runIndex = s.runCtx.runIndex
-			itemIndex = s.runCtx.itemIndex
+		if runCtx != nil {
+			runData = runCtx.runData
+			wf = runCtx.workflow
+			runIndex = runCtx.runIndex
+			itemIndex = runCtx.itemIndex
 			if runData != nil && runData.ExecutionID != "" {
 				execID = runData.ExecutionID
 			}

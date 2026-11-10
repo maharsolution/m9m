@@ -68,9 +68,13 @@ import (
 // — acceptable for low/medium QPS; for high QPS the right fix is
 // to lift the client to a process-wide pool, which is a 0.5.0
 // milestone item (see m9m.MD §12).
+// Run context is NEVER stored on the singleton: Finnet's Kafka
+// consumer (Find and replace) and the webhook poller (Find Respond)
+// execute concurrently on the same registered node, and a shared
+// runCtx field would clobber $('Async Subworkflow').item.json.key
+// mid-poll — leaving the webhook with an empty body.
 type MongoDBNode struct {
 	*base.BaseNode
-	runCtx *mongoRunContext
 }
 
 type mongoRunContext struct {
@@ -113,6 +117,7 @@ func mongoProperties() []base.NodeProperty {
 		{Name: "Insert", Value: "insert"},
 		{Name: "Insert Many", Value: "insertMany"},
 		{Name: "Update", Value: "update"},
+		{Name: "Find One And Replace", Value: "findOneAndReplace"},
 		{Name: "Delete", Value: "delete"},
 		{Name: "Aggregate", Value: "aggregate"},
 		{Name: "Count", Value: "count"},
@@ -130,13 +135,16 @@ func mongoProperties() []base.NodeProperty {
 		base.StringProp("Collection", "collection", "", "MongoDB collection name.", "users", true),
 		base.StringOpt("Operation", "operation", "find", "MongoDB operation to run.", ops, true),
 		base.JsonProp("Filter", "filter", "{}", "MongoDB filter expression (find / findOne / update / delete / count)."),
+		base.JsonProp("Query", "query", "{}", "Alias for filter (n8n mongoDb parameter name)."),
 		base.JsonProp("Sort", "sort", "{}", "MongoDB sort spec (find)."),
 		base.NumberProp("Limit", "limit", 0, "Max documents to return (find). 0 = no limit.", false),
 		base.NumberProp("Skip", "skip", 0, "Documents to skip (find).", false),
 		base.JsonProp("Document", "document", "{}", "Single document (insert). Falls back to input data when empty."),
 		base.JsonProp("Documents", "documents", "[]", "Array of documents (insertMany). Falls back to input items."),
 		base.JsonProp("Update", "update", "{}", "MongoDB update spec (update). e.g. {\"$set\": {\"name\": \"x\"}}."),
-		base.BoolProp("Upsert", "upsert", false, "Insert if no match (update).").WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("operation", []string{"update"})),
+		base.StringProp("Update Key", "updateKey", "id", "Field used as the filter key for findOneAndReplace.", "id", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("operation", []string{"findOneAndReplace"})),
+		base.StringProp("Fields", "fields", "", "Comma-separated fields to include in the replacement document (findOneAndReplace). Empty = all input fields.", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("operation", []string{"findOneAndReplace"})),
+		base.BoolProp("Upsert", "upsert", false, "Insert if no match (update / findOneAndReplace).").WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("operation", []string{"update", "findOneAndReplace"})),
 		base.JsonProp("Pipeline", "pipeline", "[]", "Aggregation pipeline (aggregate)."),
 	}
 	return append(props, base.CommonSettings()...)
@@ -145,15 +153,26 @@ func mongoProperties() []base.NodeProperty {
 // ExecuteWithRun lets $('OtherNode') resolve inside query/filter
 // expressions (Finnet Find Respond uses
 // `$('Async Subworkflow').item.json.key`).
+//
+// The run context is passed by value into Execute — never stored on
+// the singleton — so concurrent Kafka + webhook pollers cannot
+// clobber each other's `$('…')` lookups.
 func (n *MongoDBNode) ExecuteWithRun(workflow *model.Workflow, runData *expressions.RunExecutionData, runIndex, itemIndex int, inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
-	n.runCtx = &mongoRunContext{workflow: workflow, runData: runData, runIndex: runIndex, itemIndex: itemIndex}
-	defer func() { n.runCtx = nil }()
-	return n.Execute(inputData, nodeParams)
+	return n.execute(inputData, nodeParams, &mongoRunContext{
+		workflow:  workflow,
+		runData:   runData,
+		runIndex:  runIndex,
+		itemIndex: itemIndex,
+	})
 }
 
 // Execute runs the configured MongoDB operation.
 func (n *MongoDBNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
-	resolvedParams, err := n.resolveQueryExpressions(nodeParams, inputData)
+	return n.execute(inputData, nodeParams, nil)
+}
+
+func (n *MongoDBNode) execute(inputData []model.DataItem, nodeParams map[string]interface{}, runCtx *mongoRunContext) ([]model.DataItem, error) {
+	resolvedParams, err := n.resolveQueryExpressions(nodeParams, inputData, runCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -206,6 +225,8 @@ func (n *MongoDBNode) Execute(inputData []model.DataItem, nodeParams map[string]
 		return n.doInsertMany(ctx, coll, nodeParams, inputData)
 	case "update":
 		return n.doUpdate(ctx, coll, nodeParams)
+	case "findOneAndReplace":
+		return n.doFindOneAndReplace(ctx, coll, nodeParams, inputData)
 	case "delete":
 		return n.doDelete(ctx, coll, nodeParams)
 	case "aggregate":
@@ -313,7 +334,7 @@ func (n *MongoDBNode) parseFilter(params map[string]interface{}) (bson.M, error)
 // resolveQueryExpressions evaluates n8n `={{...}}` / `{{...}}`
 // expressions in `query` and `filter` so Find Respond can use
 // `$('Async Subworkflow').item.json.key`.
-func (n *MongoDBNode) resolveQueryExpressions(params map[string]interface{}, inputData []model.DataItem) (map[string]interface{}, error) {
+func (n *MongoDBNode) resolveQueryExpressions(params map[string]interface{}, inputData []model.DataItem, runCtx *mongoRunContext) (map[string]interface{}, error) {
 	if params == nil {
 		return nil, nil
 	}
@@ -327,11 +348,11 @@ func (n *MongoDBNode) resolveQueryExpressions(params map[string]interface{}, inp
 		ActiveNodeName:      "MongoDB",
 		Mode:                expressions.ModeManual,
 	}
-	if n.runCtx != nil {
-		ctx.Workflow = n.runCtx.workflow
-		ctx.RunExecutionData = n.runCtx.runData
-		ctx.RunIndex = n.runCtx.runIndex
-		ctx.ItemIndex = n.runCtx.itemIndex
+	if runCtx != nil {
+		ctx.Workflow = runCtx.workflow
+		ctx.RunExecutionData = runCtx.runData
+		ctx.RunIndex = runCtx.runIndex
+		ctx.ItemIndex = runCtx.itemIndex
 	}
 	for _, key := range []string{"query", "filter"} {
 		raw, ok := out[key].(string)
@@ -498,6 +519,59 @@ func (n *MongoDBNode) doInsertMany(ctx context.Context, coll *mongo.Collection, 
 		"insertedCount": len(res.InsertedIDs),
 		"insertedIds":   ids,
 	}}}, nil
+}
+
+// doFindOneAndReplace mirrors n8n findOneAndReplace: filter by updateKey
+// from the input item, replace with selected fields (or the whole item),
+// optionally upsert. Finnet Kafka consumer depends on this.
+func (n *MongoDBNode) doFindOneAndReplace(ctx context.Context, coll *mongo.Collection, params map[string]interface{}, inputData []model.DataItem) ([]model.DataItem, error) {
+	if len(inputData) == 0 {
+		return []model.DataItem{}, nil
+	}
+	updateKey := n.GetStringParameter(params, "updateKey", "id")
+	if updateKey == "" {
+		updateKey = "id"
+	}
+	item := inputData[0].JSON
+	if item == nil {
+		return nil, n.CreateError("findOneAndReplace requires an input item", nil)
+	}
+	keyVal, ok := item[updateKey]
+	if !ok || keyVal == nil || keyVal == "" {
+		return nil, n.CreateError(fmt.Sprintf("findOneAndReplace: updateKey %q missing or empty on input", updateKey), nil)
+	}
+	filter := bson.M{updateKey: keyVal}
+	fieldsStr := strings.TrimSpace(n.GetStringParameter(params, "fields", ""))
+	replacement := bson.M{}
+	if fieldsStr == "" {
+		replacement = convertMapToBSON(item)
+	} else {
+		for _, f := range strings.Split(fieldsStr, ",") {
+			f = strings.TrimSpace(f)
+			if f == "" {
+				continue
+			}
+			if v, exists := item[f]; exists {
+				replacement[f] = v
+			}
+		}
+	}
+	if len(replacement) == 0 {
+		return nil, n.CreateError("findOneAndReplace: replacement document is empty", nil)
+	}
+	opts := options.FindOneAndReplace().SetReturnDocument(options.After)
+	if n.GetBoolParameter(params, "upsert", false) {
+		opts.SetUpsert(true)
+	}
+	var doc bson.M
+	err := coll.FindOneAndReplace(ctx, filter, replacement, opts).Decode(&doc)
+	if err == mongo.ErrNoDocuments {
+		return []model.DataItem{{JSON: map[string]interface{}{"found": false}}}, nil
+	}
+	if err != nil {
+		return nil, n.CreateError(fmt.Sprintf("mongo findOneAndReplace: %v", err), nil)
+	}
+	return []model.DataItem{{JSON: convertBSONToJSON(doc)}}, nil
 }
 
 func (n *MongoDBNode) doUpdate(ctx context.Context, coll *mongo.Collection, params map[string]interface{}) ([]model.DataItem, error) {
@@ -690,7 +764,8 @@ func (n *MongoDBNode) ValidateParameters(params map[string]interface{}) error {
 	operation := n.GetStringParameter(params, "operation", "find")
 	validOps := map[string]bool{
 		"find": true, "findOne": true, "insert": true, "insertMany": true,
-		"update": true, "delete": true, "aggregate": true, "count": true,
+		"update": true, "findOneAndReplace": true, "delete": true,
+		"aggregate": true, "count": true,
 	}
 	if !validOps[operation] {
 		return n.CreateError(fmt.Sprintf("invalid operation: %s", operation), nil)

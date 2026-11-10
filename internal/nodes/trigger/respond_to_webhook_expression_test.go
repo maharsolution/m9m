@@ -72,6 +72,44 @@ func TestRespondToWebhook_NonExpressionResponseBodyPassesThrough(t *testing.T) {
 	}
 }
 
+// TestRespondToWebhook_EvaluatesContentTypeExpression covers Finnet
+// post_balance Content-Type `=application/{{ $json.respond_type }}`.
+func TestRespondToWebhook_EvaluatesContentTypeExpression(t *testing.T) {
+	node := NewRespondToWebhookNode()
+	xml := `<?xml version="1.0"?><data><balance>140000</balance></data>`
+	input := []model.DataItem{
+		{JSON: map[string]interface{}{"value": xml, "respond_type": "xml"}},
+	}
+	params := map[string]interface{}{
+		"respondWith":  "text",
+		"responseBody": "={{ $json.value }}",
+		"options": map[string]interface{}{
+			"responseHeaders": map[string]interface{}{
+				"entries": []interface{}{
+					map[string]interface{}{
+						"name":  "Content-Type",
+						"value": "=application/{{ $json.respond_type }}",
+					},
+				},
+			},
+		},
+	}
+	out, err := node.Execute(input, params)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if got, _ := out[0].JSON["data"].(string); got != xml {
+		t.Fatalf("body: got %q", got)
+	}
+	headers, ok := out[0].JSON[ResponseHeadersMetaKey].(map[string]string)
+	if !ok {
+		t.Fatalf("expected evaluated headers meta, got %T %#v", out[0].JSON[ResponseHeadersMetaKey], out[0].JSON)
+	}
+	if headers["Content-Type"] != "application/xml" {
+		t.Fatalf("Content-Type: got %q", headers["Content-Type"])
+	}
+}
+
 // TestRespondToWebhook_ExpressionWithEmptyInput makes sure the
 // expression path doesn't crash when the upstream produced no items
 // at all. n8n still evaluates the expression but `$json` resolves to

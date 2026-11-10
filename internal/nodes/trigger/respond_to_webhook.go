@@ -97,36 +97,36 @@ func (r *RespondToWebhookNode) ValidateParameters(params map[string]interface{})
 // Anything else (e.g. "binary", "text") falls back to pass-through
 // so the workflow stays alive; the webhook manager will still emit
 // the right shape because it reads NodeOutputs directly.
+// ResponseHeadersMetaKey is stamped onto the Respond-to-Webhook
+// output item after header expressions are evaluated against the
+// INPUT item (n8n evaluates `options.responseHeaders` with `$json`
+// = the incoming item, e.g. `=application/{{ $json.respond_type }}`).
+// The webhook manager reads this key then strips it before writing
+// the body — it must not leak into the HTTP payload.
+const ResponseHeadersMetaKey = "__m9mResponseHeaders"
+
 func (r *RespondToWebhookNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
 	if nodeParams == nil {
 		nodeParams = map[string]interface{}{}
 	}
 	respondWith, _ := nodeParams["respondWith"].(string)
+	headers := r.evaluateResponseHeaders(nodeParams, inputData)
 
 	switch respondWith {
 	case "firstIncomingItem":
 		if len(inputData) == 0 {
-			return []model.DataItem{{JSON: map[string]interface{}{}}}, nil
+			return []model.DataItem{withResponseHeaders(map[string]interface{}{}, headers)}, nil
 		}
-		return []model.DataItem{inputData[0]}, nil
+		return []model.DataItem{withResponseHeaders(copyJSON(inputData[0].JSON), headers)}, nil
 
 	case "text", "json":
 		raw, ok := nodeParams["responseBody"]
 		if !ok {
-			// No explicit body — pass-through so the caller still
-			// gets a valid JSON object instead of an empty 200.
 			if len(inputData) == 0 {
-				return []model.DataItem{{JSON: map[string]interface{}{}}}, nil
+				return []model.DataItem{withResponseHeaders(map[string]interface{}{}, headers)}, nil
 			}
-			return inputData, nil
+			return []model.DataItem{withResponseHeaders(copyJSON(inputData[0].JSON), headers)}, nil
 		}
-		// If the user supplied `responseBody` as a string starting with
-		// `=`, n8n interprets the rest as a JavaScript expression. Run
-		// it through the Goja evaluator against the upstream `$json`
-		// context so the response body reflects the actual data the
-		// workflow produced (e.g. `={{ $json.value }}` for Finnet
-		// post_balance XML) instead of returning the literal
-		// expression text.
 		if s, ok := raw.(string); ok && strings.HasPrefix(s, "=") {
 			evaluated, err := r.evaluateResponseBody(s, inputData)
 			if err != nil {
@@ -135,38 +135,40 @@ func (r *RespondToWebhookNode) Execute(inputData []model.DataItem, nodeParams ma
 			raw = evaluated
 		}
 		if respondWith == "text" {
+			var body string
 			switch v := raw.(type) {
 			case string:
-				return []model.DataItem{{JSON: map[string]interface{}{"data": v}}}, nil
+				body = v
 			case nil:
-				return []model.DataItem{{JSON: map[string]interface{}{"data": ""}}}, nil
+				body = ""
 			default:
-				return []model.DataItem{{JSON: map[string]interface{}{"data": fmt.Sprintf("%v", v)}}}, nil
+				body = fmt.Sprintf("%v", v)
 			}
+			return []model.DataItem{withResponseHeaders(map[string]interface{}{"data": body}, headers)}, nil
 		}
 		body, err := normalizeResponseBody(raw)
 		if err != nil {
-			// Non-JSON string body (XML, plain text, etc.). n8n
-			// evaluates the `responseBody` expression and emits the
-			// literal result back to the webhook caller regardless of
-			// whether it's valid JSON. Mirror that behaviour so XML
-			// and text responses work even when the workflow author
-			// used `respondWith: "json"` out of habit. The webhook
-			// manager reads `data` back out of NodeOutputs and writes
-			// it as the raw response body when the value is a string.
 			if s, ok := raw.(string); ok {
-				return []model.DataItem{{JSON: map[string]interface{}{"data": s}}}, nil
+				return []model.DataItem{withResponseHeaders(map[string]interface{}{"data": s}, headers)}, nil
 			}
 			return nil, fmt.Errorf("invalid responseBody JSON: %w", err)
 		}
-		return []model.DataItem{{JSON: body}}, nil
+		return []model.DataItem{withResponseHeaders(body, headers)}, nil
 
 	default:
-		// "" or "allIncomingItems" or unknown → pass-through.
 		if len(inputData) == 0 {
-			return []model.DataItem{{JSON: map[string]interface{}{}}}, nil
+			return []model.DataItem{withResponseHeaders(map[string]interface{}{}, headers)}, nil
 		}
-		return inputData, nil
+		if len(headers) == 0 {
+			return inputData, nil
+		}
+		out := make([]model.DataItem, len(inputData))
+		for i, item := range inputData {
+			out[i] = withResponseHeaders(copyJSON(item.JSON), headers)
+			out[i].Binary = item.Binary
+			out[i].PairedItem = item.PairedItem
+		}
+		return out, nil
 	}
 }
 
@@ -228,6 +230,77 @@ func (r *RespondToWebhookNode) evaluateResponseBody(expr string, inputData []mod
 	default:
 		return fmt.Sprintf("%v", v), nil
 	}
+}
+
+
+// evaluateResponseHeaders resolves `options.responseHeaders` against
+// the upstream input item. Finnet's Respond to Webhook sets
+// Content-Type to `=application/{{ $json.respond_type }}`.
+func (r *RespondToWebhookNode) evaluateResponseHeaders(nodeParams map[string]interface{}, inputData []model.DataItem) map[string]string {
+	options, _ := nodeParams["options"].(map[string]interface{})
+	if options == nil {
+		return nil
+	}
+	rh, _ := options["responseHeaders"].(map[string]interface{})
+	if rh == nil {
+		return nil
+	}
+	entries := make([]map[string]string, 0)
+	if rawEntries, ok := rh["entries"].([]interface{}); ok {
+		for _, e := range rawEntries {
+			m, ok := e.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			name, _ := m["name"].(string)
+			value, _ := m["value"].(string)
+			if name == "" {
+				continue
+			}
+			entries = append(entries, map[string]string{"name": name, "value": value})
+		}
+	} else {
+		for name, v := range rh {
+			vs, _ := v.(string)
+			entries = append(entries, map[string]string{"name": name, "value": vs})
+		}
+	}
+	if len(entries) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(entries))
+	for _, e := range entries {
+		val := e["value"]
+		if strings.HasPrefix(val, "=") || (strings.Contains(val, "{{") && strings.Contains(val, "}}")) {
+			evaluated, err := r.evaluateResponseBody(val, inputData)
+			if err == nil {
+				val = fmt.Sprintf("%v", evaluated)
+			}
+		}
+		out[e["name"]] = val
+	}
+	return out
+}
+
+func withResponseHeaders(json map[string]interface{}, headers map[string]string) model.DataItem {
+	if json == nil {
+		json = map[string]interface{}{}
+	}
+	if len(headers) > 0 {
+		json[ResponseHeadersMetaKey] = headers
+	}
+	return model.DataItem{JSON: json}
+}
+
+func copyJSON(in map[string]interface{}) map[string]interface{} {
+	if in == nil {
+		return map[string]interface{}{}
+	}
+	out := make(map[string]interface{}, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
 
 // normalizeResponseBody coerces the `responseBody` parameter into a

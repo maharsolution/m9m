@@ -74,6 +74,16 @@ func TestMongoDBNode_Validate(t *testing.T) {
 		"database":         "db",
 		"collection":       "col",
 	}))
+
+	// Finnet Kafka path uses n8n's findOneAndReplace + upsert.
+	assert.NoError(t, node.ValidateParameters(map[string]interface{}{
+		"connectionString": "mongodb://localhost:27017",
+		"operation":        "findOneAndReplace",
+		"database":         "finnet_db",
+		"collection":       "finnet_store",
+		"updateKey":        "key",
+		"upsert":           true,
+	}))
 }
 
 // TestToBSON — exercises the JSON ↔ bson.M conversion. The
