@@ -405,6 +405,15 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 
 	// Execute nodes in order
 	nodeResults := make(map[string][]model.DataItem)
+	// Per-target input-index buckets. n8n Merge chooseBranch
+	// (Finnet post_balance) waits for both inputs then emits
+	// ONLY `useDataOfInput` (default 1 = Payload, which carries
+	// `key`). Flattening both inputs into nodeResults made the
+	// Async Subworkflow see the ServiceRoutePlans item without
+	// `key`, so Find Respond queried `{key:"undefined"}` and the
+	// webhook returned an empty body even though mongo had the
+	// doc under the real exec_* key.
+	nodeInputResults := make(map[string]map[int][]model.DataItem)
 
 	// Build node lookup map for O(1) access (instead of O(n) linear search)
 	nodeMap := make(map[string]*model.Node, len(workflow.Nodes))
@@ -665,6 +674,14 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 			// input data in that single case.
 			inputDataForNode = inputData
 		}
+		// Merge chooseBranch: n8n emits ONLY the selected input's
+		// items (default useDataOfInput=1 → Payload with `key` on
+		// Finnet). Replace the flattened multi-input slice before
+		// the empty-input guard so we don't feed ServiceRoutePlans
+		// into Kafka / Async Sub Workflow.
+		if selected, ok := chooseBranchInput(node, nodeInputResults[nodeName]); ok {
+			inputDataForNode = selected
+		}
 		// Skip nodes that received no input. This mirrors n8n's
 		// "0 items → node doesn't run" behaviour and is the only
 		// thing that prevents the unselected IF/Switch branch from
@@ -865,7 +882,9 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 			return nil, fmt.Errorf("error routing data from node %s: %w", node.Name, err)
 		}
 
-		// Add routed data to node results
+		// Add routed data to node results, also bucketing by the
+		// target's input index so Merge chooseBranch can pick a
+		// single input the way n8n does.
 		for targetNode, data := range routedData {
 			if nodeResults[targetNode] == nil {
 				nodeResults[targetNode] = data
@@ -873,6 +892,11 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 				// Append data if node already has data
 				nodeResults[targetNode] = append(nodeResults[targetNode], data...)
 			}
+			inIdx := incomingInputIndex(workflow, nodeName, targetNode)
+			if nodeInputResults[targetNode] == nil {
+				nodeInputResults[targetNode] = make(map[int][]model.DataItem)
+			}
+			nodeInputResults[targetNode][inIdx] = append(nodeInputResults[targetNode][inIdx], data...)
 		}
 
 		// Record which connections actually carried items in this
@@ -2282,6 +2306,55 @@ func recordEdgesTaken(taken map[string]bool, sourceNode *model.Node, outputData 
 // publisher) speak the same dialect.
 func edgeKey(sourceID string, outputIndex int, targetID string, inputIndex int) string {
 	return fmt.Sprintf("%s:%d:%s:%d", sourceID, outputIndex, targetID, inputIndex)
+}
+
+// incomingInputIndex returns the target input index for the first
+// connection from source→target in the workflow. Defaults to 0 when
+// the edge is missing (legacy single-input nodes).
+func incomingInputIndex(workflow *model.Workflow, source, target string) int {
+	if workflow == nil || workflow.Connections == nil {
+		return 0
+	}
+	conns, ok := workflow.Connections[source]
+	if !ok {
+		return 0
+	}
+	for _, branch := range conns.Main {
+		for _, c := range branch {
+			if c.Node == target {
+				if c.Index < 0 {
+					return 0
+				}
+				return c.Index
+			}
+		}
+	}
+	return 0
+}
+
+// chooseBranchInput returns the items from the Merge input selected
+// by n8n's chooseBranch `useDataOfInput` (1-based, default 1) when
+// the node is a chooseBranch Merge. ok is false for every other
+// node type / mode so callers keep the flattened input slice.
+func chooseBranchInput(node *model.Node, byInput map[int][]model.DataItem) ([]model.DataItem, bool) {
+	if node == nil || node.Type != "n8n-nodes-base.merge" || byInput == nil {
+		return nil, false
+	}
+	mode, _ := node.Parameters["mode"].(string)
+	if mode != "chooseBranch" {
+		return nil, false
+	}
+	use := 1
+	if raw, ok := node.Parameters["useDataOfInput"]; ok {
+		if n, ok := toInt(raw); ok && n >= 1 {
+			use = n
+		}
+	}
+	data, ok := byInput[use-1]
+	if !ok {
+		return nil, false
+	}
+	return data, true
 }
 
 // toInt coerces arbitrary JSON-decoded numerics into an int. n8n's
