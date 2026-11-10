@@ -19,7 +19,46 @@ const (
 	ctxExecutionIsRetry
 	ctxExecutionRetryOf
 	ctxContinuationSpan
+	ctxSubWorkflowStart
+	ctxSubWorkflowDepth
 )
+
+// WithSubWorkflowStart marks ctx so ExecuteWorkflowWithContext starts
+// only at `n8n-nodes-base.executeWorkflowTrigger` nodes — matching
+// n8n's behaviour when a parent Execute Workflow node invokes a
+// child (often the same) workflow. Without this flag, findStartingNodes
+// seeds EVERY trigger (Webhook, Kafka, …) and Finnet post_balance
+// re-enters itself recursively until the webhook times out
+// (inputLen exploding: 1 → 2 → 4 → … → 64).
+func WithSubWorkflowStart(ctx context.Context, depth int) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx = context.WithValue(ctx, ctxSubWorkflowStart, true)
+	ctx = context.WithValue(ctx, ctxSubWorkflowDepth, depth)
+	return ctx
+}
+
+// IsSubWorkflowStart reports whether ctx was marked by WithSubWorkflowStart.
+func IsSubWorkflowStart(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	v, _ := ctx.Value(ctxSubWorkflowStart).(bool)
+	return v
+}
+
+// SubWorkflowDepth returns the recursion depth attached by
+// WithSubWorkflowStart (0 when unset).
+func SubWorkflowDepth(ctx context.Context) int {
+	if ctx == nil {
+		return 0
+	}
+	if v, ok := ctx.Value(ctxSubWorkflowDepth).(int); ok {
+		return v
+	}
+	return 0
+}
 
 // WithExecutionMode stores mode ("manual", "trigger", "webhook", "retry",
 // "cli", "schedule") on ctx. Callers (webhook handler, scheduler, MCP)

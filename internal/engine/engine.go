@@ -358,8 +358,40 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		nodeMap[workflow.Nodes[i].Name] = &workflow.Nodes[i]
 	}
 
-	// Initialize with input data for starting nodes (nodes with no incoming connections)
+	// Initialize with input data for starting nodes (nodes with no incoming connections).
+	// Sub-workflow invocations (Execute Workflow → same/other workflow)
+	// must start ONLY at executeWorkflowTrigger — otherwise every
+	// Webhook/Kafka trigger is re-seeded and Finnet post_balance
+	// recurses until the HTTP client times out.
 	startingNodes := e.findStartingNodes(workflow)
+	if IsSubWorkflowStart(ctx) {
+		ewtStarts := e.findExecuteWorkflowTriggerStarts(workflow)
+		// #region agent log
+		func() {
+			log.Printf(`[agent-debug] {"sessionId":"31457b","hypothesisId":"H16","location":"engine.go:startNodes","message":"subworkflow start selection","data":{"depth":%d,"ewtCount":%d,"allStarts":%d},"runId":"post-fix"}`, SubWorkflowDepth(ctx), len(ewtStarts), len(startingNodes))
+			f, err := os.OpenFile(`/tmp/debug-31457b.log`, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err == nil {
+				_, _ = fmt.Fprintf(f, `{"sessionId":"31457b","hypothesisId":"H16","location":"engine.go:startNodes","message":"subworkflow start selection","data":{"depth":%d,"ewtCount":%d,"allStarts":%d},"timestamp":%d,"runId":"post-fix"}`+"\n", SubWorkflowDepth(ctx), len(ewtStarts), len(startingNodes), time.Now().UnixMilli())
+				_ = f.Close()
+			}
+		}()
+		// #endregion
+		if len(ewtStarts) > 0 {
+			// Seed non-EWT entry points with empty input so the
+			// engine's nil→workflow-input fallback does not re-run
+			// Webhook/Kafka and recurse into Execute Workflow.
+			ewtSet := make(map[string]bool, len(ewtStarts))
+			for _, n := range ewtStarts {
+				ewtSet[n] = true
+			}
+			for _, n := range startingNodes {
+				if !ewtSet[n] {
+					nodeResults[n] = []model.DataItem{}
+				}
+			}
+			startingNodes = ewtStarts
+		}
+	}
 
 	// Set input data for starting nodes
 	for _, nodeName := range startingNodes {
@@ -1771,6 +1803,22 @@ func (e *workflowEngineImpl) ExecuteWorkflowParallel(workflows []*model.Workflow
 	wg.Wait()
 
 	return results, nil
+}
+
+// findExecuteWorkflowTriggerStarts returns every node whose type is
+// `n8n-nodes-base.executeWorkflowTrigger`. Used when a parent Execute
+// Workflow node invokes this workflow as a child.
+func (e *workflowEngineImpl) findExecuteWorkflowTriggerStarts(workflow *model.Workflow) []string {
+	if workflow == nil {
+		return nil
+	}
+	var starts []string
+	for _, node := range workflow.Nodes {
+		if node.Type == "n8n-nodes-base.executeWorkflowTrigger" {
+			starts = append(starts, node.Name)
+		}
+	}
+	return starts
 }
 
 // findStartingNodes finds nodes that have no incoming connections

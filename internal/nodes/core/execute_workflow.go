@@ -37,6 +37,9 @@ type WorkflowResult struct {
 // EngineAdapter adapts any engine that satisfies the full interface.
 type EngineAdapter struct {
 	ExecuteFn func(workflow *model.Workflow, inputData []model.DataItem) ([]model.DataItem, error)
+	// ExecuteCtxFn is preferred when set — it forwards the caller's
+	// context (sub-workflow start flag + depth) into the engine.
+	ExecuteCtxFn func(ctx context.Context, workflow *model.Workflow, inputData []model.DataItem) ([]model.DataItem, error)
 	// LookupFn resolves a workflow by ID. Optional — when nil the node
 	// only honours `workflowPath` (the historic m9m contract).
 	LookupFn func(id string) (*model.Workflow, error)
@@ -44,9 +47,18 @@ type EngineAdapter struct {
 
 // ExecuteWorkflowWithContext satisfies WorkflowExecutor. The supplied
 // context is forwarded as-is, which lets the engine chain the inner
-// workflow.execute span onto the caller's trace.
+// workflow.execute span onto the caller's trace and honour
+// WithSubWorkflowStart / depth.
 func (a *EngineAdapter) ExecuteWorkflowWithContext(ctx context.Context, workflow *model.Workflow, inputData []model.DataItem) (*WorkflowResult, error) {
-	data, err := a.ExecuteFn(workflow, inputData)
+	var data []model.DataItem
+	var err error
+	if a.ExecuteCtxFn != nil {
+		data, err = a.ExecuteCtxFn(ctx, workflow, inputData)
+	} else if a.ExecuteFn != nil {
+		data, err = a.ExecuteFn(workflow, inputData)
+	} else {
+		return nil, fmt.Errorf("no workflow executor configured")
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -67,17 +79,21 @@ func (a *EngineAdapter) GetWorkflow(id string) (*model.Workflow, error) {
 // `workflowId: {"value": "..."}` parameters; pass nil for the historic
 // localFile-only behaviour.
 func EngineAdapterFromEngine(eng engine.WorkflowEngine, lookup WorkflowLookup) *EngineAdapter {
+	run := func(ctx context.Context, workflow *model.Workflow, inputData []model.DataItem) ([]model.DataItem, error) {
+		res, err := engine.ExecuteWorkflowWithContext(ctx, eng, workflow, inputData)
+		if err != nil {
+			return nil, err
+		}
+		if res != nil && res.Error != nil {
+			return res.Data, res.Error
+		}
+		return res.Data, nil
+	}
 	a := &EngineAdapter{
 		ExecuteFn: func(workflow *model.Workflow, inputData []model.DataItem) ([]model.DataItem, error) {
-			res, err := engine.ExecuteWorkflowWithContext(context.Background(), eng, workflow, inputData)
-			if err != nil {
-				return nil, err
-			}
-			if res != nil && res.Error != nil {
-				return res.Data, res.Error
-			}
-			return res.Data, nil
+			return run(context.Background(), workflow, inputData)
 		},
+		ExecuteCtxFn: run,
 	}
 	if lookup != nil {
 		a.LookupFn = lookup.GetWorkflow
@@ -90,7 +106,6 @@ type ExecuteWorkflowNode struct {
 	*base.BaseNode
 	executor WorkflowExecutor
 	lookup   WorkflowLookup
-	depth    int // current recursion depth, set by parent
 }
 
 // NewExecuteWorkflowNode creates a new Execute Workflow node.
@@ -123,7 +138,10 @@ func (n *ExecuteWorkflowNode) ExecuteWithContext(ctx context.Context, inputData 
 	}
 
 	maxDepth := n.GetIntParameter(nodeParams, "maxDepth", 10)
-	if n.depth >= maxDepth {
+	// Depth lives on ctx (not on the shared node singleton) so concurrent
+	// webhook runs and nested same-workflow calls cannot clobber each other.
+	depth := engine.SubWorkflowDepth(ctx)
+	if depth >= maxDepth {
 		return nil, n.CreateError(fmt.Sprintf("maximum recursion depth (%d) reached", maxDepth), nil)
 	}
 
@@ -155,7 +173,11 @@ func (n *ExecuteWorkflowNode) ExecuteWithContext(ctx context.Context, inputData 
 		subInputs = []model.DataItem{{JSON: map[string]interface{}{}}}
 	}
 
-	result, err := n.executor.ExecuteWorkflowWithContext(ctx, workflow, subInputs)
+	// Mark the child execution as a sub-workflow start so the engine
+	// seeds only executeWorkflowTrigger (not Webhook/Kafka/…). Also
+	// bump depth for the maxDepth guard above.
+	childCtx := engine.WithSubWorkflowStart(ctx, depth+1)
+	result, err := n.executor.ExecuteWorkflowWithContext(childCtx, workflow, subInputs)
 	if err != nil {
 		return nil, n.CreateError(fmt.Sprintf("sub-workflow execution failed: %v", err), nil)
 	}

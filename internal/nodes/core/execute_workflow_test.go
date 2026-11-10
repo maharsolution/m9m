@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/neul-labs/m9m/internal/engine"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -164,13 +165,14 @@ func TestExecuteWorkflowNode_Execute(t *testing.T) {
 		}
 
 		node := NewExecuteWorkflowNode(executor, nil)
-		node.depth = 10
 		params := map[string]interface{}{
 			"workflowPath": wfPath,
 			"maxDepth":     10,
 		}
 
-		_, err := node.Execute(nil, params)
+		// Depth is tracked on ctx (shared node singleton is not mutated).
+		ctx := engine.WithSubWorkflowStart(context.Background(), 10)
+		_, err := node.ExecuteWithContext(ctx, nil, params)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "maximum recursion depth")
 	})
