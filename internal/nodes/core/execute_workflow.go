@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/neul-labs/m9m/internal/engine"
@@ -53,8 +54,14 @@ func (a *EngineAdapter) ExecuteWorkflowWithContext(ctx context.Context, workflow
 	var data []model.DataItem
 	var err error
 	if a.ExecuteCtxFn != nil {
+		// #region agent log
+		log.Printf(`[agent-debug] {"sessionId":"31457b","hypothesisId":"H17","location":"execute_workflow.go:adapter","message":"ExecuteCtxFn path","data":{"isSub":%v,"depth":%d},"runId":"post-fix"}`, engine.IsSubWorkflowStart(ctx), engine.SubWorkflowDepth(ctx))
+		// #endregion
 		data, err = a.ExecuteCtxFn(ctx, workflow, inputData)
 	} else if a.ExecuteFn != nil {
+		// #region agent log
+		log.Printf(`[agent-debug] {"sessionId":"31457b","hypothesisId":"H17","location":"execute_workflow.go:adapter","message":"ExecuteFn fallback drops ctx","data":{"isSub":%v,"depth":%d},"runId":"post-fix"}`, engine.IsSubWorkflowStart(ctx), engine.SubWorkflowDepth(ctx))
+		// #endregion
 		data, err = a.ExecuteFn(workflow, inputData)
 	} else {
 		return nil, fmt.Errorf("no workflow executor configured")

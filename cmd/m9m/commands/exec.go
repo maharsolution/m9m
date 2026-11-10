@@ -2,7 +2,6 @@ package commands
 
 import (
 	"bufio"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -359,21 +358,10 @@ func RegisterAllNodes(eng engine.WorkflowEngine, wfLookup core.WorkflowLookup) {
 	// workflow so `workflowId: {"value": "<id>"}` resolves correctly. The
 	// adapter's LookupFn closes over `store` from the outer scope when
 	// one is wired (see serve.go's RegisterAllNodes call).
-	execAdapter := &core.EngineAdapter{
-		ExecuteFn: func(wf *model.Workflow, input []model.DataItem) ([]model.DataItem, error) {
-			result, err := engine.ExecuteWorkflowWithContext(context.Background(), eng, wf, input)
-			if err != nil {
-				return nil, err
-			}
-			if result.Error != nil {
-				return nil, result.Error
-			}
-			return result.Data, nil
-		},
-	}
-	if wfLookup != nil {
-		execAdapter.LookupFn = wfLookup.GetWorkflow
-	}
+	// Must use ExecuteCtxFn so WithSubWorkflowStart / depth survive into
+	// the child engine run. ExecuteFn-only (context.Background) caused
+	// Finnet post_balance to re-seed Webhook+Kafka and hang.
+	execAdapter := core.EngineAdapterFromEngine(eng, wfLookup)
 	eng.RegisterNodeExecutor("n8n-nodes-base.executeWorkflow", core.NewExecuteWorkflowNode(execAdapter, wfLookup))
 
 	// Additional transform nodes
