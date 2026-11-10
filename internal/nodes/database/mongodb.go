@@ -453,6 +453,12 @@ func (n *MongoDBNode) doFind(ctx context.Context, coll *mongo.Collection, params
 		return nil, n.CreateError(fmt.Sprintf("mongo cursor.All: %v", err), nil)
 	}
 
+	if len(docs) == 0 {
+		// Surface the resolved filter so Finnet Find Respond misses
+		// are diagnosable from container stderr without a debugger.
+		fmt.Fprintf(os.Stderr, "m9m-mongo-find miss filter=%v collection=%s\n", filter, coll.Name())
+	}
+
 	// Match n8n's behaviour: emit one DataItem per matching doc,
 	// with the document fields flattened to the top level (not
 	// nested under a `documents` key — that's the Atlas Data API
