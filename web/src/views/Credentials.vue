@@ -108,7 +108,7 @@ const openEditModal = async (credential: Credential) => {
     form.value = {
       name: full.name,
       type: full.type,
-      data: { ...(full.data ?? {}) },
+      data: applyFieldAliases(full.data ?? {}),
     }
   } catch (e) {
     console.error('Failed to load credential data:', e)
@@ -194,6 +194,34 @@ const extraDataFields = computed(() => {
   )
   return Object.keys(form.value.data).filter((k) => !schemaNames.has(k))
 })
+
+// Synced n8n credentials sometimes use a different key for the same
+// field (rabbitmq stores `hostname` / `username` where the schema says
+// `host` / `user`). Copy the value over so the schema field is not
+// blank and the required-field check does not report a false alarm.
+// The original key is kept — nothing is lost on save.
+const fieldAliases: Record<string, string[]> = {
+  host: ['hostname', 'server', 'serverName'],
+  user: ['username', 'login', 'loginName'],
+  database: ['db', 'dbName', 'databaseName'],
+  password: ['pass', 'pwd'],
+}
+
+const applyFieldAliases = (
+  data: Record<string, unknown>
+): Record<string, unknown> => {
+  const out = { ...data }
+  for (const [canonical, aliases] of Object.entries(fieldAliases)) {
+    if (out[canonical] !== undefined) continue
+    for (const alias of aliases) {
+      if (out[alias] !== undefined) {
+        out[canonical] = out[alias]
+        break
+      }
+    }
+  }
+  return out
+}
 
 const updateNumberField = (key: string, raw: string) => {
   const n = parseInt(raw, 10)
