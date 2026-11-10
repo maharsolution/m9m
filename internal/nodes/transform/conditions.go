@@ -105,17 +105,44 @@ func ValidateConditions(conditions interface{}, combiner string) error {
 // explicit form) or an operator object with an `operation` field and
 // returns the canonical operation name. Errors are returned so callers
 // can surface a precise validation message.
+//
+// n8n IF v2 typed operators use short names (`lt`, `gt`, `eq`, …)
+// alongside the long forms (`lessThan`, `greaterThan`, `equals`). We
+// normalize the short forms here so ValidateConditions and
+// evaluateCondition share one vocabulary.
 func extractOperatorOperation(op interface{}) (string, error) {
+	var name string
 	switch v := op.(type) {
 	case string:
-		return v, nil
+		name = v
 	case map[string]interface{}:
-		if name, ok := v["operation"].(string); ok && name != "" {
-			return name, nil
+		if s, ok := v["operation"].(string); ok && s != "" {
+			name = s
+		} else {
+			return "", fmt.Errorf("operator object missing 'operation' field")
 		}
-		return "", fmt.Errorf("operator object missing 'operation' field")
 	default:
 		return "", fmt.Errorf("operator must be a string or object")
+	}
+	return normalizeOperatorName(name), nil
+}
+
+func normalizeOperatorName(op string) string {
+	switch op {
+	case "lt":
+		return "lessThan"
+	case "lte", "lteq":
+		return "lessThanOrEqual"
+	case "gt":
+		return "greaterThan"
+	case "gte", "gteq":
+		return "greaterThanOrEqual"
+	case "eq":
+		return "equals"
+	case "neq", "ne":
+		return "notEquals"
+	default:
+		return op
 	}
 }
 
