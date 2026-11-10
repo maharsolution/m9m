@@ -392,22 +392,34 @@ func (h *HTTPRequestNode) ExecuteWithContext(ctx context.Context, inputData []mo
 			return nil, h.CreateError(fmt.Sprintf("credential auth: %v", err), nil)
 		}
 		
-		// Add body for POST, PUT, PATCH requests
+		// Add body for POST, PUT, PATCH requests.
+		// n8n HTTP Request v4 uses `jsonBody` + `specifyBody: "json"`
+		// (Finnet ServiceRoutePlans / Call SvcRule). Older m9m only
+		// read `body`, so those nodes posted an empty payload and the
+		// downstream IF (`$json.data.attributes.route`) fell to false.
 		if method == "POST" || method == "PUT" || method == "PATCH" {
-			if body, ok := evaluatedParams["body"].(string); ok && body != "" {
-				req.Body = io.NopCloser(strings.NewReader(body))
-				if req.Header.Get("Content-Type") == "" {
-					req.Header.Set("Content-Type", "application/json")
-				}
-			} else if body, ok := evaluatedParams["body"].(map[string]interface{}); ok {
-				// Convert map to JSON
-				jsonBody, err := json.Marshal(body)
+			bodyBytes, contentType, bodyErr := resolveRequestBody(evaluatedParams)
+			if bodyErr != nil {
+				return nil, h.CreateError(fmt.Sprintf("failed to build request body: %v", bodyErr), nil)
+			}
+			// #region agent log
+			func() {
+				f, err := os.OpenFile(`c:\Users\mahar\OneDrive\workspace\m9m\debug-31457b.log`, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 				if err != nil {
-					return nil, h.CreateError(fmt.Sprintf("failed to marshal body: %v", err), nil)
+					return
 				}
-				req.Body = io.NopCloser(bytes.NewReader(jsonBody))
-				if req.Header.Get("Content-Type") == "" {
-					req.Header.Set("Content-Type", "application/json")
+				defer f.Close()
+				snippet := string(bodyBytes)
+				if len(snippet) > 120 {
+					snippet = snippet[:120]
+				}
+				_, _ = fmt.Fprintf(f, `{"sessionId":"31457b","hypothesisId":"H14","location":"request.go:body","message":"resolved request body","data":{"method":%q,"bodyLen":%d,"contentType":%q,"snippet":%q,"hasJsonBody":%t,"hasBody":%t},"timestamp":%d,"runId":"post-fix"}`+"\n", method, len(bodyBytes), contentType, snippet, evaluatedParams["jsonBody"] != nil, evaluatedParams["body"] != nil, time.Now().UnixMilli())
+			}()
+			// #endregion
+			if len(bodyBytes) > 0 {
+				req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+				if contentType != "" && req.Header.Get("Content-Type") == "" {
+					req.Header.Set("Content-Type", contentType)
 				}
 			}
 		}
@@ -582,6 +594,91 @@ func flattenHeaderSpec(raw interface{}) []map[string]interface{} {
 		}
 	}
 	return nil
+}
+
+// resolveRequestBody picks the outbound body from n8n-shaped params.
+// Priority:
+//  1. `jsonBody` when `specifyBody` is "json" (or jsonBody is set and
+//     body is empty) — Finnet ServiceRoutePlans / Call SvcRule
+//  2. `body` string / map (Call External Svc raw XML, legacy shapes)
+// Content-Type defaults to application/json for jsonBody; raw bodies
+// honour `rawContentType` / `contentType` when provided.
+func resolveRequestBody(params map[string]interface{}) ([]byte, string, error) {
+	specify, _ := params["specifyBody"].(string)
+	jsonBody := params["jsonBody"]
+	body := params["body"]
+
+	useJSONBody := false
+	switch {
+	case specify == "json" && jsonBody != nil:
+		useJSONBody = true
+	case jsonBody != nil && (body == nil || body == ""):
+		useJSONBody = true
+	}
+
+	if useJSONBody {
+		switch v := jsonBody.(type) {
+		case string:
+			s := strings.TrimSpace(v)
+			if s == "" {
+				return nil, "", nil
+			}
+			// After expression eval, `={...}` becomes a JSON text
+			// string. Validate lightly; still send even if not strict
+			// JSON so upstream can report its own parse error.
+			return []byte(s), "application/json", nil
+		case map[string]interface{}, []interface{}:
+			b, err := json.Marshal(v)
+			if err != nil {
+				return nil, "", err
+			}
+			return b, "application/json", nil
+		default:
+			b, err := json.Marshal(v)
+			if err != nil {
+				return nil, "", err
+			}
+			return b, "application/json", nil
+		}
+	}
+
+	contentType := ""
+	if ct, ok := params["rawContentType"].(string); ok && ct != "" {
+		contentType = ct
+	} else if ct, ok := params["contentType"].(string); ok && ct != "" && ct != "raw" && ct != "json" {
+		contentType = ct
+	}
+
+	switch v := body.(type) {
+	case string:
+		if v == "" {
+			return nil, contentType, nil
+		}
+		if contentType == "" {
+			contentType = "application/json"
+		}
+		return []byte(v), contentType, nil
+	case map[string]interface{}, []interface{}:
+		b, err := json.Marshal(v)
+		if err != nil {
+			return nil, "", err
+		}
+		if contentType == "" {
+			contentType = "application/json"
+		}
+		return b, contentType, nil
+	case nil:
+		return nil, contentType, nil
+	default:
+		b, err := json.Marshal(v)
+		if err != nil {
+			return nil, "", err
+		}
+		if contentType == "" {
+			contentType = "application/json"
+		}
+		return b, contentType, nil
+	}
 }
 
 // responseIncludesMeta reports whether the HTTP Request node should
