@@ -113,12 +113,12 @@ type workflowEngineImpl struct {
 	connectionRouter  connections.ConnectionRouter
 	otelManager       *otel.Manager
 
-	// Per-execution context. Populated at the start of every
-	// ExecuteWorkflow call and read by executeNodeWithContext so the
-	// RunAwareNodeExecutor interface can hand the workflow + live
-	// runExecutionData to nodes that need it (Code, primarily, for
-	// `$("OtherNode").item.json` lookups).
-	workflow        *model.Workflow
+	// Per-execution context. Prefer the execFrame stored on ctx
+	// (see withExecFrame) so concurrent webhook + Kafka runs on the
+	// same engine cannot clobber each other's runExecutionData.
+	// The fields below remain as a fallback for older call paths /
+	// tests that invoke executeNodeWithContext without a frame.
+	workflow         *model.Workflow
 	runExecutionData *expressions.RunExecutionData
 	runIndex         int
 	itemIndex        int
@@ -132,6 +132,45 @@ type workflowEngineImpl struct {
 	// Reset to a fresh map at the start of every ExecuteWorkflow
 	// call so the previous run's data never leaks across runs.
 	edgesTaken map[string]bool
+}
+
+// execFrame holds the per-run state that used to live on the engine
+// singleton. Storing it on ctx means Finnet's webhook poller and the
+// Kafka consumer can run concurrently without clobbering
+// `$('Async Subworkflow').item.json.key` mid-Find.
+type execFrame struct {
+	workflow         *model.Workflow
+	runExecutionData *expressions.RunExecutionData
+	runIndex         int
+	itemIndex        int
+}
+
+type execFrameKey struct{}
+
+func withExecFrame(ctx context.Context, f *execFrame) context.Context {
+	return context.WithValue(ctx, execFrameKey{}, f)
+}
+
+func execFrameFrom(ctx context.Context) *execFrame {
+	if ctx == nil {
+		return nil
+	}
+	f, _ := ctx.Value(execFrameKey{}).(*execFrame)
+	return f
+}
+
+func (e *workflowEngineImpl) activeRunData(ctx context.Context) *expressions.RunExecutionData {
+	if f := execFrameFrom(ctx); f != nil && f.runExecutionData != nil {
+		return f.runExecutionData
+	}
+	return e.runExecutionData
+}
+
+func (e *workflowEngineImpl) setActiveRunIndex(ctx context.Context, idx int) {
+	if f := execFrameFrom(ctx); f != nil {
+		f.runIndex = idx
+	}
+	e.runIndex = idx
 }
 
 // NewWorkflowEngine creates a new workflow engine
@@ -267,11 +306,6 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		}
 	}()
 
-	// Set run context on the engine so that RunAwareNodeExecutor
-	// implementations (e.g. Code) can pull sibling node outputs from
-	// the live runExecutionData. Both fields are cleared at the end
-	// to keep the engine re-entrant across concurrent workflows.
-	e.workflow = workflow
 	// Save + reset the EdgesTaken accumulator before every run so a
 	// re-used engine (long-lived process) never leaks edges from
 	// the previous workflow into the current one. The map is
@@ -296,19 +330,35 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 	if execID == "" {
 		execID = fmt.Sprintf("exec_%d", time.Now().UnixNano())
 	}
-	e.runExecutionData = &expressions.RunExecutionData{
-		ExecutionData: &expressions.ExecutionData{},
-		ResultData: &expressions.RunData{
-			NodeData: make(map[string][]expressions.NodeExecutionResult),
+	frame := &execFrame{
+		workflow: workflow,
+		runExecutionData: &expressions.RunExecutionData{
+			ExecutionData: &expressions.ExecutionData{},
+			ResultData: &expressions.RunData{
+				NodeData: make(map[string][]expressions.NodeExecutionResult),
+			},
+			ExecutionID: execID,
+			StartedAt:   time.Now(),
 		},
-		ExecutionID: execID,
-		StartedAt:   time.Now(),
 	}
+	ctx = withExecFrame(ctx, frame)
+	// Mirror onto the engine fields for fallbacks / tests, but the
+	// live path always reads from the ctx frame so concurrent runs
+	// stay isolated.
+	e.workflow = frame.workflow
+	e.runExecutionData = frame.runExecutionData
+	e.runIndex = 0
+	e.itemIndex = 0
 	defer func() {
-		e.workflow = nil
-		e.runExecutionData = nil
-		e.runIndex = 0
-		e.itemIndex = 0
+		// Only clear the engine fields when this frame is still the
+		// one mirrored there — a concurrent run may have already
+		// overwritten them with its own frame.
+		if e.runExecutionData == frame.runExecutionData {
+			e.workflow = nil
+			e.runExecutionData = nil
+			e.runIndex = 0
+			e.itemIndex = 0
+		}
 	}()
 
 	// Handle empty workflow
@@ -533,7 +583,7 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 						guardNode,
 						*loop,
 						nodeResults,
-						e.runExecutionData,
+						e.activeRunData(ctx),
 						nodeResults[nodeName],
 					); err != nil {
 						return &ExecutionResult{
@@ -647,7 +697,7 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 				workflow,
 				node,
 				nodeResults,
-				e.runExecutionData,
+				e.activeRunData(ctx),
 				inputDataForNode,
 				loopBodyOrder[node.Name],
 				loopDoneOrder[node.Name],
@@ -680,7 +730,7 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 				node,
 				*loop,
 				nodeResults,
-				e.runExecutionData,
+				e.activeRunData(ctx),
 				inputDataForNode,
 			); err != nil {
 				return &ExecutionResult{
@@ -791,17 +841,22 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		// implementations (Code node, primarily) can pull sibling
 		// node outputs via `$("OtherNode").item.json`. The slice
 		// is keyed by runIndex so multiple iterations of a Loop
-		// node each get their own slot.
-		if e.runExecutionData != nil && e.runExecutionData.ResultData != nil {
-			results := e.runExecutionData.ResultData.NodeData[nodeName]
-			for len(results) <= e.runIndex {
+		// node each get their own slot. Prefer the ctx execFrame
+		// so concurrent runs stay isolated.
+		if runData := e.activeRunData(ctx); runData != nil && runData.ResultData != nil {
+			runIndex := e.runIndex
+			if f := execFrameFrom(ctx); f != nil {
+				runIndex = f.runIndex
+			}
+			results := runData.ResultData.NodeData[nodeName]
+			for len(results) <= runIndex {
 				results = append(results, expressions.NodeExecutionResult{})
 			}
-			results[e.runIndex] = expressions.NodeExecutionResult{
+			results[runIndex] = expressions.NodeExecutionResult{
 				Data:      stripRoutingMetadata(outputData),
 				StartTime: time.Now(),
 			}
-			e.runExecutionData.ResultData.NodeData[nodeName] = results
+			runData.ResultData.NodeData[nodeName] = results
 		}
 
 		// Route data to connected nodes
@@ -905,6 +960,19 @@ func (e *workflowEngineImpl) executeNodeWithContext(
 		return nil, err
 	}
 
+	// Prefer the per-run execFrame on ctx so concurrent webhook +
+	// Kafka executions cannot clobber each other's runExecutionData.
+	wf := e.workflow
+	runData := e.runExecutionData
+	runIndex := e.runIndex
+	itemIndex := e.itemIndex
+	if f := execFrameFrom(ctx); f != nil {
+		wf = f.workflow
+		runData = f.runExecutionData
+		runIndex = f.runIndex
+		itemIndex = f.itemIndex
+	}
+
 	// Prefer the run-aware executor when available — Code node
 	// snippets use `$("OtherNode").item.json` to pull sibling node
 	// outputs, which only resolves when the executor gets the live
@@ -912,7 +980,7 @@ func (e *workflowEngineImpl) executeNodeWithContext(
 	// context internally and silently swallows fields under spread
 	// operators (`...$(Loop).item.json`).
 	if runExecutor, ok := executor.(base.RunAwareNodeExecutor); ok {
-		return runExecutor.ExecuteWithRun(e.workflow, e.runExecutionData, e.runIndex, e.itemIndex, inputData, nodeParams)
+		return runExecutor.ExecuteWithRun(wf, runData, runIndex, itemIndex, inputData, nodeParams)
 	}
 
 	if contextExecutor, ok := executor.(base.ContextAwareNodeExecutor); ok {
@@ -1203,7 +1271,10 @@ func (e *workflowEngineImpl) runLoopBodyChain(
 		// sibling-node lookups (e.g. `$("Other Body Node")`)
 		// resolve against the same iteration slot.
 		prevRunIndex := e.runIndex
-		e.runIndex = iterRunIndex
+		if f := execFrameFrom(ctx); f != nil {
+			prevRunIndex = f.runIndex
+		}
+		e.setActiveRunIndex(ctx, iterRunIndex)
 		nodeCtx, nodeSpan := e.otelManager.StartNodeSpan(ctx, otel.NodeAttrs{
 			NodeID:          bodyNode.ID,
 			NodeName:        bodyNode.Name,
@@ -1217,7 +1288,7 @@ func (e *workflowEngineImpl) runLoopBodyChain(
 			nodeSpan.SetAttributes(otel.AttrNodeItemsOutput.Int(len(outputData)))
 		}
 		otel.EndNodeSpan(nodeSpan, err)
-		e.runIndex = prevRunIndex
+		e.setActiveRunIndex(ctx, prevRunIndex)
 		if err != nil {
 			return nil, fmt.Errorf("body node %q: %w", name, err)
 		}
@@ -1500,9 +1571,12 @@ func (e *workflowEngineImpl) runIfRetryBodyChain(
 			continue
 		}
 		prevRunIndex := e.runIndex
-		e.runIndex = runIndexSlot
+		if f := execFrameFrom(ctx); f != nil {
+			prevRunIndex = f.runIndex
+		}
+		e.setActiveRunIndex(ctx, runIndexSlot)
 		outputData, err := e.executeNodeWithContext(ctx, executor, inputSnapshot, finalParams)
-		e.runIndex = prevRunIndex
+		e.setActiveRunIndex(ctx, prevRunIndex)
 		if err != nil {
 			return nil, fmt.Errorf("body node %q execution: %w", name, err)
 		}
