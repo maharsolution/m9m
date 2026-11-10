@@ -391,6 +391,27 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 			}
 			startingNodes = ewtStarts
 		}
+	} else if mode := workflowExecutionMode(ctx); mode == "webhook" {
+		// Webhook invocations must start ONLY at webhook nodes —
+		// otherwise executeWorkflowTrigger / Kafka Trigger are also
+		// seeded and Finnet's Set Counter→Find Respond poll runs on
+		// the parent before finnet-queue has published.
+		webhookStarts := e.findWebhookStarts(workflow)
+		// #region agent log
+		log.Printf(`[agent-debug] {"sessionId":"31457b","hypothesisId":"H18","location":"engine.go:startNodes","message":"webhook start selection","data":{"webhookCount":%d,"allStarts":%d},"runId":"post-fix"}`, len(webhookStarts), len(startingNodes))
+		// #endregion
+		if len(webhookStarts) > 0 {
+			whSet := make(map[string]bool, len(webhookStarts))
+			for _, n := range webhookStarts {
+				whSet[n] = true
+			}
+			for _, n := range startingNodes {
+				if !whSet[n] {
+					nodeResults[n] = []model.DataItem{}
+				}
+			}
+			startingNodes = webhookStarts
+		}
 	}
 
 	// Set input data for starting nodes
@@ -477,13 +498,15 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 	// with a back-edge into the body). Like splitInBatches,
 	// the body nodes need to be skipped from the top-level
 	// topological loop — the engine drives the iteration when
-	// it reaches the guard node.
+	// it reaches the body entry (BackEdgeTarget) with seeded
+	// input, or the guard node.
 	ifRetryLoops := connections.DetectIfRetryLoops(workflow)
 	for i := range ifRetryLoops {
 		for _, name := range ifRetryLoops[i].BodyNodes {
 			nodesHandledByLoopDriver[name] = true
 		}
 	}
+	ifRetryDriven := make(map[string]bool, len(ifRetryLoops))
 
 	// Execute each node in order
 	for _, nodeName := range executionOrder {
@@ -500,11 +523,38 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		}
 
 		// Skip nodes that belong to a splitInBatches body or done
-		// chain. These are executed by the engine's loop driver
-		// when the splitInBatches node itself runs; the top-level
-		// topological loop would otherwise execute them a second
-		// time and double-apply their assignments.
+		// chain / If-retry body. These are executed by the engine's
+		// loop driver. Exception: when the If-retry body entry
+		// (BackEdgeTarget) already has items from Set Counter, drive
+		// the loop here — the guard If sits AFTER the body and would
+		// otherwise see empty input and never start (H18).
 		if nodesHandledByLoopDriver[nodeName] {
+			if loop := connections.IfRetryLoopForNode(workflow, nodeName); loop != nil &&
+				nodeName == loop.BackEdgeTarget &&
+				len(nodeResults[nodeName]) > 0 &&
+				!ifRetryDriven[loop.GuardNode] {
+				guardNode := nodeMap[loop.GuardNode]
+				if guardNode != nil {
+					// #region agent log
+					log.Printf(`[agent-debug] {"sessionId":"31457b","hypothesisId":"H18","location":"engine.go:ifRetry","message":"driving If-retry from body entry","data":{"entry":%q,"guard":%q,"seedLen":%d,"maxIter":%d},"runId":"post-fix"}`, nodeName, loop.GuardNode, len(nodeResults[nodeName]), loop.MaxIterations)
+					// #endregion
+					ifRetryDriven[loop.GuardNode] = true
+					if err := e.executeIfRetryLoop(
+						ctx,
+						workflow,
+						guardNode,
+						*loop,
+						nodeResults,
+						e.runExecutionData,
+						nodeResults[nodeName],
+					); err != nil {
+						return &ExecutionResult{
+							Data:  nil,
+							Error: fmt.Errorf("error executing If-retry loop %s: %w", loop.GuardNode, err),
+						}, nil
+					}
+				}
+			}
 			continue
 		}
 
@@ -635,6 +685,10 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		// condition is false (i.e. the If would route to its
 		// main[1] "false" branch on this iteration).
 		if loop := connections.IfRetryLoopForGuard(workflow, node.Name); loop != nil {
+			if ifRetryDriven[loop.GuardNode] {
+				continue
+			}
+			ifRetryDriven[loop.GuardNode] = true
 			if err := e.executeIfRetryLoop(
 				ctx,
 				workflow,
@@ -1280,20 +1334,6 @@ func (e *workflowEngineImpl) executeIfRetryLoop(
 		loop.MaxIterations = 10
 	}
 
-	// If we received no input, skip the loop entirely. This
-	// mirrors the splitInBatches behavior: a guard with no
-	// upstream items should not produce output.
-	if len(inputData) == 0 {
-		nodeResults[guardNode.Name] = []model.DataItem{}
-		return nil
-	}
-
-	// The body chain, in execution order. We use the
-	// pre-computed order from the detector (canvas position
-	// order, which is stable and matches the natural left-to-
-	// right reading order of n8n's UI).
-	bodyOrder := loop.BodyNodes
-
 	// Build a node lookup so we can resolve each body node
 	// quickly.
 	nodeMap := make(map[string]*model.Node, len(workflow.Nodes))
@@ -1304,10 +1344,22 @@ func (e *workflowEngineImpl) executeIfRetryLoop(
 	// Seed the body entry with the input data the first time
 	// around. On subsequent iterations, the body's own output
 	// is what we want to feed back in; we re-publish it to
-	// `nodeResults[backEdgeTarget]` below.
-	if nodeResults[loop.BackEdgeTarget] == nil {
+	// `nodeResults[backEdgeTarget]` below. Prefer an already-
+	// seeded BackEdgeTarget (Set Counter → Find Respond) when
+	// the guard itself has no direct input.
+	if len(nodeResults[loop.BackEdgeTarget]) == 0 {
+		if len(inputData) == 0 {
+			nodeResults[guardNode.Name] = []model.DataItem{}
+			return nil
+		}
 		nodeResults[loop.BackEdgeTarget] = inputData
 	}
+
+	// The body chain, in execution order. We use the
+	// pre-computed order from the detector (canvas position
+	// order, which is stable and matches the natural left-to-
+	// right reading order of n8n's UI).
+	bodyOrder := loop.BodyNodes
 
 	for iter := 0; iter < loop.MaxIterations; iter++ {
 		if err := ctx.Err(); err != nil {
@@ -1350,8 +1402,19 @@ func (e *workflowEngineImpl) executeIfRetryLoop(
 		// Loop again: seed the body entry with the
 		// iteration's terminal output so the next
 		// iteration's first node sees the right input.
+		// Sleep briefly between polls so the Kafka consumer
+		// path can write the mongo reply (Finnet sticky:
+		// "Counter Max 10 retry" over ~20s wall clock).
 		if iter < loop.MaxIterations-1 {
 			nodeResults[loop.BackEdgeTarget] = bodyOutput
+			// #region agent log
+			log.Printf(`[agent-debug] {"sessionId":"31457b","hypothesisId":"H18","location":"engine.go:ifRetry","message":"If-retry iteration continue","data":{"iter":%d,"guard":%q},"runId":"post-fix"}`, iter, loop.GuardNode)
+			// #endregion
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(2 * time.Second):
+			}
 		}
 	}
 
@@ -1445,12 +1508,18 @@ func (e *workflowEngineImpl) runIfRetryBodyChain(
 			return nil, fmt.Errorf("body node %q validation: %w", name, err)
 		}
 
-		// Execute the node.
+		// Execute the node via the context-aware path so
+		// expressions like $('Async Subworkflow').item.json.key
+		// and $('Set Counter').item.json.attempt resolve against
+		// the live runExecutionData (plain Execute cannot).
 		if len(inputSnapshot) == 0 && !isTriggerOnlyNodeType(bodyNode.Type) {
 			nodeResults[name] = []model.DataItem{}
 			continue
 		}
-		outputData, err := executor.Execute(inputSnapshot, finalParams)
+		prevRunIndex := e.runIndex
+		e.runIndex = runIndexSlot
+		outputData, err := e.executeNodeWithContext(ctx, executor, inputSnapshot, finalParams)
+		e.runIndex = prevRunIndex
 		if err != nil {
 			return nil, fmt.Errorf("body node %q execution: %w", name, err)
 		}
@@ -1534,6 +1603,12 @@ func (e *workflowEngineImpl) evaluateIfRetryGuard(
 	// terminal node tags every item with `_ifResult`; the
 	// items with `_ifResult=false` are the ones routed to
 	// the guard.
+	// Empty body output means Find Respond / upstream returned
+	// no items (mongo miss). Keep polling — do NOT treat this
+	// as "exit branch taken".
+	if len(bodyOutput) == 0 {
+		return true, nil
+	}
 	guardItems := filterIfRetryGuardItems(bodyOutput)
 	if len(guardItems) == 0 {
 		// The body found what it was looking for (routed
@@ -1815,6 +1890,22 @@ func (e *workflowEngineImpl) findExecuteWorkflowTriggerStarts(workflow *model.Wo
 	var starts []string
 	for _, node := range workflow.Nodes {
 		if node.Type == "n8n-nodes-base.executeWorkflowTrigger" {
+			starts = append(starts, node.Name)
+		}
+	}
+	return starts
+}
+
+// findWebhookStarts returns every webhook trigger node. Used when
+// execution mode is "webhook" so sibling triggers (Kafka, EWT) are
+// not also seeded with the HTTP payload.
+func (e *workflowEngineImpl) findWebhookStarts(workflow *model.Workflow) []string {
+	if workflow == nil {
+		return nil
+	}
+	var starts []string
+	for _, node := range workflow.Nodes {
+		if node.Type == "n8n-nodes-base.webhook" {
 			starts = append(starts, node.Name)
 		}
 	}
