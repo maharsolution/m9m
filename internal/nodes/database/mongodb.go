@@ -46,7 +46,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -371,9 +370,90 @@ func (n *MongoDBNode) resolveQueryExpressions(params map[string]interface{}, inp
 		if err != nil {
 			return nil, n.CreateError(fmt.Sprintf("failed to evaluate %s expression: %v", key, err), nil)
 		}
+		// A nil/empty resolution of a real query expression must not
+		// fall through to toBSON(nil) → bson.M{} (match-all). That
+		// made Finnet Find Respond intermittently return a stale
+		// Atlas doc when $('Async Subworkflow').item.json.key failed
+		// open, producing a lucky balance instead of an empty body.
+		if resolved == nil {
+			return nil, n.CreateError(fmt.Sprintf("%s expression resolved to nil", key), nil)
+		}
+		if s, ok := resolved.(string); ok {
+			if strings.TrimSpace(s) == "" {
+				return nil, n.CreateError(fmt.Sprintf("%s expression resolved to empty string", key), nil)
+			}
+			// When $('Async Subworkflow').item.json.key is missing,
+			// the template becomes {"key":"undefined"} and Find
+			// quietly misses forever. Recover the live key from
+			// runExecutionData before that happens.
+			if strings.Contains(s, `"key": "undefined"`) || strings.Contains(s, `"key":"undefined"`) {
+				if recovered := lookupRunDataKey(runCtx); recovered != "" {
+					s = strings.ReplaceAll(s, `"key": "undefined"`, fmt.Sprintf(`"key": %q`, recovered))
+					s = strings.ReplaceAll(s, `"key":"undefined"`, fmt.Sprintf(`"key":%q`, recovered))
+				}
+			}
+			resolved = s
+		}
 		out[key] = resolved
 	}
 	return out, nil
+}
+
+// hasNonEmptyQueryParam reports whether a raw query/filter param was
+// configured (string non-empty, or non-nil object). Used to distinguish
+// intentional match-all from a evaporated expression.
+func hasNonEmptyQueryParam(v interface{}) bool {
+	switch t := v.(type) {
+	case nil:
+		return false
+	case string:
+		s := strings.TrimSpace(t)
+		return s != "" && s != "{}" && s != "null"
+	case map[string]interface{}:
+		return len(t) > 0
+	default:
+		return true
+	}
+}
+
+// lookupRunDataKey finds a `key` field on a prior node output in the
+// live run. Finnet's Find Respond depends on
+// $('Async Subworkflow').item.json.key; when that expression yields
+// JS undefined we still have the key on Async Subworkflow / Payload /
+// Input in runExecutionData.
+func lookupRunDataKey(runCtx *mongoRunContext) string {
+	if runCtx == nil || runCtx.runData == nil {
+		return ""
+	}
+	if runCtx.runData.ExecutionData != nil && runCtx.runData.ExecutionData.ContextData != nil {
+		if k, ok := runCtx.runData.ExecutionData.ContextData["subworkflowKey"].(string); ok && k != "" && k != "undefined" {
+			return k
+		}
+	}
+	if runCtx.runData.ResultData == nil {
+		return ""
+	}
+	prefer := []string{"Async Subworkflow", "Payload", "Input"}
+	for _, name := range prefer {
+		slots := runCtx.runData.ResultData.NodeData[name]
+		for i := len(slots) - 1; i >= 0; i-- {
+			for _, item := range slots[i].Data {
+				if k, ok := item.JSON["key"].(string); ok && k != "" && k != "undefined" {
+					return k
+				}
+			}
+		}
+	}
+	for _, slots := range runCtx.runData.ResultData.NodeData {
+		for i := len(slots) - 1; i >= 0; i-- {
+			for _, item := range slots[i].Data {
+				if k, ok := item.JSON["key"].(string); ok && k != "" && k != "undefined" {
+					return k
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // resolveConnParams reads connectionString / database / collection from
@@ -426,6 +506,16 @@ func (n *MongoDBNode) doFind(ctx context.Context, coll *mongo.Collection, params
 	if err != nil {
 		return nil, n.CreateError(fmt.Sprintf("filter: %v", err), nil)
 	}
+	// Reject match-all when the node was configured with a query /
+	// filter that evaporated during expression evaluation. An empty
+	// filter is only valid when the workflow author left query empty.
+	if len(filter) == 0 {
+		rawQuery := params["query"]
+		rawFilter := params["filter"]
+		if hasNonEmptyQueryParam(rawQuery) || hasNonEmptyQueryParam(rawFilter) {
+			return nil, n.CreateError("mongo find: query/filter resolved to empty match-all filter", nil)
+		}
+	}
 	opts := options.Find()
 	if raw, ok := params["sort"]; ok {
 		s, sErr := toBSON(raw)
@@ -452,12 +542,6 @@ func (n *MongoDBNode) doFind(ctx context.Context, coll *mongo.Collection, params
 	var docs []bson.M
 	if err := cur.All(ctx, &docs); err != nil {
 		return nil, n.CreateError(fmt.Sprintf("mongo cursor.All: %v", err), nil)
-	}
-
-	if len(docs) == 0 {
-		// Surface the resolved filter so Finnet Find Respond misses
-		// are diagnosable from container stderr without a debugger.
-		fmt.Fprintf(os.Stderr, "m9m-mongo-find miss filter=%v collection=%s\n", filter, coll.Name())
 	}
 
 	// Match n8n's behaviour: emit one DataItem per matching doc,

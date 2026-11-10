@@ -333,13 +333,25 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 	frame := &execFrame{
 		workflow: workflow,
 		runExecutionData: &expressions.RunExecutionData{
-			ExecutionData: &expressions.ExecutionData{},
+			ExecutionData: &expressions.ExecutionData{
+				ContextData: make(map[string]interface{}),
+			},
 			ResultData: &expressions.RunData{
 				NodeData: make(map[string][]expressions.NodeExecutionResult),
 			},
 			ExecutionID: execID,
 			StartedAt:   time.Now(),
 		},
+	}
+	// Sub-workflow inputs (Finnet Async Sub Workflow → Execute
+	// Workflow Trigger) carry the Payload `key`. Stash it on the
+	// run so Find Respond can recover when
+	// `$('Async Subworkflow').item.json.key` resolves to JS
+	// undefined during the If-retry poll.
+	if IsSubWorkflowStart(ctx) && len(inputData) > 0 {
+		if k, ok := inputData[0].JSON["key"].(string); ok && k != "" {
+			frame.runExecutionData.ExecutionData.ContextData["subworkflowKey"] = k
+		}
 	}
 	ctx = withExecFrame(ctx, frame)
 	// Mirror onto the engine fields for fallbacks / tests, but the
