@@ -1,6 +1,7 @@
 package transform
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -181,6 +182,14 @@ func resolveConditionsArray(conditions interface{}) ([]interface{}, bool) {
 // else is compared as a literal. This keeps the Filter node (and any
 // other caller that hasn't been wired up to an evaluator) working.
 func EvaluateConditions(item model.DataItem, conditions []interface{}, combiner string, eval ExpressionEvaluator) bool {
+	return EvaluateConditionsWithRun(item, conditions, combiner, eval, nil)
+}
+
+// EvaluateConditionsWithRun is the run-aware variant used by the IF
+// node's ExecuteWithRun path. When runCtx is non-nil, expression
+// operands such as `$('Set Counter').item.json.attempt` resolve
+// against the live RunExecutionData instead of an isolated context.
+func EvaluateConditionsWithRun(item model.DataItem, conditions []interface{}, combiner string, eval ExpressionEvaluator, runCtx *ifRunContext) bool {
 	if len(conditions) == 0 {
 		return true
 	}
@@ -194,7 +203,7 @@ func EvaluateConditions(item model.DataItem, conditions []interface{}, combiner 
 			continue
 		}
 
-		result := evaluateCondition(item, conditionMap, eval)
+		result := evaluateCondition(item, conditionMap, eval, runCtx)
 
 		if combiner == "and" && !result {
 			return false
@@ -216,7 +225,7 @@ type ExpressionEvaluator interface {
 	EvaluateExpression(expression string, context *expressions.ExpressionContext) (interface{}, error)
 }
 
-func evaluateCondition(item model.DataItem, condition map[string]interface{}, eval ExpressionEvaluator) bool {
+func evaluateCondition(item model.DataItem, condition map[string]interface{}, eval ExpressionEvaluator, runCtx *ifRunContext) bool {
 	leftValue := condition["leftValue"]
 	rightValue := condition["rightValue"]
 	// n8n's IF v2 emits the operator as either a bare string or a
@@ -228,8 +237,8 @@ func evaluateCondition(item model.DataItem, condition map[string]interface{}, ev
 		operator = "equals"
 	}
 
-	leftResolved := resolveValue(item.JSON, leftValue, eval)
-	rightResolved := resolveValue(item.JSON, rightValue, eval)
+	leftResolved := resolveValue(item.JSON, leftValue, eval, runCtx)
+	rightResolved := resolveValue(item.JSON, rightValue, eval, runCtx)
 
 	switch operator {
 	case "exists":
@@ -296,7 +305,7 @@ func evaluateCondition(item model.DataItem, condition map[string]interface{}, ev
 // The evaluator is consulted only for the third case, so the historic
 // `$json.foo` short-circuit keeps working for callers that pass a nil
 // evaluator (Filter node, tests, etc.).
-func resolveValue(data map[string]interface{}, value interface{}, eval ExpressionEvaluator) interface{} {
+func resolveValue(data map[string]interface{}, value interface{}, eval ExpressionEvaluator, runCtx *ifRunContext) interface{} {
 	strValue, ok := value.(string)
 	if !ok {
 		return value
@@ -330,12 +339,26 @@ func resolveValue(data map[string]interface{}, value interface{}, eval Expressio
 		// parser/evaluator doesn't try to double-wrap it.
 	}
 
+	runIndex, itemIndex := 0, 0
+	var runData *expressions.RunExecutionData
+	var wf *model.Workflow
+	if runCtx != nil {
+		runIndex = runCtx.runIndex
+		itemIndex = runCtx.itemIndex
+		runData = runCtx.runData
+		wf = runCtx.workflow
+	}
+	if wf == nil {
+		wf = &model.Workflow{Name: "IF"}
+	}
 	ctx := &expressions.ExpressionContext{
 		ActiveNodeName:      "IF",
-		RunIndex:            0,
-		ItemIndex:           0,
+		RunIndex:            runIndex,
+		ItemIndex:           itemIndex,
 		Mode:                expressions.ModeManual,
 		ConnectionInputData: []model.DataItem{{JSON: data}},
+		Workflow:            wf,
+		RunExecutionData:    runData,
 	}
 	resolved, err := eval.EvaluateExpression(expr, ctx)
 	if err != nil {
@@ -443,8 +466,26 @@ func condToFloat64(value interface{}) (float64, bool) {
 	switch v := value.(type) {
 	case int:
 		return float64(v), true
+	case int32:
+		return float64(v), true
+	case int64:
+		// goja returns JS integers as int64; Finnet's
+		// `$('Set Counter').item.json.attempt < maxAttempts`
+		// guard depends on this conversion succeeding.
+		return float64(v), true
+	case uint:
+		return float64(v), true
+	case uint32:
+		return float64(v), true
+	case uint64:
+		return float64(v), true
+	case float32:
+		return float64(v), true
 	case float64:
 		return v, true
+	case json.Number:
+		f, err := v.Float64()
+		return f, err == nil
 	case string:
 		if num, err := strconv.ParseFloat(v, 64); err == nil {
 			return num, true

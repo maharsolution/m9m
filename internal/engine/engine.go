@@ -1458,11 +1458,21 @@ func (e *workflowEngineImpl) executeIfRetryLoop(
 		// Loop again: seed the body entry with the
 		// iteration's terminal output so the next
 		// iteration's first node sees the right input.
+		//
+		// IMPORTANT: when Find Respond misses, the body
+		// returns no items. Re-seeding that empty slice
+		// into BackEdgeTarget makes the next iteration
+		// skip Find entirely (empty-input guard), so the
+		// poll never observes the Kafka/mongo write.
+		// Keep the previous seed (Set Counter / prior
+		// Find input) across empty misses.
 		// Sleep briefly between polls so the Kafka consumer
 		// path can write the mongo reply (Finnet sticky:
 		// "Counter Max 10 retry" over ~20s wall clock).
 		if iter < loop.MaxIterations-1 {
-			nodeResults[loop.BackEdgeTarget] = bodyOutput
+			if len(bodyOutput) > 0 {
+				nodeResults[loop.BackEdgeTarget] = bodyOutput
+			}
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -1694,10 +1704,13 @@ func (e *workflowEngineImpl) evaluateIfRetryGuard(
 		return false, err
 	}
 
-	// Evaluate. The IF node returns items tagged with
-	// _ifResult; we look for any item that the guard would
-	// route to its true (loop) branch.
-	output, err := executor.Execute(guardItems, finalParams)
+	// Evaluate via the run-aware path so
+	// `$('Set Counter').item.json.attempt` resolves against
+	// the live runExecutionData. Plain Execute builds an
+	// ExpressionContext without RunExecutionData, so the
+	// Finnet guard always saw undefined/undefined → false
+	// and aborted the poll after the first miss.
+	output, err := e.executeNodeWithContext(ctx, executor, guardItems, finalParams)
 	if err != nil {
 		return false, err
 	}

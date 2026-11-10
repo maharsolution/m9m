@@ -14,6 +14,16 @@ type IfNode struct {
 	evaluator *expressions.GojaExpressionEvaluator
 }
 
+// ifRunContext carries the live workflow/runExecutionData so
+// condition expressions like `$('Set Counter').item.json.attempt`
+// resolve the same way Set/Code/Mongo do under RunAwareNodeExecutor.
+type ifRunContext struct {
+	workflow  *model.Workflow
+	runData   *expressions.RunExecutionData
+	runIndex  int
+	itemIndex int
+}
+
 // NewIfNode creates a new IF node.
 func NewIfNode() *IfNode {
 	return &IfNode{
@@ -86,7 +96,24 @@ func ifProperties() []base.NodeProperty {
 // compatibility: when false (the historic n8n default), items that
 // fail the condition are still returned (tagged false) rather than
 // dropped, so the false branch of the workflow still executes.
+// ExecuteWithRun is the run-aware path. Engines that implement
+// RunAwareNodeExecutor call this so Finnet's If-retry guard
+// (`$('Set Counter').item.json.attempt < maxAttempts`) and
+// Check Key Exists1 (`$json.respond_type`) share the live run.
+func (n *IfNode) ExecuteWithRun(workflow *model.Workflow, runData *expressions.RunExecutionData, runIndex, itemIndex int, inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
+	return n.execute(inputData, nodeParams, &ifRunContext{
+		workflow:  workflow,
+		runData:   runData,
+		runIndex:  runIndex,
+		itemIndex: itemIndex,
+	})
+}
+
 func (n *IfNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
+	return n.execute(inputData, nodeParams, nil)
+}
+
+func (n *IfNode) execute(inputData []model.DataItem, nodeParams map[string]interface{}, runCtx *ifRunContext) ([]model.DataItem, error) {
 	if len(inputData) == 0 {
 		return []model.DataItem{}, nil
 	}
@@ -106,11 +133,26 @@ func (n *IfNode) Execute(inputData []model.DataItem, nodeParams map[string]inter
 	}
 
 	combiner := n.GetStringParameter(nodeParams, "combiner", "and")
+	// n8n IF v2 stores the combinator under conditions.combinator.
+	if combiner == "and" {
+		if wrap, ok := conditions.(map[string]interface{}); ok {
+			if c, ok := wrap["combinator"].(string); ok && c != "" {
+				combiner = c
+			}
+		}
+	}
 
 	var trueItems, falseItems []model.DataItem
 
-	for _, item := range inputData {
-		passes := EvaluateConditions(item, conditionsArr, combiner, n.evaluator)
+	for i, item := range inputData {
+		itemRunCtx := runCtx
+		if runCtx != nil {
+			// Per-item index so $('…').item resolves paired items.
+			copied := *runCtx
+			copied.itemIndex = i
+			itemRunCtx = &copied
+		}
+		passes := EvaluateConditionsWithRun(item, conditionsArr, combiner, n.evaluator, itemRunCtx)
 		if passes {
 			trueItems = append(trueItems, item)
 		} else {
