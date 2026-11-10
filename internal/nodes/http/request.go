@@ -13,7 +13,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -402,20 +401,6 @@ func (h *HTTPRequestNode) ExecuteWithContext(ctx context.Context, inputData []mo
 			if bodyErr != nil {
 				return nil, h.CreateError(fmt.Sprintf("failed to build request body: %v", bodyErr), nil)
 			}
-			// #region agent log
-			func() {
-				f, err := os.OpenFile(`c:\Users\mahar\OneDrive\workspace\m9m\debug-31457b.log`, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-				if err != nil {
-					return
-				}
-				defer f.Close()
-				snippet := string(bodyBytes)
-				if len(snippet) > 120 {
-					snippet = snippet[:120]
-				}
-				_, _ = fmt.Fprintf(f, `{"sessionId":"31457b","hypothesisId":"H14","location":"request.go:body","message":"resolved request body","data":{"method":%q,"bodyLen":%d,"contentType":%q,"snippet":%q,"hasJsonBody":%t,"hasBody":%t},"timestamp":%d,"runId":"post-fix"}`+"\n", method, len(bodyBytes), contentType, snippet, evaluatedParams["jsonBody"] != nil, evaluatedParams["body"] != nil, time.Now().UnixMilli())
-			}()
-			// #endregion
 			if len(bodyBytes) > 0 {
 				req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 				if contentType != "" && req.Header.Get("Content-Type") == "" {
@@ -477,17 +462,6 @@ func (h *HTTPRequestNode) ExecuteWithContext(ctx context.Context, inputData []mo
 		// legacy fullResponse flag) is true do we also surface
 		// `headers` / `statusCode` as top-level keys alongside the body.
 		includeMeta := h.responseIncludesMeta(evaluatedParams)
-
-		// #region agent log
-		func() {
-			f, err := os.OpenFile(`c:\Users\mahar\OneDrive\workspace\m9m\debug-31457b.log`, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				return
-			}
-			defer f.Close()
-			_, _ = fmt.Fprintf(f, `{"sessionId":"31457b","hypothesisId":"H13","location":"request.go:responseShape","message":"HTTP response shaping","data":{"status":%d,"includeMeta":%t,"contentType":%q,"bodyLen":%d},"timestamp":%d,"runId":"post-fix"}`+"\n", resp.StatusCode, includeMeta, resp.Header.Get("Content-Type"), len(body), time.Now().UnixMilli())
-		}()
-		// #endregion
 
 		responseData := model.DataItem{
 			JSON: h.shapeHTTPResponse(resp.StatusCode, headers, body, resp.Header.Get("Content-Type"), includeMeta),

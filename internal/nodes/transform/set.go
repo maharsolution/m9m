@@ -18,6 +18,17 @@ import (
 type SetNode struct {
 	*base.BaseNode
 	evaluator *expressions.GojaExpressionEvaluator
+	runCtx    *setRunContext
+}
+
+// setRunContext carries the live execution id / run data from the
+// engine so `$execution.id` resolves to a unique per-run value
+// (Finnet Payload uses it as the mongo/Kafka correlation key).
+type setRunContext struct {
+	workflow  *model.Workflow
+	runData   *expressions.RunExecutionData
+	runIndex  int
+	itemIndex int
 }
 
 // NewSetNode creates a new Set node
@@ -464,6 +475,15 @@ func parseRawJSON(params map[string]interface{}) (map[string]interface{}, error)
 }
 
 // Execute processes the Set node operation
+// ExecuteWithRun is the run-aware path. Engines that implement
+// RunAwareNodeExecutor call this so `$execution.id` and
+// `$("OtherNode")` resolve against the live run.
+func (s *SetNode) ExecuteWithRun(workflow *model.Workflow, runData *expressions.RunExecutionData, runIndex, itemIndex int, inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
+	s.runCtx = &setRunContext{workflow: workflow, runData: runData, runIndex: runIndex, itemIndex: itemIndex}
+	defer func() { s.runCtx = nil }()
+	return s.Execute(inputData, nodeParams)
+}
+
 func (s *SetNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
 	if len(inputData) == 0 {
 		return []model.DataItem{}, nil
@@ -518,18 +538,35 @@ func (s *SetNode) Execute(inputData []model.DataItem, nodeParams map[string]inte
 	result := make([]model.DataItem, len(inputData))
 
 	for i, item := range inputData {
-		// Create expression context for current item
+		// Create expression context for current item.
+		// Prefer the engine-supplied execution id so
+		// `={{ $execution.id }}` is unique per webhook run.
+		execID := "set-processing"
+		var runData *expressions.RunExecutionData
+		var wf *model.Workflow
+		runIndex, itemIndex := 0, i
+		if s.runCtx != nil {
+			runData = s.runCtx.runData
+			wf = s.runCtx.workflow
+			runIndex = s.runCtx.runIndex
+			itemIndex = s.runCtx.itemIndex
+			if runData != nil && runData.ExecutionID != "" {
+				execID = runData.ExecutionID
+			}
+		}
+		if wf == nil {
+			wf = &model.Workflow{Name: "Set Processing"}
+		}
 		context := &expressions.ExpressionContext{
 			ActiveNodeName:      "Set",
-			RunIndex:            0,
-			ItemIndex:           0,
+			RunIndex:            runIndex,
+			ItemIndex:           itemIndex,
 			Mode:                expressions.ModeManual,
 			ConnectionInputData: []model.DataItem{item},
-			Workflow: &model.Workflow{
-				Name: "Set Processing",
-			},
+			Workflow:            wf,
+			RunExecutionData:    runData,
 			AdditionalKeys: &expressions.AdditionalKeys{
-				ExecutionId: "set-processing",
+				ExecutionId: execID,
 			},
 		}
 

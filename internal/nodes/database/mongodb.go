@@ -46,7 +46,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -159,9 +158,6 @@ func (n *MongoDBNode) Execute(inputData []model.DataItem, nodeParams map[string]
 		return nil, err
 	}
 	connStr, database, collection := n.resolveConnParams(resolvedParams)
-	// #region agent log
-	log.Printf(`[agent-debug] {"sessionId":"31457b","hypothesisId":"H20","location":"mongodb.go:Execute","message":"mongo conn+query resolve","data":{"hasConn":%v,"hasDB":%v,"collection":%q,"filterType":"%T","queryType":"%T"},"runId":"post-fix"}`, connStr != "", database != "", collection, resolvedParams["filter"], resolvedParams["query"])
-	// #endregion
 	if connStr == "" {
 		return nil, n.CreateError("connectionString is required (e.g. mongodb://user:pass@host:27017 or mongodb+srv://user:pass@cluster0.x.mongodb.net/)", nil)
 	}
@@ -353,9 +349,6 @@ func (n *MongoDBNode) resolveQueryExpressions(params map[string]interface{}, inp
 		if err != nil {
 			return nil, n.CreateError(fmt.Sprintf("failed to evaluate %s expression: %v", key, err), nil)
 		}
-		// #region agent log
-		log.Printf(`[agent-debug] {"sessionId":"31457b","hypothesisId":"H20","location":"mongodb.go:resolveQuery","message":"evaluated mongo query expr","data":{"key":%q,"resolvedType":"%T"},"runId":"post-fix"}`, key, resolved)
-		// #endregion
 		out[key] = resolved
 	}
 	return out, nil

@@ -3,7 +3,6 @@ package trigger
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/neul-labs/m9m/internal/expressions"
@@ -136,9 +135,6 @@ func (r *RespondToWebhookNode) Execute(inputData []model.DataItem, nodeParams ma
 			raw = evaluated
 		}
 		if respondWith == "text" {
-			// #region agent log
-			log.Printf(`[agent-debug] {"sessionId":"31457b","hypothesisId":"H22","location":"respond_to_webhook.go","message":"text responseBody resolved","data":{"rawType":"%T"},"runId":"post-fix"}`, raw)
-			// #endregion
 			switch v := raw.(type) {
 			case string:
 				return []model.DataItem{{JSON: map[string]interface{}{"data": v}}}, nil

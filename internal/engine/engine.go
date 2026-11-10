@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -294,11 +293,16 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 	// happens just before the result is constructed below.
 	parentEdgesTaken := e.edgesTaken
 	e.edgesTaken = make(map[string]bool)
+	if execID == "" {
+		execID = fmt.Sprintf("exec_%d", time.Now().UnixNano())
+	}
 	e.runExecutionData = &expressions.RunExecutionData{
 		ExecutionData: &expressions.ExecutionData{},
 		ResultData: &expressions.RunData{
 			NodeData: make(map[string][]expressions.NodeExecutionResult),
 		},
+		ExecutionID: execID,
+		StartedAt:   time.Now(),
 	}
 	defer func() {
 		e.workflow = nil
@@ -366,16 +370,6 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 	startingNodes := e.findStartingNodes(workflow)
 	if IsSubWorkflowStart(ctx) {
 		ewtStarts := e.findExecuteWorkflowTriggerStarts(workflow)
-		// #region agent log
-		func() {
-			log.Printf(`[agent-debug] {"sessionId":"31457b","hypothesisId":"H16","location":"engine.go:startNodes","message":"subworkflow start selection","data":{"depth":%d,"ewtCount":%d,"allStarts":%d},"runId":"post-fix"}`, SubWorkflowDepth(ctx), len(ewtStarts), len(startingNodes))
-			f, err := os.OpenFile(`/tmp/debug-31457b.log`, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if err == nil {
-				_, _ = fmt.Fprintf(f, `{"sessionId":"31457b","hypothesisId":"H16","location":"engine.go:startNodes","message":"subworkflow start selection","data":{"depth":%d,"ewtCount":%d,"allStarts":%d},"timestamp":%d,"runId":"post-fix"}`+"\n", SubWorkflowDepth(ctx), len(ewtStarts), len(startingNodes), time.Now().UnixMilli())
-				_ = f.Close()
-			}
-		}()
-		// #endregion
 		if len(ewtStarts) > 0 {
 			// Seed non-EWT entry points with empty input so the
 			// engine's nil→workflow-input fallback does not re-run
@@ -397,9 +391,6 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		// seeded and Finnet's Set Counter→Find Respond poll runs on
 		// the parent before finnet-queue has published.
 		webhookStarts := e.findWebhookStarts(workflow)
-		// #region agent log
-		log.Printf(`[agent-debug] {"sessionId":"31457b","hypothesisId":"H18","location":"engine.go:startNodes","message":"webhook start selection","data":{"webhookCount":%d,"allStarts":%d},"runId":"post-fix"}`, len(webhookStarts), len(startingNodes))
-		// #endregion
 		if len(webhookStarts) > 0 {
 			whSet := make(map[string]bool, len(webhookStarts))
 			for _, n := range webhookStarts {
@@ -535,9 +526,6 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 				!ifRetryDriven[loop.GuardNode] {
 				guardNode := nodeMap[loop.GuardNode]
 				if guardNode != nil {
-					// #region agent log
-					log.Printf(`[agent-debug] {"sessionId":"31457b","hypothesisId":"H18","location":"engine.go:ifRetry","message":"driving If-retry from body entry","data":{"entry":%q,"guard":%q,"seedLen":%d,"maxIter":%d},"runId":"post-fix"}`, nodeName, loop.GuardNode, len(nodeResults[nodeName]), loop.MaxIterations)
-					// #endregion
 					ifRetryDriven[loop.GuardNode] = true
 					if err := e.executeIfRetryLoop(
 						ctx,
@@ -627,8 +615,6 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 			// input data in that single case.
 			inputDataForNode = inputData
 		}
-		os.Stderr.WriteString(fmt.Sprintf("[exec-trace] node=%s inputLen=%d\n", node.Name, len(inputDataForNode)))
-
 		// Skip nodes that received no input. This mirrors n8n's
 		// "0 items → node doesn't run" behaviour and is the only
 		// thing that prevents the unselected IF/Switch branch from
@@ -641,7 +627,6 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		// connection graph and start the workflow even when their
 		// nodeResults entry happens to be empty at this point.
 		if len(inputDataForNode) == 0 && !isTriggerOnlyNodeType(node.Type) {
-			os.Stderr.WriteString(fmt.Sprintf("[exec-trace] SKIP empty input node=%s\n", node.Name))
 			nodeResults[nodeName] = []model.DataItem{}
 			continue
 		}
@@ -1407,9 +1392,6 @@ func (e *workflowEngineImpl) executeIfRetryLoop(
 		// "Counter Max 10 retry" over ~20s wall clock).
 		if iter < loop.MaxIterations-1 {
 			nodeResults[loop.BackEdgeTarget] = bodyOutput
-			// #region agent log
-			log.Printf(`[agent-debug] {"sessionId":"31457b","hypothesisId":"H18","location":"engine.go:ifRetry","message":"If-retry iteration continue","data":{"iter":%d,"guard":%q},"runId":"post-fix"}`, iter, loop.GuardNode)
-			// #endregion
 			select {
 			case <-ctx.Done():
 				return ctx.Err()

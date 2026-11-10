@@ -2,7 +2,6 @@ package transform
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -196,7 +195,6 @@ func EvaluateConditions(item model.DataItem, conditions []interface{}, combiner 
 		}
 
 		result := evaluateCondition(item, conditionMap, eval)
-		os.Stderr.WriteString(fmt.Sprintf("[cond-debug] evaluateCondition result=%v\n", result))
 
 		if combiner == "and" && !result {
 			return false
@@ -232,7 +230,6 @@ func evaluateCondition(item model.DataItem, condition map[string]interface{}, ev
 
 	leftResolved := resolveValue(item.JSON, leftValue, eval)
 	rightResolved := resolveValue(item.JSON, rightValue, eval)
-	os.Stderr.WriteString(fmt.Sprintf("[cond-debug] operator=%q leftResolved=%v (%T) rightResolved=%v (%T)\n", operator, leftResolved, leftResolved, rightResolved, rightResolved))
 
 	switch operator {
 	case "exists":
@@ -345,10 +342,8 @@ func resolveValue(data map[string]interface{}, value interface{}, eval Expressio
 		// Preserve prior observable behaviour for broken expressions:
 		// fall back to the literal string so downstream comparison
 		// proceeds against the unevaluated text rather than panicking.
-		os.Stderr.WriteString(fmt.Sprintf("[cond-debug] expr=%q resolved=%v (fallback) err=%v\n", expr, resolved, err))
 		return value
 	}
-	os.Stderr.WriteString(fmt.Sprintf("[cond-debug] expr=%q resolved=%v (%T)\n", expr, resolved, resolved))
 	return resolved
 }
 

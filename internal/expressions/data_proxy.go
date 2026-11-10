@@ -34,6 +34,12 @@ type RunExecutionData struct {
 	StartedAt     time.Time
 	StoppedAt     *time.Time
 	WorkflowData  interface{}
+	// ExecutionID is the live workflow execution id (n8n's
+	// `$execution.id`). Set by the engine from the caller's
+	// context so nodes like Set (`key={{ $execution.id }}`) do
+	// not fall back to a hardcoded stub such as "set-processing"
+	// and collide across concurrent Finnet post_balance runs.
+	ExecutionID string
 }
 
 // ExecutionData represents execution context data
@@ -272,16 +278,6 @@ func (p *WorkflowDataProxy) createInputProxy() goja.Value {
 		} else {
 			_ = inputProxy.Set("item", goja.Undefined())
 		}
-		// #region agent log
-		func() {
-			f, err := os.OpenFile(`c:\Users\mahar\OneDrive\workspace\m9m\debug-31457b.log`, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				return
-			}
-			defer f.Close()
-			_, _ = fmt.Fprintf(f, `{"sessionId":"31457b","hypothesisId":"H1","location":"data_proxy.go:createInputProxy","message":"$input.item bound as property","data":{"itemIndex":%d,"resolvedIdx":%d,"inputLen":%d,"bound":%t},"timestamp":%d,"runId":"post-fix"}`+"\n", p.itemIndex, idx, len(inputData), len(inputData) > 0, time.Now().UnixMilli())
-		}()
-		// #endregion
 	}
 
 	return inputProxy
@@ -470,9 +466,20 @@ func (p *WorkflowDataProxy) createExecutionProxy() goja.Value {
 		}
 	}
 
-	// Add additional execution keys
+	// Prefer the engine-supplied execution id over any per-node
+	// AdditionalKeys stub ("set-processing", "merge-processing", …).
+	execID := ""
+	if p.runExecutionData != nil {
+		execID = p.runExecutionData.ExecutionID
+	}
+	if execID == "" && p.additionalKeys != nil {
+		execID = p.additionalKeys.ExecutionId
+	}
+	if execID != "" {
+		_ = executionProxy.Set("id", p.vm.ToValue(execID))
+	}
+
 	if p.additionalKeys != nil {
-		_ = executionProxy.Set("id", p.vm.ToValue(p.additionalKeys.ExecutionId))
 		_ = executionProxy.Set("restApiUrl", p.vm.ToValue(p.additionalKeys.RestApiUrl))
 		_ = executionProxy.Set("instanceBaseUrl", p.vm.ToValue(p.additionalKeys.InstanceBaseUrl))
 		_ = executionProxy.Set("webhookBaseUrl", p.vm.ToValue(p.additionalKeys.WebhookBaseUrl))
