@@ -55,6 +55,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
+	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
 )
@@ -70,6 +71,14 @@ import (
 // milestone item (see m9m.MD §12).
 type MongoDBNode struct {
 	*base.BaseNode
+	runCtx *mongoRunContext
+}
+
+type mongoRunContext struct {
+	workflow  *model.Workflow
+	runData   *expressions.RunExecutionData
+	runIndex  int
+	itemIndex int
 }
 
 // NewMongoDBNode constructs a fresh MongoDB node.
@@ -134,16 +143,30 @@ func mongoProperties() []base.NodeProperty {
 	return append(props, base.CommonSettings()...)
 }
 
+// ExecuteWithRun lets $('OtherNode') resolve inside query/filter
+// expressions (Finnet Find Respond uses
+// `$('Async Subworkflow').item.json.key`).
+func (n *MongoDBNode) ExecuteWithRun(workflow *model.Workflow, runData *expressions.RunExecutionData, runIndex, itemIndex int, inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
+	n.runCtx = &mongoRunContext{workflow: workflow, runData: runData, runIndex: runIndex, itemIndex: itemIndex}
+	defer func() { n.runCtx = nil }()
+	return n.Execute(inputData, nodeParams)
+}
+
 // Execute runs the configured MongoDB operation.
 func (n *MongoDBNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
-	connStr, database, collection := n.resolveConnParams(nodeParams)
+	resolvedParams, err := n.resolveQueryExpressions(nodeParams, inputData)
+	if err != nil {
+		return nil, err
+	}
+	connStr, database, collection := n.resolveConnParams(resolvedParams)
 	// #region agent log
-	log.Printf(`[agent-debug] {"sessionId":"31457b","hypothesisId":"H19","location":"mongodb.go:Execute","message":"mongo conn resolve","data":{"hasConn":%v,"hasDB":%v,"collection":%q,"hasFilter":%v,"hasQuery":%v},"runId":"post-fix"}`, connStr != "", database != "", collection, nodeParams["filter"] != nil, nodeParams["query"] != nil)
+	log.Printf(`[agent-debug] {"sessionId":"31457b","hypothesisId":"H20","location":"mongodb.go:Execute","message":"mongo conn+query resolve","data":{"hasConn":%v,"hasDB":%v,"collection":%q,"filterType":"%T","queryType":"%T"},"runId":"post-fix"}`, connStr != "", database != "", collection, resolvedParams["filter"], resolvedParams["query"])
 	// #endregion
 	if connStr == "" {
 		return nil, n.CreateError("connectionString is required (e.g. mongodb://user:pass@host:27017 or mongodb+srv://user:pass@cluster0.x.mongodb.net/)", nil)
 	}
-	operation := n.GetStringParameter(nodeParams, "operation", "find")
+	operation := n.GetStringParameter(resolvedParams, "operation", "find")
+	nodeParams = resolvedParams
 
 	if database == "" {
 		return nil, n.CreateError("database is required", nil)
@@ -289,6 +312,53 @@ func (n *MongoDBNode) parseFilter(params map[string]interface{}) (bson.M, error)
 		}
 	}
 	return toBSON(raw)
+}
+
+// resolveQueryExpressions evaluates n8n `={{...}}` / `{{...}}`
+// expressions in `query` and `filter` so Find Respond can use
+// `$('Async Subworkflow').item.json.key`.
+func (n *MongoDBNode) resolveQueryExpressions(params map[string]interface{}, inputData []model.DataItem) (map[string]interface{}, error) {
+	if params == nil {
+		return nil, nil
+	}
+	out := make(map[string]interface{}, len(params))
+	for k, v := range params {
+		out[k] = v
+	}
+	evaluator := expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig())
+	ctx := &expressions.ExpressionContext{
+		ConnectionInputData: inputData,
+		ActiveNodeName:      "MongoDB",
+		Mode:                expressions.ModeManual,
+	}
+	if n.runCtx != nil {
+		ctx.Workflow = n.runCtx.workflow
+		ctx.RunExecutionData = n.runCtx.runData
+		ctx.RunIndex = n.runCtx.runIndex
+		ctx.ItemIndex = n.runCtx.itemIndex
+	}
+	for _, key := range []string{"query", "filter"} {
+		raw, ok := out[key].(string)
+		if !ok || raw == "" {
+			continue
+		}
+		if !expressions.IsExpression(raw) {
+			continue
+		}
+		toEval := raw
+		if strings.HasPrefix(raw, "=") {
+			toEval = strings.TrimPrefix(raw, "=")
+		}
+		resolved, err := evaluator.EvaluateExpression(toEval, ctx)
+		if err != nil {
+			return nil, n.CreateError(fmt.Sprintf("failed to evaluate %s expression: %v", key, err), nil)
+		}
+		// #region agent log
+		log.Printf(`[agent-debug] {"sessionId":"31457b","hypothesisId":"H20","location":"mongodb.go:resolveQuery","message":"evaluated mongo query expr","data":{"key":%q,"resolvedType":"%T"},"runId":"post-fix"}`, key, resolved)
+		// #endregion
+		out[key] = resolved
+	}
+	return out, nil
 }
 
 // resolveConnParams reads connectionString / database / collection from
