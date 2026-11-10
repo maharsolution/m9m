@@ -6,7 +6,9 @@ package transform
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
@@ -331,6 +333,22 @@ func (c *CodeNode) Execute(inputData []model.DataItem, nodeParams map[string]int
 	// validates the same lookup, so by the time we reach Execute the
 	// code is guaranteed to be a non-empty string.
 	code := extractCodeParam(nodeParams, language)
+
+	// #region agent log
+	func() {
+		f, err := os.OpenFile(`c:\Users\mahar\OneDrive\workspace\m9m\debug-31457b.log`, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return
+		}
+		defer f.Close()
+		snippet := code
+		if len(snippet) > 80 {
+			snippet = snippet[:80]
+		}
+		hasInputItem := strings.Contains(code, "$input.item")
+		_, _ = fmt.Fprintf(f, `{"sessionId":"31457b","hypothesisId":"H2","location":"code.go:Execute","message":"Code node execute entry","data":{"mode":%q,"language":%q,"inputLen":%d,"hasInputItem":%t,"snippet":%q},"timestamp":%d}`+"\n", mode, language, len(inputData), hasInputItem, snippet, time.Now().UnixMilli())
+	}()
+	// #endregion
 
 	// Validate parameters
 	if code == "" {

@@ -207,13 +207,14 @@ func (p *WorkflowDataProxy) createInputProxy() goja.Value {
 
 	// $input.first() - first item from connection.
 	//
-	// n8n's `$input.first()` (and `.last()`, `.item`, `.all()`) returns the
-	// n8n-shaped item wrapper `{json, binary, pairedItem}`, NOT the bare JSON
-	// map. Code node snippets like `$input.first().json.body` rely on this
-	// wrapper shape. Returning the bare `item.JSON` map would mean `.json`
-	// resolves to `undefined` inside the snippet (because maps don't carry
-	// their own `json` key), and downstream JS expressions like
-	// `if (!$input.first()?.json)` end up taking the wrong branch.
+	// n8n's `$input.first()` / `$input.last()` (methods) and `$input.item`
+	// (property) return the n8n-shaped item wrapper
+	// `{json, binary, pairedItem}`, NOT the bare JSON map. Code node
+	// snippets like `$input.first().json.body` and
+	// `$input.item.json.attempt` rely on this wrapper shape. Returning
+	// the bare `item.JSON` map would mean `.json` resolves to
+	// `undefined` inside the snippet, and downstream JS expressions
+	// like `if (!$input.first()?.json)` end up taking the wrong branch.
 	//
 	// When `codeNodeInputItems` is set on `CurrentNodeParameters` (the Code
 	// node calls these proxies from inside `runOnceForAllItems` /
@@ -249,24 +250,39 @@ func (p *WorkflowDataProxy) createInputProxy() goja.Value {
 		return goja.Undefined()
 	}))
 
-	// $input.item - specific item by index
-	_ = inputProxy.Set("item", p.vm.ToValue(func(call goja.FunctionCall) goja.Value {
-		var itemIndex int = p.itemIndex
-		var connectionIndex int = 0
-
-		if len(call.Arguments) > 0 {
-			itemIndex = int(call.Arguments[0].ToInteger())
+	// $input.item — n8n exposes this as a PROPERTY (the current item
+	// wrapper `{json, binary, pairedItem}`), not a function. Code node
+	// snippets such as `$input.item.json.attempt` (Finnet Set Counter)
+	// rely on property access. Binding a Goja callable here made
+	// `$input.item.json` resolve to `undefined` and threw
+	// `Cannot read property 'attempt' of undefined`.
+	//
+	// Mirrors `$("NodeName").item`, which is already a property value.
+	{
+		inputData := p.getInputConnectionData(0)
+		idx := p.itemIndex
+		if idx < 0 || idx >= len(inputData) {
+			// runOnceForEachItem passes a 1-element ConnectionInputData
+			// slice while keeping the original ItemIndex; fall back to 0
+			// so `$input.item` still resolves to the current item.
+			idx = 0
 		}
-		if len(call.Arguments) > 1 {
-			connectionIndex = int(call.Arguments[1].ToInteger())
+		if len(inputData) > 0 {
+			_ = inputProxy.Set("item", p.vm.ToValue(n8nItemWrapper(inputData[idx])))
+		} else {
+			_ = inputProxy.Set("item", goja.Undefined())
 		}
-
-		inputData := p.getInputConnectionData(connectionIndex)
-		if itemIndex >= 0 && itemIndex < len(inputData) {
-			return p.vm.ToValue(n8nItemWrapper(inputData[itemIndex]))
-		}
-		return goja.Undefined()
-	}))
+		// #region agent log
+		func() {
+			f, err := os.OpenFile(`c:\Users\mahar\OneDrive\workspace\m9m\debug-31457b.log`, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				return
+			}
+			defer f.Close()
+			_, _ = fmt.Fprintf(f, `{"sessionId":"31457b","hypothesisId":"H1","location":"data_proxy.go:createInputProxy","message":"$input.item bound as property","data":{"itemIndex":%d,"resolvedIdx":%d,"inputLen":%d,"bound":%t},"timestamp":%d,"runId":"post-fix"}`+"\n", p.itemIndex, idx, len(inputData), len(inputData) > 0, time.Now().UnixMilli())
+		}()
+		// #endregion
+	}
 
 	return inputProxy
 }
