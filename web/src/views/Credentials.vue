@@ -160,6 +160,13 @@ const updateData = (key: string, value: unknown) => {
   form.value.data = { ...form.value.data, [key]: value }
 }
 
+// Secret-looking fields are masked when the form has no schema for the
+// credential type (fallback rendering).
+const isSecretField = (key: string): boolean =>
+  /pass(word|wd)?|secret|token|api[_-]?key|connectionstring|credential|private/i.test(
+    key
+  )
+
 const updateNumberField = (key: string, raw: string) => {
   const n = parseInt(raw, 10)
   form.value.data = { ...form.value.data, [key]: Number.isNaN(n) ? 0 : n }
@@ -586,6 +593,29 @@ const allCredentialTypes = computed(() => {
                       <p v-if="prop.description" class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                         {{ prop.description }}
                       </p>
+                    </div>
+                  </div>
+
+                  <!-- Fallback for credential types without a form schema:
+                       list the stored fields so they stay editable. -->
+                  <div
+                    v-else-if="!schemaLoading && form.type && Object.keys(form.data).length > 0"
+                    class="space-y-4 border-t border-slate-200 dark:border-slate-700 pt-4"
+                  >
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                      This credential type has no form schema — the stored fields
+                      are listed below and can be edited directly.
+                    </p>
+                    <div v-for="(value, key) in form.data" :key="String(key)">
+                      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        {{ key }}
+                      </label>
+                      <input
+                        :type="isSecretField(String(key)) ? 'password' : 'text'"
+                        :value="value"
+                        @input="updateData(String(key), ($event.target as HTMLInputElement).value)"
+                        class="input"
+                      />
                     </div>
                   </div>
 

@@ -260,6 +260,28 @@ func TestListCredentialsEnvelope(t *testing.T) {
 	}
 }
 
+// TestCredentialSchemaAliasesAndMissingTypes covers credential types
+// that exist in the store but had no form definition — the legacy n8n
+// spellings mySql / openAiApi plus rabbitmq and redis. Without them the
+// edit modal renders no fields and the user sees an empty form.
+func TestCredentialSchemaAliasesAndMissingTypes(t *testing.T) {
+	srv := newTestServer(t)
+
+	for _, typ := range []string{"mySql", "openAiApi", "rabbitmq", "redis"} {
+		w := doJSON(t, srv, http.MethodGet, "/api/v1/credentials/schema/"+typ, nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("schema %s: status %d body %s", typ, w.Code, w.Body.String())
+		}
+		var schema CredentialTypeSchema
+		if err := json.Unmarshal(w.Body.Bytes(), &schema); err != nil {
+			t.Fatalf("decode %s: %v", typ, err)
+		}
+		if len(schema.Properties) == 0 {
+			t.Fatalf("schema %s has no properties", typ)
+		}
+	}
+}
+
 func TestCredentialSchema(t *testing.T) {
 	srv := newTestServer(t)
 

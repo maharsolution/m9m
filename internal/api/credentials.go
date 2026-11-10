@@ -521,6 +521,53 @@ func (s *APIServer) ListCredentialTypes(w http.ResponseWriter, r *http.Request) 
 	s.sendJSON(w, http.StatusOK, map[string]interface{}{"data": types})
 }
 
+// init registers the legacy n8n type spellings as aliases of their
+// canonical schemas, and adds the schemas for the credential types that
+// exist in the store but had no form definition (rabbitmq, redis).
+// Without them the edit modal renders no fields at all — the user sees
+// an empty form for exactly the credentials they want to fix.
+func init() {
+	for alias, source := range map[string]string{
+		"mySql":     "mysql",
+		"openAiApi": "openai",
+	} {
+		base, ok := credentialSchemas[source]
+		if !ok {
+			continue
+		}
+		clone := base
+		clone.Type = alias
+		credentialSchemas[alias] = clone
+	}
+
+	credentialSchemas["rabbitmq"] = CredentialTypeSchema{
+		Type:        "rabbitmq",
+		DisplayName: "RabbitMQ",
+		Properties: []SchemaProperty{
+			{Name: "host", DisplayName: "Host", Type: "string", Required: true, Default: "localhost"},
+			{Name: "port", DisplayName: "Port", Type: "number", Required: true, Default: 5672},
+			{Name: "user", DisplayName: "User", Type: "string", Required: false},
+			{Name: "password", DisplayName: "Password", Type: "password", Required: false},
+			{Name: "vhost", DisplayName: "Virtual Host", Type: "string", Required: false, Default: "/"},
+			{Name: "ssl", DisplayName: "SSL", Type: "boolean", Required: false, Default: false},
+		},
+		Required: []string{"host"},
+	}
+
+	credentialSchemas["redis"] = CredentialTypeSchema{
+		Type:        "redis",
+		DisplayName: "Redis",
+		Properties: []SchemaProperty{
+			{Name: "host", DisplayName: "Host", Type: "string", Required: true, Default: "localhost"},
+			{Name: "port", DisplayName: "Port", Type: "number", Required: true, Default: 6379},
+			{Name: "password", DisplayName: "Password", Type: "password", Required: false},
+			{Name: "db", DisplayName: "Database Index", Type: "number", Required: false, Default: 0},
+			{Name: "tls", DisplayName: "TLS", Type: "boolean", Required: false, Default: false},
+		},
+		Required: []string{"host"},
+	}
+}
+
 // GetCredentialSchema returns the JSON Schema for one credential type.
 func (s *APIServer) GetCredentialSchema(w http.ResponseWriter, r *http.Request) {
 	credType, err := url.PathUnescape(mux.Vars(r)["type"])
