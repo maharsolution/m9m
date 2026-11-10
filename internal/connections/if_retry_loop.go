@@ -481,24 +481,57 @@ func collectRetryBody(workflow *model.Workflow, byName map[string]model.Node, ba
 		}
 	}
 
-	// body = (F ∩ B) ∩ canReachGuard, minus guard, in
-	// canvas order.
-	var body []string
-	for _, n := range workflow.Nodes {
-		name := n.Name
+	// bodySet = (F ∩ B) ∩ canReachGuard, minus guard.
+	bodySet := map[string]bool{}
+	for name := range F {
 		if name == guard {
 			continue
 		}
-		if !F[name] || !B[name] {
+		if !B[name] || !canReachGuard[name] {
 			continue
 		}
-		if !canReachGuard[name] {
-			// Exit branch — handled by the main
-			// engine when the body's terminal If
-			// node routes items to it.
+		bodySet[name] = true
+	}
+
+	// Walk forward from backEdge in BFS order so the body
+	// executes as Find Respond → Value → Check Key Exists1
+	// (dependency order). Canvas / workflow.Nodes order put
+	// Check Key Exists1 BEFORE Find Respond and the Finnet
+	// exit branch never saw respond_type.
+	var body []string
+	seen := map[string]bool{}
+	queue = []string{backEdge}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		if seen[cur] {
 			continue
 		}
-		body = append(body, name)
+		seen[cur] = true
+		if bodySet[cur] {
+			body = append(body, cur)
+		}
+		conns, ok := workflow.Connections[cur]
+		if !ok {
+			continue
+		}
+		for _, branch := range conns.Main {
+			for _, c := range branch {
+				if c.Node == "" || seen[c.Node] || c.Node == guard {
+					continue
+				}
+				if bodySet[c.Node] || F[c.Node] {
+					queue = append(queue, c.Node)
+				}
+			}
+		}
+	}
+	// Any body members missed by the BFS (shouldn't happen)
+	// append in canvas order for stability.
+	for _, n := range workflow.Nodes {
+		if bodySet[n.Name] && !seen[n.Name] {
+			body = append(body, n.Name)
+		}
 	}
 	return body
 }

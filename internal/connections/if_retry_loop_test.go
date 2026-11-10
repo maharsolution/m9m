@@ -111,6 +111,16 @@ func TestDetectIfRetryLoops_Finnet(t *testing.T) {
 			t.Errorf("unexpected body node %q", n)
 		}
 	}
+	// Dependency order from the back-edge target — not canvas /
+	// workflow.Nodes order (which listed Check Key Exists1 first).
+	wantOrder := []string{"Find Respond", "Value", "Check Key Exists1"}
+	if len(got.BodyNodes) == len(wantOrder) {
+		for i, n := range wantOrder {
+			if got.BodyNodes[i] != n {
+				t.Errorf("BodyNodes order[%d]: want %q, got %q (full=%v)", i, n, got.BodyNodes[i], got.BodyNodes)
+			}
+		}
+	}
 }
 
 func TestWorkflowUsesIfRetryLoop_Finnet(t *testing.T) {
