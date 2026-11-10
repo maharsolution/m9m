@@ -2,6 +2,8 @@ package transform
 
 import (
 	"fmt"
+	"os"
+	"time"
 
 	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
@@ -172,8 +174,19 @@ func (m *MergeNode) combineMerge(inputData []model.DataItem, nodeParams map[stri
 func (m *MergeNode) chooseBranchMerge(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
 	// Get branch selection criteria
 	branchCondition, _ := nodeParams["branchCondition"].(string)
+	// #region agent log
+	func() {
+		f, err := os.OpenFile(`c:\Users\mahar\OneDrive\workspace\m9m\debug-31457b.log`, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return
+		}
+		defer f.Close()
+		_, _ = fmt.Fprintf(f, `{"sessionId":"31457b","hypothesisId":"H6","location":"merge.go:chooseBranchMerge","message":"chooseBranch execute","data":{"inputLen":%d,"hasBranchCondition":%t,"conditionLen":%d},"timestamp":%d,"runId":"post-fix"}`+"\n", len(inputData), branchCondition != "", len(branchCondition), time.Now().UnixMilli())
+	}()
+	// #endregion
 	if branchCondition == "" {
-		// If no condition, return all items
+		// n8n Merge v3 chooseBranch often ships with only `mode` set
+		// (Finnet post_balance). With no condition, pass input through.
 		return inputData, nil
 	}
 
@@ -245,12 +258,21 @@ func (m *MergeNode) ValidateParameters(params map[string]interface{}) error {
 		return fmt.Errorf("invalid merge mode: %s", mode)
 	}
 
-	// Validate mode-specific parameters
-	if mode == "chooseBranch" {
-		if _, ok := params["branchCondition"]; !ok {
-			return fmt.Errorf("branchCondition parameter is required for chooseBranch mode")
+	// chooseBranch: n8n does not require `branchCondition`. Many real
+	// workflows (Finnet post_balance) ship with only `mode: chooseBranch`.
+	// Execute already treats a missing/empty condition as passthrough, so
+	// validation must not reject the n8n-shaped parameter set.
+	// #region agent log
+	func() {
+		f, err := os.OpenFile(`c:\Users\mahar\OneDrive\workspace\m9m\debug-31457b.log`, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return
 		}
-	}
+		defer f.Close()
+		_, hasCond := params["branchCondition"]
+		_, _ = fmt.Fprintf(f, `{"sessionId":"31457b","hypothesisId":"H6","location":"merge.go:ValidateParameters","message":"chooseBranch validate","data":{"mode":%q,"hasBranchCondition":%t},"timestamp":%d,"runId":"post-fix"}`+"\n", mode, hasCond, time.Now().UnixMilli())
+	}()
+	// #endregion
 
 	return nil
 }
