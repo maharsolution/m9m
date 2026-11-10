@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -34,8 +35,10 @@ func toCredentialResponse(c *storage.Credential) CredentialResponse {
 		ID:                      c.ID,
 		Name:                    c.Name,
 		Type:                    c.Type,
-		// data is intentionally omitted from API responses — n8n strips it
-		// on read for security parity. UI re-fetches via POST/GET cycle.
+		// data is intentionally omitted from list responses — n8n strips
+		// it there for security parity. The single-credential GET
+		// (toCredentialResponseWithData) does return it so the editor
+		// can pre-fill the edit form.
 		IsManaged:               false,
 		IsGlobal:                c.IsGlobal,
 		IsResolvable:            false,
@@ -44,6 +47,22 @@ func toCredentialResponse(c *storage.Credential) CredentialResponse {
 		CreatedAt:               c.CreatedAt,
 		UpdatedAt:               c.UpdatedAt,
 	}
+}
+
+// toCredentialResponseWithData is the single-credential envelope. It
+// attaches the stored `data` payload so the UI's edit modal can show
+// the real values (host, database, connection string, …) instead of
+// blank inputs — the user asked for exactly that: the data fields must
+// be honoured so the credential can be tested against its real data.
+//
+// n8n's editor REST API behaves the same way: GET /credentials/:id
+// returns the decrypted `data` so the edit form is pre-filled.
+func toCredentialResponseWithData(c *storage.Credential) CredentialResponse {
+	resp := toCredentialResponse(c)
+	if c.Data != nil {
+		resp.Data = c.Data
+	}
+	return resp
 }
 
 // ListCredentials returns the safe envelope list.
@@ -71,7 +90,8 @@ func (s *APIServer) ListCredentials(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetCredential returns the safe envelope for a single credential.
+// GetCredential returns the envelope for a single credential, WITH its
+// `data` payload attached so the UI can pre-fill the edit form.
 func (s *APIServer) GetCredential(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	credential, err := s.storage.GetCredential(id)
@@ -79,7 +99,7 @@ func (s *APIServer) GetCredential(w http.ResponseWriter, r *http.Request) {
 		s.sendError(w, http.StatusNotFound, "Credential not found", err)
 		return
 	}
-	s.sendJSON(w, http.StatusOK, toCredentialResponse(credential))
+	s.sendJSON(w, http.StatusOK, toCredentialResponseWithData(credential))
 }
 
 // credentialCreateRequest is the inbound POST/PATCH body. Mirrors n8n's
@@ -141,7 +161,7 @@ func (s *APIServer) CreateCredential(w http.ResponseWriter, r *http.Request) {
 		s.credMgr.UpsertCredential(cred)
 	}
 
-	s.sendJSON(w, http.StatusCreated, toCredentialResponse(cred))
+	s.sendJSON(w, http.StatusCreated, toCredentialResponseWithData(cred))
 }
 
 // UpdateCredential performs a partial update via PATCH (n8n) and a full
@@ -179,7 +199,7 @@ func (s *APIServer) UpdateCredential(w http.ResponseWriter, r *http.Request) {
 		merged.Type = req.Type
 	}
 	if req.Data != nil {
-		merged.Data = req.Data
+		merged.Data = mergeCredentialData(existing.Data, req.Data)
 	}
 	if req.IsGlobal {
 		merged.IsGlobal = req.IsGlobal
@@ -198,7 +218,23 @@ func (s *APIServer) UpdateCredential(w http.ResponseWriter, r *http.Request) {
 		s.credMgr.UpsertCredential(&merged)
 	}
 
-	s.sendJSON(w, http.StatusOK, toCredentialResponse(&merged))
+	s.sendJSON(w, http.StatusOK, toCredentialResponseWithData(&merged))
+}
+
+// mergeCredentialData overlays the fields present in `patch` onto a
+// copy of `base`. A PATCH that only carries the fields the user
+// actually touched must not wipe the secrets they left alone — the
+// previous wholesale replace erased the credential's data whenever the
+// UI submitted an empty (or partial) map.
+func mergeCredentialData(base, patch map[string]interface{}) map[string]interface{} {
+	out := make(map[string]interface{}, len(base)+len(patch))
+	for k, v := range base {
+		out[k] = v
+	}
+	for k, v := range patch {
+		out[k] = v
+	}
+	return out
 }
 
 // PatchCredential is the explicit PATCH entry point registered in routes.go.
@@ -462,6 +498,29 @@ var credentialSchemas = map[string]CredentialTypeSchema{
 	},
 }
 
+// credentialTypeSummary describes one supported credential type.
+type credentialTypeSummary struct {
+	Type        string `json:"type"`
+	DisplayName string `json:"displayName"`
+}
+
+// ListCredentialTypes returns every credential type m9m ships a
+// schema for. The UI's "Add Credential" chooser is built from this
+// list so it can never drift from the backend — the hardcoded
+// frontend list was missing mongoDb and kafka, which made those
+// credentials impossible to create from the UI.
+func (s *APIServer) ListCredentialTypes(w http.ResponseWriter, r *http.Request) {
+	types := make([]credentialTypeSummary, 0, len(credentialSchemas))
+	for _, schema := range credentialSchemas {
+		types = append(types, credentialTypeSummary{
+			Type:        schema.Type,
+			DisplayName: schema.DisplayName,
+		})
+	}
+	sort.Slice(types, func(i, j int) bool { return types[i].Type < types[j].Type })
+	s.sendJSON(w, http.StatusOK, map[string]interface{}{"data": types})
+}
+
 // GetCredentialSchema returns the JSON Schema for one credential type.
 func (s *APIServer) GetCredentialSchema(w http.ResponseWriter, r *http.Request) {
 	credType, err := url.PathUnescape(mux.Vars(r)["type"])
@@ -501,18 +560,48 @@ func (s *APIServer) TestCredential(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	schema, ok := credentialSchemas[cred.Type]
-	if !ok {
-		s.sendJSON(w, http.StatusOK, testCredentialResult{
-			Status:  "Error",
-			Message: "Unknown credential type: " + cred.Type,
-		})
+	s.sendJSON(w, http.StatusOK, validateCredentialData(cred.Type, cred.Data))
+}
+
+// credentialTestPayload is the body of POST /credentials/test. The UI
+// sends the credential type plus the *current form values* so the
+// validation honours unsaved edits — "Test connection" must reflect
+// what is in the form, not what is still stored.
+type credentialTestPayload struct {
+	Type string                 `json:"type"`
+	Data map[string]interface{} `json:"data"`
+}
+
+// TestCredentialPayload validates a credential payload that has NOT
+// been saved yet. Same rules as the by-id test endpoint, but it works
+// on the request body so the UI can test the edited values directly.
+func (s *APIServer) TestCredentialPayload(w http.ResponseWriter, r *http.Request) {
+	var req credentialTestPayload
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.sendError(w, http.StatusBadRequest, "Invalid JSON", err)
 		return
+	}
+	if strings.TrimSpace(req.Type) == "" {
+		s.sendError(w, http.StatusBadRequest, "type is required", nil)
+		return
+	}
+	s.sendJSON(w, http.StatusOK, validateCredentialData(req.Type, req.Data))
+}
+
+// validateCredentialData holds the type-specific rules shared by the
+// by-id test endpoint and the payload test endpoint.
+func validateCredentialData(credType string, data map[string]interface{}) testCredentialResult {
+	schema, ok := credentialSchemas[credType]
+	if !ok {
+		return testCredentialResult{
+			Status:  "Error",
+			Message: "Unknown credential type: " + credType,
+		}
 	}
 
 	var missing []string
 	for _, req := range schema.Required {
-		v, ok := cred.Data[req]
+		v, ok := data[req]
 		if !ok {
 			missing = append(missing, req)
 			continue
@@ -523,48 +612,37 @@ func (s *APIServer) TestCredential(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Type-specific format checks.
-	if cred.Type == "oAuth2Api" {
-		if u, ok := cred.Data["authUrl"].(string); ok && !isValidURL(u) {
-			s.sendJSON(w, http.StatusOK, testCredentialResult{
-				Status:  "Error",
-				Message: "Authorization URL is not a valid URL",
-			})
-			return
+	if credType == "oAuth2Api" {
+		if u, ok := data["authUrl"].(string); ok && !isValidURL(u) {
+			return testCredentialResult{Status: "Error", Message: "Authorization URL is not a valid URL"}
 		}
-		if u, ok := cred.Data["accessTokenUrl"].(string); ok && !isValidURL(u) {
-			s.sendJSON(w, http.StatusOK, testCredentialResult{
-				Status:  "Error",
-				Message: "Access Token URL is not a valid URL",
-			})
-			return
+		if u, ok := data["accessTokenUrl"].(string); ok && !isValidURL(u) {
+			return testCredentialResult{Status: "Error", Message: "Access Token URL is not a valid URL"}
 		}
 	}
-	if cred.Type == "postgres" || cred.Type == "mysql" {
-		if p, ok := cred.Data["port"]; ok {
+	if credType == "postgres" || credType == "mysql" {
+		if p, ok := data["port"]; ok {
 			switch v := p.(type) {
 			case float64:
 				if v < 1 || v > 65535 {
-					s.sendJSON(w, http.StatusOK, testCredentialResult{Status: "Error", Message: "Port out of range"})
-					return
+					return testCredentialResult{Status: "Error", Message: "Port out of range"}
 				}
 			case string:
 				n, err := strconv.Atoi(v)
 				if err != nil || n < 1 || n > 65535 {
-					s.sendJSON(w, http.StatusOK, testCredentialResult{Status: "Error", Message: "Port out of range"})
-					return
+					return testCredentialResult{Status: "Error", Message: "Port out of range"}
 				}
 			}
 		}
 	}
 
 	if len(missing) > 0 {
-		s.sendJSON(w, http.StatusOK, testCredentialResult{
+		return testCredentialResult{
 			Status:  "Error",
 			Message: "Missing or empty required fields: " + strings.Join(missing, ", "),
-		})
-		return
+		}
 	}
-	s.sendJSON(w, http.StatusOK, testCredentialResult{Status: "OK", Message: "Credential is valid"})
+	return testCredentialResult{Status: "OK", Message: "Credential is valid"}
 }
 
 func isValidURL(s string) bool {

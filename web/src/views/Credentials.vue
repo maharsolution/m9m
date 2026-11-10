@@ -37,6 +37,8 @@ const currentSchema = ref<CredentialSchema | null>(null)
 const schemaLoading = ref(false)
 const testResult = ref<CredentialTestResult | null>(null)
 const testing = ref(false)
+const loadingCredential = ref(false)
+const lastSchemaType = ref('')
 
 // Grouping & expand state
 const expandedGroups = ref<Set<string>>(new Set())
@@ -63,6 +65,7 @@ const groupedCredentials = computed(() => {
 // Open / close modal lifecycle
 onMounted(async () => {
   await credentialsStore.fetchCredentials()
+  await credentialsStore.fetchCredentialTypes()
   // Expand all groups by default — n8n shows them inline.
   Object.keys(credentialsStore.credentialsByType).forEach((t) =>
     expandedGroups.value.add(t)
@@ -83,19 +86,31 @@ const openCreateModal = (presetType = '') => {
   showModal.value = true
 }
 
-const openEditModal = (credential: Credential) => {
+// Editing a credential loads its stored `data` so every field shows the
+// real value and can be edited in place. The single-credential endpoint
+// returns the payload (n8n editor parity); the list endpoint does not.
+const openEditModal = async (credential: Credential) => {
   editingCredential.value = credential
   form.value = {
     name: credential.name,
     type: credential.type,
-    // For edit, the API doesn't return `data` (security parity).
-    // Pre-fill with empty values — user enters them again. This matches
-    // n8n's edit modal which also shows blank fields (n8n also strips
-    // data on GET and forces a re-entry if you want to change secrets).
     data: {},
   }
   testResult.value = null
   showModal.value = true
+  loadingCredential.value = true
+  try {
+    const full = await credentialsStore.fetchCredential(credential.id)
+    form.value = {
+      name: full.name,
+      type: full.type,
+      data: { ...(full.data ?? {}) },
+    }
+  } catch (e) {
+    console.error('Failed to load credential data:', e)
+  } finally {
+    loadingCredential.value = false
+  }
 }
 
 const closeModal = () => {
@@ -110,14 +125,21 @@ const closeModal = () => {
 watch(
   () => form.value.type,
   async (newType) => {
-    currentSchema.value = null
     if (!newType) return
+    const unchanged = newType === lastSchemaType.value
+    lastSchemaType.value = newType
+    // Same type re-assigned (e.g. the edit modal re-rendering the
+    // form with the loaded data) — keep the schema we already have.
+    if (unchanged && currentSchema.value) return
+    if (!unchanged) currentSchema.value = null
     schemaLoading.value = true
     try {
       const schema = await credentialsStore.fetchSchema(newType)
       currentSchema.value = schema
-      // Pre-fill defaults for any unfilled fields
-      if (schema) {
+      // Pre-fill defaults only for NEW credentials. An existing
+      // credential keeps its stored values — defaults must never
+      // overwrite what the user saved.
+      if (schema && !editingCredential.value) {
         for (const prop of schema.properties) {
           if (
             !(prop.name in form.value.data) &&
@@ -173,16 +195,20 @@ const saveCredential = async () => {
   }
 }
 
+// Tests the values currently in the form — saved or not. The backend
+// validates the payload it receives, so the result always reflects the
+// data the user typed.
 const runTest = async () => {
-  if (!editingCredential.value) {
-    alert('Save the credential first, then test it.')
+  if (!form.value.type) {
+    alert('Select a credential type first.')
     return
   }
   testing.value = true
   testResult.value = null
   try {
-    testResult.value = await credentialsStore.testConnection(
-      editingCredential.value.id
+    testResult.value = await credentialsStore.testPayload(
+      form.value.type,
+      form.value.data
     )
   } catch (e) {
     testResult.value = {
@@ -234,29 +260,46 @@ const typeLabel = (type: string): string => {
     apiKey: 'API Key',
     postgres: 'Postgres',
     mysql: 'MySQL',
+    mongoDb: 'MongoDB',
+    kafka: 'Kafka',
     slack: 'Slack',
     discord: 'Discord',
     openai: 'OpenAI',
     anthropic: 'Anthropic',
     jwtAuth: 'JWT Auth',
   }
-  return known[type] ?? type
+  if (known[type]) return known[type]
+  const fromBackend = credentialsStore.supportedCredentialTypes.find(
+    (t) => t.type === type
+  )
+  return fromBackend?.displayName ?? type
 }
 
-// Credential-type chooser list — kept in sync with backend schemas.
-const allCredentialTypes = [
+// Credential-type chooser list — driven by the backend so it can never
+// drift (mongoDb and kafka were missing from the old hardcoded list).
+const fallbackCredentialTypes = [
   'httpBasicAuth',
   'httpHeaderAuth',
   'oAuth2Api',
   'apiKey',
   'postgres',
   'mysql',
+  'mongoDb',
+  'kafka',
   'slack',
   'discord',
   'openai',
   'anthropic',
   'jwtAuth',
 ]
+
+const allCredentialTypes = computed(() => {
+  const fromBackend = credentialsStore.supportedCredentialTypes
+  if (fromBackend.length > 0) {
+    return fromBackend.map((t) => t.type)
+  }
+  return fallbackCredentialTypes
+})
 </script>
 
 <template>
@@ -447,11 +490,17 @@ const allCredentialTypes = [
                   <!-- Schema-driven fields -->
                   <div v-if="currentSchema && form.type" class="space-y-4 border-t border-slate-200 dark:border-slate-700 pt-4">
                     <p
-                      v-if="editingCredential"
-                      class="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-lg"
+                      v-if="loadingCredential"
+                      class="text-xs text-slate-500 dark:text-slate-400"
                     >
-                      Re-enter any fields you want to change. The current values are
-                      masked for security.
+                      Loading stored values…
+                    </p>
+                    <p
+                      v-else-if="editingCredential"
+                      class="text-xs text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-900/20 px-3 py-2 rounded-lg"
+                    >
+                      Stored values are loaded below — edit any field directly and
+                      save. Leave a password field untouched to keep it as-is.
                     </p>
 
                     <div
@@ -540,8 +589,8 @@ const allCredentialTypes = [
                     </div>
                   </div>
 
-                  <!-- Inline test result (edit mode only) -->
-                  <div v-if="editingCredential && testResult" class="border-t border-slate-200 dark:border-slate-700 pt-4">
+                  <!-- Inline test result -->
+                  <div v-if="testResult" class="border-t border-slate-200 dark:border-slate-700 pt-4">
                     <div
                       :class="[
                         'flex items-start gap-2 px-3 py-2 rounded-lg text-sm',
@@ -570,16 +619,14 @@ const allCredentialTypes = [
                   <!-- Action row -->
                   <div class="flex justify-between items-center pt-4 border-t border-slate-200 dark:border-slate-700">
                     <button
-                      v-if="editingCredential"
                       type="button"
                       @click="runTest"
-                      :disabled="testing"
+                      :disabled="testing || !form.type"
                       class="btn-secondary flex items-center gap-2"
                     >
                       <span v-if="!testing">Test connection</span>
                       <span v-else>Testing…</span>
                     </button>
-                    <div v-else></div>
 
                     <div class="flex gap-2">
                       <button

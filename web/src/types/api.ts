@@ -59,6 +59,12 @@ export interface Credential {
   id: string
   name: string
   type: string
+  /**
+   * The credential's secret fields. Returned by the single-credential
+   * endpoint (GET /credentials/:id) so the edit form can be pre-filled
+   * with the stored values; the list endpoint leaves it undefined.
+   */
+  data?: Record<string, unknown>
   isManaged?: boolean
   isGlobal?: boolean
   isResolvable?: boolean
@@ -66,6 +72,11 @@ export interface Credential {
   resolverId?: string
   createdAt: string
   updatedAt: string
+}
+
+export interface CredentialTypeSummary {
+  type: string
+  displayName: string
 }
 
 export interface CredentialCreate {

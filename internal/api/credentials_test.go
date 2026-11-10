@@ -44,6 +44,10 @@ func doJSON(t *testing.T, srv *APIServer, method, path string, body any) *httpte
 		srv.ListCredentials(w, req)
 	case method == http.MethodPost && path == "/api/v1/credentials":
 		srv.CreateCredential(w, req)
+	case method == http.MethodGet && path == "/api/v1/credentials/types":
+		srv.ListCredentialTypes(w, req)
+	case method == http.MethodPost && path == "/api/v1/credentials/test":
+		srv.TestCredentialPayload(w, req)
 	case method == http.MethodGet && strings.HasPrefix(path, "/api/v1/credentials/schema/"):
 		credType := strings.TrimPrefix(path, "/api/v1/credentials/schema/")
 		srv.GetCredentialSchema(w, withVars(req, map[string]string{"type": credType}))
@@ -92,14 +96,137 @@ func TestCreateAndGetCredential(t *testing.T) {
 		t.Fatalf("unexpected envelope: %+v", created)
 	}
 
-	// GET must strip the data field — secrets must not leak via the API.
+	// GET of a single credential returns the stored `data` so the UI's
+	// edit form can be pre-filled with the real values (n8n editor
+	// parity). The LIST endpoint stays data-free.
 	w = doJSON(t, srv, http.MethodGet, "/api/v1/credentials/"+created.ID, nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("get: status %d", w.Code)
 	}
-	body := w.Body.String()
-	if strings.Contains(body, "secret") {
-		t.Fatalf("data leaked in GET response: %s", body)
+	var fetched struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &fetched); err != nil {
+		t.Fatalf("decode fetched: %v", err)
+	}
+	if fetched.Data["user"] != "admin" || fetched.Data["password"] != "secret" {
+		t.Fatalf("single GET must expose data fields, got %+v", fetched.Data)
+	}
+
+	// The list envelope must NOT carry the secrets.
+	w = doJSON(t, srv, http.MethodGet, "/api/v1/credentials", nil)
+	if strings.Contains(w.Body.String(), "secret") {
+		t.Fatalf("data leaked in LIST response: %s", w.Body.String())
+	}
+}
+
+// TestCredentialPatchMergesDataFields guards the "data fields are
+// honoured" contract: a PATCH that only carries the fields the user
+// touched must not wipe the fields they left alone.
+func TestCredentialPatchMergesDataFields(t *testing.T) {
+	srv := newTestServer(t)
+
+	w := doJSON(t, srv, http.MethodPost, "/api/v1/credentials", map[string]any{
+		"name": "pg",
+		"type": "postgres",
+		"data": map[string]any{
+			"host":     "db.example.com",
+			"port":     5432,
+			"database": "prod",
+			"user":     "admin",
+			"password": "secret",
+		},
+	})
+	var created CredentialResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &created)
+
+	// Patch only the password.
+	w = doJSON(t, srv, http.MethodPatch, "/api/v1/credentials/"+created.ID,
+		map[string]any{"data": map[string]any{"password": "new-secret"}})
+	if w.Code != http.StatusOK {
+		t.Fatalf("patch: status %d body %s", w.Code, w.Body.String())
+	}
+	var patched struct {
+		Data map[string]any `json:"data"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &patched)
+	if patched.Data["password"] != "new-secret" {
+		t.Fatalf("password not updated: %+v", patched.Data)
+	}
+	if patched.Data["user"] != "admin" || patched.Data["host"] != "db.example.com" ||
+		patched.Data["database"] != "prod" {
+		t.Fatalf("untouched fields were wiped: %+v", patched.Data)
+	}
+
+	// An empty data map must not erase the stored secrets either.
+	w = doJSON(t, srv, http.MethodPatch, "/api/v1/credentials/"+created.ID,
+		map[string]any{"name": "pg-renamed", "data": map[string]any{}})
+	_ = json.Unmarshal(w.Body.Bytes(), &patched)
+	if patched.Data["password"] != "new-secret" || patched.Data["user"] != "admin" {
+		t.Fatalf("empty data patch wiped the credential: %+v", patched.Data)
+	}
+}
+
+// TestCredentialTestPayloadEndpoint validates an unsaved payload —
+// the UI's "Test connection" button must check the values currently in
+// the form, not the ones still in storage.
+func TestCredentialTestPayloadEndpoint(t *testing.T) {
+	srv := newTestServer(t)
+
+	w := doJSON(t, srv, http.MethodPost, "/api/v1/credentials/test", map[string]any{
+		"type": "postgres",
+		"data": map[string]any{
+			"host":     "db.example.com",
+			"port":     5432,
+			"database": "prod",
+			"user":     "admin",
+			"password": "secret",
+		},
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("test payload: status %d body %s", w.Code, w.Body.String())
+	}
+	var result testCredentialResult
+	_ = json.Unmarshal(w.Body.Bytes(), &result)
+	if result.Status != "OK" {
+		t.Fatalf("expected OK, got %+v", result)
+	}
+
+	// Missing required field -> Error.
+	w = doJSON(t, srv, http.MethodPost, "/api/v1/credentials/test", map[string]any{
+		"type": "postgres",
+		"data": map[string]any{"host": "db.example.com", "database": "prod"},
+	})
+	_ = json.Unmarshal(w.Body.Bytes(), &result)
+	if result.Status != "Error" {
+		t.Fatalf("expected Error for missing user/password, got %+v", result)
+	}
+}
+
+// TestListCredentialTypes makes sure the UI's type chooser is driven
+// by the backend — mongoDb and kafka were missing from the hardcoded
+// frontend list, so those credentials could not be created at all.
+func TestListCredentialTypes(t *testing.T) {
+	srv := newTestServer(t)
+
+	w := doJSON(t, srv, http.MethodGet, "/api/v1/credentials/types", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("types: status %d body %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Data []credentialTypeSummary `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, t := range resp.Data {
+		seen[t.Type] = true
+	}
+	for _, want := range []string{"mongoDb", "kafka", "postgres", "mysql", "apiKey"} {
+		if !seen[want] {
+			t.Fatalf("credential type %q missing from types list: %+v", want, resp.Data)
+		}
 	}
 }
 

@@ -4,6 +4,7 @@ import type {
   CredentialCreate,
   CredentialSchema,
   CredentialTestResult,
+  CredentialTypeSummary,
 } from '@/types/api'
 
 interface CredentialListResponse {
@@ -48,6 +49,34 @@ export async function getCredentialSchema(
 ): Promise<CredentialSchema> {
   const response = await apiClient.get<CredentialSchema>(
     `/credentials/schema/${encodeURIComponent(type)}`
+  )
+  return response.data
+}
+
+/**
+ * Every credential type the backend ships a schema for. The UI's type
+ * chooser is built from this list so it can never drift from the
+ * backend (mongoDb / kafka were missing from the old hardcoded list).
+ */
+export async function getCredentialTypes(): Promise<CredentialTypeSummary[]> {
+  const response = await apiClient.get<{ data: CredentialTypeSummary[] }>(
+    '/credentials/types'
+  )
+  return response.data.data
+}
+
+/**
+ * Validate a credential payload that has NOT been saved yet. The
+ * backend checks the exact values currently in the form, so the test
+ * button honours unsaved edits.
+ */
+export async function testCredentialPayload(
+  type: string,
+  data: Record<string, unknown>
+): Promise<CredentialTestResult> {
+  const response = await apiClient.post<CredentialTestResult>(
+    '/credentials/test',
+    { type, data }
   )
   return response.data
 }

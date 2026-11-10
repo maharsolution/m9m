@@ -59,7 +59,13 @@ func (s *APIServer) RegisterRoutes(router *mux.Router) {
 
 	api.HandleFunc("/credentials", s.ListCredentials).Methods("GET", "OPTIONS")
 	api.HandleFunc("/credentials", s.CreateCredential).Methods("POST", "OPTIONS")
+	// Static paths must be registered BEFORE the `{id}` pattern —
+	// gorilla/mux matches routes in registration order, so
+	// "/credentials/test" would otherwise be swallowed by
+	// "/credentials/{id}" with id="test".
 	api.HandleFunc("/credentials/schema/{type}", s.GetCredentialSchema).Methods("GET", "OPTIONS")
+	api.HandleFunc("/credentials/types", s.ListCredentialTypes).Methods("GET", "OPTIONS")
+	api.HandleFunc("/credentials/test", s.TestCredentialPayload).Methods("POST", "OPTIONS")
 	api.HandleFunc("/credentials/{id}", s.GetCredential).Methods("GET", "OPTIONS")
 	api.HandleFunc("/credentials/{id}", s.UpdateCredential).Methods("PUT", "OPTIONS")
 	api.HandleFunc("/credentials/{id}", s.PatchCredential).Methods("PATCH", "OPTIONS")

@@ -5,6 +5,7 @@ import type {
   CredentialCreate,
   CredentialSchema,
   CredentialTestResult,
+  CredentialTypeSummary,
 } from '@/types/api'
 import * as credentialsApi from '@/api/credentials'
 
@@ -17,6 +18,9 @@ export const useCredentialsStore = defineStore('credentials', () => {
   // Schema cache keyed by credential type. null = not yet fetched.
   // Missing key after fetch means the backend returned 404.
   const schemaCache = ref<Record<string, CredentialSchema | null>>({})
+
+  // Credential types supported by the backend (name + display name).
+  const supportedCredentialTypes = ref<CredentialTypeSummary[]>([])
 
   // Getters
   const credentialsByType = computed(() => {
@@ -115,8 +119,51 @@ export const useCredentialsStore = defineStore('credentials', () => {
     }
   }
 
+  /**
+   * Load the credential types the backend knows about. Drives the
+   * "Add Credential" type chooser so it stays in sync with the
+   * backend's schema registry.
+   */
+  async function fetchCredentialTypes(): Promise<CredentialTypeSummary[]> {
+    try {
+      supportedCredentialTypes.value = await credentialsApi.getCredentialTypes()
+    } catch (e) {
+      console.warn('Failed to load credential types:', e)
+    }
+    return supportedCredentialTypes.value
+  }
+
+  /**
+   * Fetch a single credential INCLUDING its `data` payload. The list
+   * endpoint leaves `data` out; this one is what pre-fills the edit
+   * modal with the stored values.
+   */
+  async function fetchCredential(id: string): Promise<Credential> {
+    const credential = await credentialsApi.getCredential(id)
+    const index = credentials.value.findIndex((c) => c.id === id)
+    if (index !== -1) {
+      credentials.value[index] = {
+        ...credentials.value[index],
+        ...credential,
+      }
+    }
+    return credential
+  }
+
   async function testConnection(id: string): Promise<CredentialTestResult> {
     return credentialsApi.testCredential(id)
+  }
+
+  /**
+   * Test the credential values currently in the form (saved or not).
+   * The backend validates the payload it receives, so the result
+   * reflects exactly what the user typed.
+   */
+  async function testPayload(
+    type: string,
+    data: Record<string, unknown>
+  ): Promise<CredentialTestResult> {
+    return credentialsApi.testCredentialPayload(type, data)
   }
 
   function getCredential(id: string): Credential | undefined {
@@ -133,6 +180,7 @@ export const useCredentialsStore = defineStore('credentials', () => {
     loading,
     error,
     schemaCache,
+    supportedCredentialTypes,
 
     // Getters
     credentialsByType,
@@ -145,7 +193,10 @@ export const useCredentialsStore = defineStore('credentials', () => {
     updateCredential,
     deleteCredential,
     fetchSchema,
+    fetchCredentialTypes,
+    fetchCredential,
     testConnection,
+    testPayload,
     getCredential,
     getCredentialsByType,
   }
