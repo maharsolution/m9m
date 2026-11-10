@@ -1632,7 +1632,21 @@ func (e *workflowEngineImpl) runIfRetryBodyChain(
 		// nodes (Check Key Exists1) can fan out to IsRespondJson vs
 		// the guard. Stripping first left IsRespondJson empty and
 		// the parent Respond to Webhook got the raw mongo doc.
-		nodeResults[name] = stripRoutingMetadata(outputData)
+		//
+		// CRITICAL (Finnet post_balance): the BackEdgeTarget is
+		// Find Respond. When Find misses it returns []. Writing that
+		// empty slice into nodeResults[Find Respond] wipes the Set
+		// Counter seed. The post-iteration reseed only runs when
+		// bodyOutput is non-empty, so the next iteration sees
+		// len(input)==0 and SKIPS Find entirely — the poll sleeps
+		// for ~20s never querying again while Atlas already has the
+		// doc. Keep the seed whenever the body entry itself misses.
+		cleaned := stripRoutingMetadata(outputData)
+		if name == loop.BackEdgeTarget && len(cleaned) == 0 && len(inputSnapshot) > 0 {
+			nodeResults[name] = inputSnapshot
+		} else {
+			nodeResults[name] = cleaned
+		}
 		lastTaggedOutput = outputData
 
 		// Route the output to all downstream nodes, except
@@ -2363,8 +2377,24 @@ func chooseBranchInput(node *model.Node, byInput map[int][]model.DataItem) ([]mo
 		}
 	}
 	data, ok := byInput[use-1]
-	if !ok {
-		return nil, false
+	if !ok || len(data) == 0 {
+		// Finnet: input 0 is Payload (has key) and input 1 is the
+		// ServiceRoutePlans branch. If the configured input is empty
+		// but another input carries `key`, prefer that so Kafka /
+		// Async Sub Workflow still get the mongo lookup key.
+		for idx, items := range byInput {
+			if idx == use-1 {
+				continue
+			}
+			for _, it := range items {
+				if k, ok := it.JSON["key"].(string); ok && k != "" {
+					return items, true
+				}
+			}
+		}
+		if !ok {
+			return nil, false
+		}
 	}
 	return data, true
 }

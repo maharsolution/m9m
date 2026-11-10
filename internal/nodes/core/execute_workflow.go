@@ -172,6 +172,12 @@ func (n *ExecuteWorkflowNode) ExecuteWithContext(ctx context.Context, inputData 
 	if len(subInputs) == 0 {
 		subInputs = []model.DataItem{{JSON: map[string]interface{}{}}}
 	}
+	// Finnet Async Subworkflow is `inputSource: passthrough` but the
+	// parent ships `workflowInputs.mappingMode=defineBelow` with an
+	// empty value map. Guarantee the parent item's `key` (and other
+	// top-level fields) survive into the child even if mapping wiped
+	// them — Find Respond needs $('Async Subworkflow').item.json.key.
+	subInputs = ensureParentFields(subInputs, inputData)
 
 	// Mark the child execution as a sub-workflow start so the engine
 	// seeds only executeWorkflowTrigger (not Webhook/Kafka/…). Also
@@ -333,6 +339,9 @@ func (n *ExecuteWorkflowNode) mapWorkflowInputs(inputData []model.DataItem, node
 	if !ok || len(valueMap) == 0 {
 		// No explicit value mapping either — fall through with the
 		// raw payload so empty-mapping configurations don't crash.
+		// Finnet's Async Sub Workflow uses defineBelow + empty value
+		// together with a child trigger `inputSource: passthrough`;
+		// n8n keeps the parent item, so we must too.
 		return inputData, nil
 	}
 
@@ -377,4 +386,52 @@ func (n *ExecuteWorkflowNode) mapWorkflowInputs(inputData []model.DataItem, node
 		out = append(out, model.DataItem{JSON: mapped})
 	}
 	return out, nil
+}
+
+// ensureParentFields copies top-level fields from parent inputData onto
+// mapped subInputs when those fields are missing after workflowInputs
+// mapping. Finnet's child Find Respond reads
+// $('Async Subworkflow').item.json.key — if mapping (or an empty
+// defineBelow value that somehow still produced {}) dropped `key`,
+// the poll forever queries {key:"undefined"} and Respond stays empty.
+func ensureParentFields(subInputs, parent []model.DataItem) []model.DataItem {
+	if len(parent) == 0 {
+		return subInputs
+	}
+	if len(subInputs) == 0 {
+		return parent
+	}
+	out := make([]model.DataItem, len(subInputs))
+	for i, item := range subInputs {
+		src := parent[0]
+		if i < len(parent) {
+			src = parent[i]
+		}
+		dst := item.JSON
+		if dst == nil {
+			dst = map[string]interface{}{}
+		} else {
+			// Shallow copy so we don't mutate the mapped map in place
+			// when it is shared with other callers.
+			cp := make(map[string]interface{}, len(dst)+len(src.JSON))
+			for k, v := range dst {
+				cp[k] = v
+			}
+			dst = cp
+		}
+		for k, v := range src.JSON {
+			if _, exists := dst[k]; exists {
+				continue
+			}
+			if v == nil {
+				continue
+			}
+			if s, ok := v.(string); ok && (s == "" || s == "undefined") {
+				continue
+			}
+			dst[k] = v
+		}
+		out[i] = model.DataItem{JSON: dst, Binary: item.Binary}
+	}
+	return out
 }

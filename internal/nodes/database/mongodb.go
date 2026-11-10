@@ -386,10 +386,13 @@ func (n *MongoDBNode) resolveQueryExpressions(params map[string]interface{}, inp
 			// the template becomes {"key":"undefined"} and Find
 			// quietly misses forever. Recover the live key from
 			// runExecutionData before that happens.
-			if strings.Contains(s, `"key": "undefined"`) || strings.Contains(s, `"key":"undefined"`) {
+			if strings.Contains(s, `"key": "undefined"`) || strings.Contains(s, `"key":"undefined"`) ||
+				strings.Contains(s, `"key": ""`) || strings.Contains(s, `"key":""`) {
 				if recovered := lookupRunDataKey(runCtx); recovered != "" {
 					s = strings.ReplaceAll(s, `"key": "undefined"`, fmt.Sprintf(`"key": %q`, recovered))
 					s = strings.ReplaceAll(s, `"key":"undefined"`, fmt.Sprintf(`"key":%q`, recovered))
+					s = strings.ReplaceAll(s, `"key": ""`, fmt.Sprintf(`"key": %q`, recovered))
+					s = strings.ReplaceAll(s, `"key":""`, fmt.Sprintf(`"key":%q`, recovered))
 				}
 			}
 			resolved = s
