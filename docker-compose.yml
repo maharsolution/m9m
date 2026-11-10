@@ -13,7 +13,7 @@ services:
   # `REGISTRY_IMAGE_URL` (default `https://harbor.solutiontech.id/m9m/m9m-core:latest`)
   # pins exactly which tag is pulled. Operators override per
   # environment via .env / docker-compose.override.yaml. The previous
-  # build-from-source flow (`/root/bin/build`) is replaced by this
+  # build-from-source flow (`/home/mhr/bin/build`) is replaced by this
   # registry pull; see documentation/docs/deployment/docker.md.
   m9m-backend:
     image: ${REGISTRY_IMAGE_URL:-m9m}

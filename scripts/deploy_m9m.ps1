@@ -1,4 +1,4 @@
-# deploy_m9m.ps1 — commit, push, rebuild and restart the m9m-backend container
+# deploy_m9m.ps1 — commit, push and restart the m9m-backend container
 # on the remote server 187.77.113.218 via SSH port 2212.
 #
 # Usage:
@@ -7,9 +7,17 @@
 #
 # Requires:
 #   - git in PATH and a configured origin remote
-#   - ssh in PATH with key auth configured (C:\Users\HYPE R Series\.ssh\id_rsa)
-#   - the remote server has /root/m9m checked out from the same repo
-#   - docker compose available on the remote
+#   - ssh in PATH with key auth configured (C:\Users\mahar\.ssh\id_rsa)
+#   - the Harbor image for the pushed commit to be built already
+#     (the harbor-image.yml workflow does this on every push to main)
+#   - the compose project to live in /home/mhr/gabungan on the remote
+#
+# The remote operator account is `mhr` (passwordless sudo + docker group).
+# Use `sudo -n` for the root-owned paths.
+#
+# The server pulls the image from Harbor — it does NOT build from source.
+# The legacy /home/mhr/bin/build script is only a fallback and tags
+# `m9m:latest`, which the compose stack no longer references.
 #
 # This script intentionally does NOT touch sync.py inside the container;
 # sync-service/sync.py is mounted from /root/sync-service and is updated
@@ -19,8 +27,8 @@ param(
     [string]$CommitMessage = "chore: deploy m9m parity orchestrator",
     [string]$ServerHost = "187.77.113.218",
     [int]$ServerPort = 2212,
-    [string]$ServerUser = "root",
-    [string]$RepoPath = "/root/m9m",
+    [string]$ServerUser = "mhr",
+    [string]$ComposeDir = "/home/mhr/gabungan",
     [switch]$SkipPush,
     [switch]$SkipBuild,
     [switch]$VerifyOnly
@@ -74,27 +82,31 @@ if ($VerifyOnly) {
     exit 0
 }
 
-# 4. SSH + pull + rebuild + restart
-Step "ssh $ServerUser@$ServerHost`:$ServerPort — pulling and rebuilding"
-$remoteCmd = @"
-set -e
-cd $RepoPath
-echo "[remote] pulling"
-git pull
-echo "[remote] building m9m-backend"
-$(if (-not $SkipBuild) { "docker compose build m9m-backend" } else { "echo '[remote] skipping build (SkipBuild)'" })
-echo "[remote] restarting m9m-backend"
-docker compose up -d m9m-backend
-echo "[remote] done"
-"@
+# 4. SSH + pull + restart
+Step "ssh $ServerUser@$ServerHost`:$ServerPort — pulling and restarting"
+# Build the remote script as an array so it is joined with LF only — a
+# here-string inherits the file's CRLF endings and the remote bash then
+# chokes on `set -e\r` / `cd /path\r`.
+$remoteLines = @(
+    "set -e"
+    "cd $ComposeDir"
+    "echo '[remote] pulling m9m image from Harbor'"
+    $(if (-not $SkipBuild) { "docker compose pull m9m-backend" } else { "echo '[remote] skipping pull (SkipBuild)'" })
+    "echo '[remote] restarting m9m-backend'"
+    "docker compose up -d m9m-backend"
+    "echo '[remote] done'"
+)
+$remoteCmd = ($remoteLines -join "`n")
 
 ssh -p $ServerPort -o StrictHostKeyChecking=accept-new -o BatchMode=yes `
-    "$ServerUser@$ServerHost" $remoteCmd
+    -i "$HOME\.ssh\id_rsa" "$ServerUser@$ServerHost" $remoteCmd
 if ($LASTEXITCODE -ne 0) { Fail "remote deploy failed" }
 
 # 5. Verify healthz
 Step "verifying healthz"
-$m9mHealth = curl.exe -sS -o $null -w "%{http_code}" -m 10 "http://$ServerHost:8080/healthz"
+# `${ServerHost}` (not `$ServerHost`) — PowerShell reads `$ServerHost:8080`
+# as a drive-qualified variable and silently expands it to empty.
+$m9mHealth = curl.exe -sS -o NUL -w "%{http_code}" -m 10 "http://${ServerHost}:8080/healthz"
 if ($m9mHealth -ne "200") {
     Fail "m9m /healthz returned $m9mHealth (expected 200)"
 }

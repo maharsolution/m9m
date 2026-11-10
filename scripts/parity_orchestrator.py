@@ -580,8 +580,9 @@ def cmd_deploy_m9m(args) -> int:
     subprocess.run(["git", "push", "origin", "main"], check=False)
     rc = subprocess.call([
         "ssh", "-p", "2212", "-o", "StrictHostKeyChecking=accept-new",
-        "root@187.77.113.218",
-        "cd /root/m9m && git pull && docker compose build m9m-backend "
+        "-o", "BatchMode=yes", "-i", str(Path.home() / ".ssh" / "id_rsa"),
+        "mhr@187.77.113.218",
+        "cd /home/mhr/gabungan && docker compose pull m9m-backend "
         "&& docker compose up -d m9m-backend",
     ])
     return rc

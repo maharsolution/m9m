@@ -411,7 +411,7 @@ docker exec m9m m9m backup /data/backup.sql
 
 Starting with the 2026-09 cycle, the m9m Docker image is **built by a GitHub
 Action and pushed to the project's Harbor registry**, instead of being
-built in-place by `/root/bin/build` on the deploy server. The end-to-end
+built in-place by `/home/mhr/bin/build` on the deploy server. The end-to-end
 shape is:
 
 ```
@@ -433,8 +433,8 @@ git push origin main
 ┌─────────────────────────────────────────────┐
 │ deploy job (same workflow, ssh-action)      │
 │                                             │
-│   ssh root@<server> -p 2212                 │
-│     bash /root/bin/pull-compose.sh          │
+│   ssh mhr@<server> -p 2212                  │
+│     bash /home/mhr/bin/pull-compose.sh      │
 │       # docker compose pull m9m-backend     │
 │       # docker compose up -d m9m-backend    │
 └─────────────────────────────────────────────┘
@@ -493,7 +493,7 @@ The `deploy` job uses the `appleboy/ssh-action@v1` Marketplace action to
 SSH into the deploy server (port 2212) and execute:
 
 ```bash
-bash /root/bin/pull-compose.sh
+bash /home/mhr/bin/pull-compose.sh
 ```
 
 The host key for `[187.77.113.218]:2212` is pinned in the workflow so a
@@ -517,7 +517,7 @@ restart yet.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `Permission denied (publickey)` | `SSH_PRIVATE_KEY` not set, or doesn't match an entry in `~/.ssh/authorized_keys` on the server | Compare the public half of the secret against `ssh -p 2212 root@$SSH_HOST 'cat ~/.ssh/authorized_keys'` |
+| `Permission denied (publickey)` | `SSH_PRIVATE_KEY` not set, or doesn't match an entry in `~/.ssh/authorized_keys` on the server | Compare the public half of the secret against `ssh -p 2212 mhr@$SSH_HOST 'cat ~/.ssh/authorized_keys'` |
 | `Host key verification failed` | The `fingerprint` pin in the workflow is outdated (server was rebuilt) | Re-read the new fingerprint with `ssh-keyscan -p 2212 $SSH_HOST \| ssh-keygen -lf -` (OpenSSH base64 form, no `SHA256:` prefix) and paste it into the workflow |
 | `bash: /root/bin/pull-compose.sh: Permission denied` or `No such file or directory` | Script lives at `/home/mhr/bin/pull-compose.sh` since the operator move on 2026-09-11 | Update the `script:` body in the workflow to `bash /home/mhr/bin/pull-compose.sh` |
 
@@ -559,16 +559,16 @@ docker compose up -d
 The bundled Dockerfile lives at the repo root and is identical to what
 the GitHub Action builds; only the tag and registry differ.
 
-### Replacing the legacy `/root/bin/build` pipeline
+### Replacing the legacy `/home/mhr/bin/build` pipeline
 
 Before this workflow landed, deploys ran through `/root/bin/build` on
 the server itself. The replacement script on the server is now roughly:
 
 ```bash
 #!/usr/bin/env bash
-# /root/bin/pull-compose.sh — runs on the deploy server
+# /home/mhr/bin/pull-compose.sh — runs on the deploy server
 set -euo pipefail
-cd /root/gabungan
+cd ~/gabungan
 docker compose pull m9m-backend
 docker compose up -d m9m-backend
 ```
