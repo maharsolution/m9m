@@ -1453,6 +1453,7 @@ func (e *workflowEngineImpl) runIfRetryBodyChain(
 		return nil, nil
 	}
 
+	var lastTaggedOutput []model.DataItem
 	for _, name := range bodyOrder {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -1524,12 +1525,13 @@ func (e *workflowEngineImpl) runIfRetryBodyChain(
 			return nil, fmt.Errorf("body node %q execution: %w", name, err)
 		}
 
-		// Strip routing metadata that the engine
-		// understands (_ifResult, _switchRuleIndex) so
-		// downstream body nodes don't see leaked tags.
-		outputData = stripRoutingMetadata(outputData)
-
-		nodeResults[name] = outputData
+		// Store a cleaned copy for downstream body inputs / final
+		// results, but RouteData MUST see the tagged output so IF
+		// nodes (Check Key Exists1) can fan out to IsRespondJson vs
+		// the guard. Stripping first left IsRespondJson empty and
+		// the parent Respond to Webhook got the raw mongo doc.
+		nodeResults[name] = stripRoutingMetadata(outputData)
+		lastTaggedOutput = outputData
 
 		// Route the output to all downstream nodes, except
 		// the back-edge target (the body entry). The
@@ -1558,7 +1560,11 @@ func (e *workflowEngineImpl) runIfRetryBodyChain(
 		}
 	}
 
-	// Terminal output is the last body node's result.
+	// Guard evaluation needs IF routing tags on the terminal body
+	// output so filterIfRetryGuardItems can distinguish exit vs retry.
+	if lastTaggedOutput != nil {
+		return lastTaggedOutput, nil
+	}
 	return nodeResults[bodyOrder[len(bodyOrder)-1]], nil
 }
 

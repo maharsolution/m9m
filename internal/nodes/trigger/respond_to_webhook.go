@@ -3,6 +3,7 @@ package trigger
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/neul-labs/m9m/internal/expressions"
@@ -110,7 +111,7 @@ func (r *RespondToWebhookNode) Execute(inputData []model.DataItem, nodeParams ma
 		}
 		return []model.DataItem{inputData[0]}, nil
 
-	case "json":
+	case "text", "json":
 		raw, ok := nodeParams["responseBody"]
 		if !ok {
 			// No explicit body — pass-through so the caller still
@@ -124,14 +125,28 @@ func (r *RespondToWebhookNode) Execute(inputData []model.DataItem, nodeParams ma
 		// `=`, n8n interprets the rest as a JavaScript expression. Run
 		// it through the Goja evaluator against the upstream `$json`
 		// context so the response body reflects the actual data the
-		// workflow produced (e.g. `={{ $json.data.toJsonString() }}`)
-		// instead of returning the literal expression text.
+		// workflow produced (e.g. `={{ $json.value }}` for Finnet
+		// post_balance XML) instead of returning the literal
+		// expression text.
 		if s, ok := raw.(string); ok && strings.HasPrefix(s, "=") {
 			evaluated, err := r.evaluateResponseBody(s, inputData)
 			if err != nil {
 				return nil, fmt.Errorf("failed to evaluate responseBody expression: %w", err)
 			}
 			raw = evaluated
+		}
+		if respondWith == "text" {
+			// #region agent log
+			log.Printf(`[agent-debug] {"sessionId":"31457b","hypothesisId":"H22","location":"respond_to_webhook.go","message":"text responseBody resolved","data":{"rawType":"%T"},"runId":"post-fix"}`, raw)
+			// #endregion
+			switch v := raw.(type) {
+			case string:
+				return []model.DataItem{{JSON: map[string]interface{}{"data": v}}}, nil
+			case nil:
+				return []model.DataItem{{JSON: map[string]interface{}{"data": ""}}}, nil
+			default:
+				return []model.DataItem{{JSON: map[string]interface{}{"data": fmt.Sprintf("%v", v)}}}, nil
+			}
 		}
 		body, err := normalizeResponseBody(raw)
 		if err != nil {
