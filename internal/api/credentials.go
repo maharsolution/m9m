@@ -689,6 +689,25 @@ func validateCredentialData(credType string, data map[string]interface{}) testCr
 			Message: "Missing or empty required fields: " + strings.Join(missing, ", "),
 		}
 	}
+
+	// MongoDB can be configured with a connection string OR with
+	// host/port/user/password — neither is in the required list, so
+	// check explicitly before attempting a connection.
+	if credType == "mongoDb" || credType == "mongodb" {
+		if dataString(data, "connectionString") == "" && dataString(data, "host") == "" {
+			return testCredentialResult{
+				Status:  "Error",
+				Message: "connectionString or host is required",
+			}
+		}
+	}
+
+	// Real connection check for the types where it is meaningful. A
+	// wrong password must be reported as a failure — not "valid".
+	if res, attempted := testCredentialConnection(credType, data); attempted {
+		return res
+	}
+
 	return testCredentialResult{Status: "OK", Message: "Credential is valid"}
 }
 

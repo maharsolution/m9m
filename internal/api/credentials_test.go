@@ -3,10 +3,13 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/neul-labs/m9m/internal/credentials"
@@ -174,11 +177,8 @@ func TestCredentialTestPayloadEndpoint(t *testing.T) {
 	srv := newTestServer(t)
 
 	w := doJSON(t, srv, http.MethodPost, "/api/v1/credentials/test", map[string]any{
-		"type": "postgres",
+		"type": "httpBasicAuth",
 		"data": map[string]any{
-			"host":     "db.example.com",
-			"port":     5432,
-			"database": "prod",
 			"user":     "admin",
 			"password": "secret",
 		},
@@ -194,12 +194,12 @@ func TestCredentialTestPayloadEndpoint(t *testing.T) {
 
 	// Missing required field -> Error.
 	w = doJSON(t, srv, http.MethodPost, "/api/v1/credentials/test", map[string]any{
-		"type": "postgres",
-		"data": map[string]any{"host": "db.example.com", "database": "prod"},
+		"type": "httpBasicAuth",
+		"data": map[string]any{"user": "admin"},
 	})
 	_ = json.Unmarshal(w.Body.Bytes(), &result)
 	if result.Status != "Error" {
-		t.Fatalf("expected Error for missing user/password, got %+v", result)
+		t.Fatalf("expected Error for missing password, got %+v", result)
 	}
 }
 
@@ -314,13 +314,12 @@ func TestCredentialSchema(t *testing.T) {
 func TestCredentialTestEndpoint(t *testing.T) {
 	srv := newTestServer(t)
 
+	// httpBasicAuth is validated statically — no outbound connection is
+	// attempted for it, so the test stays hermetic.
 	createBody := map[string]any{
-		"name": "pg-valid",
-		"type": "postgres",
+		"name": "basic-valid",
+		"type": "httpBasicAuth",
 		"data": map[string]any{
-			"host":     "db.example.com",
-			"port":     5432,
-			"database": "prod",
 			"user":     "admin",
 			"password": "secret",
 		},
@@ -343,12 +342,9 @@ func TestCredentialTestEndpoint(t *testing.T) {
 	}
 
 	createBody2 := map[string]any{
-		"name": "pg-invalid",
-		"type": "postgres",
+		"name": "basic-invalid",
+		"type": "httpBasicAuth",
 		"data": map[string]any{
-			"host":     "db.example.com",
-			"port":     5432,
-			"database": "prod",
 			"password": "secret",
 		},
 	}
@@ -363,6 +359,84 @@ func TestCredentialTestEndpoint(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &result)
 	if result.Status != "Error" {
 		t.Fatalf("expected Error for missing user, got %+v", result)
+	}
+
+	// A postgres credential with an out-of-range port is rejected by the
+	// static port check — before any connection attempt.
+	w = doJSON(t, srv, http.MethodPost, "/api/v1/credentials", map[string]any{
+		"name": "pg-bad-port",
+		"type": "postgres",
+		"data": map[string]any{
+			"host":     "db.example.com",
+			"port":     70000,
+			"database": "prod",
+			"user":     "admin",
+			"password": "secret",
+		},
+	})
+	var created3 CredentialResponse
+	_ = json.Unmarshal(w.Body.Bytes(), &created3)
+	w = doJSON(t, srv, http.MethodPost, "/api/v1/credentials/"+created3.ID+"/test", nil)
+	_ = json.Unmarshal(w.Body.Bytes(), &result)
+	if result.Status != "Error" || !strings.Contains(result.Message, "Port out of range") {
+		t.Fatalf("expected port range error, got %+v", result)
+	}
+}
+
+// TestCredentialTestRejectsWrongPassword proves the test endpoint now
+// performs a REAL connection attempt: a wrong Redis password must be
+// reported as an error, not as "valid". A fake RESP server stands in
+// for Redis so the test stays hermetic.
+func TestCredentialTestRejectsWrongPassword(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				buf := make([]byte, 512)
+				_ = c.SetDeadline(time.Now().Add(5 * time.Second))
+				if _, err := c.Read(buf); err != nil {
+					return
+				}
+				// Reply to AUTH with an error, like Redis does for a
+				// wrong password.
+				_, _ = c.Write([]byte("-WRONGPASS invalid username-password pair\r\n"))
+			}(conn)
+		}
+	}()
+
+	host, portStr, _ := net.SplitHostPort(ln.Addr().String())
+	port := 0
+	_, _ = fmt.Sscanf(portStr, "%d", &port)
+
+	srv := newTestServer(t)
+	w := doJSON(t, srv, http.MethodPost, "/api/v1/credentials/test", map[string]any{
+		"type": "redis",
+		"data": map[string]any{
+			"host":     host,
+			"port":     port,
+			"password": "wrong-password",
+		},
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("test payload: status %d body %s", w.Code, w.Body.String())
+	}
+	var result testCredentialResult
+	_ = json.Unmarshal(w.Body.Bytes(), &result)
+	if result.Status != "Error" {
+		t.Fatalf("wrong password must not be reported as valid, got %+v", result)
+	}
+	if !strings.Contains(strings.ToLower(result.Message), "auth") {
+		t.Fatalf("expected an authentication error, got %+v", result)
 	}
 }
 

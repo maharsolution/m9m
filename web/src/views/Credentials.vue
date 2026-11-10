@@ -10,6 +10,8 @@ import {
   ChevronRightIcon,
   CheckCircleIcon,
   XCircleIcon,
+  EyeIcon,
+  EyeSlashIcon,
 } from '@heroicons/vue/24/outline'
 import { Dialog, DialogPanel, DialogTitle, TransitionRoot, TransitionChild } from '@headlessui/vue'
 import { useCredentialsStore } from '@/stores'
@@ -83,6 +85,7 @@ const openCreateModal = (presetType = '') => {
   editingCredential.value = null
   form.value = { name: '', type: presetType, data: {} }
   testResult.value = null
+  revealedFields.value = new Set()
   showModal.value = true
 }
 
@@ -97,6 +100,7 @@ const openEditModal = async (credential: Credential) => {
     data: {},
   }
   testResult.value = null
+  revealedFields.value = new Set()
   showModal.value = true
   loadingCredential.value = true
   try {
@@ -119,6 +123,7 @@ const closeModal = () => {
   form.value = { name: '', type: '', data: {} }
   currentSchema.value = null
   testResult.value = null
+  revealedFields.value = new Set()
 }
 
 // Re-fetch schema whenever the type changes
@@ -166,6 +171,29 @@ const isSecretField = (key: string): boolean =>
   /pass(word|wd)?|secret|token|api[_-]?key|connectionstring|credential|private/i.test(
     key
   )
+
+// Password fields can be revealed (eye toggle). Keyed by field name.
+const revealedFields = ref<Set<string>>(new Set())
+const isRevealed = (name: string): boolean => revealedFields.value.has(name)
+const toggleReveal = (name: string) => {
+  const next = new Set(revealedFields.value)
+  if (next.has(name)) {
+    next.delete(name)
+  } else {
+    next.add(name)
+  }
+  revealedFields.value = next
+}
+
+// Stored fields the schema does not describe (e.g. rabbitmq's
+// `hostname` / `username`). They must stay visible and editable, not
+// silently dropped from the form.
+const extraDataFields = computed(() => {
+  const schemaNames = new Set(
+    (currentSchema.value?.properties ?? []).map((p) => p.name)
+  )
+  return Object.keys(form.value.data).filter((k) => !schemaNames.has(k))
+})
 
 const updateNumberField = (key: string, raw: string) => {
   const n = parseInt(raw, 10)
@@ -529,16 +557,29 @@ const allCredentialTypes = computed(() => {
                         class="input"
                       />
 
-                      <!-- Password input -->
-                      <input
-                        v-else-if="prop.type === 'password'"
-                        type="password"
-                        autocomplete="off"
-                        :value="fieldValue(prop)"
-                        @input="updateData(prop.name, ($event.target as HTMLInputElement).value)"
-                        :placeholder="prop.placeholder ?? ''"
-                        class="input"
-                      />
+                      <!-- Password input (with reveal toggle) -->
+                      <div v-else-if="prop.type === 'password'" class="relative">
+                        <input
+                          :type="isRevealed(prop.name) ? 'text' : 'password'"
+                          autocomplete="off"
+                          :value="fieldValue(prop)"
+                          @input="updateData(prop.name, ($event.target as HTMLInputElement).value)"
+                          :placeholder="prop.placeholder ?? ''"
+                          class="input pr-10"
+                        />
+                        <button
+                          type="button"
+                          @click="toggleReveal(prop.name)"
+                          :title="isRevealed(prop.name) ? 'Hide value' : 'Reveal value'"
+                          class="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                        >
+                          <EyeSlashIcon
+                            v-if="isRevealed(prop.name)"
+                            class="w-4 h-4"
+                          />
+                          <EyeIcon v-else class="w-4 h-4" />
+                        </button>
+                      </div>
 
                       <!-- Number input -->
                       <input
@@ -594,6 +635,51 @@ const allCredentialTypes = computed(() => {
                         {{ prop.description }}
                       </p>
                     </div>
+
+                    <!-- Stored fields the schema does not describe
+                         (e.g. rabbitmq's hostname / username). Keep them
+                         visible and editable. -->
+                    <div
+                      v-if="extraDataFields.length > 0"
+                      class="pt-3 border-t border-slate-100 dark:border-slate-700/60 space-y-4"
+                    >
+                      <p class="text-xs text-slate-500 dark:text-slate-400">
+                        Additional stored fields
+                      </p>
+                      <div v-for="key in extraDataFields" :key="key">
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                          {{ key }}
+                        </label>
+                        <div v-if="isSecretField(key)" class="relative">
+                          <input
+                            :type="isRevealed(key) ? 'text' : 'password'"
+                            autocomplete="off"
+                            :value="String(form.data[key] ?? '')"
+                            @input="updateData(key, ($event.target as HTMLInputElement).value)"
+                            class="input pr-10"
+                          />
+                          <button
+                            type="button"
+                            @click="toggleReveal(key)"
+                            :title="isRevealed(key) ? 'Hide value' : 'Reveal value'"
+                            class="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                          >
+                            <EyeSlashIcon
+                              v-if="isRevealed(key)"
+                              class="w-4 h-4"
+                            />
+                            <EyeIcon v-else class="w-4 h-4" />
+                          </button>
+                        </div>
+                        <input
+                          v-else
+                          type="text"
+                          :value="String(form.data[key] ?? '')"
+                          @input="updateData(key, ($event.target as HTMLInputElement).value)"
+                          class="input"
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   <!-- Fallback for credential types without a form schema:
@@ -610,8 +696,30 @@ const allCredentialTypes = computed(() => {
                       <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                         {{ key }}
                       </label>
+                      <div v-if="isSecretField(String(key))" class="relative">
+                        <input
+                          :type="isRevealed(String(key)) ? 'text' : 'password'"
+                          autocomplete="off"
+                          :value="value"
+                          @input="updateData(String(key), ($event.target as HTMLInputElement).value)"
+                          class="input pr-10"
+                        />
+                        <button
+                          type="button"
+                          @click="toggleReveal(String(key))"
+                          :title="isRevealed(String(key)) ? 'Hide value' : 'Reveal value'"
+                          class="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                        >
+                          <EyeSlashIcon
+                            v-if="isRevealed(String(key))"
+                            class="w-4 h-4"
+                          />
+                          <EyeIcon v-else class="w-4 h-4" />
+                        </button>
+                      </div>
                       <input
-                        :type="isSecretField(String(key)) ? 'password' : 'text'"
+                        v-else
+                        type="text"
                         :value="value"
                         @input="updateData(String(key), ($event.target as HTMLInputElement).value)"
                         class="input"
