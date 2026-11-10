@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -454,23 +455,32 @@ func (h *HTTPRequestNode) ExecuteWithContext(ctx context.Context, inputData []mo
 			}
 		}
 		
-		// Create response data item
-		responseData := model.DataItem{
-			JSON: map[string]interface{}{
-				"statusCode": resp.StatusCode,
-				"headers":    headers,
-				"body":       string(body),
-			},
-		}
-		
-		// Try to parse JSON response
-		if strings.Contains(resp.Header.Get("Content-Type"), "application/json") {
-			var jsonResponse interface{}
-			if err := json.Unmarshal(body, &jsonResponse); err == nil {
-				responseData.JSON["json"] = jsonResponse
+		// Build the n8n-shaped response item.
+		//
+		// n8n HTTP Request (default): `$json` IS the parsed response body
+		// (object fields at the top level). Workflows like Finnet
+		// post_balance read `$json.data.attributes.route` directly.
+		//
+		// Only when `response.includeResponseHeadersAndStatus` (or the
+		// legacy fullResponse flag) is true do we also surface
+		// `headers` / `statusCode` as top-level keys alongside the body.
+		includeMeta := h.responseIncludesMeta(evaluatedParams)
+
+		// #region agent log
+		func() {
+			f, err := os.OpenFile(`c:\Users\mahar\OneDrive\workspace\m9m\debug-31457b.log`, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				return
 			}
+			defer f.Close()
+			_, _ = fmt.Fprintf(f, `{"sessionId":"31457b","hypothesisId":"H13","location":"request.go:responseShape","message":"HTTP response shaping","data":{"status":%d,"includeMeta":%t,"contentType":%q,"bodyLen":%d},"timestamp":%d,"runId":"post-fix"}`+"\n", resp.StatusCode, includeMeta, resp.Header.Get("Content-Type"), len(body), time.Now().UnixMilli())
+		}()
+		// #endregion
+
+		responseData := model.DataItem{
+			JSON: h.shapeHTTPResponse(resp.StatusCode, headers, body, resp.Header.Get("Content-Type"), includeMeta),
 		}
-		
+
 		// Copy binary data if present
 		if item.Binary != nil {
 			responseData.Binary = make(map[string]model.BinaryData)
@@ -478,12 +488,12 @@ func (h *HTTPRequestNode) ExecuteWithContext(ctx context.Context, inputData []mo
 				responseData.Binary[k] = v
 			}
 		}
-		
+
 		// Copy paired item data if present
 		if item.PairedItem != nil {
 			responseData.PairedItem = item.PairedItem
 		}
-		
+
 		result[i] = responseData
 	}
 	
@@ -572,6 +582,77 @@ func flattenHeaderSpec(raw interface{}) []map[string]interface{} {
 		}
 	}
 	return nil
+}
+
+// responseIncludesMeta reports whether the HTTP Request node should
+// surface response headers/status alongside the body. Mirrors n8n's
+// `response.includeResponseHeadersAndStatus` / fullResponse flags.
+func (h *HTTPRequestNode) responseIncludesMeta(params map[string]interface{}) bool {
+	if h.GetBoolParameter(params, "response.includeResponseHeadersAndStatus", false) {
+		return true
+	}
+	if h.GetBoolParameter(params, "includeResponseHeadersAndStatus", false) {
+		return true
+	}
+	// Nested options.response.fullResponse (n8n v3/v4 export shape).
+	if opts, ok := params["options"].(map[string]interface{}); ok {
+		if resp, ok := opts["response"].(map[string]interface{}); ok {
+			if full, ok := resp["fullResponse"].(bool); ok && full {
+				return true
+			}
+			if include, ok := resp["includeResponseHeadersAndStatus"].(bool); ok && include {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// shapeHTTPResponse builds the n8n-compatible `$json` payload for an
+// HTTP Request node output.
+//
+// Default (includeMeta=false): parsed JSON object fields become the
+// top-level `$json` keys — so `$json.data.attributes.route` works for
+// Finnet ServiceRoutePlans → isAsync. Non-object JSON and non-JSON
+// bodies are wrapped as `{ "data": <value> }` (n8n's text/array shape).
+//
+// includeMeta=true: also attach `headers` and `statusCode` as top-level
+// keys (and keep a `body` string for raw access).
+func (h *HTTPRequestNode) shapeHTTPResponse(statusCode int, headers map[string]interface{}, body []byte, contentType string, includeMeta bool) map[string]interface{} {
+	var out map[string]interface{}
+
+	isJSON := strings.Contains(strings.ToLower(contentType), "application/json") ||
+		strings.Contains(strings.ToLower(contentType), "+json")
+	if isJSON || json.Valid(body) {
+		var parsed interface{}
+		if err := json.Unmarshal(body, &parsed); err == nil {
+			switch v := parsed.(type) {
+			case map[string]interface{}:
+				out = v
+			default:
+				out = map[string]interface{}{"data": v}
+			}
+		}
+	}
+	if out == nil {
+		out = map[string]interface{}{"data": string(body)}
+	}
+
+	if includeMeta {
+		// Copy so we don't mutate a shared parsed map unexpectedly when
+		// callers hold references; also avoid colliding with a body key
+		// named "headers"/"statusCode" by preferring response meta only
+		// when the flag is set (n8n does the same under fullResponse).
+		meta := make(map[string]interface{}, len(out)+3)
+		for k, v := range out {
+			meta[k] = v
+		}
+		meta["headers"] = headers
+		meta["statusCode"] = statusCode
+		meta["body"] = string(body)
+		return meta
+	}
+	return out
 }
 
 // applyCredentialAuth looks at the evaluated node params for the

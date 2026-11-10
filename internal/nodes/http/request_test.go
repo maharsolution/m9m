@@ -120,36 +120,14 @@ func TestHTTPRequestNodeExecuteWithValidRequest(t *testing.T) {
 
 	responseData := result[0]
 
-	// Check status code
-	statusCode, ok := responseData.JSON["statusCode"]
-	if !ok {
-		t.Fatal("Expected statusCode to be present")
-	}
-	
-	// Convert to int for comparison
-	var statusCodeInt int
-	switch v := statusCode.(type) {
-	case float64:
-		statusCodeInt = int(v)
-	case int:
-		statusCodeInt = v
-	default:
-		t.Fatalf("Unexpected status code type: %T", statusCode)
-	}
-	
-	if statusCodeInt != http.StatusOK {
-		t.Errorf("Expected status code %d, got %d", http.StatusOK, statusCodeInt)
-	}
-	
-	// Check that JSON response is parsed
-	jsonData, ok := responseData.JSON["json"].(map[string]interface{})
-	if !ok {
-		t.Fatal("Expected JSON response to be parsed")
-	}
-	
-	message, ok := jsonData["message"].(string)
+	// n8n default: `$json` is the flattened response body (no nested
+	// `json` / always-on statusCode wrapper).
+	message, ok := responseData.JSON["message"].(string)
 	if !ok || message != "success" {
-		t.Errorf("Expected message 'success', got '%v'", message)
+		t.Errorf("Expected top-level message 'success', got '%v' (full=%v)", responseData.JSON["message"], responseData.JSON)
+	}
+	if _, hasStatus := responseData.JSON["statusCode"]; hasStatus {
+		t.Errorf("statusCode must not be present unless includeResponseHeadersAndStatus is set; got %v", responseData.JSON)
 	}
 }
 
@@ -209,26 +187,10 @@ func TestHTTPRequestNodeExecutePostRequest(t *testing.T) {
 	}
 	
 	responseData := result[0]
-	
-	// Check status code
-	statusCode, ok := responseData.JSON["statusCode"]
-	if !ok {
-		t.Fatal("Expected statusCode to be present")
-	}
-	
-	// Convert to int for comparison
-	var statusCodeInt int
-	switch v := statusCode.(type) {
-	case float64:
-		statusCodeInt = int(v)
-	case int:
-		statusCodeInt = v
-	default:
-		t.Fatalf("Unexpected status code type: %T", statusCode)
-	}
-	
-	if statusCodeInt != http.StatusCreated {
-		t.Errorf("Expected status code %d, got %d", http.StatusCreated, statusCodeInt)
+
+	// Flattened body: server echoed `{ "received": <body> }`.
+	if _, ok := responseData.JSON["received"]; !ok {
+		t.Fatalf("Expected flattened JSON body with 'received', got %v", responseData.JSON)
 	}
 }
 
@@ -335,10 +297,11 @@ func TestHTTPRequestNode_AppliesBasicAuth(t *testing.T) {
 
 	node := NewHTTPRequestNode()
 	params := map[string]interface{}{
-		"url":                     server.URL + "/protected",
-		"method":                  "GET",
-		"httpBasicAuth_user":      "alice",
-		"httpBasicAuth_password":  "s3cret",
+		"url":                    server.URL + "/protected",
+		"method":                 "GET",
+		"httpBasicAuth_user":     "alice",
+		"httpBasicAuth_password": "s3cret",
+		"allowInternalRequests":  true,
 	}
 	// evaluatedParams is what the engine hands to Execute;
 	// in real flows the credential inject happens upstream.
@@ -368,10 +331,11 @@ func TestHTTPRequestNode_AppliesHeaderAuth(t *testing.T) {
 
 	node := NewHTTPRequestNode()
 	params := map[string]interface{}{
-		"url":                 server.URL + "/protected",
-		"method":              "GET",
-		"httpHeaderAuth_name": "X-API-Key",
+		"url":                  server.URL + "/protected",
+		"method":               "GET",
+		"httpHeaderAuth_name":  "X-API-Key",
 		"httpHeaderAuth_value": "my-key",
+		"allowInternalRequests": true,
 	}
 	if _, err := node.Execute([]model.DataItem{{JSON: map[string]interface{}{}}}, params); err != nil {
 		t.Fatalf("Execute: %v", err)
