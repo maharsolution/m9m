@@ -19,6 +19,13 @@ func (s *APIServer) RegisterRoutes(router *mux.Router) {
 	api.HandleFunc("/workflows", s.ListWorkflows).Methods("GET", "OPTIONS")
 	api.HandleFunc("/workflows/count", s.CountWorkflows).Methods("GET", "OPTIONS")
 	api.HandleFunc("/workflows", s.CreateWorkflow).Methods("POST", "OPTIONS")
+	// Import/export routes must be registered BEFORE "/workflows/{id}":
+	// gorilla/mux matches routes in registration order, so
+	// "/workflows/export" would otherwise be swallowed by the
+	// "/workflows/{id}" route.
+	api.HandleFunc("/workflows/export", s.ExportWorkflows).Methods("GET", "POST", "OPTIONS")
+	api.HandleFunc("/workflows/import", s.ImportWorkflows).Methods("POST", "OPTIONS")
+	api.HandleFunc("/workflows/{id}/export", s.ExportWorkflow).Methods("GET", "OPTIONS")
 	api.HandleFunc("/workflows/{id}", s.GetWorkflow).Methods("GET", "OPTIONS")
 	api.HandleFunc("/workflows/{id}", s.UpdateWorkflow).Methods("PUT", "PATCH", "OPTIONS")
 	api.HandleFunc("/workflows/{id}", s.DeleteWorkflow).Methods("DELETE", "OPTIONS")

@@ -7,6 +7,7 @@ import NodePalette from '@/components/workflow/NodePalette.vue'
 import NodePanel from '@/components/workflow/NodePanel.vue'
 import AgentAI from '@/components/ai/AgentAI.vue'
 import { useWorkflowEditorStore, useWorkflowStore } from '@/stores'
+import { apiErrorMessage, downloadWorkflowExport, exportWorkflow } from '@/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,6 +18,8 @@ const showNodePalette = ref(true)
 const showNodePanel = ref(false)
 const showAI = ref(false)
 const isExecuting = ref(false)
+const isExporting = ref(false)
+const exportNotice = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 
 const workflowId = computed(() => route.params.id as string | undefined)
 const isNewWorkflow = computed(() => !workflowId.value || workflowId.value === 'new')
@@ -161,6 +164,31 @@ const toggleDebug = async () => {
 const renameWorkflow = (name: string) => {
   workflowEditorStore.setWorkflowName(name)
 }
+
+// Export the workflow as an n8n-compatible JSON file. The server
+// answers with a single workflow object (n8n editor "Download"
+// parity).
+const exportWorkflowFile = async () => {
+  if (!workflow.value?.id) return
+
+  isExporting.value = true
+  exportNotice.value = null
+  try {
+    const file = await exportWorkflow(workflow.value.id)
+    downloadWorkflowExport(file)
+    exportNotice.value = {
+      type: 'success',
+      message: `Exported "${workflow.value.name}" as ${file.filename}.`,
+    }
+  } catch (e) {
+    exportNotice.value = {
+      type: 'error',
+      message: await apiErrorMessage(e, 'Failed to export the workflow.'),
+    }
+  } finally {
+    isExporting.value = false
+  }
+}
 </script>
 
 <template>
@@ -173,6 +201,7 @@ const renameWorkflow = (name: string) => {
       :is-dirty="workflowEditorStore.isDirty"
       :is-loading="workflowStore.loading"
       :is-executing="isExecuting"
+      :is-exporting="isExporting"
       :show-node-palette="showNodePalette"
       :show-agent-ai="showAI"
       @back="router.push('/workflows')"
@@ -183,7 +212,20 @@ const renameWorkflow = (name: string) => {
       @toggle-debug="toggleDebug"
       @execute="executeWorkflow"
       @save="saveWorkflow"
+      @export="exportWorkflowFile"
     />
+
+    <!-- Export feedback -->
+    <div
+      v-if="exportNotice"
+      :class="exportNotice.type === 'success'
+        ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300'
+        : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300'"
+      class="absolute top-4 right-4 z-20 flex items-center gap-3 rounded-lg border px-4 py-2 text-sm shadow-sm"
+    >
+      <span>{{ exportNotice.message }}</span>
+      <button @click="exportNotice = null" class="opacity-60 hover:opacity-100">✕</button>
+    </div>
 
     <div class="flex-1 flex overflow-hidden">
       <transition

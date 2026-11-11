@@ -152,3 +152,50 @@ export interface NodeExecutionMessage {
   status: string
   data?: Record<string, unknown>
 }
+
+/**
+ * One workflow that was imported successfully.
+ */
+export interface WorkflowImportItem {
+  index: number
+  id: string
+  name: string
+  /** The workflow id carried by the source document (traceability). */
+  sourceId?: string
+  /** The fresh version id m9m assigned to the import. */
+  versionId?: string
+  active: boolean
+  /** Non-fatal problems found while converting the workflow. */
+  warnings?: string[]
+}
+
+/**
+ * One workflow of an import batch that was rejected. A bad entry
+ * never aborts the rest of the batch.
+ */
+export interface WorkflowImportError {
+  index: number
+  name?: string
+  message: string
+}
+
+/**
+ * Response body of `POST /workflows/import`.
+ */
+export interface WorkflowImportSummary {
+  imported: number
+  failed: number
+  /** "fromJson" when the JSON active flag was honoured, else "false". */
+  activeState: string
+  workflows: WorkflowImportItem[]
+  errors: WorkflowImportError[]
+}
+
+/**
+ * A downloadable export: the JSON payload plus the file name the
+ * server suggested through the Content-Disposition header.
+ */
+export interface WorkflowExportFile {
+  blob: Blob
+  filename: string
+}

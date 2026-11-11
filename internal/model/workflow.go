@@ -79,6 +79,24 @@ type Node struct {
 	WebhookID   string                 `json:"webhookId,omitempty"`
 	Notes       string                 `json:"notes,omitempty"`
 	Disabled    *bool                  `json:"disabled,omitempty"`
+	Color       string                 `json:"color,omitempty"`
+
+	// n8n node-level execution flags. m9m's engine honours only a
+	// subset of them today, but keeping them on the model means an
+	// n8n workflow survives an import -> export round-trip without
+	// losing settings. Every field is optional so workflows created
+	// inside m9m keep the current JSON shape.
+	OnError          string `json:"onError,omitempty"`
+	RetryOnFail      bool   `json:"retryOnFail,omitempty"`
+	MaxTries         int    `json:"maxTries,omitempty"`
+	WaitBetweenTries int    `json:"waitBetweenTries,omitempty"`
+	ContinueOnFail   bool   `json:"continueOnFail,omitempty"`
+	AlwaysOutputData bool   `json:"alwaysOutputData,omitempty"`
+	ExecuteOnce      bool   `json:"executeOnce,omitempty"`
+
+	// Root marks the node that owns a group of nodes. m9m has no node
+	// groups yet; the value is preserved for round-trip fidelity.
+	Root string `json:"root,omitempty"`
 
 	// CustomSpanAttributes are exported onto the node.execute span
 	// under the m9m.node.custom.* prefix. Values may be expressions
@@ -176,15 +194,16 @@ func (w *Workflow) ToFile(filename string) error {
 		return err
 	}
 	defer file.Close()
-	
+
 	data, err := w.ToJSON()
 	if err != nil {
 		return err
 	}
-	
+
 	_, err = file.Write(data)
 	return err
 }
+
 // Additional type definitions for compatibility
 
 // NodeExecutionInput represents input to a node execution

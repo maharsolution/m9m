@@ -34,6 +34,18 @@ export interface WorkflowNode {
   webhookId?: string
   notes?: string
   disabled?: boolean
+  // n8n node-level execution flags. m9m stores them so a workflow
+  // survives an n8n import -> export round-trip without losing
+  // settings.
+  color?: string
+  onError?: string
+  retryOnFail?: boolean
+  maxTries?: number
+  waitBetweenTries?: number
+  continueOnFail?: boolean
+  alwaysOutputData?: boolean
+  executeOnce?: boolean
+  root?: string
 }
 
 export interface NodeCredential {
@@ -116,4 +128,82 @@ export interface ExecutionFilters {
   status?: ExecutionStatus
   offset?: number
   limit?: number
+}
+
+/**
+ * n8n wire format of a workflow tag. n8n stores tags as objects,
+ * m9m stores the tag names only.
+ */
+export interface N8nWorkflowTag {
+  id: string
+  name: string
+}
+
+/**
+ * n8n wire format of a node credential reference. The modern n8n
+ * shape is `{type: {id, name}}`; the id is null when m9m could not
+ * resolve the credential.
+ */
+export interface N8nWorkflowCredential {
+  id: string | null
+  name: string
+}
+
+/**
+ * n8n wire format of one node.
+ */
+export interface N8nWorkflowNode {
+  id?: string
+  name: string
+  type: string
+  typeVersion: number
+  position: number[]
+  parameters: Record<string, unknown>
+  credentials?: Record<string, N8nWorkflowCredential | string>
+  disabled?: boolean
+  notes?: string
+  color?: string
+  onError?: string
+  retryOnFail?: boolean
+  maxTries?: number
+  waitBetweenTries?: number
+  continueOnFail?: boolean
+  alwaysOutputData?: boolean
+  executeOnce?: boolean
+  webhookId?: string
+  root?: string
+}
+
+/**
+ * n8n wire format of one connection.
+ */
+export interface N8nWorkflowConnection {
+  node: string
+  type: string
+  index: number
+}
+
+/**
+ * n8n wire format of the connections of one node.
+ */
+export interface N8nWorkflowConnections {
+  main?: N8nWorkflowConnection[][]
+}
+
+/**
+ * n8n wire format of one workflow document. The same shape is used
+ * by the export endpoint and accepted by the import endpoint.
+ */
+export interface N8nWorkflowDocument {
+  id?: string | number
+  name?: string
+  active?: boolean
+  nodes: N8nWorkflowNode[]
+  connections: Record<string, N8nWorkflowConnections>
+  settings?: Record<string, unknown>
+  staticData?: Record<string, unknown>
+  pinData?: Record<string, unknown>
+  meta?: Record<string, unknown>
+  tags?: Array<N8nWorkflowTag | string>
+  versionId?: string
 }

@@ -8,6 +8,7 @@ import {
   PencilIcon,
   SparklesIcon,
   BugAntIcon,
+  ArrowDownTrayIcon,
 } from '@heroicons/vue/24/outline'
 
 const props = withDefaults(defineProps<{
@@ -20,11 +21,13 @@ const props = withDefaults(defineProps<{
   isExecuting: boolean
   showNodePalette: boolean
   showAgentAi?: boolean
+  isExporting?: boolean
 }>(), {
   workflowName: '',
   workflowActive: false,
   workflowDebug: false,
   showAgentAi: false,
+  isExporting: false,
 })
 
 const emit = defineEmits<{
@@ -36,6 +39,7 @@ const emit = defineEmits<{
   toggleDebug: []
   execute: []
   save: []
+  export: []
 }>()
 
 const editingName = ref(false)
@@ -201,6 +205,20 @@ function cancelEditingName() {
         <ArrowPathIcon v-if="props.isExecuting" class="w-4 h-4 animate-spin" />
         <PlayIcon v-else class="w-4 h-4" />
         <span>{{ props.isExecuting ? 'Running...' : 'Execute' }}</span>
+      </button>
+
+      <!-- Download the workflow as an n8n-compatible JSON file.
+           Hidden for a draft workflow: it has no id yet, so the
+           export endpoint has nothing to serve. -->
+      <button
+        v-if="!props.isNewWorkflow"
+        @click="emit('export')"
+        :disabled="props.isExporting"
+        class="btn-secondary flex items-center gap-2 disabled:opacity-60"
+        title="Download this workflow as an n8n-compatible JSON file"
+      >
+        <ArrowDownTrayIcon class="w-4 h-4" />
+        <span>{{ props.isExporting ? 'Exporting...' : 'Export' }}</span>
       </button>
 
       <button
