@@ -55,3 +55,9 @@ Thumbs.db
 # Temporary files
 /tmp/
 *.tmp
+
+# Local reference checkouts and local knowledge graph — never part
+# of the image. The n8n upstream checkout alone is ~576 MB.
+/n8n/
+/graphify-out/
+/focus-solution.txt
