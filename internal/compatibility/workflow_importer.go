@@ -580,7 +580,7 @@ func (importer *N8nWorkflowImporter) convertNode(n8nNode N8nNodeData, opts Impor
 		})
 	}
 
-	credentials, credIssues := importer.convertCredentials(n8nNode.Credentials, opts, n8nNode.Disabled)
+	credentials, credIssues := importer.convertCredentials(n8nNode.Credentials, opts)
 	issues = append(issues, credIssues...)
 
 	node := &model.Node{
@@ -612,10 +612,14 @@ func (importer *N8nWorkflowImporter) convertNode(n8nNode N8nNodeData, opts Impor
 // m9m's model. The modern shape is {type: {id, name}}; a credential
 // whose id cannot be resolved keeps its name and reports a warning.
 //
-// disabled mirrors n8n's `replaceInvalidCredentials`, which skips
-// disabled nodes completely: their credential references are kept as
-// they are instead of being cleared.
-func (importer *N8nWorkflowImporter) convertCredentials(creds map[string]interface{}, opts ImportOptions, disabled bool) (map[string]model.Credential, []ConversionIssue) {
+// The lookup follows n8n's `replaceInvalidCredentials`: a reference
+// that carries an id is resolved by id AND type, a reference without
+// an id is resolved by name AND type and only a unique match wins.
+//
+// Unlike n8n, which skips disabled nodes completely, m9m normalises
+// every node the same way: an id that cannot be resolved is cleared
+// so a stale reference never survives an import.
+func (importer *N8nWorkflowImporter) convertCredentials(creds map[string]interface{}, opts ImportOptions) (map[string]model.Credential, []ConversionIssue) {
 	var issues []ConversionIssue
 	result := make(map[string]model.Credential)
 
@@ -670,10 +674,6 @@ func (importer *N8nWorkflowImporter) convertCredentials(creds map[string]interfa
 				if name != "" {
 					resolvedName = name
 				}
-			} else if disabled {
-				// n8n skips disabled nodes, so a dangling reference is
-				// kept instead of being reported.
-				resolvedID = credID
 			} else {
 				resolvedID = ""
 				issues = append(issues, ConversionIssue{

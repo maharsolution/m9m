@@ -145,11 +145,11 @@ type DataItem struct {
 
 // BinaryData represents binary data in a workflow
 type BinaryData struct {
-	Data         string `json:"data"`
-	MimeType     string `json:"mimeType"`
-	FileSize     string `json:"fileSize,omitempty"`
-	FileName     string `json:"fileName,omitempty"`
-	Directory    string `json:"directory,omitempty"`
+	Data          string `json:"data"`
+	MimeType      string `json:"mimeType"`
+	FileSize      string `json:"fileSize,omitempty"`
+	FileName      string `json:"fileName,omitempty"`
+	Directory     string `json:"directory,omitempty"`
 	FileExtension string `json:"fileExtension,omitempty"`
 }
 
@@ -208,14 +208,14 @@ func (w *Workflow) ToFile(filename string) error {
 
 // NodeExecutionInput represents input to a node execution
 type NodeExecutionInput struct {
-	Data []DataItem
-	RunIndex int
+	Data      []DataItem
+	RunIndex  int
 	ItemIndex int
 }
 
 // NodeExecutionOutput represents output from a node execution
 type NodeExecutionOutput struct {
-	Data []DataItem
+	Data  []DataItem
 	Error error
 }
 
@@ -232,16 +232,16 @@ type NodeDefinition struct {
 
 // WorkflowExecution represents the execution of a workflow
 type WorkflowExecution struct {
-	ID          string                 `json:"id"`
-	WorkflowID  string                 `json:"workflowId"`
-	WorkspaceID string                 `json:"workspaceId,omitempty"`
-	Status      string                 `json:"status"` // running, completed, failed, cancelled
-	Mode        string                 `json:"mode"`   // manual, trigger, test
-	StartedAt   time.Time              `json:"startedAt"`
-	FinishedAt  *time.Time             `json:"finishedAt,omitempty"`
-	Data        []DataItem             `json:"data,omitempty"`
-	Error       error                  `json:"error,omitempty"`
-	NodeData    map[string][]DataItem  `json:"nodeData,omitempty"`
+	ID          string                `json:"id"`
+	WorkflowID  string                `json:"workflowId"`
+	WorkspaceID string                `json:"workspaceId,omitempty"`
+	Status      string                `json:"status"` // running, completed, failed, cancelled
+	Mode        string                `json:"mode"`   // manual, trigger, test
+	StartedAt   time.Time             `json:"startedAt"`
+	FinishedAt  *time.Time            `json:"finishedAt,omitempty"`
+	Data        []DataItem            `json:"data,omitempty"`
+	Error       error                 `json:"error,omitempty"`
+	NodeData    map[string][]DataItem `json:"nodeData,omitempty"`
 	// EdgesTaken records which connections in the workflow actually
 	// carried items during this execution. The map is keyed by
 	// `<sourceNodeID>:<outputIndex>:<targetNodeID>:<inputIndex>` and
@@ -249,10 +249,10 @@ type WorkflowExecution struct {
 	// the UI to colour-code execution edges green for the path
 	// that ran, grey for the path that didn't — without bloating
 	// the DB with per-node I/O snapshots when Debug=OFF.
-	EdgesTaken  map[string]bool        `json:"edgesTaken,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt   time.Time              `json:"createdAt"`
-	UpdatedAt   time.Time              `json:"updatedAt"`
+	EdgesTaken map[string]bool        `json:"edgesTaken,omitempty"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt  time.Time              `json:"createdAt"`
+	UpdatedAt  time.Time              `json:"updatedAt"`
 }
 
 // NodeConnections represents connections configuration for a node

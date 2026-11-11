@@ -20,6 +20,7 @@ import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/vue'
 import { useWorkflowEditorStore, useWorkflowStore } from '@/stores'
 import type { Workflow } from '@/types'
 import {
+  apiErrorDetails,
   apiErrorMessage,
   downloadWorkflowExport,
   exportWorkflow,
@@ -230,7 +231,9 @@ const handleImportFile = async (event: Event) => {
     notice.value = {
       type: 'error',
       message: await apiErrorMessage(e, 'Failed to import the workflow file.'),
-      details: [],
+      // The server repeats the per-item errors at the top level of a
+      // rejected import, so the rejected entries are visible too.
+      details: await apiErrorDetails(e),
     }
   } finally {
     isImporting.value = false

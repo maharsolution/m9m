@@ -192,6 +192,25 @@ export interface WorkflowImportSummary {
 }
 
 /**
+ * Response body of a rejected `POST /workflows/import`.
+ *
+ * The endpoint answers 400 when no workflow of the batch could be
+ * imported. It repeats the summary fields at the top level so the
+ * per-item errors are readable without digging into `summary`.
+ */
+export interface WorkflowImportFailure {
+  error: boolean
+  message: string
+  code: number
+  imported: number
+  failed: number
+  activeState: string
+  workflows: WorkflowImportItem[]
+  errors: WorkflowImportError[]
+  summary?: WorkflowImportSummary
+}
+
+/**
  * A downloadable export: the JSON payload plus the file name the
  * server suggested through the Content-Disposition header.
  */

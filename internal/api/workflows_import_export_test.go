@@ -157,6 +157,114 @@ func TestExportWorkflow_NotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
+// TestExportWorkflow_ContainsAllN8nFields pins the export contract:
+// the document carries every field n8n writes.
+func TestExportWorkflow_ContainsAllN8nFields(t *testing.T) {
+	router, store := setupImportExportServer(t)
+
+	require.NoError(t, store.SaveWorkflow(&model.Workflow{
+		ID:          "wf-fields",
+		Name:        "Field check",
+		Nodes:       []model.Node{},
+		Connections: map[string]model.Connections{},
+	}))
+
+	req := httptest.NewRequest("GET", "/api/v1/workflows/wf-fields/export", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var exported map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &exported))
+
+	for _, field := range []string{
+		"id", "name", "active", "nodes", "connections", "settings",
+		"staticData", "pinData", "meta", "tags", "versionId",
+	} {
+		assert.Contains(t, exported, field)
+	}
+
+	// A workflow that never went through an import has no version id
+	// of its own, but n8n always writes one.
+	assert.NotEmpty(t, exported["versionId"])
+}
+
+// TestExportWorkflow_FallbackFileName pins the file-name fallback for
+// a workflow whose name carries no usable characters: the workflow id
+// takes over.
+func TestExportWorkflow_FallbackFileName(t *testing.T) {
+	router, store := setupImportExportServer(t)
+
+	require.NoError(t, store.SaveWorkflow(&model.Workflow{
+		ID:          "wf-odd",
+		Name:        "###",
+		Nodes:       []model.Node{},
+		Connections: map[string]model.Connections{},
+	}))
+
+	req := httptest.NewRequest("GET", "/api/v1/workflows/wf-odd/export", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Header().Get("Content-Disposition"), `filename="wf-odd.json"`)
+}
+
+// TestExportWorkflows_BulkUsesStableFileName pins the bulk file name:
+// a bulk export always answers with an array, so it always carries the
+// same file name - also for a single id.
+func TestExportWorkflows_BulkUsesStableFileName(t *testing.T) {
+	router, store := setupImportExportServer(t)
+
+	require.NoError(t, store.SaveWorkflow(&model.Workflow{
+		ID:          "wf-1",
+		Name:        "Daily Report",
+		Nodes:       []model.Node{},
+		Connections: map[string]model.Connections{},
+	}))
+
+	req := httptest.NewRequest("GET", "/api/v1/workflows/export?ids=wf-1", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Header().Get("Content-Disposition"), `filename="workflows-export.json"`)
+}
+
+// TestRoutes_StaticWorkflowPathsAreNotWorkflowIDs pins the route
+// order: the static paths win over the "{id}" wildcard.
+func TestRoutes_StaticWorkflowPathsAreNotWorkflowIDs(t *testing.T) {
+	router, store := setupImportExportServer(t)
+
+	// A workflow whose id collides with the static paths.
+	require.NoError(t, store.SaveWorkflow(&model.Workflow{
+		ID:          "export",
+		Name:        "Trap",
+		Nodes:       []model.Node{},
+		Connections: map[string]model.Connections{},
+	}))
+
+	// GET /workflows/export is the bulk export, not "get workflow export".
+	req := httptest.NewRequest("GET", "/api/v1/workflows/export?ids=export", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var exported []map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &exported))
+	require.Len(t, exported, 1)
+	assert.Equal(t, "Trap", exported[0]["name"])
+
+	// POST /workflows/import is the import endpoint, not "import" as an id.
+	req = httptest.NewRequest("POST", "/api/v1/workflows/import", bytes.NewBufferString(n8nWorkflowJSON))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusCreated, w.Code)
+}
+
 func TestExportWorkflows_BulkAlwaysReturnsArray(t *testing.T) {
 	router, store := setupImportExportServer(t)
 
@@ -605,6 +713,10 @@ func TestImportExport_RoundTrip(t *testing.T) {
 	credentials := httpNode["credentials"].(map[string]interface{})
 	basic := credentials["httpBasicAuth"].(map[string]interface{})
 	assert.Equal(t, "My Cred", basic["name"])
+	// The credential does not exist in m9m, so the export writes the
+	// n8n shape with a null id.
+	assert.Nil(t, basic["id"])
+	assert.NotEmpty(t, exported["versionId"])
 }
 
 // TestImportWorkflow_DropsNodesWithoutType pins the n8n editor rule:
@@ -833,4 +945,229 @@ func TestImportWorkflow_DropsConnectionsOfUnknownNode(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &summary))
 	require.Len(t, summary.Workflows, 1)
 	assert.Contains(t, strings.Join(summary.Workflows[0].Warnings, " "), "Ghost")
+}
+
+// TestExportImport_ReimportsExportedFile pins the UI requirement: a
+// downloaded export file is valid JSON that m9m can re-import.
+func TestExportImport_ReimportsExportedFile(t *testing.T) {
+	router, store := setupImportExportServer(t)
+
+	require.NoError(t, store.SaveWorkflow(&model.Workflow{
+		ID:     "wf-round-trip",
+		Name:   "Round trip",
+		Active: false,
+		Nodes: []model.Node{
+			{ID: "n1", Name: "Start", Type: "n8n-nodes-base.manualTrigger", TypeVersion: 1, Position: []int{10, 20}, Parameters: map[string]interface{}{}},
+			{ID: "n2", Name: "HTTP Request", Type: "n8n-nodes-base.httpRequest", TypeVersion: 1, Position: []int{30, 20}, Parameters: map[string]interface{}{"url": "https://example.com"}},
+		},
+		Connections: map[string]model.Connections{
+			"Start": {Main: [][]model.Connection{{{Node: "HTTP Request", Type: "main", Index: 0}}}},
+		},
+		Tags: []string{"prod"},
+	}))
+
+	// Download the workflow.
+	req := httptest.NewRequest("GET", "/api/v1/workflows/wf-round-trip/export", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	exported := w.Body.Bytes()
+
+	// Feed the file back into the import endpoint.
+	req = httptest.NewRequest("POST", "/api/v1/workflows/import", bytes.NewReader(exported))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusCreated, w.Code)
+
+	var summary WorkflowImportSummary
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &summary))
+	require.Len(t, summary.Workflows, 1)
+	assert.Equal(t, "Round trip", summary.Workflows[0].Name)
+
+	imported, err := store.GetWorkflow(summary.Workflows[0].ID)
+	require.NoError(t, err)
+	require.Len(t, imported.Nodes, 2)
+	assert.Equal(t, "n8n-nodes-base.manualTrigger", imported.Nodes[0].Type)
+	assert.Equal(t, "n8n-nodes-base.httpRequest", imported.Nodes[1].Type)
+	require.Contains(t, imported.Connections, "Start")
+	require.Len(t, imported.Connections["Start"].Main, 1)
+	require.Len(t, imported.Connections["Start"].Main[0], 1)
+	assert.Equal(t, "HTTP Request", imported.Connections["Start"].Main[0][0].Node)
+	assert.Equal(t, []string{"prod"}, imported.Tags)
+}
+
+// TestImportWorkflow_FailedBatchReportsErrorsAtTopLevel pins the
+// failure response: the per-item errors are readable without digging
+// into the nested summary object.
+func TestImportWorkflow_FailedBatchReportsErrorsAtTopLevel(t *testing.T) {
+	router, _ := setupImportExportServer(t)
+
+	req := httptest.NewRequest("POST", "/api/v1/workflows/import", bytes.NewBufferString(`[{"name":"Broken","nodes":[]}]`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	assert.Equal(t, float64(0), response["imported"])
+	assert.Equal(t, float64(1), response["failed"])
+
+	errors, ok := response["errors"].([]interface{})
+	require.True(t, ok, "the per-item errors must be readable at the top level")
+	require.Len(t, errors, 1)
+	entry, ok := errors[0].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "Broken", entry["name"])
+	assert.Contains(t, entry["message"], "connections")
+}
+
+// TestImportWorkflow_PayloadTooLargeIsRejected pins the payload cap:
+// an oversized body is refused with 413 instead of being truncated
+// into invalid JSON.
+func TestImportWorkflow_PayloadTooLargeIsRejected(t *testing.T) {
+	router, _ := setupImportExportServer(t)
+
+	original := maxImportPayloadBytes
+	maxImportPayloadBytes = 64
+	defer func() { maxImportPayloadBytes = original }()
+
+	payload := `{"name":"Too big","nodes":[],"connections":{},"padding":"` + strings.Repeat("x", 256) + `"}`
+	req := httptest.NewRequest("POST", "/api/v1/workflows/import", bytes.NewBufferString(payload))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
+}
+
+// TestImportWorkflow_CredentialIDMustMatchType pins the n8n lookup
+// rule: a credential id is only reused when the credential type
+// matches as well (`findOneBy({ id, type })`).
+func TestImportWorkflow_CredentialIDMustMatchType(t *testing.T) {
+	router, store := setupImportExportServer(t)
+
+	// cred-1 is an httpHeaderAuth credential, the node asks for an
+	// httpBasicAuth one.
+	require.NoError(t, store.SaveCredential(&storage.Credential{
+		ID:   "cred-1",
+		Name: "Header Cred",
+		Type: "httpHeaderAuth",
+	}))
+
+	payload := `{
+      "id": "cred-type-flow",
+      "name": "Credential type flow",
+      "nodes": [
+        {
+          "id": "n1",
+          "name": "HTTP Request",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 1,
+          "position": [0, 0],
+          "parameters": {},
+          "credentials": { "httpBasicAuth": { "id": "cred-1", "name": "Header Cred" } }
+        }
+      ],
+      "connections": {}
+    }`
+
+	req := httptest.NewRequest("POST", "/api/v1/workflows/import", bytes.NewBufferString(payload))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusCreated, w.Code)
+
+	stored, err := store.GetWorkflow("cred-type-flow")
+	require.NoError(t, err)
+	require.Len(t, stored.Nodes, 1)
+	// The id belongs to another credential type, so it is not reused.
+	assert.Empty(t, stored.Nodes[0].Credentials["httpBasicAuth"].ID)
+	assert.Equal(t, "Header Cred", stored.Nodes[0].Credentials["httpBasicAuth"].Name)
+}
+
+// TestImportWorkflow_AmbiguousCredentialNameIsNotResolved pins n8n's
+// "exactly one match wins" rule.
+func TestImportWorkflow_AmbiguousCredentialNameIsNotResolved(t *testing.T) {
+	router, store := setupImportExportServer(t)
+
+	require.NoError(t, store.SaveCredential(&storage.Credential{ID: "c1", Name: "Twin", Type: "httpBasicAuth"}))
+	require.NoError(t, store.SaveCredential(&storage.Credential{ID: "c2", Name: "Twin", Type: "httpBasicAuth"}))
+
+	payload := `{
+      "id": "cred-ambiguous",
+      "name": "Ambiguous credential",
+      "nodes": [
+        {
+          "id": "n1",
+          "name": "HTTP Request",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 1,
+          "position": [0, 0],
+          "parameters": {},
+          "credentials": { "httpBasicAuth": "Twin" }
+        }
+      ],
+      "connections": {}
+    }`
+
+	req := httptest.NewRequest("POST", "/api/v1/workflows/import", bytes.NewBufferString(payload))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusCreated, w.Code)
+
+	stored, err := store.GetWorkflow("cred-ambiguous")
+	require.NoError(t, err)
+	require.Len(t, stored.Nodes, 1)
+	assert.Empty(t, stored.Nodes[0].Credentials["httpBasicAuth"].ID)
+	assert.Equal(t, "Twin", stored.Nodes[0].Credentials["httpBasicAuth"].Name)
+}
+
+// TestImportWorkflow_DisabledNodeCredentialIsNormalized pins the m9m
+// rule: every node is normalised the same way, so a disabled node
+// does not keep a dangling credential reference.
+func TestImportWorkflow_DisabledNodeCredentialIsNormalized(t *testing.T) {
+	router, store := setupImportExportServer(t)
+
+	payload := `{
+      "id": "cred-disabled",
+      "name": "Disabled credential",
+      "nodes": [
+        {
+          "id": "n1",
+          "name": "HTTP Request",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 1,
+          "position": [0, 0],
+          "parameters": {},
+          "disabled": true,
+          "credentials": { "httpBasicAuth": { "id": "gone", "name": "Missing Cred" } }
+        }
+      ],
+      "connections": {}
+    }`
+
+	req := httptest.NewRequest("POST", "/api/v1/workflows/import", bytes.NewBufferString(payload))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusCreated, w.Code)
+
+	stored, err := store.GetWorkflow("cred-disabled")
+	require.NoError(t, err)
+	require.Len(t, stored.Nodes, 1)
+	assert.Empty(t, stored.Nodes[0].Credentials["httpBasicAuth"].ID)
+	assert.Equal(t, "Missing Cred", stored.Nodes[0].Credentials["httpBasicAuth"].Name)
+
+	var summary WorkflowImportSummary
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &summary))
+	require.Len(t, summary.Workflows, 1)
+	assert.Contains(t, strings.Join(summary.Workflows[0].Warnings, " "), "Missing Cred")
 }

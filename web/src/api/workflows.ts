@@ -213,3 +213,49 @@ export async function apiErrorMessage(error: unknown, fallback: string): Promise
 
   return fallback
 }
+
+/**
+ * Extracts the per-item errors of a failed import from an API error.
+ *
+ * The import endpoint answers 400 when no workflow of the batch could
+ * be imported. It repeats the summary fields (`imported`, `failed`,
+ * `errors`) at the top level of the body, so the rejected entries can
+ * be shown to the user.
+ */
+export async function apiErrorDetails(error: unknown): Promise<string[]> {
+  const response = (error as { response?: { data?: unknown } })?.response
+  let body: unknown = response?.data
+
+  if (typeof Blob !== 'undefined' && body instanceof Blob) {
+    try {
+      body = JSON.parse(await body.text())
+    } catch {
+      return []
+    }
+  }
+
+  if (!body || typeof body !== 'object') return []
+
+  const payload = body as {
+    errors?: unknown
+    summary?: { errors?: unknown }
+  }
+  const raw = Array.isArray(payload.errors)
+    ? payload.errors
+    : payload.summary?.errors
+  if (!Array.isArray(raw)) return []
+
+  return raw
+    .map((entry) => {
+      const item = (entry ?? {}) as {
+        name?: string
+        message?: string
+        index?: number
+      }
+      const label =
+        item.name ||
+        (typeof item.index === 'number' ? `Entry #${item.index + 1}` : 'Entry')
+      return item.message ? `${label}: ${item.message}` : label
+    })
+    .filter((line) => line.length > 0)
+}
