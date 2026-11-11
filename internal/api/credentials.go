@@ -648,7 +648,9 @@ func validateCredentialData(credType string, data map[string]interface{}) testCr
 
 	var missing []string
 	for _, req := range schema.Required {
-		v, ok := data[req]
+		// Alias keys (hostname → host, username → user) satisfy the
+		// requirement too — synced n8n credentials use them.
+		v, ok := credentialFieldValue(data, req)
 		if !ok {
 			missing = append(missing, req)
 			continue

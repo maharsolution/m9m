@@ -347,10 +347,7 @@ func testKafkaConnection(data map[string]interface{}) (testCredentialResult, boo
 
 // testRabbitMQConnection checks that the AMQP broker is reachable.
 func testRabbitMQConnection(data map[string]interface{}) (testCredentialResult, bool) {
-	host := dataString(data, "hostname")
-	if host == "" {
-		host = dataString(data, "host")
-	}
+	host := dataString(data, "host")
 	if host == "" {
 		return testCredentialResult{}, false
 	}
@@ -463,19 +460,49 @@ func doCredentialHTTP(req *http.Request) (*http.Response, string, error) {
 // Helpers
 // ---------------------------------------------------------------------------
 
+// credentialFieldAliases maps a schema field to the alternative keys a
+// synced n8n credential may use (rabbitmq stores `hostname` /
+// `username` where the schema declares `host` / `user`).
+var credentialFieldAliases = map[string][]string{
+	"host":     {"hostname", "server", "serverName"},
+	"user":     {"username", "login", "loginName"},
+	"database": {"db", "dbName", "databaseName"},
+	"password": {"pass", "pwd"},
+}
+
+// credentialFieldValue returns the value of a schema field, falling back
+// to the alias keys used by synced credentials.
+func credentialFieldValue(data map[string]interface{}, field string) (interface{}, bool) {
+	if v, ok := data[field]; ok {
+		return v, true
+	}
+	for _, alias := range credentialFieldAliases[field] {
+		if v, ok := data[alias]; ok {
+			return v, true
+		}
+	}
+	return nil, false
+}
+
 // dataString reads a string-ish field from the credential payload.
+// Alias keys are honoured so a synced credential is not reported as
+// missing its host or user.
 func dataString(data map[string]interface{}, key string) string {
-	switch v := data[key].(type) {
+	v, ok := credentialFieldValue(data, key)
+	if !ok {
+		return ""
+	}
+	switch t := v.(type) {
 	case string:
-		return strings.TrimSpace(v)
+		return strings.TrimSpace(t)
 	case float64:
-		return strconv.FormatFloat(v, 'f', -1, 64)
+		return strconv.FormatFloat(t, 'f', -1, 64)
 	case bool:
-		return strconv.FormatBool(v)
+		return strconv.FormatBool(t)
 	case nil:
 		return ""
 	default:
-		return strings.TrimSpace(fmt.Sprintf("%v", v))
+		return strings.TrimSpace(fmt.Sprintf("%v", t))
 	}
 }
 

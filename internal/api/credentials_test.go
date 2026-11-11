@@ -383,6 +383,25 @@ func TestCredentialTestEndpoint(t *testing.T) {
 	}
 }
 
+// TestCredentialValidateAcceptsAliasedFields proves a synced credential
+// that stores `hostname` / `username` (instead of `host` / `user`) is not
+// reported as missing its required fields.
+func TestCredentialValidateAcceptsAliasedFields(t *testing.T) {
+	res := validateCredentialData("rabbitmq", map[string]any{
+		"hostname": "127.0.0.1",
+		"port":     1,
+		"username": "user",
+		"password": "pass",
+		"vhost":    "/",
+	})
+	if strings.Contains(res.Message, "Missing or empty required fields") {
+		t.Fatalf("aliased fields must satisfy the required check, got %+v", res)
+	}
+	if !strings.Contains(res.Message, "RabbitMQ connection failed") {
+		t.Fatalf("expected the connection attempt to run, got %+v", res)
+	}
+}
+
 // TestCredentialTestRejectsWrongPassword proves the test endpoint now
 // performs a REAL connection attempt: a wrong Redis password must be
 // reported as an error, not as "valid". A fake RESP server stands in
