@@ -74,6 +74,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/raft v1.7.3
 	github.com/hashicorp/raft-boltdb v0.0.0-20251103221153-05f9dd7a5148
+	github.com/rabbitmq/amqp091-go v1.16.0
 	go.nanomsg.org/mangos/v3 v3.4.2
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.38.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.38.0

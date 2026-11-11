@@ -2,7 +2,10 @@ package api
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -14,6 +17,11 @@ import (
 	// Database drivers, registered for the credential connection test.
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
+	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/segmentio/kafka-go"
+	"github.com/segmentio/kafka-go/sasl"
+	"github.com/segmentio/kafka-go/sasl/plain"
+	"github.com/segmentio/kafka-go/sasl/scram"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -310,61 +318,219 @@ func redisCommand(conn net.Conn, args ...string) (string, error) {
 // Broker credentials
 // ---------------------------------------------------------------------------
 
-// testKafkaConnection checks that the bootstrap brokers are reachable.
-// SASL credentials are not verifiable with a plain dial, so the message
-// says so explicitly instead of pretending the password was checked.
+// testKafkaConnection authenticates against the Kafka brokers with the
+// stored credentials. A plain TCP dial would not prove anything about
+// the password, so the SASL handshake runs and a metadata request must
+// be answered.
 func testKafkaConnection(data map[string]interface{}) (testCredentialResult, bool) {
-	brokers := dataString(data, "brokers")
-	if brokers == "" {
+	brokers := kafkaBrokerList(data)
+	if len(brokers) == 0 {
 		return testCredentialResult{}, false
 	}
-	var first string
-	for _, b := range strings.Split(brokers, ",") {
-		if b = strings.TrimSpace(b); b != "" {
-			first = b
+
+	tlsCfg, err := kafkaTLSConfig(data)
+	if err != nil {
+		return testCredentialResult{Status: "Error", Message: err.Error()}, true
+	}
+
+	user := dataString(data, "user")
+	password := dataString(data, "password")
+
+	var mechanisms []sasl.Mechanism
+	if user != "" {
+		mechanisms = append(mechanisms, plain.Mechanism{Username: user, Password: password})
+		if m, err := scram.Mechanism(scram.SHA256, user, password); err == nil {
+			mechanisms = append(mechanisms, m)
+		}
+		if m, err := scram.Mechanism(scram.SHA512, user, password); err == nil {
+			mechanisms = append(mechanisms, m)
+		}
+	}
+
+	if len(mechanisms) == 0 {
+		count, err := kafkaMetadata(brokers, tlsCfg, nil)
+		if err != nil {
+			return testCredentialResult{
+				Status:  "Error",
+				Message: "Kafka connection failed: " + scrubSecret(err.Error(), password),
+			}, true
+		}
+		return testCredentialResult{
+			Status:  "OK",
+			Message: fmt.Sprintf("Connected to Kafka broker(s) %s (%d broker(s) reported)", strings.Join(brokers, ", "), count),
+		}, true
+	}
+
+	var lastErr error
+	for _, mech := range mechanisms {
+		count, err := kafkaMetadata(brokers, tlsCfg, mech)
+		if err == nil {
+			return testCredentialResult{
+				Status: "OK",
+				Message: fmt.Sprintf("Connected to Kafka broker(s) %s (authenticated as %s, %d broker(s) reported)",
+					strings.Join(brokers, ", "), user, count),
+			}, true
+		}
+		lastErr = err
+		if !isKafkaAuthError(err) {
 			break
 		}
 	}
-	if first == "" {
-		return testCredentialResult{}, false
-	}
-	if !strings.Contains(first, ":") {
-		first = net.JoinHostPort(first, "9092")
-	}
-	conn, err := net.DialTimeout("tcp", first, 5*time.Second)
-	if err != nil {
+
+	if isKafkaAuthError(lastErr) {
 		return testCredentialResult{
 			Status:  "Error",
-			Message: "Kafka connection failed: " + err.Error(),
+			Message: "Kafka authentication failed: " + scrubSecret(lastErr.Error(), password),
 		}, true
 	}
-	_ = conn.Close()
 	return testCredentialResult{
-		Status:  "OK",
-		Message: fmt.Sprintf("Kafka broker %s reachable (SASL credentials not verified)", first),
+		Status:  "Error",
+		Message: "Kafka connection failed: " + scrubSecret(lastErr.Error(), password),
 	}, true
 }
 
-// testRabbitMQConnection checks that the AMQP broker is reachable.
+// kafkaBrokerList parses the comma separated bootstrap broker list.
+func kafkaBrokerList(data map[string]interface{}) []string {
+	var brokers []string
+	for _, b := range strings.Split(dataString(data, "brokers"), ",") {
+		b = strings.TrimSpace(b)
+		if b == "" {
+			continue
+		}
+		if !strings.Contains(b, ":") {
+			b = net.JoinHostPort(b, "9092")
+		}
+		brokers = append(brokers, b)
+	}
+	return brokers
+}
+
+// kafkaTLSConfig builds the TLS configuration, adding the credential's
+// CA certificate to the system trust store when present.
+func kafkaTLSConfig(data map[string]interface{}) (*tls.Config, error) {
+	cfg := &tls.Config{MinVersion: tls.VersionTLS12}
+	ca := dataString(data, "ca")
+	if ca == "" {
+		return cfg, nil
+	}
+	pool, err := x509.SystemCertPool()
+	if err != nil || pool == nil {
+		pool = x509.NewCertPool()
+	}
+	if !pool.AppendCertsFromPEM([]byte(ca)) {
+		return nil, fmt.Errorf("Kafka CA certificate could not be parsed")
+	}
+	cfg.RootCAs = pool
+	return cfg, nil
+}
+
+// kafkaMetadata performs an authenticated metadata request and returns
+// the number of brokers the cluster reported.
+func kafkaMetadata(brokers []string, tlsCfg *tls.Config, mech sasl.Mechanism) (int, error) {
+	transport := &kafka.Transport{TLS: tlsCfg}
+	if mech != nil {
+		transport.SASL = mech
+	}
+	defer transport.CloseIdleConnections()
+
+	client := &kafka.Client{
+		Addr:      kafka.TCP(strings.Join(brokers, ",")),
+		Transport: transport,
+		Timeout:   credentialConnectTimeout,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), credentialConnectTimeout)
+	defer cancel()
+
+	resp, err := client.Metadata(ctx, &kafka.MetadataRequest{Addr: kafka.TCP(strings.Join(brokers, ","))})
+	if err != nil {
+		return 0, err
+	}
+	return len(resp.Brokers), nil
+}
+
+// isKafkaAuthError reports whether the broker rejected the credentials.
+func isKafkaAuthError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var kafkaErr kafka.Error
+	if errors.As(err, &kafkaErr) && kafkaErr == kafka.SASLAuthenticationFailed {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "sasl") || strings.Contains(msg, "authentication failed")
+}
+
+// testRabbitMQConnection performs a full AMQP handshake with the stored
+// credentials, so a wrong user or password fails the test.
 func testRabbitMQConnection(data map[string]interface{}) (testCredentialResult, bool) {
 	host := dataString(data, "host")
 	if host == "" {
 		return testCredentialResult{}, false
 	}
 	port := dataInt(data, "port", 5672)
-	addr := net.JoinHostPort(host, strconv.Itoa(port))
-	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+	user := dataString(data, "user")
+	password := dataString(data, "password")
+	vhost := dataString(data, "vhost")
+	if vhost == "" {
+		vhost = "/"
+	}
+
+	u := &url.URL{
+		Scheme: "amqp",
+		Host:   net.JoinHostPort(host, strconv.Itoa(port)),
+	}
+	if user != "" {
+		u.User = url.UserPassword(user, password)
+	}
+
+	cfg := amqp.Config{
+		Vhost:    vhost,
+		Locale:   "en_US",
+		Heartbeat: 0,
+		Dial:     amqp.DefaultDial(5 * time.Second),
+	}
+	if user != "" {
+		cfg.SASL = []amqp.Authentication{&amqp.PlainAuth{Username: user, Password: password}}
+	}
+
+	conn, err := amqp.DialConfig(u.String(), cfg)
 	if err != nil {
+		msg := scrubSecret(err.Error(), password)
+		if isAMQPAuthError(err) {
+			return testCredentialResult{
+				Status:  "Error",
+				Message: "RabbitMQ authentication failed: " + msg,
+			}, true
+		}
 		return testCredentialResult{
 			Status:  "Error",
-			Message: "RabbitMQ connection failed: " + err.Error(),
+			Message: "RabbitMQ connection failed: " + msg,
 		}, true
 	}
 	_ = conn.Close()
+
+	message := fmt.Sprintf("Connected to RabbitMQ %s:%d (vhost %s", host, port, vhost)
+	if user != "" {
+		message += fmt.Sprintf(", authenticated as %s", user)
+	}
 	return testCredentialResult{
 		Status:  "OK",
-		Message: fmt.Sprintf("RabbitMQ broker %s reachable (credentials not verified)", addr),
+		Message: message + ")",
 	}, true
+}
+
+// isAMQPAuthError reports whether RabbitMQ refused the credentials.
+func isAMQPAuthError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "access_refused") ||
+		strings.Contains(msg, "access refused") ||
+		strings.Contains(msg, "authentication") ||
+		strings.Contains(msg, "login was refused") ||
+		strings.Contains(msg, "not allowed")
 }
 
 // ---------------------------------------------------------------------------

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -380,6 +381,163 @@ func TestCredentialTestEndpoint(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &result)
 	if result.Status != "Error" || !strings.Contains(result.Message, "Port out of range") {
 		t.Fatalf("expected port range error, got %+v", result)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Fake AMQP broker helpers
+// ---------------------------------------------------------------------------
+
+// amqpFrame builds one AMQP 0-9-1 frame.
+func amqpFrame(frameType byte, payload []byte) []byte {
+	frame := make([]byte, 7+len(payload)+1)
+	frame[0] = frameType
+	// channel 0
+	size := len(payload)
+	frame[3] = byte(size >> 24)
+	frame[4] = byte(size >> 16)
+	frame[5] = byte(size >> 8)
+	frame[6] = byte(size)
+	copy(frame[7:], payload)
+	frame[len(frame)-1] = 0xCE
+	return frame
+}
+
+// amqpLongStr encodes a long string (4 byte length prefix).
+func amqpLongStr(s string) []byte {
+	out := []byte{byte(len(s) >> 24), byte(len(s) >> 16), byte(len(s) >> 8), byte(len(s))}
+	return append(out, s...)
+}
+
+// amqpShortStr encodes a short string (1 byte length prefix).
+func amqpShortStr(s string) []byte {
+	return append([]byte{byte(len(s))}, s...)
+}
+
+// readAmqpFrame reads one frame and returns its payload.
+func readAmqpFrame(conn net.Conn) (byte, []byte, error) {
+	header := make([]byte, 7)
+	if _, err := io.ReadFull(conn, header); err != nil {
+		return 0, nil, err
+	}
+	size := int(header[3])<<24 | int(header[4])<<16 | int(header[5])<<8 | int(header[6])
+	payload := make([]byte, size)
+	if _, err := io.ReadFull(conn, payload); err != nil {
+		return 0, nil, err
+	}
+	end := make([]byte, 1)
+	if _, err := io.ReadFull(conn, end); err != nil {
+		return 0, nil, err
+	}
+	return header[0], payload, nil
+}
+
+// amqpStartOKResponse extracts the SASL response from a
+// connection.start-ok frame payload.
+func amqpStartOKResponse(payload []byte) string {
+	if len(payload) < 4 {
+		return ""
+	}
+	pos := 4 // class + method
+	if len(payload) < pos+4 {
+		return ""
+	}
+	tableLen := int(payload[pos])<<24 | int(payload[pos+1])<<16 | int(payload[pos+2])<<8 | int(payload[pos+3])
+	pos += 4 + tableLen
+	if len(payload) < pos+1 {
+		return ""
+	}
+	mechLen := int(payload[pos])
+	pos += 1 + mechLen
+	if len(payload) < pos+4 {
+		return ""
+	}
+	respLen := int(payload[pos])<<24 | int(payload[pos+1])<<16 | int(payload[pos+2])<<8 | int(payload[pos+3])
+	pos += 4
+	if len(payload) < pos+respLen {
+		return ""
+	}
+	return string(payload[pos : pos+respLen])
+}
+
+// TestRabbitMQCredentialTestSendsCredentialsAndReportsAuthFailure proves
+// the RabbitMQ test performs a real AMQP handshake: the credentials are
+// sent to the broker and a refusal is reported as an authentication
+// failure.
+func TestRabbitMQCredentialTestSendsCredentialsAndReportsAuthFailure(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+
+	creds := make(chan string, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
+
+		header := make([]byte, 8)
+		if _, err := io.ReadFull(conn, header); err != nil {
+			return
+		}
+
+		// connection.start
+		start := []byte{0, 10, 0, 10, 0, 9, 0, 0, 0, 0}
+		start = append(start, amqpLongStr("PLAIN")...)
+		start = append(start, amqpLongStr("en_US")...)
+		if _, err := conn.Write(amqpFrame(1, start)); err != nil {
+			return
+		}
+
+		// connection.start-ok -> capture the SASL response
+		_, payload, err := readAmqpFrame(conn)
+		if err != nil {
+			return
+		}
+		creds <- amqpStartOKResponse(payload)
+
+		// connection.close with ACCESS_REFUSED
+		closed := []byte{0, 10, 0, 50, 0x01, 0x93}
+		closed = append(closed, amqpShortStr("ACCESS_REFUSED - Login was refused using authentication mechanism PLAIN")...)
+		closed = append(closed, 0, 10, 0, 11)
+		_, _ = conn.Write(amqpFrame(1, closed))
+	}()
+
+	host, portStr, _ := net.SplitHostPort(ln.Addr().String())
+	port := 0
+	_, _ = fmt.Sscanf(portStr, "%d", &port)
+
+	res, attempted := testCredentialConnection("rabbitmq", map[string]any{
+		"host":     host,
+		"port":     port,
+		"user":     "user",
+		"password": "secret",
+		"vhost":    "/",
+	})
+	if !attempted {
+		t.Fatal("rabbitmq test must attempt a connection")
+	}
+	if res.Status != "Error" {
+		t.Fatalf("expected Error, got %+v", res)
+	}
+	if !strings.Contains(strings.ToLower(res.Message), "authentication failed") {
+		t.Fatalf("expected an authentication failure, got %+v", res)
+	}
+	if strings.Contains(res.Message, "secret") {
+		t.Fatalf("password must not appear in the message: %+v", res)
+	}
+
+	select {
+	case got := <-creds:
+		if got != "\x00user\x00secret" {
+			t.Fatalf("credentials were not sent to the broker, got %q", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("broker did not receive connection.start-ok")
 	}
 }
 
