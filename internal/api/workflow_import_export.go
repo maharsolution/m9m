@@ -17,8 +17,12 @@ import (
 )
 
 // maxImportPayloadBytes caps the size of an uploaded/imported workflow
-// document (32 MiB).
-const maxImportPayloadBytes = 32 << 20
+// document (32 MiB). It is a variable so the tests can lower the cap.
+var maxImportPayloadBytes int64 = 32 << 20
+
+// errImportPayloadTooLarge marks a payload that exceeds
+// maxImportPayloadBytes. The endpoint answers 413 for it.
+var errImportPayloadTooLarge = errors.New("the import payload is too large")
 
 // maxBulkExportWorkflows caps how many workflows a bulk export returns
 // when no explicit id list is given.
@@ -85,6 +89,11 @@ func (s *APIServer) ExportWorkflow(w http.ResponseWriter, r *http.Request) {
 	filename := workflowSlug(workflow.Name)
 	if filename == "" {
 		filename = workflowSlug(workflow.ID)
+	}
+	if filename == "" {
+		// A name that carries no usable characters still has to end up
+		// in a valid file name.
+		filename = "workflow"
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -153,9 +162,6 @@ func (s *APIServer) ExportWorkflows(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filename := "workflows-export.json"
-	if len(workflows) == 1 {
-		filename = workflowSlug(workflows[0].Name) + ".json"
-	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
@@ -184,9 +190,13 @@ func (s *APIServer) ExportWorkflows(w http.ResponseWriter, r *http.Request) {
 // (`?active=fromJson`, `?activeState=fromJson`, or the envelope's
 // "activeState" field) - n8n's `activeState: fromJson` semantics.
 func (s *APIServer) ImportWorkflows(w http.ResponseWriter, r *http.Request) {
-	payload, err := s.readImportPayload(r)
+	payload, err := s.readImportPayload(w, r)
 	if err != nil {
-		s.sendError(w, http.StatusBadRequest, "Failed to read the import payload", err)
+		status := http.StatusBadRequest
+		if errors.Is(err, errImportPayloadTooLarge) {
+			status = http.StatusRequestEntityTooLarge
+		}
+		s.sendError(w, status, "Failed to read the import payload", err)
 		return
 	}
 
@@ -292,11 +302,19 @@ func (s *APIServer) ImportWorkflows(w http.ResponseWriter, r *http.Request) {
 		if len(summary.Errors) > 0 {
 			message = fmt.Sprintf("%s: %s", message, summary.Errors[0].Message)
 		}
+		// The summary fields are repeated at the top level so a client
+		// can read the per-item errors from a failed response without
+		// digging into the nested "summary" object.
 		s.sendJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"error":   true,
-			"message": message,
-			"code":    http.StatusBadRequest,
-			"summary": summary,
+			"error":       true,
+			"message":     message,
+			"code":        http.StatusBadRequest,
+			"imported":    summary.Imported,
+			"failed":      summary.Failed,
+			"activeState": summary.ActiveState,
+			"workflows":   summary.Workflows,
+			"errors":      summary.Errors,
+			"summary":     summary,
 		})
 		return
 	}
@@ -305,11 +323,22 @@ func (s *APIServer) ImportWorkflows(w http.ResponseWriter, r *http.Request) {
 }
 
 // readImportPayload reads the workflow document from a multipart upload
-// or from the raw request body.
-func (s *APIServer) readImportPayload(r *http.Request) ([]byte, error) {
+// or from the raw request body. The body is capped at
+// maxImportPayloadBytes; an oversized payload is reported as
+// errImportPayloadTooLarge instead of being silently truncated.
+func (s *APIServer) readImportPayload(w http.ResponseWriter, r *http.Request) ([]byte, error) {
+	if r.Body != nil {
+		// MaxBytesReader aborts the read as soon as the cap is hit, so
+		// an oversized upload never reaches the JSON decoder.
+		r.Body = http.MaxBytesReader(w, r.Body, maxImportPayloadBytes)
+	}
+
 	contentType := strings.ToLower(r.Header.Get("Content-Type"))
 	if strings.HasPrefix(contentType, "multipart/form-data") {
 		if err := r.ParseMultipartForm(maxImportPayloadBytes); err != nil {
+			if isPayloadTooLarge(err) {
+				return nil, importPayloadTooLargeError()
+			}
 			return nil, fmt.Errorf("failed to parse the multipart form: %w", err)
 		}
 		if r.MultipartForm == nil {
@@ -334,9 +363,14 @@ func (s *APIServer) readImportPayload(r *http.Request) ([]byte, error) {
 		}
 		defer file.Close()
 
-		data, err := io.ReadAll(io.LimitReader(file, maxImportPayloadBytes))
+		// Read one byte past the cap so an oversized file is detected
+		// instead of being truncated into invalid JSON.
+		data, err := io.ReadAll(io.LimitReader(file, maxImportPayloadBytes+1))
 		if err != nil {
-			return nil, fmt.Errorf("failed to read the uploaded file: %w", err)
+			return nil, importPayloadReadError(err)
+		}
+		if int64(len(data)) > maxImportPayloadBytes {
+			return nil, importPayloadTooLargeError()
 		}
 		return data, nil
 	}
@@ -345,11 +379,36 @@ func (s *APIServer) readImportPayload(r *http.Request) ([]byte, error) {
 		return nil, errors.New("the request has no body")
 	}
 
-	data, err := io.ReadAll(io.LimitReader(r.Body, maxImportPayloadBytes))
+	data, err := io.ReadAll(r.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read the request body: %w", err)
+		return nil, importPayloadReadError(err)
+	}
+	if int64(len(data)) > maxImportPayloadBytes {
+		return nil, importPayloadTooLargeError()
 	}
 	return data, nil
+}
+
+// importPayloadTooLargeError builds the error for an oversized import
+// payload.
+func importPayloadTooLargeError() error {
+	return fmt.Errorf("%w: the limit is %d MiB", errImportPayloadTooLarge, maxImportPayloadBytes>>20)
+}
+
+// importPayloadReadError maps a body read error onto the
+// errImportPayloadTooLarge sentinel when the cap was hit.
+func importPayloadReadError(err error) error {
+	if isPayloadTooLarge(err) {
+		return importPayloadTooLargeError()
+	}
+	return fmt.Errorf("failed to read the request body: %w", err)
+}
+
+// isPayloadTooLarge reports whether the error was caused by the
+// payload cap.
+func isPayloadTooLarge(err error) bool {
+	var maxBytesErr *http.MaxBytesError
+	return errors.As(err, &maxBytesErr)
 }
 
 // parseImportPayload splits the payload into the workflow entries and
@@ -430,24 +489,38 @@ func importWarnings(result *compatibility.ImportResult) []string {
 }
 
 // resolveCredentialRef maps an n8n credential reference onto a
-// credential that exists in m9m. n8n resolves a credential by name and
-// type (the id is only kept when it still matches); m9m does the same.
-func (s *APIServer) resolveCredentialRef(credType, name, id string) (string, bool) {
+// credential that exists in m9m.
+//
+// n8n resolves a credential reference in two steps
+// (`workflow-helpers.ts`, `replaceInvalidCredentials`):
+//   - a reference that carries an id is resolved by id AND type
+//     (`findOneBy({ id, type })`),
+//   - a reference without an id (the legacy string shape or an
+//     explicit `null` id) is resolved by name AND type, and only a
+//     unique match wins.
+//
+// The resolved name is the one m9m stores, so the exported document
+// carries the same name as the credential it points at. Only the id
+// and the name are read - the secret data of a credential is never
+// touched.
+func (s *APIServer) resolveCredentialRef(credType, name, id string) (string, string, bool) {
 	credentials, err := s.storage.ListCredentials()
 	if err != nil {
-		return "", false
+		return "", "", false
 	}
 
 	if id != "" {
 		for _, credential := range credentials {
-			if credential.ID == id {
-				return credential.ID, true
+			// The type is part of the lookup: a credential id that
+			// belongs to another credential type must not be reused.
+			if credential.ID == id && credential.Type == credType {
+				return credential.ID, credential.Name, true
 			}
 		}
 	}
 
 	if name == "" {
-		return "", false
+		return "", "", false
 	}
 
 	var match *storage.Credential
@@ -457,14 +530,14 @@ func (s *APIServer) resolveCredentialRef(credType, name, id string) (string, boo
 		}
 		if match != nil {
 			// Ambiguous name: n8n keeps the id empty as well.
-			return "", false
+			return "", "", false
 		}
 		match = credential
 	}
 	if match == nil {
-		return "", false
+		return "", "", false
 	}
-	return match.ID, true
+	return match.ID, match.Name, true
 }
 
 // resolveTagID maps a tag name onto the tag id m9m stores for it.

@@ -22,9 +22,11 @@ func (s *APIServer) RegisterRoutes(router *mux.Router) {
 	// Import/export routes must be registered BEFORE "/workflows/{id}":
 	// gorilla/mux matches routes in registration order, so
 	// "/workflows/export" would otherwise be swallowed by the
-	// "/workflows/{id}" route.
+	// "/workflows/{id}" route. The same holds for every other static
+	// path under "/workflows/" ("/workflows/run").
 	api.HandleFunc("/workflows/export", s.ExportWorkflows).Methods("GET", "POST", "OPTIONS")
 	api.HandleFunc("/workflows/import", s.ImportWorkflows).Methods("POST", "OPTIONS")
+	api.HandleFunc("/workflows/run", s.ExecuteWorkflowByDefinition).Methods("POST", "OPTIONS")
 	api.HandleFunc("/workflows/{id}/export", s.ExportWorkflow).Methods("GET", "OPTIONS")
 	api.HandleFunc("/workflows/{id}", s.GetWorkflow).Methods("GET", "OPTIONS")
 	api.HandleFunc("/workflows/{id}", s.UpdateWorkflow).Methods("PUT", "PATCH", "OPTIONS")
@@ -34,7 +36,6 @@ func (s *APIServer) RegisterRoutes(router *mux.Router) {
 	api.HandleFunc("/workflows/{id}/execute", s.ExecuteWorkflow).Methods("POST", "OPTIONS")
 	api.HandleFunc("/workflows/{id}/execute-async", s.ExecuteWorkflowAsync).Methods("POST", "OPTIONS")
 	api.HandleFunc("/workflows/{id}/duplicate", s.DuplicateWorkflow).Methods("POST", "OPTIONS")
-	api.HandleFunc("/workflows/run", s.ExecuteWorkflowByDefinition).Methods("POST", "OPTIONS")
 
 	api.HandleFunc("/jobs", s.ListJobs).Methods("GET", "OPTIONS")
 	api.HandleFunc("/jobs/{id}", s.GetJob).Methods("GET", "OPTIONS")

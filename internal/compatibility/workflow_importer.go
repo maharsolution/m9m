@@ -196,11 +196,12 @@ type ImportOptions struct {
 	HonourActive bool
 
 	// CredentialResolver maps an n8n credential reference
-	// (type + name + optional id) onto a credential id that exists
-	// in m9m. Returning ok=false means "not resolvable": the
-	// importer keeps the credential name, leaves the id empty and
-	// reports a warning instead of failing the import.
-	CredentialResolver func(credType, name, id string) (resolvedID string, ok bool)
+	// (type + name + optional id) onto a credential that exists
+	// in m9m. It returns the resolved id and the name m9m stores for
+	// it. Returning ok=false means "not resolvable": the importer
+	// keeps the credential name, leaves the id empty and reports a
+	// warning instead of failing the import.
+	CredentialResolver func(credType, name, id string) (resolvedID string, resolvedName string, ok bool)
 
 	// IDExists reports whether a workflow id is already taken. When
 	// it is, the importer mints a fresh id instead of overwriting an
@@ -579,7 +580,7 @@ func (importer *N8nWorkflowImporter) convertNode(n8nNode N8nNodeData, opts Impor
 		})
 	}
 
-	credentials, credIssues := importer.convertCredentials(n8nNode.Credentials, opts)
+	credentials, credIssues := importer.convertCredentials(n8nNode.Credentials, opts, n8nNode.Disabled)
 	issues = append(issues, credIssues...)
 
 	node := &model.Node{
@@ -610,7 +611,11 @@ func (importer *N8nWorkflowImporter) convertNode(n8nNode N8nNodeData, opts Impor
 // convertCredentials normalises both n8n credential shapes onto
 // m9m's model. The modern shape is {type: {id, name}}; a credential
 // whose id cannot be resolved keeps its name and reports a warning.
-func (importer *N8nWorkflowImporter) convertCredentials(creds map[string]interface{}, opts ImportOptions) (map[string]model.Credential, []ConversionIssue) {
+//
+// disabled mirrors n8n's `replaceInvalidCredentials`, which skips
+// disabled nodes completely: their credential references are kept as
+// they are instead of being cleared.
+func (importer *N8nWorkflowImporter) convertCredentials(creds map[string]interface{}, opts ImportOptions, disabled bool) (map[string]model.Credential, []ConversionIssue) {
 	var issues []ConversionIssue
 	result := make(map[string]model.Credential)
 
@@ -620,6 +625,7 @@ func (importer *N8nWorkflowImporter) convertCredentials(creds map[string]interfa
 		}
 
 		var credID, credName string
+		aiGatewayManaged := false
 		switch value := raw.(type) {
 		case string:
 			// Legacy n8n shape: {"httpBasicAuth": "My Cred"}
@@ -632,10 +638,10 @@ func (importer *N8nWorkflowImporter) convertCredentials(creds map[string]interfa
 			if name, ok := value["name"].(string); ok {
 				credName = name
 			}
-			if credName == "" {
-				if name, ok := value["name"].(string); ok && name != "" {
-					credName = name
-				}
+			// AI Gateway managed credentials have no database record;
+			// n8n skips them entirely (`workflow-helpers.ts`).
+			if managed, ok := value["__aiGatewayManaged"].(bool); ok && managed {
+				aiGatewayManaged = true
 			}
 		default:
 			issues = append(issues, ConversionIssue{
@@ -652,9 +658,22 @@ func (importer *N8nWorkflowImporter) convertCredentials(creds map[string]interfa
 		}
 
 		resolvedID := credID
-		if opts.CredentialResolver != nil {
-			if id, ok := opts.CredentialResolver(credType, credName, credID); ok {
+		resolvedName := credName
+		switch {
+		case aiGatewayManaged:
+			// n8n never resolves these, the reference is kept as it is.
+			resolvedID = credID
+		case opts.CredentialResolver != nil:
+			id, name, ok := opts.CredentialResolver(credType, credName, credID)
+			if ok {
 				resolvedID = id
+				if name != "" {
+					resolvedName = name
+				}
+			} else if disabled {
+				// n8n skips disabled nodes, so a dangling reference is
+				// kept instead of being reported.
+				resolvedID = credID
 			} else {
 				resolvedID = ""
 				issues = append(issues, ConversionIssue{
@@ -668,7 +687,7 @@ func (importer *N8nWorkflowImporter) convertCredentials(creds map[string]interfa
 
 		result[credType] = model.Credential{
 			ID:   resolvedID,
-			Name: credName,
+			Name: resolvedName,
 			Type: credType,
 		}
 	}
@@ -1096,7 +1115,7 @@ type n8nExportNode struct {
 	TypeVersion      int                            `json:"typeVersion"`
 	Position         []int                          `json:"position"`
 	Parameters       map[string]interface{}         `json:"parameters"`
-	Credentials      map[string]n8nExportCredential `json:"credentials,omitempty"`
+	Credentials      map[string]n8nExportCredential `json:"credentials"`
 	Disabled         bool                           `json:"disabled"`
 	Notes            string                         `json:"notes,omitempty"`
 	Color            string                         `json:"color,omitempty"`
@@ -1159,6 +1178,11 @@ func (importer *N8nWorkflowImporter) buildExportWorkflow(workflow *model.Workflo
 	if exported.PinData == nil {
 		exported.PinData = map[string][]model.DataItem{}
 	}
+	if exported.VersionID == "" {
+		// n8n always writes a version id. A workflow that was created
+		// inside m9m has none, so one is minted for the export.
+		exported.VersionID = importer.generateVersionID(ImportOptions{})
+	}
 
 	for _, tag := range workflow.Tags {
 		tagID := ""
@@ -1197,18 +1221,18 @@ func (importer *N8nWorkflowImporter) buildExportWorkflow(workflow *model.Workflo
 		if exportedNode.Parameters == nil {
 			exportedNode.Parameters = map[string]interface{}{}
 		}
-		if len(node.Credentials) > 0 {
-			exportedNode.Credentials = make(map[string]n8nExportCredential, len(node.Credentials))
-			for credType, cred := range node.Credentials {
-				// An unresolved credential keeps its name and carries a
-				// null id, exactly like n8n's `{id: null, name}`.
-				var credID *string
-				if cred.ID != "" {
-					id := cred.ID
-					credID = &id
-				}
-				exportedNode.Credentials[credType] = n8nExportCredential{ID: credID, Name: cred.Name}
+		// n8n writes the credentials of every node, an empty object
+		// when the node has none.
+		exportedNode.Credentials = make(map[string]n8nExportCredential, len(node.Credentials))
+		for credType, cred := range node.Credentials {
+			// An unresolved credential keeps its name and carries a
+			// null id, exactly like n8n's `{id: null, name}`.
+			var credID *string
+			if cred.ID != "" {
+				id := cred.ID
+				credID = &id
 			}
+			exportedNode.Credentials[credType] = n8nExportCredential{ID: credID, Name: cred.Name}
 		}
 		exported.Nodes = append(exported.Nodes, exportedNode)
 	}
