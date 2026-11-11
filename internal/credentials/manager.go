@@ -1,8 +1,11 @@
 package credentials
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 	"sync"
 
 	"github.com/neul-labs/m9m/internal/model"
@@ -65,6 +68,12 @@ func (cm *CredentialManager) StoreCredentialFromWorkflow(credData map[string]int
 			for k, v := range dataMap {
 				if str, ok := v.(string); ok {
 					data[k] = str
+				} else if k == "oauthTokenData" {
+					encoded, err := json.Marshal(v)
+					if err != nil {
+						return fmt.Errorf("failed to encode OAuth token data: %w", err)
+					}
+					data[k] = string(encoded)
 				}
 			}
 		}
@@ -160,6 +169,17 @@ func (cm *CredentialManager) GetNodeCredentials(nodeID string) (map[string]strin
 
 		// Resolve credential values, handling environment variables
 		for key, value := range cred.Data {
+			// Preserve structured OAuth token data across the string-valued
+			// credential injection contract rather than producing Go map text.
+			if key == "oauthTokenData" {
+				if _, ok := value.(map[string]interface{}); ok {
+					encoded, err := json.Marshal(value)
+					if err != nil {
+						return nil, fmt.Errorf("failed to encode OAuth token data: %w", err)
+					}
+					value = string(encoded)
+				}
+			}
 			resolvedValue, err := cm.store.ResolveCredentialValue(value)
 			if err != nil {
 				return nil, fmt.Errorf("failed to resolve credential value for %s.%s: %v", paramName, key, err)
@@ -191,10 +211,10 @@ func (cm *CredentialManager) LoadFromStorage(store storage.WorkflowStorage) erro
 	}
 	for _, c := range creds {
 		cm.store.credentials[c.ID] = &Credential{
-			ID:    c.ID,
-			Name:  c.Name,
-			Type:  c.Type,
-			Data:  c.Data,
+			ID:   c.ID,
+			Name: c.Name,
+			Type: c.Type,
+			Data: c.Data,
 		}
 	}
 	return nil
@@ -249,4 +269,82 @@ func (cm *CredentialManager) GetCredential(id string) (*Credential, error) {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 	return cm.store.GetCredential(id)
+}
+
+// AccessTokenForType returns an OAuth access token for a stored
+// credential of the given type.
+//
+// The token is read from the n8n `oauthTokenData.access_token`
+// envelope first and falls back to the flat `accessToken` /
+// `oauthToken` fields. Environment placeholders are resolved through
+// the credential store, so a token stored as `${GOOGLE_TOKEN}` works
+// as well.
+//
+// The lookup backs the `loadOptions` providers: the parameter panel
+// asks the backend for the user's own files and the backend answers
+// with the credential it already holds — the browser never sees the
+// token.
+func (cm *CredentialManager) AccessTokenForType(credentialType string) (string, error) {
+	if cm == nil {
+		return "", fmt.Errorf("credential manager is not initialized")
+	}
+	credentialType = strings.TrimSpace(credentialType)
+	if credentialType == "" {
+		return "", fmt.Errorf("credential type is required")
+	}
+
+	cm.mu.RLock()
+	matches := make([]*Credential, 0, 4)
+	for _, cred := range cm.store.credentials {
+		if cred != nil && cred.Type == credentialType {
+			matches = append(matches, cred)
+		}
+	}
+	cm.mu.RUnlock()
+
+	// Stable order so repeated calls answer with the same credential.
+	sort.Slice(matches, func(i, j int) bool { return matches[i].ID < matches[j].ID })
+
+	for _, cred := range matches {
+		token := accessTokenFromData(cred.Data)
+		if token == "" {
+			continue
+		}
+		resolved, err := cm.store.ResolveCredentialValue(token)
+		if err != nil || resolved == "" {
+			continue
+		}
+		return resolved, nil
+	}
+	return "", fmt.Errorf("no %s credential with an access token is stored", credentialType)
+}
+
+// accessTokenFromData pulls the OAuth access token out of a credential
+// payload. n8n stores it inside `oauthTokenData` (an object or its JSON
+// text); m9m also accepts the flat `accessToken` field.
+func accessTokenFromData(data map[string]interface{}) string {
+	if data == nil {
+		return ""
+	}
+	if raw, ok := data["oauthTokenData"]; ok {
+		switch value := raw.(type) {
+		case map[string]interface{}:
+			if token, ok := value["access_token"].(string); ok && token != "" {
+				return token
+			}
+		case string:
+			var decoded map[string]interface{}
+			if err := json.Unmarshal([]byte(value), &decoded); err == nil {
+				if token, ok := decoded["access_token"].(string); ok && token != "" {
+					return token
+				}
+			}
+		}
+	}
+	for _, key := range []string{"accessToken", "oauthToken", "access_token"} {
+		if token, ok := data[key].(string); ok && token != "" {
+			return token
+		}
+	}
+	return ""
 }

@@ -49,6 +49,24 @@ type NodeTypeOptionRequest struct {
 	Action string
 	// Params carries the current parameter values of the node (may be nil).
 	Params map[string]interface{}
+	// Credentials resolves the access token of a stored credential.
+	//
+	// The parameter panel only sends node parameters — never secrets —
+	// so a provider that lists the user's own files (spreadsheets,
+	// repositories, buckets) reads its token from the server-side
+	// credential store through this resolver.
+	//
+	// May be nil when no credential manager is wired.
+	Credentials CredentialResolver
+}
+
+// CredentialResolver resolves an access token for a credential type.
+//
+// Implemented by *credentials.CredentialManager.
+type CredentialResolver interface {
+	// AccessTokenForType returns a usable OAuth access token for the
+	// first stored credential of the given type.
+	AccessTokenForType(credentialType string) (string, error)
 }
 
 // OptionProvider resolves the dynamic option list for one action.
@@ -273,11 +291,19 @@ func (s *APIServer) GetNodeTypeOptions(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), nodeTypeOptionTimeout)
 	defer cancel()
 
+	// The provider never receives credentials through the request body —
+	// it resolves them from the server-side store.
+	var resolver CredentialResolver
+	if s.credMgr != nil {
+		resolver = s.credMgr
+	}
+
 	options, err := provider(ctx, NodeTypeOptionRequest{
-		NodeType: name,
-		Property: property.Name,
-		Action:   action,
-		Params:   payload.Params,
+		NodeType:    name,
+		Property:    property.Name,
+		Action:      action,
+		Params:      payload.Params,
+		Credentials: resolver,
 	})
 	if err != nil {
 		log.Printf("[node-type-options] provider for action %q failed: %v", action, err)

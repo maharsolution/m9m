@@ -132,13 +132,19 @@ func (h *Handler) handleWebhookRequest(w http.ResponseWriter, r *http.Request, i
 		return
 	}
 
-	// Authenticate request. JWT auth has its own n8n-compatible wire
-	// shape (HTTP 403 + plain-text body "jwt expired" / "jwt not yet
-	// valid") which doesn't fit the generic JSON 401 envelope — branch
-	// out for those sentinel errors before falling through to the
-	// generic 401 response.
+	// Authenticate request. A rejection is answered in n8n's wire
+	// shape: the status n8n uses (401 when no credentials were
+	// presented, 403 when they were presented but rejected), the
+	// plain-text message n8n sends and no Content-Type header. The
+	// generic JSON envelope below is only the fallback for an
+	// unexpected internal failure.
 	if err := h.authenticateRequest(r, webhook); err != nil {
 		log.Printf("⚠️  Authentication failed for webhook %s: %v", webhook.ID, err)
+		var authErr *authFailure
+		if errors.As(err, &authErr) {
+			writeAuthFailure(w, authErr)
+			return
+		}
 		switch {
 		case errors.Is(err, errJWTExpired):
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -401,43 +407,45 @@ func (h *Handler) authenticateRequest(r *http.Request, webhook *Webhook) error {
 		// Basic authentication
 		username, password, ok := r.BasicAuth()
 		if !ok {
-			return fmt.Errorf("basic auth required")
+			// n8n: no Authorization header → 401 "Authorization is
+			// required!".
+			return newAuthFailure(http.StatusUnauthorized, authMessageRequired)
 		}
 
 		expectedUsername := getAuthData(authData, "username", "")
 		expectedPassword := getAuthData(authData, "password", "")
 
-	// n8n stores Basic Auth credentials separately from the webhook
-	// registration record. When no resolved credential is available,
-	// the fallback depends on whether the webhook was registered with
-	// a CredentialID:
-	//
-	//   * CredentialID set (modern path): the credential lookup
-	//     returned nothing usable — fail closed. The previous
-	//     "accept any well-formed header" behaviour was a security
-	//     hole: a misconfigured workflow would 200 OK on bogus
-	//     credentials. B-02 in bug-fix.MD.
-	//   * CredentialID empty (legacy path): the webhook was
-	//     registered before live auth-data was wired. Accept any
-	//     well-formed header so the Webhook node's own validator
-	//     can run; if it doesn't accept it, the Webhook node
-	//     will surface an auth error during execution instead.
-	if expectedUsername == "" && expectedPassword == "" {
-		if webhook.CredentialID != "" {
-			return fmt.Errorf("invalid credentials")
+		// n8n stores Basic Auth credentials separately from the webhook
+		// registration record. When no resolved credential is available,
+		// the fallback depends on whether the webhook was registered with
+		// a CredentialID:
+		//
+		//   * CredentialID set (modern path): the credential lookup
+		//     returned nothing usable — fail closed. The previous
+		//     "accept any well-formed header" behaviour was a security
+		//     hole: a misconfigured workflow would 200 OK on bogus
+		//     credentials. B-02 in bug-fix.MD.
+		//   * CredentialID empty (legacy path): the webhook was
+		//     registered before live auth-data was wired. Accept any
+		//     well-formed header so the Webhook node's own validator
+		//     can run; if it doesn't accept it, the Webhook node
+		//     will surface an auth error during execution instead.
+		if expectedUsername == "" && expectedPassword == "" {
+			if webhook.CredentialID != "" {
+				return newAuthFailure(http.StatusUnauthorized, authMessageBadCredentials)
+			}
+			if username == "" && password == "" {
+				return newAuthFailure(http.StatusUnauthorized, authMessageBadCredentials)
+			}
+			break
 		}
-		if username == "" && password == "" {
-			return fmt.Errorf("invalid credentials")
-		}
-		break
-	}
 
 		// SECURITY: Use constant-time comparison to prevent timing attacks
 		usernameMatch := subtle.ConstantTimeCompare([]byte(username), []byte(expectedUsername)) == 1
 		passwordMatch := subtle.ConstantTimeCompare([]byte(password), []byte(expectedPassword)) == 1
 
 		if !usernameMatch || !passwordMatch {
-			return fmt.Errorf("invalid credentials")
+			return newAuthFailure(http.StatusUnauthorized, authMessageBadCredentials)
 		}
 
 	case "apiKey":
@@ -450,14 +458,15 @@ func (h *Handler) authenticateRequest(r *http.Request, webhook *Webhook) error {
 			if r.URL.Query().Get("apiKey") != "" {
 				log.Printf("SECURITY WARNING: API key provided in query parameter (rejected). Use X-API-Key header instead.")
 			}
-			return fmt.Errorf("API key required in X-API-Key header")
+			// n8n rejects a missing API key with 403.
+			return newAuthFailure(http.StatusForbidden, authMessageWrongData)
 		}
 
 		expectedKey := getAuthData(authData, "apiKey", "")
 
 		// SECURITY: Use constant-time comparison to prevent timing attacks
 		if subtle.ConstantTimeCompare([]byte(apiKey), []byte(expectedKey)) != 1 {
-			return fmt.Errorf("invalid API key")
+			return newAuthFailure(http.StatusForbidden, authMessageWrongData)
 		}
 
 	case "header", "headerAuth":
@@ -469,7 +478,8 @@ func (h *Handler) authenticateRequest(r *http.Request, webhook *Webhook) error {
 
 		// SECURITY: Use constant-time comparison to prevent timing attacks
 		if subtle.ConstantTimeCompare([]byte(actualValue), []byte(headerValue)) != 1 {
-			return fmt.Errorf("invalid header authentication")
+			// n8n rejects a missing or wrong custom header with 403.
+			return newAuthFailure(http.StatusForbidden, authMessageWrongData)
 		}
 
 	case "jwtAuth", "jwt":
@@ -490,14 +500,23 @@ func (h *Handler) authenticateRequest(r *http.Request, webhook *Webhook) error {
 		// will fall through with a generic "unsupported alg" error.
 		token := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
 		if token == "" || token == r.Header.Get("Authorization") {
-			return fmt.Errorf("jwt auth required")
+			// n8n: no bearer token → 401 "No token provided".
+			return newAuthFailure(http.StatusUnauthorized, authMessageNoToken)
 		}
 		if err := verifyJWT(token, authData); err != nil {
-			return err
+			switch {
+			case errors.Is(err, errJWTExpired):
+				return newAuthFailure(http.StatusForbidden, "jwt expired")
+			case errors.Is(err, errJWTNotYetValid):
+				return newAuthFailure(http.StatusForbidden, "jwt not yet valid")
+			}
+			// n8n: a token that is present but not valid → 403
+			// "invalid token".
+			return newAuthFailure(http.StatusForbidden, authMessageBadToken)
 		}
 
 	default:
-		return fmt.Errorf("unsupported auth type: %s", webhook.AuthType)
+		return newAuthFailure(http.StatusUnauthorized, authMessageRequired)
 	}
 
 	return nil

@@ -275,11 +275,18 @@ func TestHandler_NotFound_TestPath_AlsoReturnsJSON(t *testing.T) {
 	assert.Contains(t, body["message"], "GET missing")
 }
 
-// TestHandler_Unauthorized_ReturnsJSON pins the 401 wire shape for
+// TestHandler_Unauthorized_MatchesN8n pins the 401 wire shape for
 // webhooks that have authType="basic" with a configured username and
 // password — when the caller omits the Authorization header the
-// handler must surface a JSON 401, not text/plain.
-func TestHandler_Unauthorized_ReturnsJSON(t *testing.T) {
+// handler must answer exactly what n8n answers: HTTP 401, the
+// plain-text body "Authorization is required!", a
+// `WWW-Authenticate: Basic realm="Webhook"` challenge and NO
+// Content-Type header.
+//
+// Verified live against http://187.77.113.218:5678/webhook/basic_auth
+// on 2026-11-11. m9m used to send a JSON envelope here, which broke
+// parity on both the status code and the Content-Type.
+func TestHandler_Unauthorized_MatchesN8n(t *testing.T) {
 	mgr, _, _ := newTestManager()
 
 	wh := &Webhook{
@@ -307,22 +314,18 @@ func TestHandler_Unauthorized_ReturnsJSON(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
-	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"),
-		"401 must use application/json, not text/plain")
-
-	var body map[string]interface{}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-	assert.Equal(t, float64(http.StatusUnauthorized), body["code"])
-	assert.Equal(t, "Authentication failed", body["message"])
-	assert.NotEmpty(t, body["hint"], "hint must provide remediation guidance")
+	assert.Empty(t, rec.Header().Get("Content-Type"),
+		"n8n sends no Content-Type on an auth rejection")
+	assert.Equal(t, `Basic realm="Webhook"`, rec.Header().Get("WWW-Authenticate"))
+	assert.Equal(t, "Authorization is required!", rec.Body.String())
 }
 
-// TestHandler_Unauthorized_WrongPassword_ReturnsJSON exercises the
+// TestHandler_Unauthorized_WrongPassword_MatchesN8n exercises the
 // same wire shape for the case where credentials are provided but
-// invalid. Without this, callers parsing m9m 401s would silently
-// treat "credentials were wrong" and "credentials were missing" as
-// the same text/plain body.
-func TestHandler_Unauthorized_WrongPassword_ReturnsJSON(t *testing.T) {
+// invalid. n8n answers 401 "Authentication data is wrong!" — the
+// message differs from the "not presented at all" case, so a caller
+// can tell the two apart.
+func TestHandler_Unauthorized_WrongPassword_MatchesN8n(t *testing.T) {
 	mgr, _, _ := newTestManager()
 
 	wh := &Webhook{
@@ -350,20 +353,15 @@ func TestHandler_Unauthorized_WrongPassword_ReturnsJSON(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
-	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-
-	var body map[string]interface{}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-	assert.Equal(t, float64(http.StatusUnauthorized), body["code"])
-	assert.Equal(t, "Authentication failed", body["message"])
+	assert.Empty(t, rec.Header().Get("Content-Type"))
+	assert.Equal(t, `Basic realm="Webhook"`, rec.Header().Get("WWW-Authenticate"))
+	assert.Equal(t, "Authentication data is wrong!", rec.Body.String())
 }
 
-// TestHandler_Unauthorized_HeaderAuth_ReturnsJSON covers the
-// `authType: header` (custom header auth) path — the same JSON 401
-// must come back whether the caller uses basic auth or a custom
-// header. n8n's webhook 401 wire shape is the same regardless of
-// which auth scheme failed.
-func TestHandler_Unauthorized_HeaderAuth_ReturnsJSON(t *testing.T) {
+// TestHandler_Unauthorized_HeaderAuth_MatchesN8n covers the// `authType: header` (custom header auth) path. n8n answers 403 for
+// a missing or wrong custom header — credentials were presented (or
+// expected) and rejected, which is what 403 means.
+func TestHandler_Unauthorized_HeaderAuth_MatchesN8n(t *testing.T) {
 	mgr, _, _ := newTestManager()
 
 	wh := &Webhook{
@@ -385,17 +383,48 @@ func TestHandler_Unauthorized_HeaderAuth_ReturnsJSON(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/webhook/hdr",
 		bytes.NewReader([]byte(`{}`)))
-	// No X-Custom-Secret header — handler must 401.
+	// No X-Custom-Secret header — handler must 403 like n8n.
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusUnauthorized, rec.Code)
-	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Empty(t, rec.Header().Get("Content-Type"))
+	assert.Equal(t, "Authorization data is wrong!", rec.Body.String())
+}
 
-	var body map[string]interface{}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-	assert.Equal(t, float64(http.StatusUnauthorized), body["code"])
+// TestHandler_Unauthorized_HeaderAuth_WrongValue_MatchesN8n covers
+// the "credentials presented but wrong" branch of the custom-header
+// auth path.
+func TestHandler_Unauthorized_HeaderAuth_WrongValue_MatchesN8n(t *testing.T) {
+	mgr, _, _ := newTestManager()
+
+	wh := &Webhook{
+		ID:         "wh-header-wrong",
+		WorkflowID: "wf-1",
+		Path:       "/hdr-wrong",
+		Method:     "POST",
+		Active:     true,
+		AuthType:   "header",
+		AuthData: map[string]interface{}{
+			"headerName":  "X-Custom-Secret",
+			"headerValue": "s3cret",
+		},
+	}
+	require.NoError(t, mgr.RegisterWebhook(wh))
+
+	h := NewHandler(mgr)
+	router := newHandlerRouter(h)
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook/hdr-wrong",
+		bytes.NewReader([]byte(`{}`)))
+	req.Header.Set("X-Custom-Secret", "nope")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Equal(t, "Authorization data is wrong!", rec.Body.String())
 }
 
 func TestHandler_BasicAuthAlias_AcceptsConfiguredCredentials(t *testing.T) {

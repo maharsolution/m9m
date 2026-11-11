@@ -304,6 +304,13 @@ func runServe(cmd *cobra.Command, args []string) {
 
 	apiServer := api.NewAPIServerWithConfig(eng, sched, store, apiConfig)
 	apiServer.SetJobQueue(jobQueue)
+	// Register the `loadOptions` providers of the nodes whose critical
+	// parameter is a resource locator (n8n parity: the parameter panel
+	// lists the user's own files instead of asking for a raw ID).
+	//
+	// The providers run against the server-side credential store — the
+	// browser never receives a token.
+	registerLoadOptionProviders()
 	// Wire the OTEL manager into the API server so PUT /api/v1/otel
 	// can hot-reload the tracer provider without a restart. The
 	// manager is non-nil in both "enabled" and "disabled at boot"

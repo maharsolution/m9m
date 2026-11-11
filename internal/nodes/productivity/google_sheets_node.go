@@ -27,6 +27,9 @@ func NewGoogleSheetsNode() *GoogleSheetsNode {
 			Category:    "productivity",
 			Group:       []string{"productivity"},
 			Properties:  googleSheetsProperties(),
+			Credentials: []base.NodeCredentialSpec{
+				{Type: "googleSheetsOAuth2Api", DisplayName: "Google Sheets OAuth2 API", Required: true},
+			},
 		}),
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
@@ -77,7 +80,25 @@ func (n *GoogleSheetsNode) Execute(inputData []model.DataItem, nodeParams map[st
 	return results, nil
 }
 
+// getAccessToken resolves the OAuth access token from the flattened
+// `googleSheetsOAuth2Api` envelope (n8n stores it under
+// oauthTokenData.access_token; m9m accepts `accessToken` too), then from
+// the legacy nested `credentials` map.
 func (n *GoogleSheetsNode) getAccessToken(nodeParams map[string]interface{}) string {
+	if token := base.CredentialString(nodeParams,
+		"googleSheetsOAuth2Api_accessToken",
+		"googleSheetsOAuth2Api_oauthToken"); token != "" {
+		return token
+	}
+	tokenData, _ := nodeParams["googleSheetsOAuth2Api_oauthTokenData"].(map[string]interface{})
+	if raw, ok := nodeParams["googleSheetsOAuth2Api_oauthTokenData"].(string); ok {
+		_ = json.Unmarshal([]byte(raw), &tokenData)
+	}
+	if tokenData != nil {
+		if token := base.CredentialString(tokenData, "access_token"); token != "" {
+			return token
+		}
+	}
 	if creds, ok := nodeParams["credentials"].(map[string]interface{}); ok {
 		if token, ok := creds["oauthToken"].(string); ok && token != "" {
 			return token
@@ -90,11 +111,9 @@ func (n *GoogleSheetsNode) getAccessToken(nodeParams map[string]interface{}) str
 }
 
 func (n *GoogleSheetsNode) handleSheetOperation(operation, token string, nodeParams map[string]interface{}, item model.DataItem) (map[string]interface{}, error) {
-	spreadsheetId, _ := nodeParams["spreadsheetId"].(string)
+	spreadsheetId := SpreadsheetID(nodeParams["spreadsheetId"])
 	if spreadsheetId == "" {
-		if id, ok := item.JSON["spreadsheetId"].(string); ok {
-			spreadsheetId = id
-		}
+		spreadsheetId = SpreadsheetID(item.JSON["spreadsheetId"])
 	}
 	if spreadsheetId == "" {
 		return nil, fmt.Errorf("spreadsheetId is required")
@@ -128,7 +147,7 @@ func (n *GoogleSheetsNode) handleSpreadsheetOperation(operation, token string, n
 		}
 		return n.createSpreadsheet(token, title)
 	case "get":
-		spreadsheetId, _ := nodeParams["spreadsheetId"].(string)
+		spreadsheetId := SpreadsheetID(nodeParams["spreadsheetId"])
 		if spreadsheetId == "" {
 			return nil, fmt.Errorf("spreadsheetId is required")
 		}

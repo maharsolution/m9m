@@ -32,9 +32,7 @@ func googleSheetsProperties() []base.NodeProperty {
 		nodeprops.Opt("Operation", "operation", "read",
 			"What to do with the selected resource.",
 			ops, true),
-		nodeprops.Str("Spreadsheet ID", "spreadsheetId", "",
-			"ID of the spreadsheet (the long id in the sheet URL).",
-			"1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms", true).
+		spreadsheetIDProperty().
 			WithDisplayOptions(nodeprops.Show("resource", "sheet")),
 		nodeprops.Str("Range", "range", "A:Z",
 			"A1-notation range of the sheet (empty = all data).",
@@ -49,4 +47,38 @@ func googleSheetsProperties() []base.NodeProperty {
 			WithDisplayOptions(nodeprops.Show("resource", "sheet", "operation", "append", "update")),
 	}
 	return append(props, nodeprops.Settings()...)
+}
+
+// spreadsheetIDProperty describes the "which spreadsheet" parameter.
+//
+// It is a resource locator (n8n's `documentId`): the panel stores
+// `{__rl: true, value, mode}` and the `loadSpreadsheets` action fills
+// the picker with the spreadsheets of the connected Google account.
+// The plain id stays valid, so workflows that were saved before the
+// locator existed keep working.
+func spreadsheetIDProperty() base.NodeProperty {
+	return base.NodeProperty{
+		DisplayName: "Spreadsheet ID",
+		Name:        "spreadsheetId",
+		Type:        "resourceLocator",
+		Default:     "",
+		Description: "ID of the spreadsheet (the long id in the sheet URL).",
+		Required:    true,
+		Placeholder: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+		Options: []base.Option{
+			{
+				Name:        "From list",
+				Value:       "list",
+				Action:      "loadSpreadsheets",
+				Description: "Pick a spreadsheet from the connected Google account.",
+			},
+			{Name: "Enter ID", Value: "id"},
+		},
+		TypeOptions: map[string]interface{}{
+			"modes": []map[string]interface{}{
+				{"displayName": "From list", "name": "list", "value": "list"},
+				{"displayName": "Enter ID", "name": "id", "value": "id"},
+			},
+		},
+	}
 }

@@ -38,28 +38,28 @@ type GCPConfig struct {
 
 // StorageOperation represents a Cloud Storage operation
 type StorageOperation struct {
-	Operation     string                 `json:"operation"`
-	Bucket        string                 `json:"bucket"`
-	Object        string                 `json:"object,omitempty"`
-	Source        string                 `json:"source,omitempty"`
-	Destination   string                 `json:"destination,omitempty"`
-	Prefix        string                 `json:"prefix,omitempty"`
-	Delimiter     string                 `json:"delimiter,omitempty"`
-	ContentType   string                 `json:"contentType,omitempty"`
-	Metadata      map[string]string      `json:"metadata,omitempty"`
-	ACL           *StorageACL            `json:"acl,omitempty"`
-	Lifecycle     *StorageLifecycle      `json:"lifecycle,omitempty"`
-	Versioning    bool                   `json:"versioning"`
-	Encryption    *StorageEncryption     `json:"encryption,omitempty"`
-	StorageClass  string                 `json:"storageClass,omitempty"`
-	Options       map[string]interface{} `json:"options,omitempty"`
+	Operation    string                 `json:"operation"`
+	Bucket       string                 `json:"bucket"`
+	Object       string                 `json:"object,omitempty"`
+	Source       string                 `json:"source,omitempty"`
+	Destination  string                 `json:"destination,omitempty"`
+	Prefix       string                 `json:"prefix,omitempty"`
+	Delimiter    string                 `json:"delimiter,omitempty"`
+	ContentType  string                 `json:"contentType,omitempty"`
+	Metadata     map[string]string      `json:"metadata,omitempty"`
+	ACL          *StorageACL            `json:"acl,omitempty"`
+	Lifecycle    *StorageLifecycle      `json:"lifecycle,omitempty"`
+	Versioning   bool                   `json:"versioning"`
+	Encryption   *StorageEncryption     `json:"encryption,omitempty"`
+	StorageClass string                 `json:"storageClass,omitempty"`
+	Options      map[string]interface{} `json:"options,omitempty"`
 }
 
 // StorageACL defines access control settings
 type StorageACL struct {
-	DefaultObjectACL string                `json:"defaultObjectACL,omitempty"`
-	BucketACL        string                `json:"bucketACL,omitempty"`
-	Permissions      []StoragePermission   `json:"permissions,omitempty"`
+	DefaultObjectACL string              `json:"defaultObjectACL,omitempty"`
+	BucketACL        string              `json:"bucketACL,omitempty"`
+	Permissions      []StoragePermission `json:"permissions,omitempty"`
 }
 
 // StoragePermission defines individual permissions
@@ -81,7 +81,7 @@ type StorageLifecycleRule struct {
 
 // StorageLifecycleAction defines lifecycle action
 type StorageLifecycleAction struct {
-	Type         string `json:"type"`         // Delete, SetStorageClass
+	Type         string `json:"type"` // Delete, SetStorageClass
 	StorageClass string `json:"storageClass,omitempty"`
 }
 
@@ -104,22 +104,22 @@ type StorageEncryption struct {
 
 // StorageObject represents a Cloud Storage object
 type StorageObject struct {
-	Name            string            `json:"name"`
-	Bucket          string            `json:"bucket"`
-	Size            int64             `json:"size"`
-	ContentType     string            `json:"contentType"`
-	TimeCreated     time.Time         `json:"timeCreated"`
-	Updated         time.Time         `json:"updated"`
-	Generation      int64             `json:"generation"`
-	Metageneration  int64             `json:"metageneration"`
-	StorageClass    string            `json:"storageClass"`
-	MD5             string            `json:"md5,omitempty"`
-	CRC32C          string            `json:"crc32c,omitempty"`
-	ETag            string            `json:"etag"`
-	Metadata        map[string]string `json:"metadata,omitempty"`
-	ACL             []StorageACLEntry `json:"acl,omitempty"`
-	Owner           string            `json:"owner,omitempty"`
-	RetentionExpires *time.Time       `json:"retentionExpires,omitempty"`
+	Name             string            `json:"name"`
+	Bucket           string            `json:"bucket"`
+	Size             int64             `json:"size"`
+	ContentType      string            `json:"contentType"`
+	TimeCreated      time.Time         `json:"timeCreated"`
+	Updated          time.Time         `json:"updated"`
+	Generation       int64             `json:"generation"`
+	Metageneration   int64             `json:"metageneration"`
+	StorageClass     string            `json:"storageClass"`
+	MD5              string            `json:"md5,omitempty"`
+	CRC32C           string            `json:"crc32c,omitempty"`
+	ETag             string            `json:"etag"`
+	Metadata         map[string]string `json:"metadata,omitempty"`
+	ACL              []StorageACLEntry `json:"acl,omitempty"`
+	Owner            string            `json:"owner,omitempty"`
+	RetentionExpires *time.Time        `json:"retentionExpires,omitempty"`
 }
 
 // StorageACLEntry represents an ACL entry
@@ -131,21 +131,21 @@ type StorageACLEntry struct {
 
 // StorageBucket represents a Cloud Storage bucket
 type StorageBucket struct {
-	Name               string                     `json:"name"`
-	Location           string                     `json:"location"`
-	StorageClass       string                     `json:"storageClass"`
-	TimeCreated        time.Time                  `json:"timeCreated"`
-	Updated            time.Time                  `json:"updated"`
-	Metageneration     int64                      `json:"metageneration"`
-	Labels             map[string]string          `json:"labels,omitempty"`
-	Lifecycle          *StorageLifecycle          `json:"lifecycle,omitempty"`
-	Versioning         bool                       `json:"versioning"`
-	RequesterPays      bool                       `json:"requesterPays"`
-	RetentionPolicy    *StorageRetentionPolicy    `json:"retentionPolicy,omitempty"`
-	Encryption         *StorageEncryption         `json:"encryption,omitempty"`
-	CORS               []StorageCORSPolicy        `json:"cors,omitempty"`
-	Website            *StorageWebsiteConfig      `json:"website,omitempty"`
-	Logging            *StorageLoggingConfig      `json:"logging,omitempty"`
+	Name            string                  `json:"name"`
+	Location        string                  `json:"location"`
+	StorageClass    string                  `json:"storageClass"`
+	TimeCreated     time.Time               `json:"timeCreated"`
+	Updated         time.Time               `json:"updated"`
+	Metageneration  int64                   `json:"metageneration"`
+	Labels          map[string]string       `json:"labels,omitempty"`
+	Lifecycle       *StorageLifecycle       `json:"lifecycle,omitempty"`
+	Versioning      bool                    `json:"versioning"`
+	RequesterPays   bool                    `json:"requesterPays"`
+	RetentionPolicy *StorageRetentionPolicy `json:"retentionPolicy,omitempty"`
+	Encryption      *StorageEncryption      `json:"encryption,omitempty"`
+	CORS            []StorageCORSPolicy     `json:"cors,omitempty"`
+	Website         *StorageWebsiteConfig   `json:"website,omitempty"`
+	Logging         *StorageLoggingConfig   `json:"logging,omitempty"`
 }
 
 // StorageRetentionPolicy defines bucket retention policy
@@ -178,25 +178,31 @@ type StorageLoggingConfig struct {
 
 // StorageOperationResult represents the result of a storage operation
 type StorageOperationResult struct {
-	Operation     string                 `json:"operation"`
-	Success       bool                   `json:"success"`
-	Bucket        string                 `json:"bucket"`
-	Object        string                 `json:"object,omitempty"`
-	Objects       []StorageObject        `json:"objects,omitempty"`
-	Buckets       []StorageBucket        `json:"buckets,omitempty"`
-	Data          interface{}            `json:"data,omitempty"`
-	Size          int64                  `json:"size,omitempty"`
-	ContentType   string                 `json:"contentType,omitempty"`
-	Generation    int64                  `json:"generation,omitempty"`
-	URL           string                 `json:"url,omitempty"`
-	ExecutionTime time.Duration          `json:"executionTime"`
-	Error         string                 `json:"error,omitempty"`
+	Operation     string          `json:"operation"`
+	Success       bool            `json:"success"`
+	Bucket        string          `json:"bucket"`
+	Object        string          `json:"object,omitempty"`
+	Objects       []StorageObject `json:"objects,omitempty"`
+	Buckets       []StorageBucket `json:"buckets,omitempty"`
+	Data          interface{}     `json:"data,omitempty"`
+	Size          int64           `json:"size,omitempty"`
+	ContentType   string          `json:"contentType,omitempty"`
+	Generation    int64           `json:"generation,omitempty"`
+	URL           string          `json:"url,omitempty"`
+	ExecutionTime time.Duration   `json:"executionTime"`
+	Error         string          `json:"error,omitempty"`
 }
 
 // NewCloudStorageNode creates a new Cloud Storage operations node
 func NewCloudStorageNode() *CloudStorageNode {
 	return &CloudStorageNode{
-		BaseNode:  base.NewBaseNode(base.NodeDescription{Name: "Google Cloud Storage", Description: "Google Cloud Storage operations", Category: "cloud", Group: []string{"cloud"}, Properties: gcsProperties()}),
+		BaseNode: base.NewBaseNode(base.NodeDescription{
+			Name: "Google Cloud Storage", Description: "Google Cloud Storage operations", Category: "cloud",
+			Group: []string{"cloud"}, Properties: gcsProperties(),
+			Credentials: []base.NodeCredentialSpec{
+				{Type: "googleCloudStorage", DisplayName: "Google Cloud Storage", Required: false},
+			},
+		}),
 		evaluator: expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 		ctx:       context.Background(),
 	}
@@ -234,11 +240,11 @@ func (n *CloudStorageNode) Execute(inputData []model.DataItem, nodeParams map[st
 		// Create expression context
 		exprContext := &expressions.ExpressionContext{
 			ActiveNodeName:      "Google Cloud Storage",
-			RunIndex:           0,
-			ItemIndex:          0,
-			Mode:               expressions.ModeManual,
+			RunIndex:            0,
+			ItemIndex:           0,
+			Mode:                expressions.ModeManual,
 			ConnectionInputData: []model.DataItem{item},
-			AdditionalKeys:     &expressions.AdditionalKeys{},
+			AdditionalKeys:      &expressions.AdditionalKeys{},
 		}
 
 		// Execute storage operation
@@ -1016,6 +1022,17 @@ func (n *CloudStorageNode) parseGCPConfig(nodeParams map[string]interface{}) (*G
 
 	if useADC, ok := nodeParams["useADC"].(bool); ok {
 		config.UseADC = useADC
+	}
+
+	// Fallback to the flattened `googleCloudStorage_*` credential envelope.
+	if config.ProjectID == "" {
+		config.ProjectID = base.CredentialString(nodeParams, "googleCloudStorage_projectId")
+	}
+	if config.KeyFileContent == "" {
+		config.KeyFileContent = base.CredentialString(nodeParams, "googleCloudStorage_keyFileContent")
+	}
+	if config.ServiceAccountEmail == "" {
+		config.ServiceAccountEmail = base.CredentialString(nodeParams, "googleCloudStorage_serviceAccountEmail")
 	}
 
 	return config, nil

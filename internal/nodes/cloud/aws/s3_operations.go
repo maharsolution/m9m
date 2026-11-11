@@ -23,22 +23,22 @@ import (
 // S3OperationsNode provides comprehensive S3 operations
 type S3OperationsNode struct {
 	*base.BaseNode
-	evaluator *expressions.GojaExpressionEvaluator
-	s3Client  *s3.S3
-	uploader  *s3manager.Uploader
+	evaluator  *expressions.GojaExpressionEvaluator
+	s3Client   *s3.S3
+	uploader   *s3manager.Uploader
 	downloader *s3manager.Downloader
-	session   *session.Session
+	session    *session.Session
 }
 
 // S3Config holds S3 connection configuration
 type S3Config struct {
-	Region          string `json:"region"`
-	AccessKeyID     string `json:"accessKeyId"`
-	SecretAccessKey string `json:"secretAccessKey"`
-	SessionToken    string `json:"sessionToken,omitempty"`
-	Endpoint        string `json:"endpoint,omitempty"` // For S3-compatible services
-	S3ForcePathStyle bool  `json:"s3ForcePathStyle"`
-	DisableSSL      bool   `json:"disableSSL"`
+	Region           string `json:"region"`
+	AccessKeyID      string `json:"accessKeyId"`
+	SecretAccessKey  string `json:"secretAccessKey"`
+	SessionToken     string `json:"sessionToken,omitempty"`
+	Endpoint         string `json:"endpoint,omitempty"` // For S3-compatible services
+	S3ForcePathStyle bool   `json:"s3ForcePathStyle"`
+	DisableSSL       bool   `json:"disableSSL"`
 }
 
 // S3Operation represents an S3 operation configuration
@@ -70,8 +70,8 @@ type S3CopySource struct {
 
 // S3Encryption defines encryption settings
 type S3Encryption struct {
-	Method    string `json:"method"` // SSE-S3, SSE-KMS, SSE-C
-	KMSKeyID  string `json:"kmsKeyId,omitempty"`
+	Method      string `json:"method"` // SSE-S3, SSE-KMS, SSE-C
+	KMSKeyID    string `json:"kmsKeyId,omitempty"`
 	CustomerKey string `json:"customerKey,omitempty"`
 }
 
@@ -82,11 +82,11 @@ type S3LifecycleConfig struct {
 
 // S3LifecycleRule defines a lifecycle rule
 type S3LifecycleRule struct {
-	ID                   string                 `json:"id"`
-	Status               string                 `json:"status"` // Enabled, Disabled
-	Filter               *S3LifecycleFilter     `json:"filter,omitempty"`
-	Transitions          []S3LifecycleTransition `json:"transitions,omitempty"`
-	Expiration           *S3LifecycleExpiration `json:"expiration,omitempty"`
+	ID                             string                            `json:"id"`
+	Status                         string                            `json:"status"` // Enabled, Disabled
+	Filter                         *S3LifecycleFilter                `json:"filter,omitempty"`
+	Transitions                    []S3LifecycleTransition           `json:"transitions,omitempty"`
+	Expiration                     *S3LifecycleExpiration            `json:"expiration,omitempty"`
 	AbortIncompleteMultipartUpload *S3AbortIncompleteMultipartUpload `json:"abortIncompleteMultipartUpload,omitempty"`
 }
 
@@ -128,26 +128,32 @@ type S3Object struct {
 
 // S3OperationResult represents the result of an S3 operation
 type S3OperationResult struct {
-	Operation     string                 `json:"operation"`
-	Success       bool                   `json:"success"`
-	Bucket        string                 `json:"bucket"`
-	Key           string                 `json:"key,omitempty"`
-	Objects       []S3Object             `json:"objects,omitempty"`
-	Data          interface{}            `json:"data,omitempty"`
-	Metadata      map[string]string      `json:"metadata,omitempty"`
-	ContentType   string                 `json:"contentType,omitempty"`
-	Size          int64                  `json:"size,omitempty"`
-	ETag          string                 `json:"etag,omitempty"`
-	VersionID     string                 `json:"versionId,omitempty"`
-	Location      string                 `json:"location,omitempty"`
-	ExecutionTime time.Duration          `json:"executionTime"`
-	Error         string                 `json:"error,omitempty"`
+	Operation     string            `json:"operation"`
+	Success       bool              `json:"success"`
+	Bucket        string            `json:"bucket"`
+	Key           string            `json:"key,omitempty"`
+	Objects       []S3Object        `json:"objects,omitempty"`
+	Data          interface{}       `json:"data,omitempty"`
+	Metadata      map[string]string `json:"metadata,omitempty"`
+	ContentType   string            `json:"contentType,omitempty"`
+	Size          int64             `json:"size,omitempty"`
+	ETag          string            `json:"etag,omitempty"`
+	VersionID     string            `json:"versionId,omitempty"`
+	Location      string            `json:"location,omitempty"`
+	ExecutionTime time.Duration     `json:"executionTime"`
+	Error         string            `json:"error,omitempty"`
 }
 
 // NewS3OperationsNode creates a new S3 operations node
 func NewS3OperationsNode() *S3OperationsNode {
 	return &S3OperationsNode{
-		BaseNode:  base.NewBaseNode(base.NodeDescription{Name: "AWS S3", Description: "Amazon S3 storage operations", Category: "cloud", Group: []string{"cloud"}, Properties: s3Properties()}),
+		BaseNode: base.NewBaseNode(base.NodeDescription{
+			Name: "AWS S3", Description: "Amazon S3 storage operations", Category: "cloud",
+			Group: []string{"cloud"}, Properties: s3Properties(),
+			Credentials: []base.NodeCredentialSpec{
+				{Type: "aws", DisplayName: "AWS", Required: true},
+			},
+		}),
 		evaluator: expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 	}
 }
@@ -183,11 +189,11 @@ func (n *S3OperationsNode) Execute(inputData []model.DataItem, nodeParams map[st
 		// Create expression context
 		context := &expressions.ExpressionContext{
 			ActiveNodeName:      "AWS S3",
-			RunIndex:           0,
-			ItemIndex:          0,
-			Mode:               expressions.ModeManual,
+			RunIndex:            0,
+			ItemIndex:           0,
+			Mode:                expressions.ModeManual,
 			ConnectionInputData: []model.DataItem{item},
-			AdditionalKeys:     &expressions.AdditionalKeys{},
+			AdditionalKeys:      &expressions.AdditionalKeys{},
 		}
 
 		// Execute S3 operation
@@ -962,8 +968,6 @@ func (n *S3OperationsNode) parseS3Config(nodeParams map[string]interface{}) (*S3
 
 	if region, ok := nodeParams["region"].(string); ok {
 		config.Region = region
-	} else {
-		config.Region = "us-east-1" // Default region
 	}
 
 	if accessKeyID, ok := nodeParams["accessKeyId"].(string); ok {
@@ -988,6 +992,11 @@ func (n *S3OperationsNode) parseS3Config(nodeParams map[string]interface{}) (*S3
 
 	if disableSSL, ok := nodeParams["disableSSL"].(bool); ok {
 		config.DisableSSL = disableSSL
+	}
+
+	applyAWSCredentialEnvelope(nodeParams, &config.Region, &config.AccessKeyID, &config.SecretAccessKey, &config.SessionToken)
+	if config.Endpoint == "" {
+		config.Endpoint = base.CredentialString(nodeParams, "aws_endpoint")
 	}
 
 	return config, nil

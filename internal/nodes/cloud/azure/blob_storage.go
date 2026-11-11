@@ -21,40 +21,40 @@ import (
 // BlobStorageNode provides Azure Blob Storage operations
 type BlobStorageNode struct {
 	*base.BaseNode
-	evaluator         *expressions.GojaExpressionEvaluator
-	serviceURL        *azblob.ServiceURL
-	containerURLs     map[string]*azblob.ContainerURL
-	credential        azblob.Credential
-	ctx               context.Context
+	evaluator     *expressions.GojaExpressionEvaluator
+	serviceURL    *azblob.ServiceURL
+	containerURLs map[string]*azblob.ContainerURL
+	credential    azblob.Credential
+	ctx           context.Context
 }
 
 // AzureConfig holds Azure authentication configuration
 type AzureConfig struct {
-	AccountName   string `json:"accountName"`
-	AccountKey    string `json:"accountKey,omitempty"`
-	SASToken      string `json:"sasToken,omitempty"`
-	ConnectionString string `json:"connectionString,omitempty"`
-	TenantID      string `json:"tenantId,omitempty"`
-	ClientID      string `json:"clientId,omitempty"`
-	ClientSecret  string `json:"clientSecret,omitempty"`
-	UseManagedIdentity bool `json:"useManagedIdentity"`
+	AccountName        string `json:"accountName"`
+	AccountKey         string `json:"accountKey,omitempty"`
+	SASToken           string `json:"sasToken,omitempty"`
+	ConnectionString   string `json:"connectionString,omitempty"`
+	TenantID           string `json:"tenantId,omitempty"`
+	ClientID           string `json:"clientId,omitempty"`
+	ClientSecret       string `json:"clientSecret,omitempty"`
+	UseManagedIdentity bool   `json:"useManagedIdentity"`
 }
 
 // BlobOperation represents a Blob Storage operation
 type BlobOperation struct {
-	Operation     string                 `json:"operation"`
-	Container     string                 `json:"container"`
-	Blob          string                 `json:"blob,omitempty"`
-	Source        string                 `json:"source,omitempty"`
-	Destination   string                 `json:"destination,omitempty"`
-	Prefix        string                 `json:"prefix,omitempty"`
-	ContentType   string                 `json:"contentType,omitempty"`
-	Metadata      map[string]string      `json:"metadata,omitempty"`
-	Properties    *BlobProperties        `json:"properties,omitempty"`
-	AccessTier    string                 `json:"accessTier,omitempty"`
-	LeaseOptions  *BlobLeaseOptions      `json:"leaseOptions,omitempty"`
-	CopyOptions   *BlobCopyOptions       `json:"copyOptions,omitempty"`
-	Options       map[string]interface{} `json:"options,omitempty"`
+	Operation    string                 `json:"operation"`
+	Container    string                 `json:"container"`
+	Blob         string                 `json:"blob,omitempty"`
+	Source       string                 `json:"source,omitempty"`
+	Destination  string                 `json:"destination,omitempty"`
+	Prefix       string                 `json:"prefix,omitempty"`
+	ContentType  string                 `json:"contentType,omitempty"`
+	Metadata     map[string]string      `json:"metadata,omitempty"`
+	Properties   *BlobProperties        `json:"properties,omitempty"`
+	AccessTier   string                 `json:"accessTier,omitempty"`
+	LeaseOptions *BlobLeaseOptions      `json:"leaseOptions,omitempty"`
+	CopyOptions  *BlobCopyOptions       `json:"copyOptions,omitempty"`
+	Options      map[string]interface{} `json:"options,omitempty"`
 }
 
 // BlobProperties defines blob properties
@@ -77,77 +77,83 @@ type BlobLeaseOptions struct {
 
 // BlobCopyOptions defines blob copy options
 type BlobCopyOptions struct {
-	SourceURL      string            `json:"sourceUrl"`
-	Metadata       map[string]string `json:"metadata,omitempty"`
-	AccessTier     string            `json:"accessTier,omitempty"`
-	RehydratePriority string         `json:"rehydratePriority,omitempty"`
+	SourceURL         string            `json:"sourceUrl"`
+	Metadata          map[string]string `json:"metadata,omitempty"`
+	AccessTier        string            `json:"accessTier,omitempty"`
+	RehydratePriority string            `json:"rehydratePriority,omitempty"`
 }
 
 // BlobInfo represents Azure Blob information
 type BlobInfo struct {
-	Name               string            `json:"name"`
-	Container          string            `json:"container"`
-	Size               int64             `json:"size"`
-	ContentType        string            `json:"contentType"`
-	LastModified       time.Time         `json:"lastModified"`
-	ETag               string            `json:"etag"`
-	ContentMD5         string            `json:"contentMD5,omitempty"`
-	ContentEncoding    string            `json:"contentEncoding,omitempty"`
-	ContentLanguage    string            `json:"contentLanguage,omitempty"`
-	ContentDisposition string            `json:"contentDisposition,omitempty"`
-	CacheControl       string            `json:"cacheControl,omitempty"`
-	BlobType           string            `json:"blobType"`
-	AccessTier         string            `json:"accessTier,omitempty"`
-	AccessTierInferred bool              `json:"accessTierInferred"`
-	ArchiveStatus      string            `json:"archiveStatus,omitempty"`
-	CreationTime       time.Time         `json:"creationTime"`
-	Metadata           map[string]string `json:"metadata,omitempty"`
-	LeaseStatus        string            `json:"leaseStatus,omitempty"`
-	LeaseState         string            `json:"leaseState,omitempty"`
-	LeaseDuration      string            `json:"leaseDuration,omitempty"`
-	ServerEncrypted    bool              `json:"serverEncrypted"`
-	DeletedTime        *time.Time        `json:"deletedTime,omitempty"`
-	RemainingRetentionDays *int32        `json:"remainingRetentionDays,omitempty"`
+	Name                   string            `json:"name"`
+	Container              string            `json:"container"`
+	Size                   int64             `json:"size"`
+	ContentType            string            `json:"contentType"`
+	LastModified           time.Time         `json:"lastModified"`
+	ETag                   string            `json:"etag"`
+	ContentMD5             string            `json:"contentMD5,omitempty"`
+	ContentEncoding        string            `json:"contentEncoding,omitempty"`
+	ContentLanguage        string            `json:"contentLanguage,omitempty"`
+	ContentDisposition     string            `json:"contentDisposition,omitempty"`
+	CacheControl           string            `json:"cacheControl,omitempty"`
+	BlobType               string            `json:"blobType"`
+	AccessTier             string            `json:"accessTier,omitempty"`
+	AccessTierInferred     bool              `json:"accessTierInferred"`
+	ArchiveStatus          string            `json:"archiveStatus,omitempty"`
+	CreationTime           time.Time         `json:"creationTime"`
+	Metadata               map[string]string `json:"metadata,omitempty"`
+	LeaseStatus            string            `json:"leaseStatus,omitempty"`
+	LeaseState             string            `json:"leaseState,omitempty"`
+	LeaseDuration          string            `json:"leaseDuration,omitempty"`
+	ServerEncrypted        bool              `json:"serverEncrypted"`
+	DeletedTime            *time.Time        `json:"deletedTime,omitempty"`
+	RemainingRetentionDays *int32            `json:"remainingRetentionDays,omitempty"`
 }
 
 // ContainerInfo represents Azure Container information
 type ContainerInfo struct {
-	Name                   string            `json:"name"`
-	LastModified           time.Time         `json:"lastModified"`
-	ETag                   string            `json:"etag"`
-	LeaseStatus            string            `json:"leaseStatus"`
-	LeaseState             string            `json:"leaseState"`
-	LeaseDuration          string            `json:"leaseDuration,omitempty"`
-	PublicAccess           string            `json:"publicAccess"`
-	HasImmutabilityPolicy  bool              `json:"hasImmutabilityPolicy"`
-	HasLegalHold           bool              `json:"hasLegalHold"`
-	Metadata               map[string]string `json:"metadata,omitempty"`
-	DefaultEncryptionScope string            `json:"defaultEncryptionScope,omitempty"`
-	DenyEncryptionScopeOverride bool         `json:"denyEncryptionScopeOverride"`
+	Name                        string            `json:"name"`
+	LastModified                time.Time         `json:"lastModified"`
+	ETag                        string            `json:"etag"`
+	LeaseStatus                 string            `json:"leaseStatus"`
+	LeaseState                  string            `json:"leaseState"`
+	LeaseDuration               string            `json:"leaseDuration,omitempty"`
+	PublicAccess                string            `json:"publicAccess"`
+	HasImmutabilityPolicy       bool              `json:"hasImmutabilityPolicy"`
+	HasLegalHold                bool              `json:"hasLegalHold"`
+	Metadata                    map[string]string `json:"metadata,omitempty"`
+	DefaultEncryptionScope      string            `json:"defaultEncryptionScope,omitempty"`
+	DenyEncryptionScopeOverride bool              `json:"denyEncryptionScopeOverride"`
 }
 
 // BlobOperationResult represents the result of a blob operation
 type BlobOperationResult struct {
-	Operation     string                 `json:"operation"`
-	Success       bool                   `json:"success"`
-	Container     string                 `json:"container"`
-	Blob          string                 `json:"blob,omitempty"`
-	Blobs         []BlobInfo             `json:"blobs,omitempty"`
-	Containers    []ContainerInfo        `json:"containers,omitempty"`
-	Data          interface{}            `json:"data,omitempty"`
-	Size          int64                  `json:"size,omitempty"`
-	ContentType   string                 `json:"contentType,omitempty"`
-	ETag          string                 `json:"etag,omitempty"`
-	URL           string                 `json:"url,omitempty"`
-	LeaseID       string                 `json:"leaseId,omitempty"`
-	ExecutionTime time.Duration          `json:"executionTime"`
-	Error         string                 `json:"error,omitempty"`
+	Operation     string          `json:"operation"`
+	Success       bool            `json:"success"`
+	Container     string          `json:"container"`
+	Blob          string          `json:"blob,omitempty"`
+	Blobs         []BlobInfo      `json:"blobs,omitempty"`
+	Containers    []ContainerInfo `json:"containers,omitempty"`
+	Data          interface{}     `json:"data,omitempty"`
+	Size          int64           `json:"size,omitempty"`
+	ContentType   string          `json:"contentType,omitempty"`
+	ETag          string          `json:"etag,omitempty"`
+	URL           string          `json:"url,omitempty"`
+	LeaseID       string          `json:"leaseId,omitempty"`
+	ExecutionTime time.Duration   `json:"executionTime"`
+	Error         string          `json:"error,omitempty"`
 }
 
 // NewBlobStorageNode creates a new Blob Storage operations node
 func NewBlobStorageNode() *BlobStorageNode {
 	return &BlobStorageNode{
-		BaseNode:      base.NewBaseNode(base.NodeDescription{Name: "Azure Blob Storage", Description: "Azure Blob Storage operations", Category: "cloud", Group: []string{"cloud"}, Properties: blobStorageProperties()}),
+		BaseNode: base.NewBaseNode(base.NodeDescription{
+			Name: "Azure Blob Storage", Description: "Azure Blob Storage operations", Category: "cloud",
+			Group: []string{"cloud"}, Properties: blobStorageProperties(),
+			Credentials: []base.NodeCredentialSpec{
+				{Type: "azureStorage", DisplayName: "Azure Storage", Required: false},
+			},
+		}),
 		evaluator:     expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 		containerURLs: make(map[string]*azblob.ContainerURL),
 		ctx:           context.Background(),
@@ -185,11 +191,11 @@ func (n *BlobStorageNode) Execute(inputData []model.DataItem, nodeParams map[str
 		// Create expression context
 		exprContext := &expressions.ExpressionContext{
 			ActiveNodeName:      "Azure Blob Storage",
-			RunIndex:           0,
-			ItemIndex:          0,
-			Mode:               expressions.ModeManual,
+			RunIndex:            0,
+			ItemIndex:           0,
+			Mode:                expressions.ModeManual,
 			ConnectionInputData: []model.DataItem{item},
-			AdditionalKeys:     &expressions.AdditionalKeys{},
+			AdditionalKeys:      &expressions.AdditionalKeys{},
 		}
 
 		// Execute blob operation
@@ -516,10 +522,10 @@ func (n *BlobStorageNode) listBlobs(operation *BlobOperation, context *expressio
 	}
 
 	listOptions.Details = azblob.BlobListingDetails{
-		Metadata: true,
-		Snapshots: false,
+		Metadata:         true,
+		Snapshots:        false,
 		UncommittedBlobs: false,
-		Deleted: false,
+		Deleted:          false,
 	}
 
 	// List blobs
@@ -1114,11 +1120,26 @@ func (n *BlobStorageNode) detectContentType(blobName string) string {
 func (n *BlobStorageNode) parseAzureConfig(nodeParams map[string]interface{}) (*AzureConfig, error) {
 	config := &AzureConfig{}
 
-	if accountName, ok := nodeParams["accountName"].(string); ok {
+	if accountName, ok := nodeParams["accountName"].(string); ok && accountName != "" {
+		config.AccountName = accountName
+	} else if accountName := base.CredentialString(nodeParams, "azureStorage_accountName"); accountName != "" {
 		config.AccountName = accountName
 	} else {
 		return nil, fmt.Errorf("accountName is required")
 	}
+
+	defer func() {
+		// Fallback to the flattened `azureStorage_*` credential envelope.
+		if config.AccountKey == "" {
+			config.AccountKey = base.CredentialString(nodeParams, "azureStorage_accountKey")
+		}
+		if config.SASToken == "" {
+			config.SASToken = base.CredentialString(nodeParams, "azureStorage_sasToken")
+		}
+		if config.ConnectionString == "" {
+			config.ConnectionString = base.CredentialString(nodeParams, "azureStorage_connectionString")
+		}
+	}()
 
 	if accountKey, ok := nodeParams["accountKey"].(string); ok {
 		config.AccountKey = accountKey

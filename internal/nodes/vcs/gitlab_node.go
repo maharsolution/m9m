@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/neul-labs/m9m/internal/model"
@@ -29,6 +30,9 @@ func NewGitLabNode() *GitLabNode {
 			Category:    "vcs",
 			Group:       []string{"development"},
 			Properties:  gitlabProperties(),
+			Credentials: []base.NodeCredentialSpec{
+				{Type: "gitlabApi", DisplayName: "GitLab API", Required: true},
+			},
 		}),
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
@@ -87,7 +91,12 @@ func (n *GitLabNode) Execute(inputData []model.DataItem, nodeParams map[string]i
 	return results, nil
 }
 
+// getToken resolves the GitLab token from the flattened `gitlabApi`
+// envelope first, then from the legacy nested `credentials` map.
 func (n *GitLabNode) getToken(nodeParams map[string]interface{}) string {
+	if token := base.CredentialString(nodeParams, "gitlabApi_accessToken"); token != "" {
+		return token
+	}
 	if creds, ok := nodeParams["credentials"].(map[string]interface{}); ok {
 		if token, ok := creds["accessToken"].(string); ok {
 			return token
@@ -102,6 +111,15 @@ func (n *GitLabNode) getToken(nodeParams map[string]interface{}) string {
 func (n *GitLabNode) getBaseURL(nodeParams map[string]interface{}) string {
 	if baseURL, ok := nodeParams["baseUrl"].(string); ok && baseURL != "" {
 		return baseURL
+	}
+	// n8n's gitlabApi credential stores the instance as `server`
+	// (e.g. https://gitlab.example.com) without the /api/v4 suffix.
+	if server := base.CredentialString(nodeParams, "gitlabApi_server"); server != "" {
+		server = strings.TrimRight(server, "/")
+		if !strings.HasSuffix(server, "/api/v4") {
+			server += "/api/v4"
+		}
+		return server
 	}
 	return "https://gitlab.com/api/v4"
 }

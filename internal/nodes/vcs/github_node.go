@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/neul-labs/m9m/internal/model"
@@ -25,6 +27,9 @@ func NewGitHubNode() *GitHubNode {
 			Category:    "vcs",
 			Group:       []string{"development"},
 			Properties:  githubProperties(),
+			Credentials: []base.NodeCredentialSpec{
+				{Type: "githubApi", DisplayName: "GitHub API", Required: true},
+			},
 		}),
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
@@ -79,7 +84,13 @@ func (n *GitHubNode) Execute(inputData []model.DataItem, nodeParams map[string]i
 	return results, nil
 }
 
+// getToken resolves the GitHub token. The credential manager flattens the
+// `githubApi` envelope into `githubApi_accessToken`; the legacy nested
+// `credentials.accessToken` map stays supported for older workflows.
 func (n *GitHubNode) getToken(nodeParams map[string]interface{}) string {
+	if token := base.CredentialString(nodeParams, "githubApi_accessToken"); token != "" {
+		return token
+	}
 	if creds, ok := nodeParams["credentials"].(map[string]interface{}); ok {
 		if token, ok := creds["accessToken"].(string); ok {
 			return token
@@ -103,9 +114,9 @@ func (n *GitHubNode) handleRepositoryOperation(operation, token string, nodePara
 
 	switch operation {
 	case "get":
-		return n.makeAPIRequest("GET", fmt.Sprintf("/repos/%s/%s", owner, repo), token, nil)
+		return n.makeAPIRequest("GET", fmt.Sprintf("/repos/%s/%s", owner, repo), token, nil, nodeParams)
 	case "list":
-		return n.makeAPIRequest("GET", fmt.Sprintf("/users/%s/repos", owner), token, nil)
+		return n.makeAPIRequest("GET", fmt.Sprintf("/users/%s/repos", owner), token, nil, nodeParams)
 	default:
 		return nil, fmt.Errorf("unsupported repository operation: %s", operation)
 	}
@@ -117,10 +128,10 @@ func (n *GitHubNode) handleIssueOperation(operation, token string, nodeParams ma
 
 	switch operation {
 	case "list":
-		return n.makeAPIRequest("GET", fmt.Sprintf("/repos/%s/%s/issues", owner, repo), token, nil)
+		return n.makeAPIRequest("GET", fmt.Sprintf("/repos/%s/%s/issues", owner, repo), token, nil, nodeParams)
 	case "get":
 		issueNumber, _ := nodeParams["issueNumber"].(float64)
-		return n.makeAPIRequest("GET", fmt.Sprintf("/repos/%s/%s/issues/%d", owner, repo, int(issueNumber)), token, nil)
+		return n.makeAPIRequest("GET", fmt.Sprintf("/repos/%s/%s/issues/%d", owner, repo, int(issueNumber)), token, nil, nodeParams)
 	default:
 		return nil, fmt.Errorf("unsupported issue operation: %s", operation)
 	}
@@ -132,10 +143,10 @@ func (n *GitHubNode) handlePullRequestOperation(operation, token string, nodePar
 
 	switch operation {
 	case "list":
-		return n.makeAPIRequest("GET", fmt.Sprintf("/repos/%s/%s/pulls", owner, repo), token, nil)
+		return n.makeAPIRequest("GET", fmt.Sprintf("/repos/%s/%s/pulls", owner, repo), token, nil, nodeParams)
 	case "get":
 		prNumber, _ := nodeParams["pullNumber"].(float64)
-		return n.makeAPIRequest("GET", fmt.Sprintf("/repos/%s/%s/pulls/%d", owner, repo, int(prNumber)), token, nil)
+		return n.makeAPIRequest("GET", fmt.Sprintf("/repos/%s/%s/pulls/%d", owner, repo, int(prNumber)), token, nil, nodeParams)
 	default:
 		return nil, fmt.Errorf("unsupported pull request operation: %s", operation)
 	}
@@ -144,19 +155,27 @@ func (n *GitHubNode) handlePullRequestOperation(operation, token string, nodePar
 func (n *GitHubNode) handleUserOperation(operation, token string, nodeParams map[string]interface{}, item model.DataItem) (map[string]interface{}, error) {
 	switch operation {
 	case "getAuthenticated":
-		return n.makeAPIRequest("GET", "/user", token, nil)
+		return n.makeAPIRequest("GET", "/user", token, nil, nodeParams)
 	case "get":
 		username, _ := nodeParams["username"].(string)
-		return n.makeAPIRequest("GET", fmt.Sprintf("/users/%s", username), token, nil)
+		return n.makeAPIRequest("GET", fmt.Sprintf("/users/%s", username), token, nil, nodeParams)
 	default:
 		return nil, fmt.Errorf("unsupported user operation: %s", operation)
 	}
 }
 
-func (n *GitHubNode) makeAPIRequest(method, path, token string, body interface{}) (map[string]interface{}, error) {
-	url := "https://api.github.com" + path
-
-	req, err := http.NewRequest(method, url, nil)
+func (n *GitHubNode) makeAPIRequest(method, path, token string, body interface{}, params ...map[string]interface{}) (map[string]interface{}, error) {
+	server := "https://api.github.com"
+	if len(params) > 0 {
+		if configured := base.CredentialString(params[0], "githubApi_server"); configured != "" {
+			server = strings.TrimRight(configured, "/")
+		}
+	}
+	parsed, err := url.Parse(server)
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.User != nil {
+		return nil, fmt.Errorf("invalid GitHub API server URL")
+	}
+	req, err := http.NewRequest(method, server+path, nil)
 	if err != nil {
 		return nil, err
 	}

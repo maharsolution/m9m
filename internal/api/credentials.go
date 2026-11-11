@@ -32,9 +32,9 @@ type CredentialResponse struct {
 
 func toCredentialResponse(c *storage.Credential) CredentialResponse {
 	return CredentialResponse{
-		ID:                      c.ID,
-		Name:                    c.Name,
-		Type:                    c.Type,
+		ID:   c.ID,
+		Name: c.Name,
+		Type: c.Type,
 		// data is intentionally omitted from list responses — n8n strips
 		// it there for security parity. The single-credential GET
 		// (toCredentialResponseWithData) does return it so the editor
@@ -288,11 +288,11 @@ type SchemaPropertyOption struct {
 // CredentialTypeSchema is the full per-type schema returned by
 // GET /api/v1/credentials/schema/{type}.
 type CredentialTypeSchema struct {
-	Type                 string           `json:"type"`
-	DisplayName          string           `json:"displayName"`
-	Properties           []SchemaProperty `json:"properties"`
-	Required             []string         `json:"required"`
-	DisplayOptions       map[string]bool  `json:"displayOptions,omitempty"`
+	Type           string           `json:"type"`
+	DisplayName    string           `json:"displayName"`
+	Properties     []SchemaProperty `json:"properties"`
+	Required       []string         `json:"required"`
+	DisplayOptions map[string]bool  `json:"displayOptions,omitempty"`
 }
 
 // credentialSchemas holds the static per-type schemas for the credential
@@ -572,6 +572,79 @@ func init() {
 			{Name: "tls", DisplayName: "TLS", Type: "boolean", Required: false, Default: false},
 		},
 		Required: []string{"host"},
+	}
+
+	// VCS and productivity credential schemas. The GitHub / GitLab nodes
+	// read the flattened `githubApi_accessToken` / `gitlabApi_accessToken`
+	// envelope, Google Sheets reads `googleSheetsOAuth2Api_accessToken`.
+	credentialSchemas["githubApi"] = CredentialTypeSchema{
+		Type:        "githubApi",
+		DisplayName: "GitHub API",
+		Properties: []SchemaProperty{
+			{Name: "accessToken", DisplayName: "Access Token", Type: "password", Required: true, Description: "GitHub personal access token (ghp_...)"},
+			{Name: "server", DisplayName: "GitHub Server", Type: "string", Required: false, Default: "https://api.github.com", Description: "API base URL (change for GitHub Enterprise)."},
+		},
+		Required: []string{"accessToken"},
+	}
+
+	credentialSchemas["gitlabApi"] = CredentialTypeSchema{
+		Type:        "gitlabApi",
+		DisplayName: "GitLab API",
+		Properties: []SchemaProperty{
+			{Name: "accessToken", DisplayName: "Access Token", Type: "password", Required: true, Description: "GitLab personal access token."},
+			{Name: "server", DisplayName: "GitLab Server", Type: "string", Required: false, Default: "https://gitlab.com", Description: "Instance base URL (self-hosted GitLab). /api/v4 is appended automatically."},
+		},
+		Required: []string{"accessToken"},
+	}
+
+	credentialSchemas["googleSheetsOAuth2Api"] = CredentialTypeSchema{
+		Type:        "googleSheetsOAuth2Api",
+		DisplayName: "Google Sheets OAuth2 API",
+		Properties: []SchemaProperty{
+			{Name: "accessToken", DisplayName: "Access Token", Type: "password", Required: true, Description: "Google OAuth2 access token with the spreadsheets scope."},
+			{Name: "clientId", DisplayName: "Client ID", Type: "string", Required: false},
+			{Name: "clientSecret", DisplayName: "Client Secret", Type: "password", Required: false},
+		},
+		Required: []string{"accessToken"},
+	}
+
+	// Cloud storage credential schemas (batch). These flatten into the
+	// node parameter surface the AWS / Azure / GCP nodes already read
+	// (accessKeyId, secretAccessKey, connectionString, keyFileContent, …).
+	credentialSchemas["aws"] = CredentialTypeSchema{
+		Type:        "aws",
+		DisplayName: "AWS",
+		Properties: []SchemaProperty{
+			{Name: "region", DisplayName: "Region", Type: "string", Required: true, Default: "us-east-1"},
+			{Name: "accessKeyId", DisplayName: "Access Key ID", Type: "string", Required: true},
+			{Name: "secretAccessKey", DisplayName: "Secret Access Key", Type: "password", Required: true},
+			{Name: "sessionToken", DisplayName: "Session Token", Type: "password", Required: false},
+			{Name: "endpoint", DisplayName: "Custom Endpoint", Type: "string", Required: false},
+		},
+		Required: []string{"region", "accessKeyId", "secretAccessKey"},
+	}
+
+	credentialSchemas["azureStorage"] = CredentialTypeSchema{
+		Type:        "azureStorage",
+		DisplayName: "Azure Storage",
+		Properties: []SchemaProperty{
+			{Name: "accountName", DisplayName: "Account Name", Type: "string", Required: false},
+			{Name: "accountKey", DisplayName: "Account Key", Type: "password", Required: false},
+			{Name: "sasToken", DisplayName: "SAS Token", Type: "password", Required: false},
+			{Name: "connectionString", DisplayName: "Connection String", Type: "password", Required: false, Description: "Full connection string (overrides accountName/accountKey)."},
+		},
+		Required: []string{},
+	}
+
+	credentialSchemas["googleCloudStorage"] = CredentialTypeSchema{
+		Type:        "googleCloudStorage",
+		DisplayName: "Google Cloud Storage",
+		Properties: []SchemaProperty{
+			{Name: "projectId", DisplayName: "Project ID", Type: "string", Required: false},
+			{Name: "keyFileContent", DisplayName: "Service Account JSON", Type: "json", Required: false, Description: "Service account key JSON (paste the whole file)."},
+			{Name: "serviceAccountEmail", DisplayName: "Service Account Email", Type: "string", Required: false},
+		},
+		Required: []string{},
 	}
 }
 

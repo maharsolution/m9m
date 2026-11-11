@@ -173,32 +173,29 @@ func (m *MySQLNode) Execute(inputData []model.DataItem, nodeParams map[string]in
 	operation := m.GetStringParameter(nodeParams, "operation", "")
 
 	// Process each input data item
-	result := make([]model.DataItem, len(inputData))
+	result := make([]model.DataItem, 0, len(inputData))
 
-	for i, item := range inputData {
-		var newItem model.DataItem
-
+	for _, item := range inputData {
 		switch operation {
 		case "executeQuery":
-			queryResult, err := m.executeQuery(db, nodeParams, item)
+			queryResults, err := m.executeQuery(db, nodeParams, item)
 			if err != nil {
 				return nil, m.CreateError(fmt.Sprintf("failed to execute query: %v", err), nil)
 			}
-			newItem = queryResult
+			// n8n returns one item per row for executeQuery.
+			result = append(result, queryResults...)
 
 		default:
 			// For other operations, just pass through the data
-			newItem = item
+			result = append(result, item)
 		}
-
-		result[i] = newItem
 	}
 
 	return result, nil
 }
 
-// executeQuery executes a SELECT query and returns results
-func (m *MySQLNode) executeQuery(db *sql.DB, nodeParams map[string]interface{}, item model.DataItem) (model.DataItem, error) {
+// executeQuery executes a SELECT query and returns one item per row
+func (m *MySQLNode) executeQuery(db *sql.DB, nodeParams map[string]interface{}, item model.DataItem) ([]model.DataItem, error) {
 	query := m.GetStringParameter(nodeParams, "query", "")
 
 	// Resolve `{{ ... }}` expressions against the inbound data item so
@@ -208,7 +205,7 @@ func (m *MySQLNode) executeQuery(db *sql.DB, nodeParams map[string]interface{}, 
 	// and returns a syntax error.
 	resolved, err := resolveQueryTemplate(query, item)
 	if err != nil {
-		return model.DataItem{}, err
+		return nil, err
 	}
 	query = resolved
 
@@ -243,58 +240,15 @@ func (m *MySQLNode) executeQuery(db *sql.DB, nodeParams map[string]interface{}, 
 	// Execute query
 	rows, err := db.Query(query)
 	if err != nil {
-		return model.DataItem{}, fmt.Errorf("failed to execute query: %v", err)
+		return nil, fmt.Errorf("failed to execute query: %v", err)
 	}
 	defer rows.Close()
 
-	// Get column names
-	columns, err := rows.Columns()
+	// Process rows — one item per row, like n8n.
+	items, err := scanRows(rows)
 	if err != nil {
-		return model.DataItem{}, fmt.Errorf("failed to get columns: %v", err)
+		return nil, fmt.Errorf("error during row iteration: %v", err)
 	}
 
-	// Process rows
-	var results []map[string]interface{}
-
-	for rows.Next() {
-		// Create a slice of interface{} to hold the values
-		values := make([]interface{}, len(columns))
-		valuePtrs := make([]interface{}, len(columns))
-
-		for i := range values {
-			valuePtrs[i] = &values[i]
-		}
-
-		// Scan the row
-		if err := rows.Scan(valuePtrs...); err != nil {
-			return model.DataItem{}, fmt.Errorf("failed to scan row: %v", err)
-		}
-
-		// Create a map for this row
-		rowMap := make(map[string]interface{})
-		for i, col := range columns {
-			// Handle nil values
-			if values[i] == nil {
-				rowMap[col] = nil
-			} else {
-				rowMap[col] = values[i]
-			}
-		}
-
-		results = append(results, rowMap)
-	}
-
-	// Check for errors after iteration
-	if err := rows.Err(); err != nil {
-		return model.DataItem{}, fmt.Errorf("error during row iteration: %v", err)
-	}
-
-	// Create result item
-	resultItem := model.DataItem{
-		JSON: map[string]interface{}{
-			"rows": results,
-		},
-	}
-
-	return resultItem, nil
+	return items, nil
 }

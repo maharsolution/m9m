@@ -59,23 +59,29 @@ import (
 // credential picker resolves the type against this registry, and a type
 // that is missing from it renders an empty picker.
 var supportedCredentialTypes = map[string]string{
-	"httpBasicAuth":  "Basic Auth",
-	"httpHeaderAuth": "Header Auth",
-	"oAuth2Api":      "OAuth2 API",
-	"apiKey":         "API Key",
-	"postgres":       "Postgres",
-	"mysql":          "MySQL",
-	"mySql":          "MySQL",
-	"mongoDb":        "MongoDB",
-	"kafka":          "Kafka",
-	"slack":          "Slack",
-	"discord":        "Discord",
-	"openai":         "OpenAI",
-	"openAiApi":      "OpenAI",
-	"anthropic":      "Anthropic",
-	"jwtAuth":        "JWT Auth",
-	"rabbitmq":       "RabbitMQ",
-	"redis":          "Redis",
+	"httpBasicAuth":          "Basic Auth",
+	"httpHeaderAuth":         "Header Auth",
+	"oAuth2Api":              "OAuth2 API",
+	"apiKey":                 "API Key",
+	"postgres":               "Postgres",
+	"mysql":                  "MySQL",
+	"mySql":                  "MySQL",
+	"mongoDb":                "MongoDB",
+	"kafka":                  "Kafka",
+	"slack":                  "Slack",
+	"discord":                "Discord",
+	"openai":                 "OpenAI",
+	"openAiApi":              "OpenAI",
+	"anthropic":              "Anthropic",
+	"jwtAuth":                "JWT Auth",
+	"rabbitmq":               "RabbitMQ",
+	"redis":                  "Redis",
+	"githubApi":              "GitHub API",
+	"gitlabApi":              "GitLab API",
+	"googleSheetsOAuth2Api":  "Google Sheets OAuth2 API",
+	"aws":                    "AWS",
+	"azureStorage":           "Azure Storage",
+	"googleCloudStorage":     "Google Cloud Storage",
 }
 
 // nodeType couples an n8n node type id with the description m9m
@@ -245,6 +251,30 @@ var credentialExpectations = map[string][]base.NodeCredentialSpec{
 	},
 	"@n8n/n8n-nodes-langchain.anthropic": {
 		{Type: "anthropic", DisplayName: "Anthropic", Required: true},
+	},
+	// VCS nodes
+	"n8n-nodes-base.github": {
+		{Type: "githubApi", DisplayName: "GitHub API", Required: true},
+	},
+	"n8n-nodes-base.gitlab": {
+		{Type: "gitlabApi", DisplayName: "GitLab API", Required: true},
+	},
+	// Productivity
+	"n8n-nodes-base.googleSheets": {
+		{Type: "googleSheetsOAuth2Api", DisplayName: "Google Sheets OAuth2 API", Required: true},
+	},
+	// Cloud nodes
+	"n8n-nodes-base.awsLambda": {
+		{Type: "aws", DisplayName: "AWS", Required: true},
+	},
+	"n8n-nodes-base.s3": {
+		{Type: "aws", DisplayName: "AWS", Required: true},
+	},
+	"n8n-nodes-base.azureBlobStorage": {
+		{Type: "azureStorage", DisplayName: "Azure Storage", Required: false},
+	},
+	"n8n-nodes-base.gcpCloudStorage": {
+		{Type: "googleCloudStorage", DisplayName: "Google Cloud Storage", Required: false},
 	},
 }
 

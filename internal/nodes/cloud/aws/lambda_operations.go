@@ -35,28 +35,28 @@ type LambdaConfig struct {
 
 // LambdaOperation represents a Lambda operation
 type LambdaOperation struct {
-	Operation        string                 `json:"operation"`
-	FunctionName     string                 `json:"functionName"`
-	Payload          interface{}            `json:"payload,omitempty"`
-	InvocationType   string                 `json:"invocationType"` // Event, RequestResponse, DryRun
-	LogType          string                 `json:"logType"`        // None, Tail
-	Qualifier        string                 `json:"qualifier,omitempty"`
-	ZipFile          []byte                 `json:"zipFile,omitempty"`
-	S3Bucket         string                 `json:"s3Bucket,omitempty"`
-	S3Key            string                 `json:"s3Key,omitempty"`
-	S3ObjectVersion  string                 `json:"s3ObjectVersion,omitempty"`
-	Runtime          string                 `json:"runtime,omitempty"`
-	Role             string                 `json:"role,omitempty"`
-	Handler          string                 `json:"handler,omitempty"`
-	Description      string                 `json:"description,omitempty"`
-	Timeout          int64                  `json:"timeout,omitempty"`
-	MemorySize       int64                  `json:"memorySize,omitempty"`
-	Environment      map[string]string      `json:"environment,omitempty"`
-	Tags             map[string]string      `json:"tags,omitempty"`
-	VpcConfig        *LambdaVpcConfig       `json:"vpcConfig,omitempty"`
+	Operation        string                  `json:"operation"`
+	FunctionName     string                  `json:"functionName"`
+	Payload          interface{}             `json:"payload,omitempty"`
+	InvocationType   string                  `json:"invocationType"` // Event, RequestResponse, DryRun
+	LogType          string                  `json:"logType"`        // None, Tail
+	Qualifier        string                  `json:"qualifier,omitempty"`
+	ZipFile          []byte                  `json:"zipFile,omitempty"`
+	S3Bucket         string                  `json:"s3Bucket,omitempty"`
+	S3Key            string                  `json:"s3Key,omitempty"`
+	S3ObjectVersion  string                  `json:"s3ObjectVersion,omitempty"`
+	Runtime          string                  `json:"runtime,omitempty"`
+	Role             string                  `json:"role,omitempty"`
+	Handler          string                  `json:"handler,omitempty"`
+	Description      string                  `json:"description,omitempty"`
+	Timeout          int64                   `json:"timeout,omitempty"`
+	MemorySize       int64                   `json:"memorySize,omitempty"`
+	Environment      map[string]string       `json:"environment,omitempty"`
+	Tags             map[string]string       `json:"tags,omitempty"`
+	VpcConfig        *LambdaVpcConfig        `json:"vpcConfig,omitempty"`
 	DeadLetterConfig *LambdaDeadLetterConfig `json:"deadLetterConfig,omitempty"`
-	TracingConfig    *LambdaTracingConfig   `json:"tracingConfig,omitempty"`
-	Options          map[string]interface{} `json:"options,omitempty"`
+	TracingConfig    *LambdaTracingConfig    `json:"tracingConfig,omitempty"`
+	Options          map[string]interface{}  `json:"options,omitempty"`
 }
 
 // LambdaVpcConfig defines VPC configuration
@@ -77,47 +77,53 @@ type LambdaTracingConfig struct {
 
 // LambdaResult represents the result of a Lambda operation
 type LambdaResult struct {
-	Operation     string                 `json:"operation"`
-	Success       bool                   `json:"success"`
-	FunctionName  string                 `json:"functionName"`
-	StatusCode    int64                  `json:"statusCode,omitempty"`
+	Operation       string               `json:"operation"`
+	Success         bool                 `json:"success"`
+	FunctionName    string               `json:"functionName"`
+	StatusCode      int64                `json:"statusCode,omitempty"`
 	ExecutedVersion string               `json:"executedVersion,omitempty"`
-	Payload       interface{}            `json:"payload,omitempty"`
-	LogResult     string                 `json:"logResult,omitempty"`
-	FunctionError string                 `json:"functionError,omitempty"`
-	Configuration *LambdaConfiguration   `json:"configuration,omitempty"`
-	ExecutionTime time.Duration          `json:"executionTime"`
-	Error         string                 `json:"error,omitempty"`
+	Payload         interface{}          `json:"payload,omitempty"`
+	LogResult       string               `json:"logResult,omitempty"`
+	FunctionError   string               `json:"functionError,omitempty"`
+	Configuration   *LambdaConfiguration `json:"configuration,omitempty"`
+	ExecutionTime   time.Duration        `json:"executionTime"`
+	Error           string               `json:"error,omitempty"`
 }
 
 // LambdaConfiguration represents Lambda function configuration
 type LambdaConfiguration struct {
-	FunctionName     string            `json:"functionName"`
-	FunctionArn      string            `json:"functionArn"`
-	Runtime          string            `json:"runtime"`
-	Role             string            `json:"role"`
-	Handler          string            `json:"handler"`
-	CodeSize         int64             `json:"codeSize"`
-	Description      string            `json:"description"`
-	Timeout          int64             `json:"timeout"`
-	MemorySize       int64             `json:"memorySize"`
-	LastModified     string            `json:"lastModified"`
-	CodeSha256       string            `json:"codeSha256"`
-	Version          string            `json:"version"`
-	Environment      map[string]string `json:"environment,omitempty"`
+	FunctionName     string                  `json:"functionName"`
+	FunctionArn      string                  `json:"functionArn"`
+	Runtime          string                  `json:"runtime"`
+	Role             string                  `json:"role"`
+	Handler          string                  `json:"handler"`
+	CodeSize         int64                   `json:"codeSize"`
+	Description      string                  `json:"description"`
+	Timeout          int64                   `json:"timeout"`
+	MemorySize       int64                   `json:"memorySize"`
+	LastModified     string                  `json:"lastModified"`
+	CodeSha256       string                  `json:"codeSha256"`
+	Version          string                  `json:"version"`
+	Environment      map[string]string       `json:"environment,omitempty"`
 	DeadLetterConfig *LambdaDeadLetterConfig `json:"deadLetterConfig,omitempty"`
-	TracingConfig    *LambdaTracingConfig `json:"tracingConfig,omitempty"`
-	VpcConfig        *LambdaVpcConfig  `json:"vpcConfig,omitempty"`
-	Layers           []string          `json:"layers,omitempty"`
-	State            string            `json:"state"`
-	StateReason      string            `json:"stateReason,omitempty"`
-	Tags             map[string]string `json:"tags,omitempty"`
+	TracingConfig    *LambdaTracingConfig    `json:"tracingConfig,omitempty"`
+	VpcConfig        *LambdaVpcConfig        `json:"vpcConfig,omitempty"`
+	Layers           []string                `json:"layers,omitempty"`
+	State            string                  `json:"state"`
+	StateReason      string                  `json:"stateReason,omitempty"`
+	Tags             map[string]string       `json:"tags,omitempty"`
 }
 
 // NewLambdaOperationsNode creates a new Lambda operations node
 func NewLambdaOperationsNode() *LambdaOperationsNode {
 	return &LambdaOperationsNode{
-		BaseNode:  base.NewBaseNode(base.NodeDescription{Name: "AWS Lambda", Description: "AWS Lambda function operations", Category: "cloud", Group: []string{"cloud"}, Properties: lambdaProperties()}),
+		BaseNode: base.NewBaseNode(base.NodeDescription{
+			Name: "AWS Lambda", Description: "AWS Lambda function operations", Category: "cloud",
+			Group: []string{"cloud"}, Properties: lambdaProperties(),
+			Credentials: []base.NodeCredentialSpec{
+				{Type: "aws", DisplayName: "AWS", Required: true},
+			},
+		}),
 		evaluator: expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 	}
 }
@@ -153,11 +159,11 @@ func (n *LambdaOperationsNode) Execute(inputData []model.DataItem, nodeParams ma
 		// Create expression context
 		context := &expressions.ExpressionContext{
 			ActiveNodeName:      "AWS Lambda",
-			RunIndex:           0,
-			ItemIndex:          0,
-			Mode:               expressions.ModeManual,
+			RunIndex:            0,
+			ItemIndex:           0,
+			Mode:                expressions.ModeManual,
 			ConnectionInputData: []model.DataItem{item},
-			AdditionalKeys:     &expressions.AdditionalKeys{},
+			AdditionalKeys:      &expressions.AdditionalKeys{},
 		}
 
 		// Execute Lambda operation
@@ -718,11 +724,11 @@ func (n *LambdaOperationsNode) createAlias(operation *LambdaOperation, context *
 	}
 
 	result.Payload = map[string]interface{}{
-		"aliasArn":         *createResult.AliasArn,
-		"name":             *createResult.Name,
-		"functionVersion":  *createResult.FunctionVersion,
-		"description":      aws.StringValue(createResult.Description),
-		"revisionId":       aws.StringValue(createResult.RevisionId),
+		"aliasArn":        *createResult.AliasArn,
+		"name":            *createResult.Name,
+		"functionVersion": *createResult.FunctionVersion,
+		"description":     aws.StringValue(createResult.Description),
+		"revisionId":      aws.StringValue(createResult.RevisionId),
 	}
 
 	return nil
@@ -762,11 +768,11 @@ func (n *LambdaOperationsNode) updateAlias(operation *LambdaOperation, context *
 	}
 
 	result.Payload = map[string]interface{}{
-		"aliasArn":         *updateResult.AliasArn,
-		"name":             *updateResult.Name,
-		"functionVersion":  *updateResult.FunctionVersion,
-		"description":      aws.StringValue(updateResult.Description),
-		"revisionId":       aws.StringValue(updateResult.RevisionId),
+		"aliasArn":        *updateResult.AliasArn,
+		"name":            *updateResult.Name,
+		"functionVersion": *updateResult.FunctionVersion,
+		"description":     aws.StringValue(updateResult.Description),
+		"revisionId":      aws.StringValue(updateResult.RevisionId),
 	}
 
 	return nil
@@ -826,11 +832,11 @@ func (n *LambdaOperationsNode) listAliases(operation *LambdaOperation, context *
 	var aliases []map[string]interface{}
 	for _, alias := range listResult.Aliases {
 		aliases = append(aliases, map[string]interface{}{
-			"aliasArn":         *alias.AliasArn,
-			"name":             *alias.Name,
-			"functionVersion":  *alias.FunctionVersion,
-			"description":      aws.StringValue(alias.Description),
-			"revisionId":       aws.StringValue(alias.RevisionId),
+			"aliasArn":        *alias.AliasArn,
+			"name":            *alias.Name,
+			"functionVersion": *alias.FunctionVersion,
+			"description":     aws.StringValue(alias.Description),
+			"revisionId":      aws.StringValue(alias.RevisionId),
 		})
 	}
 
@@ -965,8 +971,6 @@ func (n *LambdaOperationsNode) parseLambdaConfig(nodeParams map[string]interface
 
 	if region, ok := nodeParams["region"].(string); ok {
 		config.Region = region
-	} else {
-		config.Region = "us-east-1" // Default region
 	}
 
 	if accessKeyID, ok := nodeParams["accessKeyId"].(string); ok {
@@ -980,6 +984,8 @@ func (n *LambdaOperationsNode) parseLambdaConfig(nodeParams map[string]interface
 	if sessionToken, ok := nodeParams["sessionToken"].(string); ok {
 		config.SessionToken = sessionToken
 	}
+
+	applyAWSCredentialEnvelope(nodeParams, &config.Region, &config.AccessKeyID, &config.SecretAccessKey, &config.SessionToken)
 
 	return config, nil
 }

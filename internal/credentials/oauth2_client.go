@@ -85,8 +85,8 @@ func (e *ErrOAuth2HTTP) Error() string {
 
 // IsOAuth2HTTPError reports whether err is an *ErrOAuth2HTTP.
 func IsOAuth2HTTPError(err error) bool {
-	_, ok := err.(*ErrOAuth2HTTP)
-	return ok
+	var httpErr *ErrOAuth2HTTP
+	return errors.As(err, &httpErr)
 }
 
 // ExchangeRefreshToken implements the TokenExchanger contract.
