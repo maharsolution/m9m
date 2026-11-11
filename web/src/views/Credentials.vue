@@ -253,8 +253,8 @@ const openEditModal = async (credential: Credential, restore?: CredentialDraft) 
       name: full.name,
       type: full.type,
       data: restore?.data
-        ? { ...applyFieldAliases(full.data ?? {}), ...restore.data }
-        : applyFieldAliases(full.data ?? {}),
+        ? { ...applyFieldAliases(full.data ?? {}, full.type), ...restore.data }
+        : applyFieldAliases(full.data ?? {}, full.type),
     }
     if (restore?.scrollTop) restorePanelScroll(restore.scrollTop)
   } catch (e) {
@@ -364,13 +364,25 @@ const fieldAliases: Record<string, string[]> = {
   password: ['pass', 'pwd'],
 }
 
+// Type specific aliases. The synced n8n kafka credential keeps the
+// native SASL credentials in `username` / `password`, while the schema
+// expects `saslUsername` / `saslPassword`.
+const typeFieldAliases: Record<string, Record<string, string[]>> = {
+  kafka: {
+    saslUsername: ['username', 'user'],
+    saslPassword: ['password'],
+  },
+}
+
 const applyFieldAliases = (
-  data: Record<string, unknown>
+  data: Record<string, unknown>,
+  type = ''
 ): Record<string, unknown> => {
   const out = { ...data }
-  for (const [canonical, aliases] of Object.entries(fieldAliases)) {
+  const aliases = { ...fieldAliases, ...(typeFieldAliases[type] ?? {}) }
+  for (const [canonical, aliasList] of Object.entries(aliases)) {
     if (out[canonical] !== undefined) continue
-    for (const alias of aliases) {
+    for (const alias of aliasList) {
       if (out[alias] !== undefined) {
         out[canonical] = out[alias]
         break
@@ -460,6 +472,29 @@ const formatDate = (dateStr: string) =>
 // Schema-driven field renderer.
 const fieldValue = (p: CredentialSchemaProperty): unknown =>
   form.value.data[p.name] ?? p.default ?? ''
+
+// Options list for a select field. When the stored value is not one of
+// the schema options (e.g. kafka stores `authentication: true` where the
+// schema expects none/basic/apiKey) the real value is added as an extra
+// option so it stays visible instead of silently rendering blank.
+const optionValues = (
+  p: CredentialSchemaProperty
+): Array<{ name: string; value: string }> => {
+  const options = (p.options ?? []).map((o) => ({
+    name: o.name,
+    value: String(o.value),
+  }))
+  const current = fieldValue(p)
+  if (
+    current === '' ||
+    current === undefined ||
+    current === null ||
+    options.some((o) => o.value === String(current))
+  ) {
+    return options
+  }
+  return [...options, { name: String(current), value: String(current) }]
+}
 
 const requiredFieldsMissing = computed(() => {
   if (!currentSchema.value) return []
@@ -804,7 +839,7 @@ const allCredentialTypes = computed(() => {
                         class="input"
                       >
                         <option
-                          v-for="opt in prop.options"
+                          v-for="opt in optionValues(prop)"
                           :key="String(opt.value)"
                           :value="opt.value"
                         >
