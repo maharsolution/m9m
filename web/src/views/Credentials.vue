@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   PlusIcon,
@@ -42,6 +42,124 @@ const testing = ref(false)
 const loadingCredential = ref(false)
 const lastSchemaType = ref('')
 
+// ---------------------------------------------------------------------------
+// Draft persistence
+//
+// A browser may discard and reload a background tab (Chrome tab
+// discarding). Without a draft the reloaded page comes back with an
+// empty form and the scroll position at the top — the user's input is
+// gone. The draft below is written to sessionStorage on every change,
+// so a reload restores the open modal, its values and its scroll
+// position.
+// ---------------------------------------------------------------------------
+const DRAFT_KEY = 'm9m:credential-edit-draft'
+
+interface CredentialDraft {
+  id: string | null
+  name: string
+  type: string
+  data: Record<string, unknown>
+  scrollTop: number
+  savedAt: number
+}
+
+const panelRef = ref<HTMLElement | null>(null)
+const panelScrollTop = ref(0)
+
+// DialogPanel is a component, so the template ref is the component
+// instance — unwrap it to the rendered element.
+const setPanelRef = (el: unknown) => {
+  if (!el) {
+    panelRef.value = null
+    return
+  }
+  const instance = el as { $el?: HTMLElement }
+  panelRef.value =
+    instance.$el instanceof HTMLElement ? instance.$el : (el as HTMLElement)
+}
+
+const readDraft = (): CredentialDraft | null => {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY)
+    if (!raw) return null
+    const draft = JSON.parse(raw) as CredentialDraft
+    if (!draft || typeof draft !== 'object' || !draft.type) return null
+    return draft
+  } catch {
+    return null
+  }
+}
+
+const writeDraft = () => {
+  if (!showModal.value) return
+  try {
+    sessionStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        id: editingCredential.value?.id ?? null,
+        name: form.value.name,
+        type: form.value.type,
+        data: form.value.data,
+        scrollTop: panelScrollTop.value,
+        savedAt: Date.now(),
+      } satisfies CredentialDraft)
+    )
+  } catch {
+    // sessionStorage unavailable (private mode / quota) — not fatal.
+  }
+}
+
+const clearDraft = () => {
+  try {
+    sessionStorage.removeItem(DRAFT_KEY)
+  } catch {
+    // ignore
+  }
+}
+
+let draftTimer: ReturnType<typeof setTimeout> | null = null
+const scheduleDraftSave = () => {
+  if (draftTimer) clearTimeout(draftTimer)
+  draftTimer = setTimeout(writeDraft, 250)
+}
+
+const onPanelScroll = (event: Event) => {
+  panelScrollTop.value = (event.target as HTMLElement).scrollTop
+  scheduleDraftSave()
+}
+
+const restorePanelScroll = (scrollTop: number) => {
+  nextTick(() => {
+    const el = panelRef.value
+    if (!el) return
+    el.scrollTop = scrollTop
+    panelScrollTop.value = scrollTop
+  })
+}
+
+// Keep the draft in sync with every keystroke.
+watch(
+  form,
+  () => {
+    if (!showModal.value) return
+    scheduleDraftSave()
+  },
+  { deep: true }
+)
+
+// If a re-render (test result, schema load, …) resets the panel scroll
+// to the top while the content is still scrollable, put the user back
+// where they were. A deliberate scroll to the top is not undone because
+// `panelScrollTop` is updated by every scroll event.
+watch([testResult, loadingCredential, currentSchema, schemaLoading], async () => {
+  await nextTick()
+  const el = panelRef.value
+  if (!el) return
+  if (el.scrollTop === 0 && panelScrollTop.value > 0 && el.scrollHeight > el.clientHeight) {
+    el.scrollTop = panelScrollTop.value
+  }
+})
+
 // Grouping & expand state
 const expandedGroups = ref<Set<string>>(new Set())
 const toggleGroup = (type: string) => {
@@ -78,21 +196,46 @@ onMounted(async () => {
   const newType = route.query.newType
   if (typeof newType === 'string' && newType.length > 0) {
     openCreateModal(newType)
+    return
   }
+
+  // Restore an unsaved draft (the browser reloaded the tab — Chrome
+  // discards background tabs — or the user navigated back). Without this
+  // the form would come back empty and the scroll position lost.
+  const draft = readDraft()
+  if (!draft) return
+  if (draft.id) {
+    const credential = credentialsStore.credentials.find((c) => c.id === draft.id)
+    if (credential) {
+      await openEditModal(credential, draft)
+      return
+    }
+  }
+  openCreateModal(draft.type, draft)
+  restorePanelScroll(draft.scrollTop)
 })
 
-const openCreateModal = (presetType = '') => {
+const openCreateModal = (presetType = '', draft?: CredentialDraft) => {
   editingCredential.value = null
-  form.value = { name: '', type: presetType, data: {} }
+  form.value = {
+    name: draft?.name ?? '',
+    type: presetType || draft?.type || '',
+    data: draft?.data ?? {},
+  }
   testResult.value = null
   revealedFields.value = new Set()
+  panelScrollTop.value = 0
   showModal.value = true
+  writeDraft()
 }
 
 // Editing a credential loads its stored `data` so every field shows the
 // real value and can be edited in place. The single-credential endpoint
 // returns the payload (n8n editor parity); the list endpoint does not.
-const openEditModal = async (credential: Credential) => {
+//
+// `restore` carries a previously saved draft (page reload / tab discard)
+// so the user's unsaved edits are not thrown away.
+const openEditModal = async (credential: Credential, restore?: CredentialDraft) => {
   editingCredential.value = credential
   form.value = {
     name: credential.name,
@@ -101,6 +244,7 @@ const openEditModal = async (credential: Credential) => {
   }
   testResult.value = null
   revealedFields.value = new Set()
+  panelScrollTop.value = 0
   showModal.value = true
   loadingCredential.value = true
   try {
@@ -108,13 +252,24 @@ const openEditModal = async (credential: Credential) => {
     form.value = {
       name: full.name,
       type: full.type,
-      data: applyFieldAliases(full.data ?? {}),
+      data: restore?.data
+        ? { ...applyFieldAliases(full.data ?? {}), ...restore.data }
+        : applyFieldAliases(full.data ?? {}),
     }
+    if (restore?.scrollTop) restorePanelScroll(restore.scrollTop)
   } catch (e) {
     console.error('Failed to load credential data:', e)
+    if (restore) {
+      form.value = {
+        name: restore.name,
+        type: restore.type,
+        data: restore.data,
+      }
+    }
   } finally {
     loadingCredential.value = false
   }
+  writeDraft()
 }
 
 const closeModal = () => {
@@ -124,6 +279,8 @@ const closeModal = () => {
   currentSchema.value = null
   testResult.value = null
   revealedFields.value = new Set()
+  panelScrollTop.value = 0
+  clearDraft()
 }
 
 // Re-fetch schema whenever the type changes
@@ -248,6 +405,7 @@ const saveCredential = async () => {
     } else {
       await credentialsStore.createCredential(form.value as any)
     }
+    clearDraft()
     closeModal()
   } catch (e) {
     console.error('Failed to save credential:', e)
@@ -500,7 +658,11 @@ const allCredentialTypes = computed(() => {
             leave-from="opacity-100 scale-100"
             leave-to="opacity-0 scale-95"
           >
-            <DialogPanel class="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-800 rounded-xl shadow-xl">
+            <DialogPanel
+              :ref="setPanelRef"
+              @scroll="onPanelScroll"
+              class="w-full max-w-xl max-h-[90vh] overflow-y-auto overscroll-contain bg-white dark:bg-slate-800 rounded-xl shadow-xl"
+            >
               <div class="p-6">
                 <DialogTitle class="text-lg font-semibold text-slate-900 dark:text-white">
                   {{ editingCredential ? 'Edit Credential' : 'New Credential' }}
