@@ -306,6 +306,12 @@ type NodeProperty struct {
 	Values []OptionValue `json:"values,omitempty"`
 }
 
+// WithTypeOptions attaches rendering metadata to a property.
+func (p NodeProperty) WithTypeOptions(options map[string]interface{}) NodeProperty {
+	p.TypeOptions = options
+	return p
+}
+
 // Option represents a selection option for a property
 type Option struct {
 	Name  string `json:"name"`
@@ -343,6 +349,16 @@ type Option struct {
 // (`{name, value, description}`) minus the dynamic `action` — a nested
 // value list is always static.
 type OptionValue struct {
+	// Typed child-field metadata for collection buckets. Empty Type keeps
+	// existing enum entries backward compatible.
+	DisplayName    string                 `json:"displayName,omitempty"`
+	Type           string                 `json:"type,omitempty"`
+	Default        interface{}            `json:"default"`
+	Required       bool                   `json:"required,omitempty"`
+	TypeOptions    map[string]interface{} `json:"typeOptions,omitempty"`
+	DisplayOptions map[string]interface{} `json:"displayOptions,omitempty"`
+	Options        []Option               `json:"options,omitempty"`
+	Placeholder    string                 `json:"placeholder,omitempty"`
 	// Name is the human-readable label shown in the picker.
 	Name string `json:"name"`
 	// Value is the machine-readable value stored in the workflow.

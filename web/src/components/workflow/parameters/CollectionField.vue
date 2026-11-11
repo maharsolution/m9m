@@ -50,7 +50,14 @@ const emit = defineEmits<{
 const listMode = computed(() => isListCollection(props.property, props.modelValue))
 
 /** The stored rows. */
-const rows = computed<Record<string, unknown>[]>(() => toRows(props.modelValue))
+const rows = computed<Record<string, unknown>[]>(() => {
+  const value = props.modelValue
+  if (isPlainObject(value)) {
+    const bucket = props.property.options?.find((option) => option.name in value)
+    if (bucket) return toRows(value[bucket.name])
+  }
+  return toRows(value)
+})
 
 /** The field definitions every row is rendered with. */
 const defs = computed(() => collectionFieldDefs(props.property, rows.value[0]))
@@ -62,7 +69,18 @@ const defs = computed(() => collectionFieldDefs(props.property, rows.value[0]))
  */
 const bucketKey = computed<string | null>(() => {
   const value = props.modelValue
-  if (!isPlainObject(value)) return null
+  if (!isPlainObject(value)) {
+    if (value == null && props.property.type === 'fixedCollection') {
+      return props.property.options?.[0]?.name ?? null
+    }
+    return null
+  }
+  const declared = props.property.options?.find((option) => option.name in value)
+  if (declared) return declared.name
+  if (props.property.type === 'fixedCollection') {
+    const first = props.property.options?.[0]
+    if (first?.values?.length) return first.name
+  }
   const keys = Object.keys(value)
   if (keys.length !== 1) return null
   return isPlainObject(value[keys[0]]) ? keys[0] : null
@@ -70,7 +88,7 @@ const bucketKey = computed<string | null>(() => {
 
 function emitRows(next: Record<string, unknown>[]) {
   if (listMode.value) {
-    emit('update:modelValue', next)
+    emit('update:modelValue', bucketKey.value ? { ...((isPlainObject(props.modelValue) && props.modelValue) || {}), [bucketKey.value]: next } : next)
     return
   }
   const row = next[0] ?? {}

@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -95,9 +96,22 @@ func validateURLForSSRF(urlStr string) error {
 		return fmt.Errorf("invalid URL: %w", err)
 	}
 
-	// Only allow http and https schemes
+	// Only allow http and https schemes.
+	//
+	// The two failure modes are reported separately because they have
+	// different causes: an empty scheme means the expression did not
+	// resolve to a URL at all (e.g. `{{ $json.data.request.target_url }}`
+	// pointing at a missing field), while a foreign scheme means the
+	// resolved value is a URL of a kind we refuse to call.
+	if parsedURL.Scheme == "" {
+		return fmt.Errorf(
+			"url has no scheme; it must start with http:// or https:// (value: %q)",
+			urlStr)
+	}
 	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return fmt.Errorf("only http and https schemes are allowed, got: %s", parsedURL.Scheme)
+		return fmt.Errorf(
+			"only http and https schemes are allowed, got %q (value: %q)",
+			parsedURL.Scheme, urlStr)
 	}
 
 	// Extract hostname (without port)
@@ -131,6 +145,15 @@ func validateURLForSSRF(urlStr string) error {
 type HTTPRequestNode struct {
 	*base.BaseNode
 	client *http.Client
+	// evaluator is the goja-backed expression evaluator. It is the
+	// primary path for parameter evaluation because it understands the
+	// full n8n expression surface: nested paths
+	// (`$json.data.request.target_url`), bracket access
+	// (`$json.headers['Content-Type']`), method calls
+	// (`.toLowerCase()`, `.toJsonString()`) and the `$()` node
+	// accessor. The legacy evaluator stays as a fallback for the
+	// handful of expressions goja cannot compile.
+	evaluator *expressions.GojaExpressionEvaluator
 }
 
 // NewHTTPRequestNode creates a new HTTP Request node
@@ -155,6 +178,7 @@ func NewHTTPRequestNode() *HTTPRequestNode {
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		evaluator: expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 	}
 }
 
@@ -187,7 +211,13 @@ func httpRequestProperties() []base.NodeProperty {
 		nodeprops.Opt("Method", "method", "GET", "HTTP method to use.", methods, true),
 		nodeprops.Str("URL", "url", "", "Endpoint to call. Expressions are evaluated.", "https://example.com/path", true),
 		nodeprops.JSON("Headers", "headers", "{}", "Header name/value map added to the request."),
-		nodeprops.Collection("Header Parameters", "headerParameters", "n8n-style list of {name, value} header rows. Accepts a plain array or n8n's `{parameters: [...]}` wrapper.", nil),
+		nodeprops.FixedCollection("Header Parameters", "headerParameters", "Header name/value rows.", base.Option{
+			Name: "parameters", Value: "parameters",
+			Values: []base.OptionValue{
+				{Name: "name", DisplayName: "Name", Type: "string", Default: "", Required: true},
+				{Name: "value", DisplayName: "Value", Type: "string", Default: ""},
+			},
+		}).WithTypeOptions(map[string]interface{}{"multipleValues": true}),
 		nodeprops.Opt("Body Content Type", "specifyBody", "", "How the request body is supplied. `json` sends the JSON body field.", bodyTypes, false),
 		nodeprops.JSON("Body (JSON)", "jsonBody", "{}", "JSON body sent when Body Content Type is JSON.").
 			WithDisplayOptions(nodeprops.Show("specifyBody", "json")),
@@ -284,7 +314,10 @@ func (h *HTTPRequestNode) ExecuteWithContext(ctx context.Context, inputData []mo
 		// Get required parameters from evaluated parameters
 		requestURL := h.GetStringParameter(evaluatedParams, "url", "")
 		if requestURL == "" {
-			return nil, h.CreateError("url parameter cannot be empty", nil)
+			return nil, h.CreateError(
+				"url parameter is empty after expression evaluation; the expression "+
+					"must resolve to an http(s) URL (e.g. {{ $json.data.request.target_url }})",
+				nil)
 		}
 
 		// SECURITY: Validate URL against SSRF attacks
@@ -292,7 +325,7 @@ func (h *HTTPRequestNode) ExecuteWithContext(ctx context.Context, inputData []mo
 		allowInternal := h.GetBoolParameter(evaluatedParams, "allowInternalRequests", false)
 		if !allowInternal {
 			if err := validateURLForSSRF(requestURL); err != nil {
-				return nil, h.CreateError(fmt.Sprintf("SSRF protection: %v", err), nil)
+				return nil, h.CreateError(fmt.Sprintf("SSRF protection blocked the request to %q: %v", requestURL, err), nil)
 			}
 		} else {
 			log.Printf("SECURITY WARNING: SSRF protection disabled for request to %s", requestURL)
@@ -451,41 +484,144 @@ func (h *HTTPRequestNode) ExecuteWithContext(ctx context.Context, inputData []mo
 	return result, nil
 }
 
-// evaluateParameters evaluates node parameters with expression context
+// evaluateParameters evaluates node parameters with expression context.
+//
+// The goja evaluator is the primary path: it understands the whole n8n
+// expression surface, so `url={{ $json.data.request.target_url }}` and
+// `{{ $json.headers['Content-Type'].toLowerCase() }}` resolve the same
+// way they do on n8n.
+//
+// The legacy (regex) evaluator stays as a per-parameter fallback for
+// the expressions goja cannot handle. When neither evaluator resolves
+// an expression the goja error is surfaced, so the operator sees the
+// real cause instead of a literal "{{ ... }}" leaking into the request.
 func (h *HTTPRequestNode) evaluateParameters(params map[string]interface{}, context *expressions.ExecutionContext) (map[string]interface{}, error) {
-	evaluator := expressions.NewExpressionEvaluator()
+	exprContext := h.buildExpressionContext(context, params)
+	return h.evaluateParametersWithContext(params, context, exprContext)
+}
 
-	evaluatedParams := make(map[string]interface{})
+// evaluateParametersWithContext evaluates every parameter, resolving
+// expressions against the supplied goja context.
+func (h *HTTPRequestNode) evaluateParametersWithContext(params map[string]interface{}, context *expressions.ExecutionContext, exprContext *expressions.ExpressionContext) (map[string]interface{}, error) {
+	legacy := expressions.NewExpressionEvaluator()
+
+	evaluatedParams := make(map[string]interface{}, len(params))
 
 	for key, value := range params {
 		switch v := value.(type) {
 		case string:
-			// Check if this is an expression
-			if expressions.IsExpression(v) {
-				// Evaluate the expression
-				evaluatedValue, err := evaluator.Evaluate(v, context)
-				if err != nil {
-					return nil, fmt.Errorf("failed to evaluate expression for parameter %s: %v", key, err)
-				}
-				evaluatedParams[key] = evaluatedValue
-			} else {
-				// Use the literal value
+			if !expressions.IsExpression(v) {
 				evaluatedParams[key] = v
+				continue
 			}
+
+			evaluatedValue, gojaErr := h.evaluator.EvaluateExpression(v, exprContext)
+			if gojaErr == nil {
+				evaluatedParams[key] = stringifyScalar(evaluatedValue)
+				continue
+			}
+
+			// The legacy evaluator understands a smaller grammar. It
+			// only gets a chance when goja failed, and only its result
+			// is accepted when it actually resolved the expression.
+			legacyValue, legacyErr := legacy.Evaluate(v, context)
+			if legacyErr == nil && !isUnresolvedExpression(legacyValue) {
+				evaluatedParams[key] = legacyValue
+				continue
+			}
+
+			return nil, fmt.Errorf("failed to evaluate expression for parameter %s: %w", key, gojaErr)
 		case map[string]interface{}:
-			// Recursively evaluate nested maps
-			nested, err := h.evaluateParameters(v, context)
+			nested, err := h.evaluateParametersWithContext(v, context, exprContext)
 			if err != nil {
-				return nil, fmt.Errorf("failed to evaluate nested parameters for %s: %v", key, err)
+				return nil, fmt.Errorf("failed to evaluate nested parameters for %s: %w", key, err)
 			}
 			evaluatedParams[key] = nested
 		default:
-			// Use the literal value
 			evaluatedParams[key] = v
 		}
 	}
 
 	return evaluatedParams, nil
+}
+
+// isUnresolvedExpression reports whether a legacy-evaluated value still
+// carries expression markers, i.e. the legacy evaluator did not resolve
+// it. Such a value must never reach the request layer: it would put a
+// literal "{{ $json.foo }}" into a URL.
+func isUnresolvedExpression(value interface{}) bool {
+	str, ok := value.(string)
+	if !ok {
+		return false
+	}
+	lower := strings.ToLower(str)
+	return strings.Contains(str, "{{") ||
+		strings.Contains(str, "}}") ||
+		strings.Contains(lower, "<nil>")
+}
+
+// stringifyScalar converts a scalar expression result into the string
+// form n8n uses for string-typed parameter fields. Structured values
+// (maps, slices) are returned untouched so object-valued parameters
+// keep their shape.
+func stringifyScalar(value interface{}) interface{} {
+	switch v := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return v
+	case bool:
+		return fmt.Sprintf("%t", v)
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	case float32:
+		return strconv.FormatFloat(float64(v), 'f', -1, 32)
+	case int:
+		return strconv.Itoa(v)
+	case int32:
+		return strconv.FormatInt(int64(v), 10)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	default:
+		return value
+	}
+}
+
+// buildExpressionContext converts the node-local execution context into
+// the shared `expressions.ExpressionContext` the goja evaluator expects.
+func (h *HTTPRequestNode) buildExpressionContext(context *expressions.ExecutionContext, params map[string]interface{}) *expressions.ExpressionContext {
+	exprContext := expressions.ExpressionContext{
+		RunIndex:       0,
+		ItemIndex:      0,
+		ActiveNodeName: "http-request",
+		Mode:           expressions.ModeManual,
+		AdditionalKeys: &expressions.AdditionalKeys{
+			CurrentNodeParameters: map[string]interface{}{},
+		},
+	}
+
+	if context != nil {
+		exprContext.ItemIndex = context.ItemIndex
+		exprContext.ConnectionInputData = context.InputData
+		exprContext.SiblingParameters = context.Variables
+	}
+	if exprContext.ItemIndex < 0 {
+		exprContext.ItemIndex = 0
+	}
+	if exprContext.AdditionalKeys == nil {
+		exprContext.AdditionalKeys = &expressions.AdditionalKeys{}
+	}
+	if exprContext.AdditionalKeys.CurrentNodeParameters == nil {
+		exprContext.AdditionalKeys.CurrentNodeParameters = map[string]interface{}{}
+	}
+
+	// Expose the node's own parameters through `$parameter`, the way n8n
+	// does. Without this `{{ $parameter.url }}` resolves to undefined.
+	for key, value := range params {
+		exprContext.AdditionalKeys.CurrentNodeParameters[key] = value
+	}
+
+	return &exprContext
 }
 
 // applyHeaderParameters reads the n8n-style header spec (a list of

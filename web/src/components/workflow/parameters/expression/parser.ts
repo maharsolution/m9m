@@ -555,6 +555,88 @@ export function parseExpression(source: string): ExpressionNode {
 }
 
 /**
+ * Shift every span of an AST by `offset` characters.
+ *
+ * The parser works on the body of a `{{ … }}` chunk, so the spans it
+ * produces are relative to that body. The evaluator needs offsets into
+ * the *original* value to highlight the offending expression, therefore
+ * the spans are shifted by the offset of the chunk.
+ *
+ * @param node - the parsed AST.
+ * @param offset - number of characters the AST has to be moved by.
+ * @returns the same AST with absolute spans.
+ */
+export function shiftSpans(node: ExpressionNode, offset: number): ExpressionNode {
+  if (offset === 0) return node
+  const start = node.start + offset
+  const end = node.end + offset
+
+  switch (node.type) {
+    case 'literal':
+    case 'identifier':
+      return { ...node, start, end }
+
+    case 'member':
+      return {
+        type: 'member',
+        object: shiftSpans(node.object, offset),
+        property:
+          typeof node.property === 'string' ? node.property : shiftSpans(node.property, offset),
+        computed: node.computed,
+        optional: node.optional,
+        start,
+        end,
+      }
+
+    case 'call':
+      return {
+        type: 'call',
+        callee: shiftSpans(node.callee, offset),
+        args: node.args.map((argument) => shiftSpans(argument, offset)),
+        optional: node.optional,
+        start,
+        end,
+      }
+
+    case 'unary':
+      return {
+        type: 'unary',
+        operator: node.operator,
+        argument: shiftSpans(node.argument, offset),
+        start,
+        end,
+      }
+
+    case 'binary':
+      return {
+        type: 'binary',
+        operator: node.operator,
+        left: shiftSpans(node.left, offset),
+        right: shiftSpans(node.right, offset),
+        start,
+        end,
+      }
+
+    case 'conditional':
+      return {
+        type: 'conditional',
+        test: shiftSpans(node.test, offset),
+        consequent: shiftSpans(node.consequent, offset),
+        alternate: shiftSpans(node.alternate, offset),
+        start,
+        end,
+      }
+
+    default: {
+      // Every node type is handled above, so `node` narrows to `never`
+      // here — the cast keeps the span available.
+      const unsupported = node as unknown as ExpressionNode
+      return { ...unsupported, start, end }
+    }
+  }
+}
+
+/**
  * Split a parameter value into text and expression chunks.
  *
  * Mirrors the server-side chunking in `internal/expressions/parser.go`:
@@ -601,7 +683,9 @@ export function parseValue(source: string): ValueChunk[] {
     const body = source.slice(open + 2, close)
     let node: ExpressionNode
     try {
-      node = parseExpression(body)
+      // The parser works on the chunk body, so its spans are shifted to
+      // the offset of the chunk to stay absolute inside `source`.
+      node = shiftSpans(parseExpression(body), open + 2)
     } catch (error) {
       if (error instanceof ExpressionSyntaxError) {
         throw new ExpressionSyntaxError(

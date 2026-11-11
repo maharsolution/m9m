@@ -124,12 +124,13 @@ func CollectionProp(displayName, name, desc string, options []Option) NodeProper
 // FixedCollectionProp builds a fixedCollection property (named
 // buckets of sub-properties). Used by HTTP Request's "Send Query
 // Parameters" / "Send Headers" / "Send Body" groups.
-func FixedCollectionProp(displayName, name, desc string) NodeProperty {
+func FixedCollectionProp(displayName, name, desc string, buckets ...Option) NodeProperty {
 	return NodeProperty{
 		DisplayName: displayName,
 		Name:        name,
 		Type:        "fixedCollection",
 		Description: desc,
+		Options:     buckets,
 	}
 }
 

@@ -157,13 +157,14 @@ func Collection(displayName, name, description string, options []base.Option) ba
 
 // FixedCollection builds a fixedCollection property — named buckets of
 // sub-properties (n8n's "Send Query Parameters" / "Send Body" groups).
-func FixedCollection(displayName, name, description string) base.NodeProperty {
+func FixedCollection(displayName, name, description string, buckets ...base.Option) base.NodeProperty {
 	return base.NodeProperty{
 		DisplayName: displayName,
 		Name:        name,
 		Type:        "fixedCollection",
 		Default:     map[string]interface{}{},
 		Description: description,
+		Options:     buckets,
 	}
 }
 

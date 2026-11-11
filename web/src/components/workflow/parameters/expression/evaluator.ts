@@ -17,8 +17,12 @@
  * | `$input.last()`      | last incoming item wrapper   | last of `context.input` |
  * | `$input.item`        | current item wrapper         | `context.input[context.itemIndex]` |
  * | `$node["Name"].json` | last output of node `Name`   | `context.node.Name` |
+ * | `$parameter`         | parameters of the node       | `context.parameter` |
  * | `$workflow`          | workflow metadata            | `context.workflow` |
  * | `$execution`         | execution metadata           | `context.execution` |
+ * | `$vars`              | workflow variables           | `context.vars` |
+ * | `$binary`            | binary data of the item      | `context.binary` |
+ * | `$env`               | environment variables        | `context.env` |
  * | `$now`               | Luxon-style date proxy       | `context.now` |
  * | `$runIndex`          | current loop iteration       | `context.runIndex` |
  *
@@ -43,6 +47,8 @@ import {
 import { parseExpression, parseValue } from './parser'
 import {
   BUILTIN_FUNCTIONS,
+  assertBuiltinArity,
+  getMemberBuiltin,
   isTruthy,
   toNumberValue,
   toStringValue,
@@ -74,6 +80,14 @@ export interface ExpressionContext {
   itemIndex?: number
   /** Last output of every referenced node, keyed by node name. */
   node?: Record<string, unknown>
+  /** Parameters of the current node (`$parameter`). */
+  parameter?: Record<string, unknown>
+  /** Workflow variables (`$vars`). */
+  vars?: Record<string, unknown>
+  /** Binary data of the current item (`$binary`). */
+  binary?: unknown
+  /** Environment variables (`$env`). */
+  env?: Record<string, string>
   /** Workflow metadata (`$workflow`). */
   workflow?: {
     id?: string
@@ -108,6 +122,19 @@ const CHAIN_ABORT = Symbol('chain-abort')
 
 /** A value that optional chaining may short-circuit. */
 type ChainValue = unknown | typeof CHAIN_ABORT
+
+/**
+ * Unwrap a short-circuited optional chain.
+ *
+ * Inside a member chain the abort sentinel has to survive
+ * (`$json.user?.name.first` short-circuits as a whole), but as soon as
+ * a value is *consumed* — as a binary operand, a unary operand, the
+ * test of a conditional or an argument of a call — it becomes
+ * `undefined`, exactly like JavaScript does.
+ */
+function unwrapChain(value: ChainValue): unknown {
+  return value === CHAIN_ABORT ? undefined : value
+}
 
 /** The n8n item envelope: `{ json, binary, pairedItem }`. */
 interface ItemWrapper {
@@ -240,9 +267,15 @@ interface EvaluatorState {
  *
  * Three sources are consulted, in this order:
  *
- * 1. native JavaScript methods (`"abc".toUpperCase()`),
- * 2. m9m functions in method style (`$json.text.split(',')`),
+ * 1. m9m functions in method style (`$json.text.split(',')`),
+ * 2. native JavaScript methods (`"abc".toUpperCase()`),
  * 3. plain properties (`$json.user.id`).
+ *
+ * The m9m functions are *value first*, so the receiver becomes the
+ * first argument of the builtin. A builtin is only used when it can
+ * actually be called with the given arguments; otherwise the native
+ * JavaScript method wins, exactly like the Go runtime resolves
+ * `String.prototype` / `Array.prototype` members.
  */
 function resolveMember(
   receiver: unknown,
@@ -256,15 +289,25 @@ function resolveMember(
       return (receiver as string | unknown[]).length
     }
 
+    const builtin = getMemberBuiltin(receiver, key)
+    if (builtin) {
+      return (...args: unknown[]) => {
+        // m9m functions are value-first: the receiver is the first argument.
+        const callArgs = [receiver, ...args]
+        if (callArgs.length >= builtin.minArgs) {
+          return builtin.fn(callArgs)
+        }
+        const native = getNativeMethod(receiver, key)
+        if (native) return native(receiver, ...args)
+        // No native fallback — report the arity error the server reports.
+        assertBuiltinArity(key, callArgs)
+        return undefined
+      }
+    }
+
     const native = getNativeMethod(receiver, key)
     if (native) {
       return (...args: unknown[]) => native(receiver, ...args)
-    }
-
-    const builtin = BUILTIN_FUNCTIONS[key]
-    if (builtin) {
-      // m9m functions are value-first: the receiver is the first argument.
-      return (...args: unknown[]) => builtin([receiver, ...args])
     }
   }
 
@@ -322,35 +365,42 @@ function evaluateNode(node: ExpressionNode, state: EvaluatorState): ChainValue {
       const args: unknown[] = []
       for (const argument of node.args) {
         const value = evaluateNode(argument, state)
-        if (value === CHAIN_ABORT) return CHAIN_ABORT
-        args.push(value)
+        // A short-circuited chain is passed as `undefined`, like in JS.
+        args.push(unwrapChain(value))
       }
 
       if (typeof callee === 'function') {
-        return (callee as (...callArgs: unknown[]) => unknown)(...args)
+        try {
+          return (callee as (...callArgs: unknown[]) => unknown)(...args)
+        } catch (error) {
+          // Re-throw with the span of the call so the editor can
+          // highlight the offending expression.
+          if (error instanceof ExpressionEvaluationError) throw error
+          throw new ExpressionEvaluationError(
+            error instanceof Error ? error.message : String(error),
+            node.start,
+            node.end,
+          )
+        }
       }
 
       throw new ExpressionEvaluationError('Value is not a function', node.start, node.end)
     }
 
     case 'unary': {
-      const argument = evaluateNode(node.argument, state)
-      if (argument === CHAIN_ABORT) return CHAIN_ABORT
+      const argument = unwrapChain(evaluateNode(node.argument, state))
       if (node.operator === '!') return !isTruthy(argument)
       return -toNumberValue(argument)
     }
 
     case 'binary': {
-      const left = evaluateNode(node.left, state)
-      if (left === CHAIN_ABORT) return CHAIN_ABORT
-      const right = evaluateNode(node.right, state)
-      if (right === CHAIN_ABORT) return CHAIN_ABORT
+      const left = unwrapChain(evaluateNode(node.left, state))
+      const right = unwrapChain(evaluateNode(node.right, state))
       return applyBinary(node.operator, left, right, node.start, node.end)
     }
 
     case 'conditional': {
-      const test = evaluateNode(node.test, state)
-      if (test === CHAIN_ABORT) return CHAIN_ABORT
+      const test = unwrapChain(evaluateNode(node.test, state))
       return isTruthy(test)
         ? evaluateNode(node.consequent, state)
         : evaluateNode(node.alternate, state)
@@ -385,10 +435,18 @@ function resolveIdentifier(
       return createNodeRegistry(state.context)
     case '$':
       return createNodeLookup(state.context)
+    case '$parameter':
+      return state.context.parameter ?? {}
     case '$workflow':
       return state.context.workflow ?? {}
     case '$execution':
       return state.context.execution ?? {}
+    case '$vars':
+      return state.context.vars ?? {}
+    case '$binary':
+      return state.context.binary ?? {}
+    case '$env':
+      return createEnvProxy(state.context)
     case '$now':
       return state.now
     case '$runIndex':
@@ -400,7 +458,12 @@ function resolveIdentifier(
     default:
       if (Object.prototype.hasOwnProperty.call(BUILTIN_FUNCTIONS, name)) {
         const builtin = BUILTIN_FUNCTIONS[name]
-        return (...args: unknown[]) => builtin(args)
+        return (...args: unknown[]) => {
+          // The server validates the arity of its functions, e.g.
+          // `split requires 2 arguments`.
+          assertBuiltinArity(name, args)
+          return builtin(args)
+        }
       }
       if (Object.prototype.hasOwnProperty.call(GLOBAL_FUNCTIONS, name)) {
         const global = GLOBAL_FUNCTIONS[name]
@@ -521,6 +584,21 @@ function createNodeLookup(context: ExpressionContext): (name: unknown) => unknow
   return (name: unknown) => createNodeProxy(nodes[toStringValue(name)])
 }
 
+/**
+ * Build the `$env` helper.
+ *
+ * On the server `$env` is a function: `$env()` returns every variable,
+ * `$env("NAME")` returns one value (`undefined` when it is not set).
+ */
+function createEnvProxy(context: ExpressionContext): (name?: unknown) => unknown {
+  const env = context.env ?? {}
+  return (name?: unknown) => {
+    if (name === undefined) return { ...env }
+    const value = env[toStringValue(name)]
+    return value === undefined || value === '' ? undefined : value
+  }
+}
+
 /** Build the proxy returned by `$node["Name"]` / `$("Name")`. */
 function createNodeProxy(output: unknown): Record<string, unknown> {
   const items = Array.isArray(output) ? output : output === undefined ? [] : [output]
@@ -552,13 +630,21 @@ function toExpressionError(error: unknown, offset: number): ExpressionError {
 /** Strip the `=` / `{{ … }}` envelope and return the body plus its offset. */
 function stripEnvelope(source: string): { body: string; offset: number } {
   const match = source.match(/^(\s*)(=?)(\s*)\{\{([\s\S]*)\}\}(\s*)$/)
-  if (!match) {
-    const leading = source.match(/^\s*/)
-    const leadingLength = leading ? leading[0].length : 0
-    return { body: source.slice(leadingLength), offset: leadingLength }
+  if (match) {
+    // The body starts right behind the `{{`.
+    const offset = match[1].length + match[2].length + match[3].length + 2
+    return { body: match[4], offset }
   }
-  const offset = match[1].length + match[2].length + match[3].length + 2
-  return { body: match[4], offset }
+
+  // Bare expression, optionally prefixed with `=`.
+  const leading = source.match(/^\s*/)
+  let start = leading ? leading[0].length : 0
+  if (source[start] === '=') {
+    start += 1
+    const afterEquals = source.slice(start).match(/^\s*/)
+    start += afterEquals ? afterEquals[0].length : 0
+  }
+  return { body: source.slice(start), offset: start }
 }
 
 /**

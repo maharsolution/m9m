@@ -124,7 +124,10 @@ function valueKey(value: unknown): string {
   if (value === undefined) return '<nil>'
   if (Array.isArray(value)) return `[${value.map(valueKey).join(' ')}]`
   if (typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>)
+    // Go prints maps with their keys sorted.
+    const entries = Object.entries(value as Record<string, unknown>).sort(([left], [right]) =>
+      left < right ? -1 : left > right ? 1 : 0,
+    )
     return `map[${entries.map(([key, item]) => `${key}:${valueKey(item)}`).join(' ')}]`
   }
   return toStringValue(value)
@@ -153,7 +156,10 @@ function splitString(args: unknown[]): unknown[] {
 
 /** Join an array into a string (Go `join`). */
 function joinArray(args: unknown[]): string {
-  const list = Array.isArray(args[0]) ? args[0] : []
+  if (!Array.isArray(args[0])) {
+    throw new Error('first argument must be an array')
+  }
+  const list = args[0] as unknown[]
   const separator = toStringValue(args[1])
   return list.map(toStringValue).join(separator)
 }
@@ -437,12 +443,36 @@ function toKebabCase(args: unknown[]): string {
 /* Math helpers                                                               */
 /* -------------------------------------------------------------------------- */
 
-/** Flatten the arguments of a math function (Go `flattenArgs`). */
+/**
+ * Flatten the arguments of a math function (Go `flattenArgs`).
+ *
+ * The Go runtime expands a *single* argument that exposes a `length`
+ * property — arrays, strings and `{ length: n }` objects alike.
+ */
 function flattenNumbers(args: unknown[]): number[] {
-  if (args.length === 1 && Array.isArray(args[0])) {
-    return args[0].map(toNumberValue)
+  if (args.length === 1) {
+    const flattened = flattenArrayLike(args[0])
+    if (flattened) return flattened
   }
   return args.map(toNumberValue)
+}
+
+/** Expand an array-like value into its numeric items. */
+function flattenArrayLike(value: unknown): number[] | undefined {
+  if (Array.isArray(value)) return value.map(toNumberValue)
+  if (typeof value === 'string') return value.split('').map((char) => toNumberValue(char))
+  if (typeof value === 'object' && value !== null) {
+    const raw = (value as { length?: unknown }).length
+    const size = typeof raw === 'number' ? raw : Number(raw)
+    if (!Number.isFinite(size) || size <= 0) return undefined
+    const items: number[] = []
+    for (let index = 0; index < size; index += 1) {
+      const item = (value as Record<string, unknown>)[String(index)]
+      if (item !== undefined) items.push(toNumberValue(item))
+    }
+    return items
+  }
+  return undefined
 }
 
 /** Smallest value. */
@@ -1131,6 +1161,26 @@ const BUILTIN_MIN_ARGS: Record<string, number> = {
   padEnd: 2,
   repeat: 2,
   slice: 2,
+  base64Encode: 1,
+  base64Decode: 1,
+  urlEncode: 1,
+  urlDecode: 1,
+  htmlEncode: 1,
+  htmlDecode: 1,
+  md5: 1,
+  sha1: 1,
+  sha256: 1,
+  sha512: 1,
+  isEmail: 1,
+  isUrl: 1,
+  isDomain: 1,
+  stripTags: 1,
+  extractDomain: 1,
+  extractUrl: 1,
+  toTitleCase: 1,
+  toCamelCase: 1,
+  toSnakeCase: 1,
+  toKebabCase: 1,
 
   // --- math ---
   round: 1,
@@ -1141,8 +1191,9 @@ const BUILTIN_MIN_ARGS: Record<string, number> = {
   sin: 1,
   cos: 1,
   tan: 1,
+  randomInt: 1,
   subtract: 2,
-  multiply: 1,
+  multiply: 2,
   divide: 2,
   modulo: 2,
   pow: 2,
@@ -1172,10 +1223,11 @@ const BUILTIN_MIN_ARGS: Record<string, number> = {
   addMinutes: 2,
 
   // --- logic ---
+  // `isEmpty` / `isNotEmpty` accept zero arguments on the server
+  // (they answer `true` / `false` for "no value"), so they are not
+  // listed here.
   if: 3,
   not: 1,
-  isEmpty: 1,
-  isNotEmpty: 1,
   equal: 2,
   notEqual: 2,
   greaterThan: 2,

@@ -1,0 +1,169 @@
+{
+  "suite": "positive",
+  "description": "14 positive webhook parity cases (workflow-test.MD Section J, 2026-09-10 cycle).",
+  "cases": [
+    {
+      "id": "p01",
+      "name": "simple_webhook",
+      "path": "simple_webhook",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{\"variable\":\"1\"}",
+      "expected_status": 200,
+      "compare": "json",
+      "notes": "Plain webhook trigger with no downstream processing."
+    },
+    {
+      "id": "p02",
+      "name": "simple_webhook_2 (Set node)",
+      "path": "simple_webhook_2",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{\"variable\":\"1\"}",
+      "expected_status": 200,
+      "compare": "json",
+      "notes": "Webhook -> Set. Response body must wrap the payload under `body`."
+    },
+    {
+      "id": "p03",
+      "name": "bocahtuanakal (Set calculation)",
+      "path": "bocahtuanakal",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{\"varA\":1,\"varB\":2}",
+      "headers": {
+        "Authorization": "Basic YWRtaW46YWRtaW4xMjM="
+      },
+      "expected_status": 200,
+      "compare": "json",
+      "notes": "Webhook -> Set with an expression; basic-auth header required by the workflow."
+    },
+    {
+      "id": "p04",
+      "name": "webhook_code (Code node)",
+      "path": "webhook_code",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{\"variable\":\"1\"}",
+      "expected_status": 200,
+      "compare": "json",
+      "notes": "Webhook -> Code (JavaScript). Response is {\"result\":\"1\"}."
+    },
+    {
+      "id": "p05",
+      "name": "webhook_callrest (HTTP Request + basic auth)",
+      "path": "webhook_callrest",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{\"variable\":\"1\"}",
+      "expected_status": 200,
+      "compare": "json",
+      "notes": "Webhook -> HTTP Request with basic-auth credentials; the credential envelope must resolve."
+    },
+    {
+      "id": "p06",
+      "name": "webhook_xml (XML <-> JSON)",
+      "path": "webhook_xml",
+      "method": "POST",
+      "content_type": "application/xml",
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><buku id=\"001\"><judul>Belajar Pemrograman Web</judul><penulis>John Doe</penulis><tahun>2026</tahun><harga mataUang=\"IDR\">120000</harga></buku>",
+      "expected_status": 200,
+      "compare": "xml",
+      "notes": "XML round-trip. n8n collapses attributes into child elements; both trees are equivalent."
+    },
+    {
+      "id": "p07",
+      "name": "webhook_loop (loop node)",
+      "path": "webhook_loop",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{\"operation\":\"start loop\"}",
+      "expected_status": 200,
+      "compare": "json",
+      "notes": "Webhook -> Code -> Loop Over Items -> respond all."
+    },
+    {
+      "id": "p08",
+      "name": "token_auth (JWT bearer)",
+      "path": "token_auth",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{}",
+      "headers": {
+        "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+      },
+      "expected_status": 200,
+      "compare": "json",
+      "notes": "Webhook with JWT bearer authentication."
+    },
+    {
+      "id": "p09",
+      "name": "auth_apikey (header auth)",
+      "path": "auth_apikey",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{}",
+      "headers": {
+        "X-API-Key": "test-api-key-value"
+      },
+      "expected_status": 200,
+      "compare": "json",
+      "notes": "Webhook with an API-key header."
+    },
+    {
+      "id": "p10",
+      "name": "user-signup (end-to-end signup)",
+      "path": "/webhook/user-signup",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{\"email\":\"parity@example.com\",\"name\":\"Parity User\"}",
+      "expected_status": 200,
+      "compare": "json",
+      "notes": "Full signup flow: webhook -> code -> http -> respond."
+    },
+    {
+      "id": "p11",
+      "name": "process-batch-orders",
+      "path": "process-batch-orders",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{\"client_id\":\"CLIENT_001\",\"batch_id\":\"BATCH-2026-001\",\"inventory_lookup\":{\"PROD-001\":{\"stock\":50,\"price\":100000},\"PROD-002\":{\"stock\":10,\"price\":250000},\"PROD-003\":{\"stock\":0,\"price\":500000}},\"orders\":[{\"order_id\":\"ORD-101\",\"customer_type\":\"VIP\",\"sku\":\"PROD-003\",\"qty\":2,\"coupon\":\"DISC10\",\"payment_status\":\"PAID\"}]}",
+      "expected_status": 200,
+      "compare": "json",
+      "notes": "Batch order pipeline: code -> if -> loop -> switch -> set -> code -> summary."
+    },
+    {
+      "id": "p12",
+      "name": "db_quiry (MySQL branch)",
+      "path": "db_quiry",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{\"db_type\":\"mysql\",\"operation\":\"inquiry\",\"table_name\":\"credentials\"}",
+      "expected_status": 200,
+      "compare": "json",
+      "notes": "Webhook -> if (db_type) -> MySQL branch. Regression guard for GAP-2026-09-10-1."
+    },
+    {
+      "id": "p13",
+      "name": "call_subworkflow",
+      "path": "call_subworkflow",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{\"name\":\"erwan\",\"address\":\"puri depok mas blok QF 12\"}",
+      "expected_status": 200,
+      "compare": "json",
+      "notes": "Webhook -> Execute Workflow -> respond."
+    },
+    {
+      "id": "p14",
+      "name": "db_quiry (PostgreSQL branch)",
+      "path": "db_quiry",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{\"db_type\":\"postgresql\",\"operation\":\"inquiry\",\"table_name\":\"credentials_entity\"}",
+      "expected_status": 200,
+      "compare": "json",
+      "notes": "Webhook -> if (db_type) -> PostgreSQL branch. Regression guard for GAP-2026-09-10-2."
+    }
+  ]
+}

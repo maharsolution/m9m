@@ -1,0 +1,50 @@
+{
+  "suite": "focus",
+  "description": "Focus scenario from focus-solution.txt: the `post_balance` webhook of the Finnet workflow (G1 $input.item, G2 Merge chooseBranch, G3 HTTP URL nested path).",
+  "cases": [
+    {
+      "id": "f01",
+      "name": "post_balance baseline (amount 14000)",
+      "path": "post_balance",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{\"customer\":{\"id\":\"U001\",\"servicenumber\":\"0812000110\"},\"transaction\":{\"amount\":14000}}",
+      "expected_status": 200,
+      "compare": "xml",
+      "notes": "n8n answers <data><customer>0812000110</customer><balance>14000</balance></data>; m9m must match."
+    },
+    {
+      "id": "f02",
+      "name": "post_balance variant (amount 55555)",
+      "path": "post_balance",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{\"customer\":{\"id\":\"U002\",\"servicenumber\":\"0812000222\"},\"transaction\":{\"amount\":55555}}",
+      "expected_status": 200,
+      "compare": "xml",
+      "notes": "Same flow with a different amount: exercises the Set Counter / retry-loop path."
+    },
+    {
+      "id": "f03",
+      "name": "post_balance malformed JSON",
+      "path": "post_balance",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{\"customer\": {\"id\": \"U001\", \"servicenumber\": ",
+      "expected_status": 422,
+      "compare": "json",
+      "notes": "A malformed body must produce the same 422 envelope on both hosts (parser hints may differ)."
+    },
+    {
+      "id": "f04",
+      "name": "post_balance wrong content type",
+      "path": "post_balance",
+      "method": "POST",
+      "content_type": "text/plain",
+      "body": "{\"customer\":{\"id\":\"U001\",\"servicenumber\":\"0812000110\"},\"transaction\":{\"amount\":14000}}",
+      "expected_status": 200,
+      "compare": "xml",
+      "notes": "n8n parses the body regardless of the declared content type and answers the same XML; m9m must not diverge."
+    }
+  ]
+}

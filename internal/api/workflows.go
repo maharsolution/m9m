@@ -53,6 +53,14 @@ func (s *APIServer) ListWorkflows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A filtered query that matches nothing must still answer with an
+	// empty array instead of `null`: the UI (and every other m9m list
+	// endpoint) expects `data` / `workflows` to be a JSON array, and
+	// `null` breaks strict clients that iterate the list.
+	if workflows == nil {
+		workflows = []*model.Workflow{}
+	}
+
 	s.sendJSON(w, http.StatusOK, map[string]interface{}{
 		"data":      workflows,
 		"workflows": workflows,

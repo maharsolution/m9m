@@ -1,0 +1,67 @@
+{
+  "suite": "negative",
+  "description": "5 negative webhook parity cases (workflow-test.MD Section J, 2026-09-10 cycle).",
+  "cases": [
+    {
+      "id": "n01",
+      "name": "basic_auth without credentials",
+      "path": "basic_auth",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{\"variable\":\"1\"}",
+      "expected_status": 401,
+      "compare": "json",
+      "notes": "The workflow requires basic auth; an anonymous request must be rejected with 401 on both hosts."
+    },
+    {
+      "id": "n02",
+      "name": "token_auth without bearer",
+      "path": "token_auth",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{}",
+      "expected_status": 401,
+      "compare": "json",
+      "notes": "JWT-protected webhook; a missing bearer token must be rejected with 401."
+    },
+    {
+      "id": "n03",
+      "name": "unknown webhook path",
+      "path": "no_such_path",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{}",
+      "expected_status": 404,
+      "compare": "json",
+      "notes": "An unregistered webhook path must answer 404 on both hosts."
+    },
+    {
+      "id": "n04",
+      "name": "token_auth with invalid bearer",
+      "path": "token_auth",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{}",
+      "headers": {
+        "Authorization": "Bearer invalid.token.value"
+      },
+      "expected_status": 401,
+      "compare": "json",
+      "notes": "A malformed bearer token must be rejected with 401."
+    },
+    {
+      "id": "n05",
+      "name": "basic_auth with wrong credentials",
+      "path": "basic_auth",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{\"variable\":\"1\"}",
+      "headers": {
+        "Authorization": "Basic YWRtaW46d3Jvbmc="
+      },
+      "expected_status": 401,
+      "compare": "json",
+      "notes": "Wrong basic-auth credentials must be rejected with 401."
+    }
+  ]
+}

@@ -212,8 +212,15 @@ func (p *OIDCProvider) Verify(assertion string) (*SSOIdentity, error) {
 // JWKS. Useful when the operator rotates the IdP's signing
 // key (a `kid` miss would otherwise be silently fatal).
 func (p *OIDCProvider) Refresh() error {
+	// Invalidate both the once guards and the cached documents. The
+	// discovery/JWKS loaders intentionally serve unexpired cache entries;
+	// Refresh must bypass that cache and contact the issuer immediately.
 	p.discoveryOnce = sync.Once{}
 	p.jwksOnce = sync.Once{}
+	p.discovery = nil
+	p.discoveryExp = time.Time{}
+	p.jwks = nil
+	p.jwksExp = time.Time{}
 	_, err := p.discoveryDocument()
 	return err
 }

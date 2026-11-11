@@ -181,4 +181,8 @@ export const GLOBAL_FUNCTIONS: Record<string, (...args: unknown[]) => unknown> =
   Boolean: (value: unknown) => Boolean(value),
   isNaN: (value: unknown) => Number.isNaN(Number(value)),
   isFinite: (value: unknown) => Number.isFinite(Number(value)),
+  encodeURIComponent: (value: unknown) => encodeURIComponent(String(value)),
+  decodeURIComponent: (value: unknown) => decodeURIComponent(String(value)),
+  encodeURI: (value: unknown) => encodeURI(String(value)),
+  decodeURI: (value: unknown) => decodeURI(String(value)),
 }
