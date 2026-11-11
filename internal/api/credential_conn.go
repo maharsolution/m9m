@@ -417,11 +417,69 @@ func kafkaTLSConfig(data map[string]interface{}) (*tls.Config, error) {
 	if err != nil || pool == nil {
 		pool = x509.NewCertPool()
 	}
-	if !pool.AppendCertsFromPEM([]byte(ca)) {
+	if !pool.AppendCertsFromPEM([]byte(normalizePEM(ca))) {
 		return nil, fmt.Errorf("Kafka CA certificate could not be parsed")
 	}
 	cfg.RootCAs = pool
 	return cfg, nil
+}
+
+// normalizePEM rebuilds a PEM block. Synced credentials often store the
+// certificate flattened onto a single line (newlines replaced by
+// spaces) or with literal "\n" sequences, which x509 cannot parse.
+func normalizePEM(raw string) string {
+	s := strings.ReplaceAll(raw, `\n`, "\n")
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+
+	begin := strings.Index(s, "-----BEGIN")
+	if begin < 0 {
+		return s
+	}
+	labelEnd := begin + len("-----BEGIN")
+	dash := strings.Index(s[labelEnd:], "-----")
+	if dash < 0 {
+		return s
+	}
+	headerEnd := labelEnd + dash + len("-----")
+	header := s[begin:headerEnd]
+
+	end := strings.Index(s[headerEnd:], "-----END")
+	if end < 0 {
+		return s
+	}
+	end += headerEnd
+	dash = strings.Index(s[end+len("-----END"):], "-----")
+	if dash < 0 {
+		return s
+	}
+	footerEnd := end + len("-----END") + dash + len("-----")
+	footer := s[end:footerEnd]
+
+	var body strings.Builder
+	for _, r := range s[headerEnd:end] {
+		switch r {
+		case ' ', '\t', '\n', '\r':
+			continue
+		}
+		body.WriteRune(r)
+	}
+	encoded := body.String()
+	if encoded == "" {
+		return s
+	}
+
+	var out strings.Builder
+	out.WriteString(header + "\n")
+	for i := 0; i < len(encoded); i += 64 {
+		endIdx := i + 64
+		if endIdx > len(encoded) {
+			endIdx = len(encoded)
+		}
+		out.WriteString(encoded[i:endIdx] + "\n")
+	}
+	out.WriteString(footer + "\n")
+	return out.String()
 }
 
 // kafkaMetadata performs an authenticated metadata request and returns

@@ -2,9 +2,16 @@ package api
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -458,6 +465,40 @@ func amqpStartOKResponse(payload []byte) string {
 		return ""
 	}
 	return string(payload[pos : pos+respLen])
+}
+
+// TestNormalizePEMParsesFlattenedCertificate proves a CA certificate
+// that was synced flattened onto one line (or with literal "\n"
+// sequences) is rebuilt into a parsable PEM block.
+func TestNormalizePEMParsesFlattenedCertificate(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("key: %v", err)
+	}
+	template := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "m9m-test"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("cert: %v", err)
+	}
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+
+	variants := map[string]string{
+		"flattened": strings.Join(strings.Fields(string(pemBytes)), " "),
+		"literal":   strings.ReplaceAll(string(pemBytes), "\n", `\n`),
+	}
+	for name, raw := range variants {
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM([]byte(normalizePEM(raw))) {
+			t.Fatalf("%s certificate must parse after normalization", name)
+		}
+	}
 }
 
 // TestRabbitMQCredentialTestSendsCredentialsAndReportsAuthFailure proves
