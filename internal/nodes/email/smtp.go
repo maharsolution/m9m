@@ -56,7 +56,7 @@ type EmailAttachment struct {
 // NewSMTPNode creates a new SMTP node
 func NewSMTPNode() *SMTPNode {
 	return &SMTPNode{
-		BaseNode:  base.NewBaseNode(base.NodeDescription{Name: "Send Email", Description: "n8n-nodes-base.smtp", Category: "core", Properties: smtpProperties()}),
+		BaseNode:  base.NewBaseNode(base.NodeDescription{Name: "Send Email", Description: "n8n-nodes-base.smtp", Category: "core", Group: []string{"communication"}, Properties: smtpProperties()}),
 		evaluator: expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 	}
 }

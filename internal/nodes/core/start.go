@@ -3,6 +3,7 @@ package core
 import (
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
 )
 
 // StartNode implements the n8n start trigger node
@@ -14,8 +15,12 @@ type StartNode struct {
 func NewStartNode() *StartNode {
 	description := base.NodeDescription{
 		Name:        "Start",
-		Description: "Triggers the workflow execution",
+		Description: "Starts a workflow run. Emits one empty item when the workflow is started manually.",
 		Category:    "Core",
+		Group:       []string{"core"},
+		Properties:  nodeprops.Settings(),
+		Inputs:      []string{},
+		Outputs:     []string{"main"},
 	}
 
 	return &StartNode{

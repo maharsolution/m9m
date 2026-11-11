@@ -191,6 +191,72 @@ export interface N8nWorkflowConnections {
 }
 
 /**
+ * n8n's sticky-note node type.
+ *
+ * Sticky notes are editor-only annotations: no inputs, no outputs,
+ * they never execute. m9m stores them as ordinary workflow nodes so
+ * the document stays byte-compatible with n8n (n8n round-trips them
+ * exactly the same way).
+ */
+export const STICKY_NOTE_TYPE = 'n8n-nodes-base.stickyNote'
+
+/** Default sticky-note geometry (matches n8n's StickyNote.node.ts). */
+export const STICKY_NOTE_DEFAULT_WIDTH = 240
+export const STICKY_NOTE_DEFAULT_HEIGHT = 160
+
+/** n8n's default sticky-note palette index. */
+export const STICKY_NOTE_DEFAULT_COLOR = 1
+
+/**
+ * Sticky-note parameters.
+ *
+ * n8n keeps the geometry and the colour inside `node.parameters`
+ * (NOT in top-level node fields) — see n8n's
+ * `packages/nodes-base/nodes/StickyNote/StickyNote.node.ts`, which
+ * declares `content`, `height`, `width` and `color` as node
+ * properties. m9m does the same, which is what makes an m9m-built
+ * workflow import into n8n (and back) without losing the note.
+ */
+export interface StickyNoteParameters {
+  content?: string
+  /** Palette index 1..7, or a custom hex colour (n8n allows both). */
+  color?: number | string
+  width?: number
+  height?: number
+}
+
+/**
+ * The seven sticky-note colours, in n8n's palette order. The
+ * 1-based index is what n8n persists in `parameters.color`.
+ */
+export const STICKY_NOTE_COLORS: ReadonlyArray<{
+  index: number
+  name: string
+  hex: string
+}> = [
+  { index: 1, name: 'Yellow', hex: '#fef9c3' },
+  { index: 2, name: 'Gold', hex: '#fef3c7' },
+  { index: 3, name: 'Red', hex: '#fee2e2' },
+  { index: 4, name: 'Green', hex: '#dcfce7' },
+  { index: 5, name: 'Blue', hex: '#dbeafe' },
+  { index: 6, name: 'Purple', hex: '#ede9fe' },
+  { index: 7, name: 'Grey', hex: '#f1f5f9' },
+]
+
+/**
+ * Resolves a sticky note's `parameters.color` to a CSS colour.
+ * Accepts n8n's palette index (1..7) and a custom hex string.
+ */
+export function stickyNoteColor(value: unknown): string {
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim()
+  }
+  const index = typeof value === 'number' ? value : STICKY_NOTE_DEFAULT_COLOR
+  const match = STICKY_NOTE_COLORS.find((c) => c.index === index)
+  return match?.hex ?? STICKY_NOTE_COLORS[0].hex
+}
+
+/**
  * n8n wire format of one workflow document. The same shape is used
  * by the export endpoint and accepted by the import endpoint.
  */

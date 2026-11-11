@@ -8,9 +8,10 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	
+
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
 )
 
 // FilterNode implements the Filter node functionality for filtering data items
@@ -24,6 +25,7 @@ func NewFilterNode() *FilterNode {
 		Name:        "Filter",
 		Description: "Filters items based on conditions",
 		Category:    "Data Transformation",
+		Group:       []string{"transform"},
 		Properties:  filterProperties(),
 		Inputs:      []string{"main"},
 		Outputs:     []string{"main"},
@@ -37,25 +39,40 @@ func NewFilterNode() *FilterNode {
 // filterProperties returns the Filter node's property descriptors.
 // Same shape as IF — only difference is Filter drops items that
 // don't match instead of routing them to a second output.
+//
+// The runtime reads the flat `conditions` array (each row needs
+// `leftValue`, `rightValue` and `operator`) plus the `combiner`
+// flag; the operator list below is the full set the shared
+// condition evaluator accepts.
 func filterProperties() []base.NodeProperty {
 	combinators := []base.Option{
 		{Name: "All conditions must be true (AND)", Value: "and"},
 		{Name: "Any condition may be true (OR)", Value: "or"},
 	}
 	operators := []base.Option{
-		{Name: "equals", Value: "equals"},
-		{Name: "not equals", Value: "notEquals"},
-		{Name: "contains", Value: "contains"},
-		{Name: "greater than", Value: "greaterThan"},
-		{Name: "less than", Value: "lessThan"},
+		{Name: "Equals", Value: "equals"},
+		{Name: "Not equals", Value: "notEquals"},
+		{Name: "Contains", Value: "contains"},
+		{Name: "Does not contain", Value: "notContains"},
+		{Name: "Starts with", Value: "startsWith"},
+		{Name: "Ends with", Value: "endsWith"},
+		{Name: "Matches regex", Value: "regex"},
+		{Name: "Exists", Value: "exists"},
+		{Name: "Does not exist", Value: "notExists"},
+		{Name: "Greater than", Value: "greaterThan"},
+		{Name: "Less than", Value: "lessThan"},
+		{Name: "Greater than or equal", Value: "greaterThanOrEqual"},
+		{Name: "Less than or equal", Value: "lessThanOrEqual"},
+		{Name: "Between", Value: "between"},
+		{Name: "Is empty", Value: "empty"},
+		{Name: "Is not empty", Value: "notEmpty"},
 	}
-	conditionRow := base.CollectionProp("Conditions", "conditions.conditions", "Conditions each item is tested against.", operators)
+	conditionRow := nodeprops.Collection("Conditions", "conditions", "Conditions each item is tested against. Each row needs `leftValue`, `rightValue` and `operator`.", operators)
 	props := []base.NodeProperty{
-		base.StringOpt("Combinator", "conditions.combinator", "and", "How to combine conditions.", combinators, true),
+		nodeprops.Opt("Combinator", "combiner", "and", "How to combine conditions.", combinators, true),
 		conditionRow,
-		base.BoolProp("Case sensitive", "options.caseSensitive", true, "Whether string comparisons are case-sensitive."),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }
 
 // Description returns the node description
@@ -68,75 +85,75 @@ func (f *FilterNode) ValidateParameters(params map[string]interface{}) error {
 	if params == nil {
 		return f.CreateError("parameters cannot be nil", nil)
 	}
-	
+
 	// Check if conditions exist
 	conditions, ok := params["conditions"]
 	if !ok {
 		return f.CreateError("conditions parameter is required", nil)
 	}
-	
+
 	// Check if conditions is an array
 	conditionsArr, ok := conditions.([]interface{})
 	if !ok {
 		return f.CreateError("conditions must be an array", nil)
 	}
-	
+
 	// Validate each condition
 	for i, condition := range conditionsArr {
 		conditionMap, ok := condition.(map[string]interface{})
 		if !ok {
 			return f.CreateError(fmt.Sprintf("condition %d must be an object", i), nil)
 		}
-		
+
 		// Check required fields
 		if _, ok := conditionMap["leftValue"]; !ok {
 			return f.CreateError(fmt.Sprintf("condition %d missing 'leftValue' field", i), nil)
 		}
-		
+
 		if _, ok := conditionMap["rightValue"]; !ok {
 			return f.CreateError(fmt.Sprintf("condition %d missing 'rightValue' field", i), nil)
 		}
-		
+
 		if _, ok := conditionMap["operator"]; !ok {
 			return f.CreateError(fmt.Sprintf("condition %d missing 'operator' field", i), nil)
 		}
-		
+
 		// Validate operator
 		operator, ok := conditionMap["operator"].(string)
 		if !ok {
 			return f.CreateError(fmt.Sprintf("condition %d operator must be a string", i), nil)
 		}
-		
+
 		validOperators := map[string]bool{
-			"equals":           true,
-			"notEquals":        true,
-			"contains":         true,
-			"notContains":      true,
-			"startsWith":       true,
-			"endsWith":         true,
-			"regex":            true,
-			"exists":           true,
-			"notExists":        true,
-			"greaterThan":      true,
-			"lessThan":         true,
+			"equals":             true,
+			"notEquals":          true,
+			"contains":           true,
+			"notContains":        true,
+			"startsWith":         true,
+			"endsWith":           true,
+			"regex":              true,
+			"exists":             true,
+			"notExists":          true,
+			"greaterThan":        true,
+			"lessThan":           true,
 			"greaterThanOrEqual": true,
 			"lessThanOrEqual":    true,
-			"between":          true,
-			"empty":            true,
-			"notEmpty":         true,
+			"between":            true,
+			"empty":              true,
+			"notEmpty":           true,
 		}
-		
+
 		if !validOperators[operator] {
 			return f.CreateError(fmt.Sprintf("condition %d has invalid operator: %s", i, operator), nil)
 		}
 	}
-	
+
 	// Check combiner
 	combiner := f.GetStringParameter(params, "combiner", "and")
 	if combiner != "and" && combiner != "or" {
 		return f.CreateError("combiner must be 'and' or 'or'", nil)
 	}
-	
+
 	return nil
 }
 
@@ -145,34 +162,34 @@ func (f *FilterNode) Execute(inputData []model.DataItem, nodeParams map[string]i
 	if len(inputData) == 0 {
 		return []model.DataItem{}, nil
 	}
-	
+
 	// Get conditions from node parameters
 	conditions, ok := nodeParams["conditions"]
 	if !ok {
 		return nil, f.CreateError("conditions parameter is required", nil)
 	}
-	
+
 	conditionsArr, ok := conditions.([]interface{})
 	if !ok {
 		return nil, f.CreateError("conditions must be an array", nil)
 	}
-	
+
 	// Get combiner from node parameters
 	combiner := f.GetStringParameter(nodeParams, "combiner", "and")
-	
+
 	// Process each input data item
 	var result []model.DataItem
-	
+
 	for _, item := range inputData {
 		// Evaluate conditions for this item
 		passesFilter := f.evaluateConditions(item, conditionsArr, combiner)
-		
+
 		// Add to result if it passes the filter
 		if passesFilter {
 			result = append(result, item)
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -181,20 +198,20 @@ func (f *FilterNode) evaluateConditions(item model.DataItem, conditions []interf
 	if len(conditions) == 0 {
 		return true // No conditions means pass all items
 	}
-	
+
 	// Evaluate each condition
 	results := make([]bool, len(conditions))
-	
+
 	for i, condition := range conditions {
 		conditionMap, ok := condition.(map[string]interface{})
 		if !ok {
 			results[i] = false
 			continue
 		}
-		
+
 		results[i] = f.evaluateCondition(item, conditionMap)
 	}
-	
+
 	// Combine results based on combiner
 	if combiner == "and" {
 		// All conditions must be true
@@ -220,13 +237,13 @@ func (f *FilterNode) evaluateCondition(item model.DataItem, condition map[string
 	leftValue := condition["leftValue"]
 	rightValue := condition["rightValue"]
 	operator := f.GetStringParameter(condition, "operator", "equals")
-	
+
 	// Resolve left value from item JSON
 	leftResolved := f.resolveValue(item.JSON, leftValue)
-	
+
 	// Resolve right value
 	rightResolved := rightValue
-	
+
 	// Handle special operators that don't need right value
 	switch operator {
 	case "exists":
@@ -238,12 +255,12 @@ func (f *FilterNode) evaluateCondition(item model.DataItem, condition map[string
 	case "notEmpty":
 		return !f.isEmpty(leftResolved)
 	}
-	
+
 	// For other operators, we need both values
 	if leftResolved == nil || rightResolved == nil {
 		return false
 	}
-	
+
 	// Compare values based on operator
 	switch operator {
 	case "equals":
@@ -282,7 +299,7 @@ func (f *FilterNode) resolveValue(data map[string]interface{}, value interface{}
 		path := strings.TrimPrefix(strValue, "$json.")
 		return f.getValueAtPath(data, path)
 	}
-	
+
 	// Return the value as-is
 	return value
 }
@@ -292,11 +309,11 @@ func (f *FilterNode) getValueAtPath(data map[string]interface{}, path string) in
 	if path == "" {
 		return data
 	}
-	
+
 	// Split the path by dots
 	parts := strings.Split(path, ".")
 	current := data
-	
+
 	// Navigate through the path
 	for i, part := range parts {
 		if i == len(parts)-1 {
@@ -311,7 +328,7 @@ func (f *FilterNode) getValueAtPath(data map[string]interface{}, path string) in
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -320,7 +337,7 @@ func (f *FilterNode) isEmpty(value interface{}) bool {
 	if value == nil {
 		return true
 	}
-	
+
 	switch v := value.(type) {
 	case string:
 		return v == ""
@@ -342,7 +359,7 @@ func (f *FilterNode) equals(left, right interface{}) bool {
 	// Convert both values to strings for comparison
 	leftStr := fmt.Sprintf("%v", left)
 	rightStr := fmt.Sprintf("%v", right)
-	
+
 	return leftStr == rightStr
 }
 
@@ -350,7 +367,7 @@ func (f *FilterNode) equals(left, right interface{}) bool {
 func (f *FilterNode) contains(left, right interface{}) bool {
 	leftStr := fmt.Sprintf("%v", left)
 	rightStr := fmt.Sprintf("%v", right)
-	
+
 	return strings.Contains(leftStr, rightStr)
 }
 
@@ -358,7 +375,7 @@ func (f *FilterNode) contains(left, right interface{}) bool {
 func (f *FilterNode) startsWith(left, right interface{}) bool {
 	leftStr := fmt.Sprintf("%v", left)
 	rightStr := fmt.Sprintf("%v", right)
-	
+
 	return strings.HasPrefix(leftStr, rightStr)
 }
 
@@ -366,7 +383,7 @@ func (f *FilterNode) startsWith(left, right interface{}) bool {
 func (f *FilterNode) endsWith(left, right interface{}) bool {
 	leftStr := fmt.Sprintf("%v", left)
 	rightStr := fmt.Sprintf("%v", right)
-	
+
 	return strings.HasSuffix(leftStr, rightStr)
 }
 
@@ -374,12 +391,12 @@ func (f *FilterNode) endsWith(left, right interface{}) bool {
 func (f *FilterNode) regexMatch(left, right interface{}) bool {
 	leftStr := fmt.Sprintf("%v", left)
 	rightStr := fmt.Sprintf("%v", right)
-	
+
 	match, err := regexp.MatchString(rightStr, leftStr)
 	if err != nil {
 		return false
 	}
-	
+
 	return match
 }
 
@@ -387,11 +404,11 @@ func (f *FilterNode) regexMatch(left, right interface{}) bool {
 func (f *FilterNode) greaterThan(left, right interface{}) bool {
 	leftNum, leftOk := f.toFloat64(left)
 	rightNum, rightOk := f.toFloat64(right)
-	
+
 	if !leftOk || !rightOk {
 		return false
 	}
-	
+
 	return leftNum > rightNum
 }
 
@@ -399,11 +416,11 @@ func (f *FilterNode) greaterThan(left, right interface{}) bool {
 func (f *FilterNode) lessThan(left, right interface{}) bool {
 	leftNum, leftOk := f.toFloat64(left)
 	rightNum, rightOk := f.toFloat64(right)
-	
+
 	if !leftOk || !rightOk {
 		return false
 	}
-	
+
 	return leftNum < rightNum
 }
 
@@ -411,11 +428,11 @@ func (f *FilterNode) lessThan(left, right interface{}) bool {
 func (f *FilterNode) greaterThanOrEqual(left, right interface{}) bool {
 	leftNum, leftOk := f.toFloat64(left)
 	rightNum, rightOk := f.toFloat64(right)
-	
+
 	if !leftOk || !rightOk {
 		return false
 	}
-	
+
 	return leftNum >= rightNum
 }
 
@@ -423,11 +440,11 @@ func (f *FilterNode) greaterThanOrEqual(left, right interface{}) bool {
 func (f *FilterNode) lessThanOrEqual(left, right interface{}) bool {
 	leftNum, leftOk := f.toFloat64(left)
 	rightNum, rightOk := f.toFloat64(right)
-	
+
 	if !leftOk || !rightOk {
 		return false
 	}
-	
+
 	return leftNum <= rightNum
 }
 
@@ -436,23 +453,23 @@ func (f *FilterNode) between(left, right interface{}) bool {
 	// For simplicity, we'll assume right is a string with format "min,max"
 	rightStr := fmt.Sprintf("%v", right)
 	parts := strings.Split(rightStr, ",")
-	
+
 	if len(parts) != 2 {
 		return false
 	}
-	
+
 	min, err1 := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
 	max, err2 := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
-	
+
 	if err1 != nil || err2 != nil {
 		return false
 	}
-	
+
 	leftNum, leftOk := f.toFloat64(left)
 	if !leftOk {
 		return false
 	}
-	
+
 	return leftNum >= min && leftNum <= max
 }
 
@@ -468,6 +485,6 @@ func (f *FilterNode) toFloat64(value interface{}) (float64, bool) {
 			return num, true
 		}
 	}
-	
+
 	return 0, false
 }

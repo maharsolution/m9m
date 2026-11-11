@@ -6,8 +6,15 @@ package transform
 // from the canonical n8n parameter surface so the NDV Settings
 // tab renders the structured form instead of falling back to the
 // raw-JSON dump.
+//
+// Every property name below is the exact key the node's Execute
+// implementation reads — no dotted n8n-style aliases, because the
+// runtime stores parameters in a flat map.
 
-import "github.com/neul-labs/m9m/internal/nodes/base"
+import (
+	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
+)
 
 // loopProperties returns the Loop node's parameter descriptors.
 // Matches LoopNode.Execute: mode is each / times / while, with
@@ -19,118 +26,109 @@ func loopProperties() []base.NodeProperty {
 		{Name: "While", Value: "while"},
 	}
 	props := []base.NodeProperty{
-		base.StringOpt("Mode", "mode", "each", "How to iterate: each input item, a fixed count, or while a condition is true.", modes, true),
-		base.NumberProp("Times", "times", 1, "Number of iterations when mode is times. Capped at 1000.", false),
-		base.StringProp("Condition", "condition", "", "JavaScript expression evaluated each iteration when mode is while. $index and $item are in scope.", "$index < 3", false),
-		base.NumberProp("Max Iterations", "maxIterations", float64(defaultMaxIterations), "Safety cap for while mode.", false),
+		nodeprops.Opt("Mode", "mode", "each", "How to iterate: each input item, a fixed count, or while a condition is true.", modes, true),
+		nodeprops.Num("Times", "times", 1, "Number of iterations when mode is times. Capped at 1000.", false).
+			WithDisplayOptions(nodeprops.Show("mode", "times")),
+		nodeprops.Str("Condition", "condition", "", "JavaScript expression evaluated each iteration when mode is while. $index and $item are in scope.", "$index < 3", false).
+			WithDisplayOptions(nodeprops.Show("mode", "while")),
+		nodeprops.Num("Max Iterations", "maxIterations", float64(defaultMaxIterations), "Safety cap for while mode.", false).
+			WithDisplayOptions(nodeprops.Show("mode", "while")),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }
 
 // splitInBatchesProperties returns the SplitInBatches node's
 // parameter descriptors. Mirrors n8n's
 // `n8n-nodes-base.splitInBatches` properties.
+//
+// The engine reads `batchSize` (default 10) and the `options` map
+// (which carries `reset`), so the reset toggle is surfaced as an
+// `options` object rather than a flat flag.
 func splitInBatchesProperties() []base.NodeProperty {
 	props := []base.NodeProperty{
-		base.NumberProp("Batch Size", "batchSize", 1, "Number of items per iteration.", true),
-		base.StringOpt("Reset", "reset", "false", "When true, restart the batch from the first item on each workflow run.", []base.Option{
-			{Name: "False", Value: "false"},
-			{Name: "True", Value: "true"},
-		}, false),
-		base.StringOpt("Options", "options", "", "Optional JSON-string of advanced options (e.g. `{\"split\": \"every\"}`).", []base.Option{
-			{Name: "Default", Value: ""},
-			{Name: "Split into batches (default)", Value: "split"},
-			{Name: "Aggregate items", Value: "aggregate"},
-		}, false),
+		nodeprops.Num("Batch Size", "batchSize", 10, "Number of items per iteration. Must be greater than zero.", true),
+		nodeprops.JSON("Options", "options", "{}", "Optional options object. Supported key: `reset` (boolean) — restart the batch from the first item on each workflow run."),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }
 
 // functionProperties returns the Function node's parameter
 // descriptors. Mirrors n8n's `n8n-nodes-base.function` properties.
+//
+// The runtime reads the `jsCode` key (the legacy n8n Function node
+// parameter) — not `functionCode`, which the n8n v2 node uses.
 func functionProperties() []base.NodeProperty {
 	props := []base.NodeProperty{
-		base.TextProp("Function Code", "functionCode", "", "JavaScript function body. Receives `items` array; must return an array of items.", "// Each item has a .json property.\nreturn items;", 12),
+		nodeprops.Text("Function Code", "jsCode", "", "JavaScript function body. Receives `items` array; must return an array of items.", "// Each item has a .json property.\nreturn items;", 12),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }
 
 // itemListsProperties returns the Item Lists node's parameter
-// descriptors. Mirrors n8n's `n8n-nodes-base.itemLists` properties.
+// descriptors.
+//
+// Divergence from n8n: n8n's Item Lists node exposes an `operation`
+// picker with values such as `splitOut` / `combine`. m9m's runtime
+// reads a `mode` parameter whose only accepted values are `combine`
+// and `split`, so the metadata mirrors the runtime.
 func itemListsProperties() []base.NodeProperty {
-	ops := []base.Option{
-		{Name: "Concatenate Items", Value: "concatenateItems"},
-		{Name: "Limit", Value: "limit"},
-		{Name: "Remove Duplicates", Value: "removeDuplicates"},
-		{Name: "Sort", Value: "sort"},
-		{Name: "Split Out Items", Value: "splitOutItems"},
-		{Name: "Summarize", Value: "summarize"},
+	modes := []base.Option{
+		{Name: "Combine", Value: "combine"},
+		{Name: "Split", Value: "split"},
 	}
 	props := []base.NodeProperty{
-		base.StringOpt("Operation", "operation", "concatenateItems", "What to do with the items list.", ops, true),
-		base.StringProp("Field To Sort By", "sortBy", "", "Field name to sort by (sort operation).", "", false),
-		base.StringOpt("Sort Direction", "sortDirection", "ascending", "Sort direction.", []base.Option{
-			{Name: "Ascending", Value: "ascending"},
-			{Name: "Descending", Value: "descending"},
-		}, false),
-		base.StringProp("Field To Split Out", "fieldToSplitOut", "", "Field whose value becomes the new items list (split operation).", "", false),
-		base.NumberProp("Limit", "limit", 1, "Max items to keep (limit operation).", false),
-		base.StringOpt("Keep", "keep", "firstItems", "Whether to keep the first N or last N items.", []base.Option{
-			{Name: "First items", Value: "firstItems"},
-			{Name: "Last items", Value: "lastItems"},
-		}, false),
-		base.StringOpt("Duplicate Field", "duplicateField", "", "Field whose value drives the dedup (removeDuplicates).", []base.Option{
-			{Name: "All fields (deep equal)", Value: ""},
-			{Name: "Single field by name", Value: "byName"},
-		}, false),
-		base.StringOpt("Aggregate By", "aggregateBy", "aggregateAllItemData", "What to compute per group (summarize).", []base.Option{
-			{Name: "All item data", Value: "aggregateAllItemData"},
-			{Name: "Specific fields", Value: "aggregateFields"},
-			{Name: "Count", Value: "count"},
-		}, false),
-		base.JsonProp("Fields to Summarize", "fieldsToAggregate", "[]", "Array of {field, operation} objects (summarize)."),
+		nodeprops.Opt("Mode", "mode", "combine", "Whether to combine the incoming items into one list or split them.", modes, true),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }
 
 // jsonProperties returns the JSON node's parameter descriptors.
-// Mirrors n8n's `n8n-nodes-base.json` properties.
+//
+// The runtime supports four operations: parse, stringify, extract and
+// merge. Each operation reads its own parameter set, so the
+// operation-specific fields are shown conditionally.
 func jsonProperties() []base.NodeProperty {
 	ops := []base.Option{
-		{Name: "Convert to JSON", Value: "toJson"},
-		{Name: "Convert from JSON", Value: "fromJson"},
+		{Name: "Parse", Value: "parse"},
+		{Name: "Stringify", Value: "stringify"},
+		{Name: "Extract", Value: "extract"},
+		{Name: "Merge", Value: "merge"},
 	}
 	props := []base.NodeProperty{
-		base.StringOpt("Operation", "operation", "toJson", "What to do with the JSON.", ops, true),
-		base.StringOpt("Mode", "mode", "eachItem", "When to run the operation.", []base.Option{
-			{Name: "Once per item", Value: "eachItem"},
-			{Name: "Once for all items", Value: "onceForAllItems"},
-		}, true),
-		base.StringProp("Property Name", "propertyName", "", "Property to read JSON from (toJson) or write to (fromJson).", "", false),
-		base.StringOpt("JSON Parse Mode", "jsonParseMode", "strict", "How lenient to be when parsing JSON (fromJson).", []base.Option{
-			{Name: "Strict (RFC 8259)", Value: "strict"},
-			{Name: "Lenient (comments, trailing commas)", Value: "lenient"},
-		}, false),
-		base.BoolProp("Always Output Data", "alwaysOutputData", true, "Emit an item even when input is empty."),
-		base.NumberProp("Max Depth", "maxDepth", 100, "Max nesting depth for toJson; -1 for unlimited.", false),
+		nodeprops.Opt("Operation", "operation", "parse", "What to do with the JSON.", ops, true),
+		nodeprops.Str("JSON Path", "jsonPath", "$json", "Expression resolving to the JSON string to parse (parse operation).", "$json", false).
+			WithDisplayOptions(nodeprops.Show("operation", "parse")),
+		nodeprops.Bool("Include Item Index", "includeItemIndex", false, "When the parsed value is an array, emit one item per element with its index (parse operation).").
+			WithDisplayOptions(nodeprops.Show("operation", "parse")),
+		nodeprops.Str("Data Path", "dataPath", "$json", "Expression resolving to the value to stringify (stringify operation).", "$json", false).
+			WithDisplayOptions(nodeprops.Show("operation", "stringify")),
+		nodeprops.Bool("Indent", "indent", false, "Pretty-print the JSON output with two-space indentation (stringify operation).").
+			WithDisplayOptions(nodeprops.Show("operation", "stringify")),
+		nodeprops.JSON("Extraction Fields", "extractionFields", "[]", "Array of {name, path} objects — each path resolves one output field (extract operation).").
+			WithDisplayOptions(nodeprops.Show("operation", "extract")),
+		nodeprops.JSON("Merge Sources", "mergeSources", "[]", "Array of expressions resolving to JSON objects that are merged into the item (merge operation).").
+			WithDisplayOptions(nodeprops.Show("operation", "merge")),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }
 
 // xmlProperties returns the XML node's parameter descriptors.
-// Mirrors n8n's `n8n-nodes-base.xml` properties.
+//
+// The runtime reads `mode` plus the `options` map (attributePrefix /
+// textKey). The two option keys are also accepted as flat parameters
+// so the parameter panel can drive them individually.
 func xmlProperties() []base.NodeProperty {
-	props := []base.NodeProperty{
-		base.StringOpt("Mode", "mode", "jsonToXml", "Conversion direction.", []base.Option{
-			{Name: "JSON → XML", Value: "jsonToXml"},
-			{Name: "XML → JSON", Value: "xmlToJson"},
-		}, true),
-		base.StringProp("Property Name", "propertyName", "", "Property to read the input from / write the output to.", "data", false),
-		base.StringProp("Attribute Key Name", "attributeKey", "$", "Wrapper key for XML attributes in the JSON output (xmlToJson).", "$", false),
-		base.StringProp("Text Key Name", "textKey", "_", "Wrapper key for mixed-content text nodes (xmlToJson).", "_", false),
-		base.BoolProp("Add CDATA", "addCdata", true, "Wrap text content in CDATA (jsonToXml)."),
-		base.StringProp("Root Element", "rootElement", "root", "Root element name (jsonToXml).", "root", false),
-		base.StringProp("Encoding", "encoding", "UTF-8", "XML encoding (jsonToXml).", "UTF-8", false),
+	modes := []base.Option{
+		{Name: "XML → JSON", Value: "xmlToJson"},
+		{Name: "JSON → XML", Value: "jsonToXml"},
 	}
-	return append(props, base.CommonSettings()...)
+	props := []base.NodeProperty{
+		nodeprops.Opt("Mode", "mode", "xmlToJson", "Conversion direction.", modes, true),
+		nodeprops.Str("Attribute Prefix", "attributePrefix", "@", "Prefix used for XML attributes in the JSON output (xmlToJson mode).", "@", false).
+			WithDisplayOptions(nodeprops.Show("mode", "xmlToJson")),
+		nodeprops.Str("Text Key", "textKey", "_text", "Wrapper key for mixed-content text nodes (xmlToJson mode).", "_text", false).
+			WithDisplayOptions(nodeprops.Show("mode", "xmlToJson")),
+		nodeprops.JSON("Options", "options", "{}", "Optional options object. Supported keys: `attributePrefix`, `textKey` — they override the flat fields above."),
+	}
+	return append(props, nodeprops.Settings()...)
 }

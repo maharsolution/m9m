@@ -12,6 +12,11 @@ export async function getWorkflows(filters?: WorkflowFilters): Promise<Paginated
   if (filters?.active !== undefined) params.append('active', String(filters.active))
   if (filters?.offset !== undefined) params.append('offset', String(filters.offset))
   if (filters?.limit !== undefined) params.append('limit', String(filters.limit))
+  // Tag filter. The values are tag IDs (or tag names, matched
+  // case-insensitively by the server); they are sent as a comma
+  // separated list and the server returns the workflows carrying every
+  // listed tag.
+  if (filters?.tags?.length) params.append('tags', filters.tags.join(','))
 
   const response = await apiClient.get<PaginatedResponse<Workflow>>('/workflows', { params })
   return response.data

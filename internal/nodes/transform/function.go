@@ -6,9 +6,9 @@ package transform
 import (
 	"fmt"
 
+	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
-	"github.com/neul-labs/m9m/internal/expressions"
 )
 
 // FunctionNode implements the Function node functionality for executing custom JavaScript code
@@ -22,7 +22,10 @@ func NewFunctionNode() *FunctionNode {
 		Name:        "Function",
 		Description: "Executes custom JavaScript code",
 		Category:    "Data Transformation",
+		Group:       []string{"transform"},
 		Properties:  functionProperties(),
+		Inputs:      []string{"main"},
+		Outputs:     []string{"main"},
 	}
 
 	return &FunctionNode{
@@ -40,24 +43,24 @@ func (f *FunctionNode) ValidateParameters(params map[string]interface{}) error {
 	if params == nil {
 		return f.CreateError("parameters cannot be nil", nil)
 	}
-	
+
 	// Check if jsCode exists
 	jsCode, ok := params["jsCode"]
 	if !ok {
 		return f.CreateError("jsCode parameter is required", nil)
 	}
-	
+
 	// Check if jsCode is a string
 	jsCodeStr, ok := jsCode.(string)
 	if !ok {
 		return f.CreateError("jsCode must be a string", nil)
 	}
-	
+
 	// Check if jsCode is empty
 	if jsCodeStr == "" {
 		return f.CreateError("jsCode parameter cannot be empty", nil)
 	}
-	
+
 	return nil
 }
 

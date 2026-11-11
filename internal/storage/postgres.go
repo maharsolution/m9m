@@ -252,6 +252,19 @@ func (s *PostgresStorage) ListWorkflows(filters WorkflowFilters) ([]*model.Workf
 		argCount++
 	}
 
+	// Tag ID filter with AND semantics: every requested tag ID has to be
+	// present in the JSONB `tags` array. The `@>` operator performs an
+	// exact, case-sensitive containment check.
+	for _, tagID := range filters.TagIDs {
+		encoded, err := json.Marshal([]string{tagID})
+		if err != nil {
+			return nil, 0, err
+		}
+		conditions = append(conditions, fmt.Sprintf("tags @> $%d::jsonb", argCount))
+		args = append(args, string(encoded))
+		argCount++
+	}
+
 	whereClause := ""
 	if len(conditions) > 0 {
 		whereClause = "WHERE " + strings.Join(conditions, " AND ")
@@ -572,18 +585,33 @@ func (s *PostgresStorage) DeleteExecution(id string) error {
 func (s *PostgresStorage) CountWorkflows(filters WorkflowFilters) (int, error) {
 	var conditions []string
 	var args []interface{}
+	argCount := 1
 
 	if filters.WorkspaceID != "" {
-		conditions = append(conditions, "workspace_id = $1")
+		conditions = append(conditions, fmt.Sprintf("workspace_id = $%d", argCount))
 		args = append(args, filters.WorkspaceID)
+		argCount++
 	}
 	if filters.Active != nil {
-		conditions = append(conditions, "active = $1")
+		conditions = append(conditions, fmt.Sprintf("active = $%d", argCount))
 		args = append(args, *filters.Active)
+		argCount++
 	}
 	if filters.Search != "" {
-		conditions = append(conditions, "LOWER(name) LIKE $1")
+		conditions = append(conditions, fmt.Sprintf("LOWER(name) LIKE $%d", argCount))
 		args = append(args, "%"+strings.ToLower(filters.Search)+"%")
+		argCount++
+	}
+
+	// Tag ID filter with AND semantics, mirroring ListWorkflows.
+	for _, tagID := range filters.TagIDs {
+		encoded, err := json.Marshal([]string{tagID})
+		if err != nil {
+			return 0, err
+		}
+		conditions = append(conditions, fmt.Sprintf("tags @> $%d::jsonb", argCount))
+		args = append(args, string(encoded))
+		argCount++
 	}
 
 	whereClause := ""

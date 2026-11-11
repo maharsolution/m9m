@@ -17,8 +17,8 @@ import (
 // OpenAINode interacts with OpenAI API
 type OpenAINode struct {
 	*base.BaseNode
-	httpClient   *http.Client
-	otelManager  *otel.Manager
+	httpClient  *http.Client
+	otelManager *otel.Manager
 }
 
 // SetOTelManager wires the OTel Manager into the node so the per-execution
@@ -36,7 +36,11 @@ func NewOpenAINode() *OpenAINode {
 			Name:        "OpenAI",
 			Description: "Use OpenAI's GPT models for text generation and completion",
 			Category:    "ai",
+			Group:       []string{"ai"},
 			Properties:  openAIProperties(),
+			Credentials: []base.NodeCredentialSpec{
+				{Type: "openai", DisplayName: "OpenAI", Required: true},
+			},
 		}),
 		httpClient: &http.Client{
 			Timeout: 60 * time.Second,
@@ -50,8 +54,14 @@ func NewOpenAINode() *OpenAINode {
 //     for OpenAI chat-completions; surfaced when the user wires the
 //     responses/agents endpoint in the future).
 func (n *OpenAINode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
-	// Get parameters
-	apiKey := n.GetStringParameter(nodeParams, "apiKey", "")
+	// Get parameters.
+	//
+	// The API key arrives through the credential envelope: the
+	// credential manager flattens the `openai` credential into
+	// `openai_apiKey` on the node parameters. The legacy plain
+	// `apiKey` parameter is still honoured as a fallback so
+	// workflows that inline the key keep working.
+	apiKey := base.CredentialString(nodeParams, "openai_apiKey", "apiKey")
 	modelName := n.GetStringParameter(nodeParams, "model", "gpt-3.5-turbo")
 	prompt := n.GetStringParameter(nodeParams, "prompt", "")
 	maxTokens := n.GetIntParameter(nodeParams, "maxTokens", 1000)
@@ -169,10 +179,10 @@ func (n *OpenAINode) Execute(inputData []model.DataItem, nodeParams map[string]i
 		// Create result item
 		resultItem := model.DataItem{
 			JSON: map[string]interface{}{
-				"prompt":      prompt,
-				"response":    content,
-				"model":       modelName,
-				"usage":       result["usage"],
+				"prompt":       prompt,
+				"response":     content,
+				"model":        modelName,
+				"usage":        result["usage"],
 				"finishReason": choice["finish_reason"],
 			},
 		}

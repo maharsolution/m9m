@@ -85,6 +85,7 @@ func NewExecuteNode() *ExecuteNode {
 			Name:        "CLI Execute",
 			Description: "Execute CLI commands with optional sandboxing",
 			Category:    "cli",
+			Group:       []string{"development"},
 			Properties:  executeCommandProperties(),
 		}),
 		factory: sandbox.NewFactory(),

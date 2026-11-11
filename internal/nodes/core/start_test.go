@@ -116,7 +116,7 @@ func TestStartNode_Description(t *testing.T) {
 	desc := node.Description()
 
 	assert.Equal(t, "Start", desc.Name, "node name should be 'Start'")
-	assert.Equal(t, "Triggers the workflow execution", desc.Description, "description should match")
+	assert.Equal(t, "Starts a workflow run. Emits one empty item when the workflow is started manually.", desc.Description, "description should match")
 	assert.Equal(t, "Core", desc.Category, "category should be 'Core'")
 }
 

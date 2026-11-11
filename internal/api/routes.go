@@ -6,7 +6,71 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/neul-labs/m9m/internal/ai"
 	"github.com/neul-labs/m9m/internal/otel"
+	"github.com/neul-labs/m9m/internal/versions"
 )
+
+// versionManager is the workflow-version manager used by the
+// "/workflows/{id}/versions" routes. It is injected by
+// cmd/m9m/commands/serve.go through SetVersionManager before the
+// routes are registered.
+//
+// It lives in a package-level slot because the APIServer struct — and
+// therefore the setter methods that go with it — is defined in
+// internal/api/server.go, which is maintained by another worker. The
+// manager is set once at startup, so a single process only ever has
+// one instance.
+var versionManager *versions.VersionManager
+
+// SetVersionManager wires the workflow-version manager that serves
+// the "/api/v1/workflows/{id}/versions" routes. Passing nil keeps the
+// routes registered but answers 503 (the manager was never wired).
+func SetVersionManager(manager *versions.VersionManager) {
+	versionManager = manager
+}
+
+// registerVersionRoutes mounts the workflow-version routes on the
+// /api/v1 subrouter.
+//
+// The routes live in the same ordered route table as the rest of the
+// API, which is what guarantees that "/workflows/{id}/versions" is
+// matched before the "/workflows/{id}" wildcard. Inside the handler the
+// static "/versions/compare" segment is registered before the
+// "/versions/{versionId}" wildcard for the same reason.
+//
+// When no manager was wired (cmd/m9m/commands/serve.go always wires
+// one) the routes still exist but answer 503 — the UI can tell "not
+// configured" apart from "no such endpoint".
+func registerVersionRoutes(api *mux.Router, manager *versions.VersionManager) {
+	if manager == nil {
+		api.HandleFunc("/workflows/{id}/versions/compare", versionManagerUnavailable).Methods("GET", "OPTIONS")
+		api.HandleFunc("/workflows/{id}/versions", versionManagerUnavailable).Methods("GET", "POST", "OPTIONS")
+		api.HandleFunc("/workflows/{id}/versions/{versionId}", versionManagerUnavailable).Methods("GET", "DELETE", "OPTIONS")
+		api.HandleFunc("/workflows/{id}/versions/{versionId}/restore", versionManagerUnavailable).Methods("POST", "OPTIONS")
+		return
+	}
+
+	handler := versions.NewVersionHandler(manager)
+	handler.SetAuthorResolver(resolveVersionAuthor)
+	handler.RegisterRoutesOn(api)
+}
+
+// resolveVersionAuthor attributes a created or restored version to the
+// authenticated user. The version handler falls back to "system" when
+// the resolver returns an empty string.
+func resolveVersionAuthor(r *http.Request) string {
+	if auth := AuthFromContext(r.Context()); auth != nil {
+		return auth.GetUserID()
+	}
+	return ""
+}
+
+// versionManagerUnavailable answers requests that arrive before the
+// version manager has been wired.
+func versionManagerUnavailable(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusServiceUnavailable)
+	_, _ = w.Write([]byte(`{"error":true,"message":"workflow version manager not initialised","code":503}`))
+}
 
 // RegisterRoutes registers all API routes.
 func (s *APIServer) RegisterRoutes(router *mux.Router) {
@@ -27,6 +91,19 @@ func (s *APIServer) RegisterRoutes(router *mux.Router) {
 	api.HandleFunc("/workflows/export", s.ExportWorkflows).Methods("GET", "POST", "OPTIONS")
 	api.HandleFunc("/workflows/import", s.ImportWorkflows).Methods("POST", "OPTIONS")
 	api.HandleFunc("/workflows/run", s.ExecuteWorkflowByDefinition).Methods("POST", "OPTIONS")
+	// Workflow versions are registered BEFORE the "/workflows/{id}"
+	// wildcard group: gorilla/mux matches routes in registration
+	// order, so the collection route must never be shadowed by a
+	// shorter wildcard. The handler itself keeps the static
+	// "/versions/compare" segment ahead of "/versions/{versionId}".
+	registerVersionRoutes(api, versionManager)
+	// Workflow ↔ tag assignment is registered in the same block for
+	// the same reason: "/workflows/{id}/tags" must be matched before
+	// any "/workflows/{id}/…" wildcard can swallow it.
+	api.HandleFunc("/workflows/{id}/tags", s.GetWorkflowTags).Methods("GET", "OPTIONS")
+	api.HandleFunc("/workflows/{id}/tags", s.SetWorkflowTags).Methods("POST", "PUT", "OPTIONS")
+	api.HandleFunc("/workflows/{id}/tags/{tagId}", s.AddWorkflowTag).Methods("POST", "OPTIONS")
+	api.HandleFunc("/workflows/{id}/tags/{tagId}", s.RemoveWorkflowTag).Methods("DELETE", "OPTIONS")
 	api.HandleFunc("/workflows/{id}/export", s.ExportWorkflow).Methods("GET", "OPTIONS")
 	api.HandleFunc("/workflows/{id}", s.GetWorkflow).Methods("GET", "OPTIONS")
 	api.HandleFunc("/workflows/{id}", s.UpdateWorkflow).Methods("PUT", "PATCH", "OPTIONS")
@@ -36,6 +113,20 @@ func (s *APIServer) RegisterRoutes(router *mux.Router) {
 	api.HandleFunc("/workflows/{id}/execute", s.ExecuteWorkflow).Methods("POST", "OPTIONS")
 	api.HandleFunc("/workflows/{id}/execute-async", s.ExecuteWorkflowAsync).Methods("POST", "OPTIONS")
 	api.HandleFunc("/workflows/{id}/duplicate", s.DuplicateWorkflow).Methods("POST", "OPTIONS")
+
+	// Tags — CRUD over the `tags` table, which is the same store the
+	// workflow import/export path resolves tag names against
+	// (resolveTagID in workflow_import_export.go). A tag created here
+	// is therefore immediately usable as a workflow tag.
+	//
+	// "/tags" (the collection) is registered before "/tags/{id}"
+	// (the item) so the collection route is never read as a tag whose
+	// id is "tags".
+	api.HandleFunc("/tags", s.ListTags).Methods("GET", "OPTIONS")
+	api.HandleFunc("/tags", s.CreateTag).Methods("POST", "OPTIONS")
+	api.HandleFunc("/tags/{id}", s.GetTag).Methods("GET", "OPTIONS")
+	api.HandleFunc("/tags/{id}", s.UpdateTag).Methods("PUT", "PATCH", "OPTIONS")
+	api.HandleFunc("/tags/{id}", s.DeleteTag).Methods("DELETE", "OPTIONS")
 
 	api.HandleFunc("/jobs", s.ListJobs).Methods("GET", "OPTIONS")
 	api.HandleFunc("/jobs/{id}", s.GetJob).Methods("GET", "OPTIONS")
@@ -90,6 +181,10 @@ func (s *APIServer) RegisterRoutes(router *mux.Router) {
 	api.HandleFunc("/data-tables/{id}/rows/{rowId}", s.DeleteDataTableRow).Methods("DELETE", "OPTIONS")
 
 	api.HandleFunc("/node-types", s.ListNodeTypes).Methods("GET", "OPTIONS")
+	// Dynamic option lists must be registered BEFORE the "/node-types/{name}"
+	// wildcard — gorilla/mux matches routes in registration order, so the
+	// wildcard would otherwise swallow "/node-types/{name}/options".
+	api.HandleFunc("/node-types/{name}/options", s.GetNodeTypeOptions).Methods("GET", "POST", "OPTIONS")
 	api.HandleFunc("/node-types/{name}", s.GetNodeType).Methods("GET", "OPTIONS")
 
 	api.HandleFunc("/settings", s.GetSettings).Methods("GET", "OPTIONS")

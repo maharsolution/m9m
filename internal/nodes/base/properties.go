@@ -162,3 +162,247 @@ func CommonSettings() []NodeProperty {
 		),
 	}
 }
+
+// ResourceMapperModes returns the mapping modes a `resourceMapper`
+// property accepts.
+//
+// n8n calls this list `ResourceMapperMode`: "defineBelow" asks the
+// user to wire the fields up by hand, "autoMapInputData" derives the
+// mapping from the incoming items.
+func ResourceMapperModes() []OptionValue {
+	return []OptionValue{
+		{Name: "Define Below", Value: "defineBelow", Description: "Map fields manually."},
+		{Name: "Auto Map Input Data", Value: "autoMapInputData", Description: "Map fields automatically from the input data."},
+	}
+}
+
+// FilterOperators returns the comparison operators a `filter`
+// property accepts.
+//
+// Every id is the n8n operator key `"<type>:<operation>"` — the
+// frontend splits it into the `type` / `operation` halves of the
+// `operator` object n8n stores. Every operation listed here is
+// implemented by m9m's condition evaluator
+// (internal/nodes/transform/conditions.go): the numeric operators
+// use n8n's short names (`gt`, `gte`, `lt`, `lte`), which the
+// evaluator normalises to `greaterThan` / `greaterThanOrEqual` /
+// `lessThan` / `lessThanOrEqual`.
+//
+// The dateTime operators are deliberately absent — m9m's evaluator
+// does not implement "after" / "before".
+func FilterOperators() []OptionValue {
+	return []OptionValue{
+		// string
+		{Name: "Equals", Value: "string:equals"},
+		{Name: "Does not equal", Value: "string:notEquals"},
+		{Name: "Does not contain", Value: "string:notContains"},
+		{Name: "Contains", Value: "string:contains"},
+		{Name: "Starts with", Value: "string:startsWith"},
+		{Name: "Ends with", Value: "string:endsWith"},
+		{Name: "Matches regex", Value: "string:regex"},
+		{Name: "Is empty", Value: "string:empty"},
+		{Name: "Is not empty", Value: "string:notEmpty"},
+		{Name: "Exists", Value: "string:exists"},
+		{Name: "Does not exist", Value: "string:notExists"},
+		// number
+		{Name: "Equals", Value: "number:equals"},
+		{Name: "Does not equal", Value: "number:notEquals"},
+		{Name: "Greater than", Value: "number:gt"},
+		{Name: "Greater than or equal", Value: "number:gte"},
+		{Name: "Less than", Value: "number:lt"},
+		{Name: "Less than or equal", Value: "number:lte"},
+		// boolean
+		{Name: "Equals", Value: "boolean:equals"},
+		{Name: "Does not equal", Value: "boolean:notEquals"},
+		{Name: "Is true", Value: "boolean:true"},
+		{Name: "Is false", Value: "boolean:false"},
+	}
+}
+
+// FileModes returns the modes a `file` property accepts.
+//
+// "binaryPropertyName" points at the binary property that carries the
+// payload, "fileName" names the file explicitly.
+func FileModes() []OptionValue {
+	return []OptionValue{
+		{Name: "Binary property name", Value: "binaryPropertyName"},
+		{Name: "File name", Value: "fileName"},
+	}
+}
+
+// IconValues returns the curated icon set an `icon` property offers.
+//
+// The names are lucide-style identifiers ("document-text", "cog-6-tooth")
+// which the web UI maps onto Heroicons. The name equals the value so
+// the list can be rendered straight from the metadata.
+func IconValues() []OptionValue {
+	names := []string{
+		"user",
+		"folder",
+		"document-text",
+		"calendar",
+		"clock",
+		"tag",
+		"bolt",
+		"cloud",
+		"code-bracket",
+		"globe-alt",
+		"heart",
+		"star",
+		"trash",
+		"cog-6-tooth",
+		"link",
+		"photo",
+		"shield-check",
+		"bell",
+		"circle-stack",
+		"table-cells",
+	}
+	values := make([]OptionValue, 0, len(names))
+	for _, name := range names {
+		values = append(values, OptionValue{Name: name, Value: name})
+	}
+	return values
+}
+
+// ResourceMapperProp builds a `resourceMapper` property — n8n's
+// field-to-field mapping widget.
+//
+// The stored value is n8n's `ResourceMapperValue`:
+//
+//	{
+//	  "mappingMode": "defineBelow",
+//	  "value": { "<destination>": "<expression>" },
+//	  "matchingColumns": [],
+//	  "schema": [ { "id": ..., "displayName": ..., "defaultMatch": false,
+//	                "required": false, "display": true } ],
+//	  "attemptToConvertTypes": false,
+//	  "convertFieldsToString": false
+//	}
+func ResourceMapperProp(displayName, name, desc string, required bool) NodeProperty {
+	return NodeProperty{
+		DisplayName: displayName,
+		Name:        name,
+		Type:        "resourceMapper",
+		Default: map[string]interface{}{
+			"mappingMode":           "defineBelow",
+			"value":                 map[string]interface{}{},
+			"matchingColumns":       []interface{}{},
+			"schema":                []interface{}{},
+			"attemptToConvertTypes": false,
+			"convertFieldsToString": false,
+		},
+		Description: desc,
+		Required:    required,
+		Values:      ResourceMapperModes(),
+		TypeOptions: map[string]interface{}{
+			"resourceMapper": map[string]interface{}{
+				"mode": "map",
+			},
+		},
+	}
+}
+
+// FilterProp builds a `filter` property — n8n's conditional filter
+// widget.
+//
+// The stored value is n8n's `FilterValue`: an `options` block, the
+// list of `conditions` and the `combinator` that joins them.
+func FilterProp(displayName, name, desc string, required bool) NodeProperty {
+	return NodeProperty{
+		DisplayName: displayName,
+		Name:        name,
+		Type:        "filter",
+		Default: map[string]interface{}{
+			"options": map[string]interface{}{
+				"caseSensitive":  true,
+				"leftValue":      "",
+				"typeValidation": "strict",
+				"version":        2,
+			},
+			"conditions": []interface{}{},
+			"combinator": "and",
+		},
+		Description: desc,
+		Required:    required,
+		Values:      FilterOperators(),
+		TypeOptions: map[string]interface{}{
+			"filter": map[string]interface{}{
+				"version":            2,
+				"caseSensitive":      true,
+				"leftValue":          "",
+				"typeValidation":     "strict",
+				"allowedCombinators": []string{"and", "or"},
+			},
+		},
+	}
+}
+
+// FilterConditionProp builds the `collection` of condition rows a
+// `filter` property is made of.
+//
+// The row fields (leftValue / operator / rightValue) are declared as
+// plain options *without* an option-level `values` list on purpose:
+// the collection renderer treats the first option that carries a
+// `values` array as the child-field bucket, so hanging the operator
+// list off it would break the row layout. The operator list lives on
+// the property itself (NodeProperty.Values) instead.
+func FilterConditionProp(displayName, name, desc string) NodeProperty {
+	return NodeProperty{
+		DisplayName: displayName,
+		Name:        name,
+		Type:        "collection",
+		Default:     []interface{}{},
+		Description: desc,
+		Values:      FilterOperators(),
+		TypeOptions: map[string]interface{}{
+			"multipleValues": true,
+		},
+		Options: []Option{
+			{Name: "Left Value", Value: "leftValue"},
+			{Name: "Operator", Value: "operator"},
+			{Name: "Right Value", Value: "rightValue"},
+		},
+	}
+}
+
+// FileProp builds a `file` property — n8n's binary-payload picker.
+//
+// The stored value is `{ "mode": <mode>, "value": <name> }`, where
+// the mode is one of FileModes().
+func FileProp(displayName, name, desc string, required bool) NodeProperty {
+	return NodeProperty{
+		DisplayName: displayName,
+		Name:        name,
+		Type:        "file",
+		Default: map[string]interface{}{
+			"mode":  "binaryPropertyName",
+			"value": "",
+		},
+		Description: desc,
+		Required:    required,
+		Values:      FileModes(),
+		TypeOptions: map[string]interface{}{
+			"binaryDataProperty": true,
+		},
+	}
+}
+
+// IconProp builds an `icon` property — n8n's icon picker.
+//
+// The stored value is n8n's `IconOrEmoji`: `{ "type": "icon",
+// "value": "<icon name>" }`.
+func IconProp(displayName, name, desc string, required bool) NodeProperty {
+	return NodeProperty{
+		DisplayName: displayName,
+		Name:        name,
+		Type:        "icon",
+		Default: map[string]interface{}{
+			"type":  "icon",
+			"value": "",
+		},
+		Description: desc,
+		Required:    required,
+		Values:      IconValues(),
+	}
+}

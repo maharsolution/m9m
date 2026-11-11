@@ -89,6 +89,19 @@ func (m *VersionManager) GetVersion(versionID string) (*WorkflowVersion, error) 
 	return m.versionStorage.GetVersion(versionID)
 }
 
+// WorkflowExists reports whether the workflow is known to the
+// workflow storage. The version routes use it to answer 404 for an
+// unknown workflow instead of an empty version list.
+func (m *VersionManager) WorkflowExists(workflowID string) bool {
+	if m.workflowStorage == nil || workflowID == "" {
+		return false
+	}
+	if _, err := m.workflowStorage.GetWorkflow(workflowID); err != nil {
+		return false
+	}
+	return true
+}
+
 // GetWorkflowVersion retrieves a specific version number for a workflow
 func (m *VersionManager) GetWorkflowVersion(workflowID string, versionNum int) (*WorkflowVersion, error) {
 	return m.versionStorage.GetWorkflowVersion(workflowID, versionNum)

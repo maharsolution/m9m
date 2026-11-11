@@ -23,7 +23,10 @@ func NewLoopNode() *LoopNode {
 			Name:        "Loop",
 			Description: "Iterates over items, a count, or a condition",
 			Category:    "Data Transformation",
+			Group:       []string{"transform"},
 			Properties:  loopProperties(),
+			Inputs:      []string{"main"},
+			Outputs:     []string{"main"},
 		}),
 	}
 }

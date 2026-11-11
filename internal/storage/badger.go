@@ -124,6 +124,12 @@ func (s *BadgerStorage) ListWorkflows(filters WorkflowFilters) ([]*model.Workflo
 					}
 				}
 
+				// Tag ID filter with AND semantics: the workflow has to
+				// carry every requested tag ID.
+				if !workflowHasAllTags(workflow.Tags, filters.TagIDs) {
+					return nil
+				}
+
 				workflows = append(workflows, &workflow)
 				return nil
 			})
@@ -335,6 +341,9 @@ func (s *BadgerStorage) CountWorkflows(filters WorkflowFilters) (int, error) {
 					if !strings.Contains(strings.ToLower(w.Name), needle) {
 						return nil
 					}
+				}
+				if !workflowHasAllTags(w.Tags, filters.TagIDs) {
+					return nil
 				}
 				count++
 				return nil

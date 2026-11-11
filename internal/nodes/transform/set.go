@@ -12,6 +12,7 @@ import (
 	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
 )
 
 // SetNode implements the Set node functionality for assigning values to fields.
@@ -37,6 +38,7 @@ func NewSetNode() *SetNode {
 		Name:        "Set",
 		Description: "Sets values on items",
 		Category:    "Data Transformation",
+		Group:       []string{"transform"},
 		Properties:  setProperties(),
 		Inputs:      []string{"main"},
 		Outputs:     []string{"main"},
@@ -50,6 +52,11 @@ func NewSetNode() *SetNode {
 
 // setProperties returns the property descriptors for the Set node's
 // Parameters tab. Mirrors n8n's INodeTypeDescription.properties.
+//
+// Every name here is a key the runtime actually reads:
+// `mode`, `assignments`, `jsonOutput`, `keepOnlySet` and
+// `includeOtherFields`. The `assignments` collection accepts the flat
+// array shape as well as n8n's `{assignments: [...]}` wrapper.
 func setProperties() []base.NodeProperty {
 	modes := []base.Option{
 		{Name: "Manual", Value: "manual"},
@@ -63,16 +70,18 @@ func setProperties() []base.NodeProperty {
 		{Name: "Object", Value: "object"},
 		{Name: "Date & Time", Value: "dateTime"},
 	}
-	assignmentRow := base.CollectionProp("Assignments", "assignments.assignments", "Values to write onto each item.", assignmentTypes)
+	assignmentRow := nodeprops.Collection("Assignments", "assignments", "Values to write onto each item. Each row needs a `name` and a `value`; `type` is optional and coerces the value.", assignmentTypes).
+		WithDisplayOptions(nodeprops.Show("mode", "manual"))
 	props := []base.NodeProperty{
-		base.StringOpt("Mode", "mode", "manual", "How to provide the assignments.", modes, true),
-		base.BoolProp("Duplicate item", "duplicateItem", false, "If enabled, the node emits one item per assignment instead of merging into the input."),
+		nodeprops.Opt("Mode", "mode", "manual", "How to provide the assignments.", modes, true),
 		assignmentRow,
-		base.JsonProp("JSON", "jsonOutput", "{}", "Raw JSON for the item, used when Mode is Raw."),
-		base.BoolProp("Strip binary data", "options.stripBinary", true, "If enabled, binary fields on the item are removed."),
-		base.BoolProp("Dot notation", "options.dotNotation", false, "When true, assignment names like `a.b` write to nested fields instead of using dots literally."),
+		nodeprops.JSON("JSON", "jsonOutput", "{}", "Raw JSON body for the item. Used when Mode is Raw."),
+		nodeprops.Bool("Keep Only Set", "keepOnlySet", true, "Replace the incoming item with only the assigned fields. When disabled the assignments are merged into the incoming item.").
+			WithDisplayOptions(nodeprops.Show("mode", "manual")),
+		nodeprops.Bool("Include Other Fields", "includeOtherFields", false, "Legacy n8n flag (typeVersion 3.0). Keep the incoming fields when Keep Only Set is disabled.").
+			WithDisplayOptions(nodeprops.ShowBool("keepOnlySet", false)),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }
 
 // Description returns the node description

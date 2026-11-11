@@ -425,9 +425,18 @@ var credentialSchemas = map[string]CredentialTypeSchema{
 				{Name: "PLAIN", Value: "PLAIN"},
 				{Name: "SCRAM-SHA-256", Value: "SCRAM-SHA-256"},
 				{Name: "SCRAM-SHA-512", Value: "SCRAM-SHA-512"},
-			}, Required: false, Default: "", Description: "SASL mechanism for the native broker connection. Leave empty for no SASL."},
-			{Name: "saslUsername", DisplayName: "SASL Username", Type: "string", Required: false},
-			{Name: "saslPassword", DisplayName: "SASL Password", Type: "password", Required: false},
+			}, Required: false, Default: "", Description: "SASL mechanism for the native broker connection. Leave empty for no SASL; when a username is set the connection test falls back to PLAIN, then SCRAM-SHA-256, then SCRAM-SHA-512."},
+			// Exactly ONE username and ONE password. The canonical
+			// names are `username` / `password` — n8n parity, see
+			// n8n/packages/nodes-base/credentials/Kafka.credentials.ts
+			// (the n8n Kafka credential stores the login as
+			// `username` / `password`). The legacy m9m spellings
+			// `saslUsername` / `saslPassword` stay valid as aliases
+			// (see kafkaCredentialUserPass in credential_conn.go), so
+			// already-stored credentials and synced n8n credentials
+			// both keep working without showing a second input.
+			{Name: "username", DisplayName: "Username", Type: "string", Required: false, Description: "Username for SASL (native brokers) and for Basic auth against the REST Proxy."},
+			{Name: "password", DisplayName: "Password", Type: "password", Required: false, Description: "Password for SASL (native brokers) and for Basic auth against the REST Proxy."},
 			{Name: "tls", DisplayName: "TLS", Type: "boolean", Default: false, Description: "Enable TLS for the native broker connection."},
 			// REST-proxy mode fields. Picked when the node's `mode` is
 			// `rest` (the default).
@@ -437,8 +446,6 @@ var credentialSchemas = map[string]CredentialTypeSchema{
 				{Name: "Basic", Value: "basic"},
 				{Name: "API Key", Value: "apiKey"},
 			}, Required: false, Default: "none"},
-			{Name: "username", DisplayName: "Username", Type: "string", Required: false, Description: "Username for Basic auth against the REST Proxy."},
-			{Name: "password", DisplayName: "Password", Type: "password", Required: false, Description: "Password for Basic auth against the REST Proxy."},
 			{Name: "apiKey", DisplayName: "API Key", Type: "password", Required: false, Description: "API key (alternative to Basic) for the REST Proxy."},
 		},
 		// Either `brokers` (native) or `restProxyUrl` (REST) is required.

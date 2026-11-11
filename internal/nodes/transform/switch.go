@@ -9,6 +9,7 @@ import (
 	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
 )
 
 // SwitchNode implements the Switch node functionality for conditional routing
@@ -23,6 +24,7 @@ func NewSwitchNode() *SwitchNode {
 		Name:        "Switch",
 		Description: "Route data based on conditions",
 		Category:    "Flow Control",
+		Group:       []string{"transform"},
 		Properties:  switchProperties(),
 		Inputs:      []string{"main"},
 		Outputs:     []string{"main", "main", "main", "main"},
@@ -37,18 +39,33 @@ func NewSwitchNode() *SwitchNode {
 // switchProperties returns the Switch node's property
 // descriptors. The rule structure mirrors n8n:
 //
-//   rules.values[]    — list of routing conditions
-//   options.fallbackOutput — index of the connection to use when no
-//                            rule matches (matches `outputIndex` of
-//                            a `main` slot)
+//	rules           — list of routing conditions (each rule holds a
+//	                  `conditions` array with `leftValue`,
+//	                  `rightValue` and `operator`)
+//	stopAfterFirstMatch — stop routing after the first matching rule
+//	fallbackToLast  — emit unmatched items on the fallback output
 func switchProperties() []base.NodeProperty {
-	props := []base.NodeProperty{
-		base.FixedCollectionProp("Routing Rules", "rules.values", "Conditions that route items to each output."),
-		base.NumberProp("Fallback output", "options.fallbackOutput", 0, "Output index to use when no rule matches.", false),
-		base.BoolProp("Case sensitive", "options.caseSensitive", true, "Whether string comparisons are case-sensitive."),
-		base.BoolProp("Type validation", "options.typeValidation", false, "If true, mismatched types compare as unequal instead of being coerced."),
+	operators := []base.Option{
+		{Name: "Equals", Value: "equals"},
+		{Name: "Not equals", Value: "notEquals"},
+		{Name: "Contains", Value: "contains"},
+		{Name: "Does not contain", Value: "notContains"},
+		{Name: "Starts with", Value: "startsWith"},
+		{Name: "Ends with", Value: "endsWith"},
+		{Name: "Matches regex", Value: "regex"},
+		{Name: "Greater than", Value: "greaterThan"},
+		{Name: "Greater than or equal", Value: "greaterThanOrEqual"},
+		{Name: "Less than", Value: "lessThan"},
+		{Name: "Less than or equal", Value: "lessThanOrEqual"},
+		{Name: "Is empty", Value: "isEmpty"},
+		{Name: "Is not empty", Value: "isNotEmpty"},
 	}
-	return append(props, base.CommonSettings()...)
+	props := []base.NodeProperty{
+		nodeprops.Collection("Routing Rules", "rules", "Conditions that route items to each output. Each rule holds a `conditions` array with `leftValue`, `rightValue` and `operator`.", operators),
+		nodeprops.Bool("Stop After First Match", "stopAfterFirstMatch", false, "Stop evaluating further rules once one matched."),
+		nodeprops.Bool("Fallback to Last Output", "fallbackToLast", false, "Send items that matched no rule to the fallback output."),
+	}
+	return append(props, nodeprops.Settings()...)
 }
 
 // ExtractSwitchRules pulls the Switch routing rules out of the parameter

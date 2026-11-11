@@ -21,7 +21,10 @@ func NewJSONNode() *JSONNode {
 		Name:        "JSON",
 		Description: "Parse, stringify and manipulate JSON data",
 		Category:    "Data Transformation",
+		Group:       []string{"transform"},
 		Properties:  jsonProperties(),
+		Inputs:      []string{"main"},
+		Outputs:     []string{"main"},
 	}
 
 	return &JSONNode{
@@ -47,9 +50,9 @@ func (j *JSONNode) Execute(inputData []model.DataItem, nodeParams map[string]int
 	for _, item := range inputData {
 		context := &expressions.ExpressionContext{
 			ActiveNodeName:      "JSON",
-			RunIndex:           0,
-			ItemIndex:          0,
-			Mode:               expressions.ModeManual,
+			RunIndex:            0,
+			ItemIndex:           0,
+			Mode:                expressions.ModeManual,
 			ConnectionInputData: []model.DataItem{item},
 			Workflow: &model.Workflow{
 				Name: "JSON Processing",

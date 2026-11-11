@@ -7,6 +7,7 @@ import (
 
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
 )
 
 // WaitNode pauses workflow execution for a configurable duration.
@@ -21,6 +22,7 @@ func NewWaitNode() *WaitNode {
 			Name:        "Wait",
 			Description: "Pauses execution for a specified duration",
 			Category:    "Core",
+			Group:       []string{"core"},
 			Properties:  waitProperties(),
 			Inputs:      []string{"main"},
 			Outputs:     []string{"main"},
@@ -28,30 +30,26 @@ func NewWaitNode() *WaitNode {
 	}
 }
 
-// waitProperties returns the Wait node's property descriptors. Mirrors
-// n8n's `INodeTypeDescription.properties` for the `Wait` core node:
-// the resume mode (afterTime / afterTimeFromLastItem / afterWebhook /
-// atTime) plus the amount/unit pair (or webhookSuffix for
-// `afterWebhook`).
+// waitProperties returns the Wait node's property descriptors.
+//
+// core.WaitNode.Execute reads exactly two parameters — `amount` and
+// `unit` — and rejects any unit outside milliseconds / seconds /
+// minutes. The previous panel advertised a `resume` mode switch and a
+// `webhookSuffix` field that the executor never looked at.
 func waitProperties() []base.NodeProperty {
-	resumeModes := []base.Option{
-		{Name: "After Time", Value: "afterTime"},
-		{Name: "After Time From Last Item", Value: "afterTimeFromLastItem"},
-		{Name: "After Webhook", Value: "afterWebhook"},
-		{Name: "At Time", Value: "atTime"},
-	}
 	units := []base.Option{
 		{Name: "Milliseconds", Value: "milliseconds"},
 		{Name: "Seconds", Value: "seconds"},
 		{Name: "Minutes", Value: "minutes"},
 	}
 	props := []base.NodeProperty{
-		base.StringOpt("Resume", "resume", "afterTime", "When the wait should release the workflow.", resumeModes, true),
-		base.NumberProp("Amount", "amount", 1, "How long to wait (when Resume is a time-based mode).", false),
-		base.StringOpt("Unit", "unit", "seconds", "Unit of the Amount field.", units, false),
-		base.StringProp("Webhook suffix", "webhookSuffix", "", "URL suffix for the resume webhook (when Resume is After Webhook).", "resume-token", false),
+		nodeprops.Num("Amount", "amount", 1,
+			"How long the workflow waits.", false),
+		nodeprops.Opt("Unit", "unit", "seconds",
+			"Unit of the Amount field.",
+			units, false),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }
 
 // Execute pauses and then passes through input data.

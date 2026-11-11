@@ -9,6 +9,7 @@ import (
 
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
 )
 
 // NotionHTTPClient abstracts the HTTP client for testing.
@@ -29,6 +30,7 @@ func NewNotionNode() *NotionNode {
 			Name:        "Notion",
 			Description: "Create, read, and update Notion pages and databases",
 			Category:    "Productivity",
+			Group:       []string{"productivity"},
 			Properties:  notionProperties(),
 		}),
 		client: &http.Client{},
@@ -205,33 +207,54 @@ func (n *NotionNode) ValidateParameters(params map[string]interface{}) error {
 	return nil
 }
 
-// notionProperties returns the Notion node's parameter
-// descriptors. BUG-UI-2026-09-09-001.
+// notionProperties describes the Notion node.
+//
+// productivity.NotionNode reads `operation`, `apiKey`, `baseUrl`,
+// `pageId`, `databaseId`, `parentId`, `properties`, `filter`, `sort`
+// and `query`. The operation-specific fields are shown conditionally.
 func notionProperties() []base.NodeProperty {
-	resources := []base.Option{
-		{Name: "Page", Value: "page"},
-		{Name: "Database", Value: "database"},
-		{Name: "Block", Value: "block"},
-	}
-	pageOps := []base.Option{
-		{Name: "Create", Value: "create"},
-		{Name: "Get", Value: "get"},
-		{Name: "Update", Value: "update"},
-		{Name: "Archive", Value: "archive"},
+	ops := []base.Option{
+		{Name: "Create page", Value: "createPage"},
+		{Name: "Get page", Value: "getPage"},
+		{Name: "Update page", Value: "updatePage"},
+		{Name: "Query database", Value: "queryDatabase"},
 		{Name: "Search", Value: "search"},
 	}
 	props := []base.NodeProperty{
-		base.StringOpt("Resource", "resource", "page", "Notion resource to operate on.", resources, true),
-		base.StringOpt("Operation", "operation", "create", "Operation on the resource.", pageOps, true),
-		base.StringProp("Page ID", "pageId", "", "Notion page ID (UUID with dashes).", "", false),
-		base.StringProp("Database ID", "databaseId", "", "Notion database ID (UUID with dashes).", "", false),
-		base.StringProp("Block ID", "blockId", "", "Notion block ID (UUID with dashes).", "", false),
-		base.StringProp("Title", "title", "", "Title for the new page (when resource=page, operation=create).", "", false),
-		base.JsonProp("Properties", "properties", "{}", "Notion properties map (page properties or database schema)."),
-		base.JsonProp("Children", "children", "[]", "Block children array."),
-		base.JsonProp("Filter", "filter", "{}", "Notion query filter (database query)."),
-		base.JsonProp("Sorts", "sorts", "[]", "Notion query sorts (database query)."),
-		base.NumberProp("Page Size", "pageSize", 100, "Number of results per page (1-100).", false),
+		nodeprops.Opt("Operation", "operation", "getPage",
+			"Notion operation to run.",
+			ops, true),
+		nodeprops.Secret("API key", "apiKey", "",
+			"Notion integration token.",
+			"secret_…", true),
+		nodeprops.Str("Base URL", "baseUrl", "https://api.notion.com/v1",
+			"Notion API root.",
+			"https://api.notion.com/v1", false),
+		nodeprops.Str("Page ID", "pageId", "",
+			"Notion page ID.",
+			"b2c1…", false).
+			WithDisplayOptions(nodeprops.Show("operation", "getPage", "updatePage")),
+		nodeprops.Str("Database ID", "databaseId", "",
+			"Notion database ID.",
+			"d2e3…", false).
+			WithDisplayOptions(nodeprops.Show("operation", "queryDatabase")),
+		nodeprops.Str("Parent ID", "parentId", "",
+			"Parent page (or database) the new page is created under.",
+			"e1f0…", false).
+			WithDisplayOptions(nodeprops.Show("operation", "createPage")),
+		nodeprops.JSON("Properties", "properties", "{}",
+			"Notion page properties (name → value map).").
+			WithDisplayOptions(nodeprops.Show("operation", "createPage", "updatePage")),
+		nodeprops.JSON("Filter", "filter", "{}",
+			"Notion query filter.").
+			WithDisplayOptions(nodeprops.Show("operation", "queryDatabase", "search")),
+		nodeprops.JSON("Sort", "sort", "{}",
+			"Notion query sort specification.").
+			WithDisplayOptions(nodeprops.Show("operation", "queryDatabase")),
+		nodeprops.Str("Query", "query", "",
+			"Search text.",
+			"m9m", false).
+			WithDisplayOptions(nodeprops.Show("operation", "search")),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }

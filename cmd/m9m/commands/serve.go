@@ -25,6 +25,7 @@ import (
 	"github.com/neul-labs/m9m/internal/queue"
 	"github.com/neul-labs/m9m/internal/scheduler"
 	"github.com/neul-labs/m9m/internal/storage"
+	"github.com/neul-labs/m9m/internal/versions"
 	"github.com/neul-labs/m9m/internal/web"
 	"github.com/neul-labs/m9m/internal/webhooks"
 	"github.com/neul-labs/m9m/internal/workspace"
@@ -326,6 +327,18 @@ func runServe(cmd *cobra.Command, args []string) {
 		apiServer.SetCredentialManager(credMgr)
 	}
 
+	// Wire the workflow-version manager so the
+	// "/api/v1/workflows/{id}/versions" routes can serve snapshots.
+	//
+	// The version store is persistent: snapshots are written to the
+	// same key/value store the rest of the server uses (key
+	// "version:<id>"), so they survive a restart. The manager needs
+	// the workflow store as well — it reads the current workflow when
+	// a snapshot is created and writes it back on restore.
+	versionStorage := versions.NewPersistentVersionStorage(store)
+	versionManager := versions.NewVersionManager(versionStorage, store)
+	api.SetVersionManager(versionManager)
+
 	// Stamp the running binary's source identity into the API server so
 	// /api/v1/version returns commit + build date. The Dockerfile fills
 	// COMMIT / BUILD_DATE via -ldflags at compile time, and main.go
@@ -448,4 +461,3 @@ func startMetricsServer(port int, logger *log.Logger) {
 		logger.Printf("Metrics server error: %v", err)
 	}
 }
-

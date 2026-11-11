@@ -11,6 +11,7 @@ import (
 
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
 )
 
 // CronNode implements the Cron node functionality
@@ -22,8 +23,9 @@ type CronNode struct {
 func NewCronNode() *CronNode {
 	description := base.NodeDescription{
 		Name:        "Cron",
-		Description: "Triggers workflows on a schedule using cron expressions",
+		Description: "Triggers the workflow on a schedule using a standard five-field cron expression.",
 		Category:    "Triggers",
+		Group:       []string{"trigger"},
 		Properties:  cronProperties(),
 		Inputs:      []string{},
 		Outputs:     []string{"main"},
@@ -35,27 +37,16 @@ func NewCronNode() *CronNode {
 }
 
 // cronProperties returns the property descriptors for the Cron
-// trigger. The UI exposes a "Mode" switch between Cron expression
-// and Interval (n8n's `scheduleTrigger`).
+// trigger. The executor reads a single parameter — `cronExpression` —
+// so the panel exposes exactly that field (the previous `rule.*`
+// names were never read by Execute and silently did nothing).
 func cronProperties() []base.NodeProperty {
-	modes := []base.Option{
-		{Name: "Cron expression", Value: "cron"},
-		{Name: "Every X", Value: "interval"},
-	}
-	intervalUnits := []base.Option{
-		{Name: "Minutes", Value: "minutes"},
-		{Name: "Hours", Value: "hours"},
-		{Name: "Days", Value: "days"},
-		{Name: "Weeks", Value: "weeks"},
-		{Name: "Months", Value: "months"},
-	}
 	props := []base.NodeProperty{
-		base.StringOpt("Mode", "rule.mode", "cron", "Whether to use a cron expression or a fixed interval.", modes, true),
-		base.StringProp("Cron expression", "rule.cron", "*/5 * * * *", "Standard 5-field cron expression.", "0 9 * * 1-5", false),
-		base.StringOpt("Unit", "rule.interval.mode", "hours", "Time unit for interval mode.", intervalUnits, false),
-		base.NumberProp("Every", "rule.interval.every", 1, "Run the workflow every N units (interval mode).", false),
+		nodeprops.Str("Cron expression", "cronExpression", "*/5 * * * *",
+			"Cron expression that decides when the workflow runs: minute hour day-of-month month day-of-week. Supports @daily style descriptors.",
+			"*/5 * * * *", true),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }
 
 // Description returns the node description

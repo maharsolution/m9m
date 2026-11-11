@@ -6,30 +6,82 @@ import WorkflowEditorToolbar from '@/components/workflow/WorkflowEditorToolbar.v
 import NodePalette from '@/components/workflow/NodePalette.vue'
 import NodePanel from '@/components/workflow/NodePanel.vue'
 import AgentAI from '@/components/ai/AgentAI.vue'
+import TagPicker from '@/components/tags/TagPicker.vue'
+import VersionDrawer from '@/components/version/VersionDrawer.vue'
 import { useWorkflowEditorStore, useWorkflowStore } from '@/stores'
+import { useTagsStore } from '@/stores/tags'
+import { useWorkflowShortcuts } from '@/composables/useKeyboardShortcuts'
 import { apiErrorMessage, downloadWorkflowExport, exportWorkflow } from '@/api'
 
 const route = useRoute()
 const router = useRouter()
 const workflowStore = useWorkflowStore()
 const workflowEditorStore = useWorkflowEditorStore()
+const tagsStore = useTagsStore()
 
 const showNodePalette = ref(true)
 const showNodePanel = ref(false)
 const showAI = ref(false)
+const showTagPicker = ref(false)
+const showVersionDrawer = ref(false)
 const isExecuting = ref(false)
 const isExporting = ref(false)
 const exportNotice = ref<{ type: 'success' | 'error'; message: string } | null>(null)
+
+// The canvas exposes the viewport helpers so the keyboard shortcuts
+// can drive the zoom.
+const canvasRef = ref<InstanceType<typeof WorkflowCanvas> | null>(null)
 
 const workflowId = computed(() => route.params.id as string | undefined)
 const isNewWorkflow = computed(() => !workflowId.value || workflowId.value === 'new')
 const workflow = computed(() => workflowStore.currentWorkflow)
 const selectedNode = computed(() => workflowEditorStore.selectedNode)
 
+/** Tags currently attached to the open workflow. */
+const currentWorkflowTags = computed(() =>
+  workflow.value?.id ? tagsStore.getWorkflowTagList(workflow.value.id) : []
+)
+
+/**
+ * Loads the tags of the open workflow. The tag IDs are mirrored into
+ * the workflow document so a later save does not write a stale tag
+ * list back to the server.
+ */
+async function loadWorkflowTags(id?: string) {
+  if (!id) return
+  try {
+    const tags = await tagsStore.fetchWorkflowTags(id)
+    if (workflow.value && workflow.value.id === id) {
+      workflow.value.tags = tags.map((tag) => tag.id)
+    }
+  } catch {
+    // The store keeps the error message; the picker surfaces it.
+  }
+}
+
+/** Called when the tag picker changed the assignment of the workflow. */
+const onTagsUpdated = (tags: { id: string }[]) => {
+  if (workflow.value) {
+    workflow.value.tags = tags.map((tag) => tag.id)
+  }
+}
+
+/** Called after a version restore replaced the workflow on the server. */
+const onVersionRestored = async () => {
+  if (!workflow.value?.id) return
+  try {
+    await workflowStore.fetchWorkflow(workflow.value.id)
+    workflowEditorStore.resetEditorState()
+  } catch (e) {
+    console.error('Failed to reload the workflow after a restore:', e)
+  }
+}
+
 onMounted(async () => {
   if (!isNewWorkflow.value && workflowId.value) {
     await workflowStore.fetchWorkflow(workflowId.value)
     workflowEditorStore.resetEditorState()
+    await loadWorkflowTags(workflowId.value)
   } else {
     workflowEditorStore.createNewWorkflow()
   }
@@ -74,10 +126,16 @@ watch(
       workflowEditorStore.createNewWorkflow()
       return
     }
-    if (workflow.value?.id === newId) return
+    if (workflow.value?.id === newId) {
+      // The post-save path: the workflow is already in the store, but
+      // its tags still have to be loaded for the toolbar chips.
+      await loadWorkflowTags(newId)
+      return
+    }
     try {
       await workflowStore.fetchWorkflow(newId)
       workflowEditorStore.resetEditorState()
+      await loadWorkflowTags(newId)
     } catch (e) {
       console.error('Failed to load workflow on route change:', e)
     }
@@ -165,6 +223,67 @@ const renameWorkflow = (name: string) => {
   workflowEditorStore.setWorkflowName(name)
 }
 
+// --------------------------------------------------------------------
+// Keyboard shortcuts
+//
+// `useWorkflowShortcuts` registers the shortcuts on mount and removes
+// them on unmount, so leaving the editor frees the keys again. Every
+// handler delegates to the editor store, which owns the undo history.
+// --------------------------------------------------------------------
+
+useWorkflowShortcuts({
+  onSave: () => {
+    void saveWorkflow()
+  },
+  onExecute: () => {
+    void executeWorkflow()
+  },
+  onUndo: () => {
+    workflowEditorStore.undo()
+  },
+  onRedo: () => {
+    workflowEditorStore.redo()
+  },
+  onDelete: () => {
+    workflowEditorStore.removeSelectedNodes()
+  },
+  onSelectAll: () => {
+    workflowEditorStore.selectAll()
+  },
+  onDeselect: () => {
+    workflowEditorStore.clearSelection()
+  },
+  onCopy: () => {
+    workflowEditorStore.copySelected()
+  },
+  onPaste: () => {
+    workflowEditorStore.paste()
+  },
+  onCut: () => {
+    if (workflowEditorStore.copySelected() > 0) {
+      workflowEditorStore.removeSelectedNodes()
+    }
+  },
+  onDuplicate: () => {
+    workflowEditorStore.duplicateSelected()
+  },
+  onZoomIn: () => {
+    canvasRef.value?.zoomIn()
+  },
+  onZoomOut: () => {
+    canvasRef.value?.zoomOut()
+  },
+  onZoomReset: () => {
+    canvasRef.value?.resetZoom()
+  },
+  onToggleActive: () => {
+    void toggleActive()
+  },
+  onNudge: (dx, dy) => {
+    workflowEditorStore.nudgeSelected(dx, dy)
+  },
+})
+
 // Export the workflow as an n8n-compatible JSON file. The server
 // answers with a single workflow object (n8n editor "Download"
 // parity).
@@ -204,6 +323,9 @@ const exportWorkflowFile = async () => {
       :is-exporting="isExporting"
       :show-node-palette="showNodePalette"
       :show-agent-ai="showAI"
+      :can-undo="workflowEditorStore.canUndo"
+      :can-redo="workflowEditorStore.canRedo"
+      :workflow-tags="currentWorkflowTags"
       @back="router.push('/workflows')"
       @rename="renameWorkflow"
       @toggle-palette="showNodePalette = !showNodePalette"
@@ -213,6 +335,12 @@ const exportWorkflowFile = async () => {
       @execute="executeWorkflow"
       @save="saveWorkflow"
       @export="exportWorkflowFile"
+      @undo="workflowEditorStore.undo()"
+      @redo="workflowEditorStore.redo()"
+      @auto-layout="workflowEditorStore.autoLayout()"
+      @add-sticky-note="workflowEditorStore.addStickyNote()"
+      @show-tags="showTagPicker = true"
+      @show-versions="showVersionDrawer = true"
     />
 
     <!-- Export feedback -->
@@ -240,7 +368,7 @@ const exportWorkflowFile = async () => {
       </transition>
 
       <div class="flex-1 relative">
-        <WorkflowCanvas />
+        <WorkflowCanvas ref="canvasRef" />
       </div>
 
       <transition
@@ -279,5 +407,21 @@ const exportWorkflowFile = async () => {
         </div>
       </transition>
     </div>
+
+    <!-- Tag management for the open workflow -->
+    <TagPicker
+      v-if="showTagPicker && workflow?.id"
+      :workflow-id="workflow.id"
+      @close="showTagPicker = false"
+      @updated="onTagsUpdated"
+    />
+
+    <!-- Version history drawer -->
+    <VersionDrawer
+      v-if="showVersionDrawer && workflow?.id"
+      :workflow-id="workflow.id"
+      @close="showVersionDrawer = false"
+      @restored="onVersionRestored"
+    />
   </div>
 </template>

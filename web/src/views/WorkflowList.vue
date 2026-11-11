@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   MagnifyingGlassIcon,
@@ -15,10 +15,15 @@ import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
   XMarkIcon,
+  TagIcon,
 } from '@heroicons/vue/24/outline'
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/vue'
 import { useWorkflowEditorStore, useWorkflowStore } from '@/stores'
+import { useTagsStore } from '@/stores/tags'
 import type { Workflow } from '@/types'
+import type { Tag } from '@/types/tag'
+import TagChip from '@/components/tags/TagChip.vue'
+import TagsModal from '@/components/tags/TagsModal.vue'
 import {
   apiErrorDetails,
   apiErrorMessage,
@@ -31,9 +36,18 @@ import {
 const router = useRouter()
 const workflowStore = useWorkflowStore()
 const workflowEditorStore = useWorkflowEditorStore()
+const tagsStore = useTagsStore()
 
 const searchQuery = ref('')
 const activeFilter = ref<'all' | 'active' | 'inactive'>('all')
+// Tag filter. The list endpoint accepts the selected tag ID through the
+// `tags` query parameter, so the list is re-fetched whenever the
+// selection changes.
+const selectedTagId = ref<string | null>(null)
+// Offset of the requested page. A new filter starts a new result set,
+// so the offset is reset whenever the tag filter changes.
+const listOffset = ref(0)
+const showTagsModal = ref(false)
 
 // Selection state for the bulk export. The ids are kept in a Set so
 // the toggle is O(1) and the selection survives a list refresh.
@@ -43,14 +57,61 @@ const isImporting = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const notice = ref<{ type: 'success' | 'error'; message: string; details: string[] } | null>(null)
 
+/**
+ * Load the workflow list with the currently selected tag filter.
+ *
+ * The tag filter is applied by the server (`?tags=<id>`), so the page
+ * holds the matching workflows only and the server side total stays
+ * correct.
+ */
+async function loadWorkflows() {
+  await workflowStore.fetchWorkflows({
+    limit: 100,
+    offset: listOffset.value,
+    tags: selectedTagId.value ? [selectedTagId.value] : undefined,
+  })
+}
+
 onMounted(async () => {
-  await workflowStore.fetchWorkflows()
+  await loadWorkflows()
+  try {
+    await tagsStore.fetchAllTags()
+  } catch (e) {
+    console.error('Failed to load tags:', e)
+  }
+})
+
+// Re-fetch whenever the tag filter changes so the server does the
+// matching instead of the client filtering a truncated page. The offset
+// is reset first: the previous page number belongs to the unfiltered
+// list and would skip rows of the new result set.
+watch(selectedTagId, () => {
+  listOffset.value = 0
+  void loadWorkflows()
 })
 
 const selectedCount = computed(() => selectedIds.value.size)
 
+const availableTags = computed(() => tagsStore.sortedTags)
+
+/**
+ * The tag chips of every workflow. The workflow document only holds the
+ * tag IDs, so they are resolved against the loaded tag list.
+ */
+const workflowChips = computed<Record<string, Tag[]>>(() => {
+  const map: Record<string, Tag[]> = {}
+  // The API answers with `null` instead of an empty list when nothing
+  // matches the filter.
+  for (const workflow of workflowStore.workflows ?? []) {
+    map[workflow.id] = (workflow.tags ?? [])
+      .map((id) => tagsStore.tagMap[id])
+      .filter((tag): tag is Tag => !!tag)
+  }
+  return map
+})
+
 const filteredWorkflows = computed(() => {
-  let workflows = workflowStore.workflows
+  let workflows = workflowStore.workflows ?? []
 
   // Filter by active status
   if (activeFilter.value === 'active') {
@@ -58,6 +119,10 @@ const filteredWorkflows = computed(() => {
   } else if (activeFilter.value === 'inactive') {
     workflows = workflows.filter((w) => !w.active)
   }
+
+  // The tag filter is applied by the server: the fetched list already
+  // contains the matching workflows only, so filtering it again here
+  // would hide workflows that do match.
 
   // Filter by search query
   if (searchQuery.value) {
@@ -278,6 +343,14 @@ const formatDate = (dateStr: string) => {
           <ArrowDownTrayIcon class="w-5 h-5" />
           <span>Export selected<template v-if="selectedCount > 0"> ({{ selectedCount }})</template></span>
         </button>
+        <button
+          @click="showTagsModal = true"
+          class="btn-secondary flex items-center gap-2"
+          title="Create, rename and delete tags"
+        >
+          <TagIcon class="w-5 h-5" />
+          <span>Manage tags</span>
+        </button>
         <button @click="createWorkflow" class="btn-primary flex items-center gap-2">
           <PlusIcon class="w-5 h-5" />
           <span>New Workflow</span>
@@ -318,7 +391,7 @@ const formatDate = (dateStr: string) => {
     </div>
 
     <!-- Filters -->
-    <div class="flex items-center gap-4 mb-6">
+    <div class="flex items-center gap-4 mb-3">
       <!-- Search -->
       <div class="relative flex-1 max-w-md">
         <MagnifyingGlassIcon class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -351,6 +424,41 @@ const formatDate = (dateStr: string) => {
         </button>
       </div>
     </div>
+
+    <!-- Tag Filter. The selection is sent to the list endpoint through the
+         `tags` query parameter, so the matching happens on the server. -->
+    <div v-if="availableTags.length > 0" class="flex items-center gap-2 flex-wrap mb-6">
+      <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+        Tags
+      </span>
+      <button
+        type="button"
+        @click="selectedTagId = null"
+        :class="[
+          'px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
+          selectedTagId === null
+            ? 'bg-primary-100 dark:bg-primary-900/30 border-primary-300 dark:border-primary-700 text-primary-700 dark:text-primary-300'
+            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+        ]"
+      >
+        All
+      </button>
+      <button
+        v-for="tag in availableTags"
+        :key="tag.id"
+        type="button"
+        :title="`Show only workflows tagged ${tag.name}`"
+        :aria-pressed="selectedTagId === tag.id"
+        class="rounded-full transition-transform hover:scale-105"
+        @click="selectedTagId = selectedTagId === tag.id ? null : tag.id"
+      >
+        <TagChip
+          :tag="tag"
+          :class="selectedTagId === tag.id ? 'ring-2 ring-primary-500' : ''"
+        />
+      </button>
+    </div>
+    <div v-else class="mb-6" />
 
     <!-- Workflow Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -472,6 +580,18 @@ const formatDate = (dateStr: string) => {
           {{ workflow.description }}
         </p>
 
+        <!-- Tags of this workflow -->
+        <div
+          v-if="(workflowChips[workflow.id] ?? []).length > 0"
+          class="mt-3 flex flex-wrap gap-1.5"
+        >
+          <TagChip
+            v-for="tag in workflowChips[workflow.id]"
+            :key="tag.id"
+            :tag="tag"
+          />
+        </div>
+
         <div class="mt-4 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
           <span>Updated {{ formatDate(workflow.updatedAt) }}</span>
           <span :class="workflow.active ? 'badge-success' : 'badge-info'">
@@ -488,17 +608,28 @@ const formatDate = (dateStr: string) => {
     >
       <BoltIcon class="w-16 h-16 mx-auto text-slate-300 dark:text-slate-600" />
       <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">
-        {{ searchQuery ? 'No workflows found' : 'No workflows yet' }}
+        {{ searchQuery || selectedTagId ? 'No workflows found' : 'No workflows yet' }}
       </h3>
       <p class="mt-2 text-slate-500 dark:text-slate-400">
-        {{ searchQuery ? 'Try a different search term' : 'Get started by creating your first workflow' }}
+        {{ searchQuery
+          ? 'Try a different search term'
+          : selectedTagId
+            ? 'No workflow carries the selected tag'
+            : 'Get started by creating your first workflow' }}
       </p>
       <button
-        v-if="!searchQuery"
+        v-if="!searchQuery && !selectedTagId"
         @click="createWorkflow"
         class="mt-6 btn-primary"
       >
         Create Workflow
+      </button>
+      <button
+        v-else-if="selectedTagId"
+        @click="selectedTagId = null"
+        class="mt-6 btn-secondary"
+      >
+        Clear the tag filter
       </button>
     </div>
 
@@ -507,5 +638,8 @@ const formatDate = (dateStr: string) => {
       <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto" />
       <p class="mt-4 text-slate-500 dark:text-slate-400">Loading workflows...</p>
     </div>
+
+    <!-- Global tag management -->
+    <TagsModal v-if="showTagsModal" @close="showTagsModal = false" />
   </div>
 </template>

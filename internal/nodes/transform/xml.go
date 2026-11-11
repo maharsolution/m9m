@@ -8,14 +8,14 @@ so no new dependencies are added.
 Two modes are supported, selected via the `mode` parameter:
 
   - "xmlToJson"  (default) — convert an XML string to a JSON object.
-                        Attributes are prefixed with `options.attributePrefix`
-                        (default "@") and text content of mixed elements is
-                        stored under `options.textKey` (default "_text").
+    Attributes are prefixed with `options.attributePrefix`
+    (default "@") and text content of mixed elements is
+    stored under `options.textKey` (default "_text").
   - "jsonToXml"            — convert a JSON object back to an XML string.
-                        Keys starting with `options.attributePrefix` are
-                        emitted as XML attributes on the parent element;
-                        a `options.textKey` entry becomes the element's
-                        character data.
+    Keys starting with `options.attributePrefix` are
+    emitted as XML attributes on the parent element;
+    a `options.textKey` entry becomes the element's
+    character data.
 
 This mirrors n8n's drop-in compatibility for the simplest "XML to JSON"
 followed by "JSON to XML" round-trip used in webhook tests. More advanced
@@ -85,7 +85,10 @@ func NewXmlNode() *XmlNode {
 			Name:        xmlNodeTypeName,
 			Description: "Convert between XML and JSON",
 			Category:    "Data Transformation",
+			Group:       []string{"transform"},
 			Properties:  xmlProperties(),
+			Inputs:      []string{"main"},
+			Outputs:     []string{"main"},
 		}),
 	}
 }
@@ -172,13 +175,26 @@ func (x *XmlNode) Execute(inputData []model.DataItem, nodeParams map[string]inte
 	return result, nil
 }
 
-// extractOptions reads the optional `options` map for attributePrefix /
-// textKey, falling back to n8n defaults ("@" / "_text").
+// extractOptions reads the attributePrefix / textKey overrides,
+// falling back to n8n defaults ("@" / "_text").
+//
+// Two shapes are accepted:
+//   - flat parameters: `attributePrefix` / `textKey`
+//   - the nested `options` map: {attributePrefix, textKey}
+//
+// The nested map wins when both carry a value, so an n8n export that
+// ships the `options` object keeps its exact behaviour.
 func extractOptions(params map[string]interface{}) (string, string) {
 	attrPrefix := "@"
 	textKey := "_text"
 	if params == nil {
 		return attrPrefix, textKey
+	}
+	if v, ok := params["attributePrefix"].(string); ok && v != "" {
+		attrPrefix = v
+	}
+	if v, ok := params["textKey"].(string); ok && v != "" {
+		textKey = v
 	}
 	rawOpts, ok := params["options"]
 	if !ok {
@@ -385,6 +401,7 @@ func mergeText(node map[string]interface{}, text, textKey string) {
 //     parent element;
 //   - the `textKey` entry (if any) becomes the element's character data;
 //   - any other key becomes a child element.
+//
 // Repeated children are emitted once per slice element.
 func jsonToXML(value interface{}, attrPrefix, textKey string) ([]byte, error) {
 	rootName := "root"

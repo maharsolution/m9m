@@ -32,6 +32,16 @@ const routes: RouteRecordRaw[] = [
         props: true,
       },
       {
+        // Full-page version history for one workflow. The editor also
+        // hosts the same panel in a drawer; this route is the
+        // shareable / linkable variant.
+        path: 'workflows/:id/versions',
+        name: 'workflow-versions',
+        component: () => import('@/components/version/VersionHistoryPage.vue'),
+        meta: { title: 'Version History' },
+        props: true,
+      },
+      {
         path: 'executions',
         name: 'executions',
         component: () => import('@/views/ExecutionHistory.vue'),

@@ -196,7 +196,7 @@ type StorageOperationResult struct {
 // NewCloudStorageNode creates a new Cloud Storage operations node
 func NewCloudStorageNode() *CloudStorageNode {
 	return &CloudStorageNode{
-		BaseNode:  base.NewBaseNode(base.NodeDescription{Name: "Google Cloud Storage", Description: "Google Cloud Storage operations", Category: "cloud", Properties: gcsProperties()}),
+		BaseNode:  base.NewBaseNode(base.NodeDescription{Name: "Google Cloud Storage", Description: "Google Cloud Storage operations", Category: "cloud", Group: []string{"cloud"}, Properties: gcsProperties()}),
 		evaluator: expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 		ctx:       context.Background(),
 	}

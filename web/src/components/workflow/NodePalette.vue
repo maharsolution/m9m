@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
-import { useNodesStore } from '@/stores'
+import { useNodesStore, useWorkflowEditorStore } from '@/stores'
 import { NODE_CATEGORIES, getNodeCategory } from '@/types/node'
 import type { NodeType, NodeCategory } from '@/types'
 
 const nodesStore = useNodesStore()
+const workflowEditorStore = useWorkflowEditorStore()
 
 const searchQuery = ref('')
 const expandedCategories = ref<Set<NodeCategory>>(new Set(['trigger', 'action', 'transform']))
@@ -57,6 +58,15 @@ const onDragStart = (event: DragEvent, nodeType: NodeType) => {
   }
 }
 
+/**
+ * Adds an n8n sticky note to the canvas. Sticky notes are not part of
+ * the node-type feed (n8n does not offer them in the node creator
+ * either) — they are added through this quick action.
+ */
+const addStickyNote = () => {
+  workflowEditorStore.addStickyNote()
+}
+
 const getCategoryColor = (category: NodeCategory) => {
   switch (category) {
     case 'trigger': return 'bg-green-500'
@@ -94,6 +104,22 @@ const getCategoryIcon = (category: NodeCategory) => {
           class="input pl-9 text-sm"
         />
       </div>
+
+      <!-- Quick action: sticky note. n8n offers the note as a canvas
+           action rather than as a node type, so it lives here and not
+           in the categorised list. -->
+      <button
+        type="button"
+        @click="addStickyNote"
+        class="mt-3 w-full flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors"
+        title="Add a sticky note to the canvas"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 4h14v10l-4 4H5V4z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 18v-4h4" />
+        </svg>
+        <span class="flex-1 text-left">Sticky Note</span>
+      </button>
     </div>
 
     <!-- Node List -->

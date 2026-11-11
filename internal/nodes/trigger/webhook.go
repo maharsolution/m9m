@@ -9,6 +9,7 @@ import (
 
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
 )
 
 // WebhookNode implements the Webhook trigger node
@@ -21,11 +22,17 @@ type WebhookNode struct {
 func NewWebhookNode() *WebhookNode {
 	description := base.NodeDescription{
 		Name:        "Webhook",
-		Description: "Receives HTTP webhook requests",
+		Description: "Starts the workflow when an HTTP request hits the configured path.",
 		Category:    "Trigger",
+		Group:       []string{"trigger"},
 		Properties:  webhookProperties(),
 		Inputs:      []string{},
 		Outputs:     []string{"main"},
+		Credentials: []base.NodeCredentialSpec{
+			{Type: "httpBasicAuth", DisplayName: "Basic Auth", Required: false},
+			{Type: "httpHeaderAuth", DisplayName: "Header Auth", Required: false},
+			{Type: "jwtAuth", DisplayName: "JWT Auth", Required: false},
+		},
 	}
 
 	return &WebhookNode{
@@ -36,45 +43,56 @@ func NewWebhookNode() *WebhookNode {
 // webhookProperties returns the property descriptors for the
 // Webhook trigger's Parameters tab. Mirrors n8n's
 // INodeTypeDescription.properties.
+//
+// Every parameter name below is the exact key the runtime reads:
+// the webhook manager (`internal/webhooks/manager.go`) reads `path`,
+// `httpMethod`, `authentication`, `responseMode` and `responseData`
+// from the node parameters, and the node's own authentication
+// validator reads `headerName` / `headerValue`.
+//
+// Divergence from n8n: n8n's `firstEntryBinary` response data is not
+// implemented by m9m's webhook manager, so the option list stops at
+// the three shapes the runtime actually produces.
 func webhookProperties() []base.NodeProperty {
 	methods := []base.Option{
-		{Name: "DELETE", Value: "DELETE"},
 		{Name: "GET", Value: "GET"},
-		{Name: "HEAD", Value: "HEAD"},
-		{Name: "OPTIONS", Value: "OPTIONS"},
-		{Name: "PATCH", Value: "PATCH"},
 		{Name: "POST", Value: "POST"},
 		{Name: "PUT", Value: "PUT"},
+		{Name: "PATCH", Value: "PATCH"},
+		{Name: "DELETE", Value: "DELETE"},
+		{Name: "HEAD", Value: "HEAD"},
+		{Name: "OPTIONS", Value: "OPTIONS"},
 	}
 	authOptions := []base.Option{
 		{Name: "None", Value: "none"},
 		{Name: "Basic auth", Value: "basicAuth"},
 		{Name: "Header auth", Value: "headerAuth"},
 		{Name: "JWT auth", Value: "jwtAuth"},
+		{Name: "API key", Value: "apiKey"},
 	}
 	responseModes := []base.Option{
 		{Name: "On Received", Value: "onReceived"},
-		{Name: "Immediately", Value: "immediately"},
 		{Name: "Last Node", Value: "lastNode"},
 		{Name: "Response Node", Value: "responseNode"},
 	}
 	responseDataOptions := []base.Option{
 		{Name: "All Entries", Value: "allEntries"},
-		{Name: "First Entry", Value: "firstEntry"},
+		{Name: "First Entry JSON", Value: "firstEntryJson"},
 		{Name: "No Data", Value: "noData"},
 	}
 	props := []base.NodeProperty{
-		base.StringOpt("HTTP method", "httpMethod", "POST", "HTTP method the webhook accepts.", methods, true),
-		base.StringProp("Path", "path", "", "URL path the webhook listens on (e.g. `incoming`).", "incoming", true),
-		base.StringOpt("Authentication", "authentication", "none", "Authentication required for incoming requests.", authOptions, false),
-		base.StringOpt("Response mode", "responseMode", "onReceived", "When to send the HTTP response.", responseModes, true),
-		base.StringOpt("Response data", "responseData", "allEntries", "What data to send back to the caller when Response mode is On Received.", responseDataOptions, false),
-		base.BoolProp("Binary data", "options.binaryData", false, "When true, the request body is exposed as a binary item."),
-		base.BoolProp("Raw body", "options.rawBody", false, "When true, the raw request body is included in the output as a string."),
-		base.TextProp("IP allowlist (comma-separated CIDRs)", "options.ipWhitelist", "", "If set, only requests from these CIDRs are accepted.", "127.0.0.1/32", 4),
-		base.BoolProp("No response body", "options.noResponseBody", false, "When true, the webhook returns an empty body."),
+		nodeprops.Opt("HTTP Method", "httpMethod", "POST", "HTTP method the webhook accepts.", methods, true),
+		nodeprops.Str("Path", "path", "", "URL path the webhook listens on (for example `incoming`).", "incoming", true),
+		nodeprops.Opt("Authentication", "authentication", "none", "Authentication required for incoming requests.", authOptions, false),
+		nodeprops.Str("Header Name", "headerName", "", "Name of the header checked when Authentication is Header auth.", "X-Api-Key", false).
+			WithDisplayOptions(nodeprops.Show("authentication", "headerAuth")),
+		nodeprops.Secret("Header Value", "headerValue", "", "Value the checked header must carry when Authentication is Header auth.", "secret-value", false).
+			WithDisplayOptions(nodeprops.Show("authentication", "headerAuth")),
+		nodeprops.Opt("Response Mode", "responseMode", "onReceived", "When the HTTP response is sent to the caller.", responseModes, true),
+		nodeprops.Opt("Response Data", "responseData", "firstEntryJson", "Which data of the last node is returned to the caller.", responseDataOptions, false).
+			WithDisplayOptions(nodeprops.Show("responseMode", "lastNode")),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }
 
 // normalizeWebhookHeaders converts a `map[string][]string` (the

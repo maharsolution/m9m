@@ -1,8 +1,34 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { NodeType, NodeCategory } from '@/types'
+import { STICKY_NOTE_TYPE } from '@/types'
 import { getNodeCategory } from '@/types/node'
 import * as nodesApi from '@/api/nodes'
+
+/**
+ * Metadata of the sticky-note node.
+ *
+ * n8n ships the sticky note as a regular node
+ * (`n8n-nodes-base.stickyNote`) but does not offer it in the node
+ * creator — it is added through the "add note" action. m9m mirrors
+ * that: the metadata lives here so the palette and the toolbar can
+ * describe the note without hard-coding the values twice.
+ */
+export const STICKY_NOTE_NODE_TYPE: NodeType = {
+  name: STICKY_NOTE_TYPE,
+  displayName: 'Sticky Note',
+  description: 'Add a note to the canvas',
+  version: 1,
+  defaults: { name: 'Sticky Note', color: '#fef9c3' },
+  inputs: [],
+  outputs: [],
+  group: ['input'],
+}
+
+/** True when the given node type is a sticky note. */
+export function isStickyNoteType(nodeType: string): boolean {
+  return nodeType === STICKY_NOTE_TYPE
+}
 
 export const useNodesStore = defineStore('nodes', () => {
   // State
@@ -107,6 +133,10 @@ export const useNodesStore = defineStore('nodes', () => {
     error,
     searchQuery,
     selectedCategory,
+
+    // The sticky note is not part of the node-type feed — it is an
+    // editor-only annotation offered as a quick action.
+    stickyNoteType: STICKY_NOTE_NODE_TYPE,
 
     // Getters
     nodeTypeMap,

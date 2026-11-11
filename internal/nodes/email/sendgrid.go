@@ -9,6 +9,7 @@ import (
 
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
 )
 
 // SendGridHTTPClient abstracts the HTTP client for testing.
@@ -29,6 +30,7 @@ func NewSendGridNode() *SendGridNode {
 			Name:        "SendGrid",
 			Description: "Send emails via SendGrid",
 			Category:    "Email",
+			Group:       []string{"communication"},
 			Properties:  sendGridProperties(),
 		}),
 		client: &http.Client{},
@@ -188,31 +190,47 @@ func (n *SendGridNode) ValidateParameters(params map[string]interface{}) error {
 	return nil
 }
 
-// sendGridProperties returns the SendGrid node's parameter
-// descriptors. BUG-UI-2026-09-09-001.
+// sendGridProperties describes the SendGrid node.
+//
+// email.SendGridNode reads `operation`, `apiKey`, `baseUrl`, `from`,
+// `to`, `subject`, `content`, `templateId` and `dynamicData`. The
+// template fields only apply to the sendTemplate operation.
 func sendGridProperties() []base.NodeProperty {
-	props := []base.NodeProperty{
-		base.StringOpt("Resource", "resource", "mail", "SendGrid resource to use.", []base.Option{
-			{Name: "Mail (send)", Value: "mail"},
-			{Name: "Contact (list)", Value: "contact"},
-		}, true),
-		base.StringOpt("Operation", "operation", "send", "What to do with the resource.", []base.Option{
-			{Name: "Send", Value: "send"},
-			{Name: "Add", Value: "add"},
-			{Name: "Get List", Value: "getList"},
-		}, true),
-		base.StringProp("From Email", "fromEmail", "", "Sender email (verified single sender or domain).", "noreply@example.com", true),
-		base.StringProp("From Name", "fromName", "", "Sender display name.", "", false),
-		base.StringProp("To", "toEmail", "", "Recipient email (comma-separated for multiple).", "user@example.com", true),
-		base.StringProp("Subject", "subject", "", "Email subject line.", "", true),
-		base.TextProp("Body (HTML)", "html", "", "Email body (HTML).", "<p>Hello from m9m!</p>", 6),
-		base.TextProp("Body (Text)", "text", "", "Plain-text fallback.", "Hello from m9m!", 4),
-		base.StringProp("Reply To", "replyTo", "", "Reply-To email address.", "", false),
-		base.JsonProp("Attachments", "attachments", "[]", "Optional attachments array."),
-		base.StringOpt("Template ID", "templateId", "", "Dynamic Template ID (overrides subject + body).", []base.Option{
-			{Name: "(none)", Value: ""},
-			{Name: "d-xxxx", Value: "d-xxxx"},
-		}, false),
+	ops := []base.Option{
+		{Name: "Send mail", Value: "send"},
+		{Name: "Send template mail", Value: "sendTemplate"},
 	}
-	return append(props, base.CommonSettings()...)
+	props := []base.NodeProperty{
+		nodeprops.Opt("Operation", "operation", "send",
+			"SendGrid operation to run.",
+			ops, true),
+		nodeprops.Secret("API key", "apiKey", "",
+			"SendGrid API key.",
+			"SG.…", true),
+		nodeprops.Str("Base URL", "baseUrl", "https://api.sendgrid.com/v3",
+			"SendGrid API root.",
+			"https://api.sendgrid.com/v3", false),
+		nodeprops.Str("From", "from", "",
+			"Verified sender address.",
+			"noreply@example.com", true),
+		nodeprops.Str("To", "to", "",
+			"Recipient address (comma-separated for several).",
+			"user@example.com", true),
+		nodeprops.Str("Subject", "subject", "",
+			"Subject line of the mail.",
+			"", false).
+			WithDisplayOptions(nodeprops.Show("operation", "send")),
+		nodeprops.Required(nodeprops.Text("Content", "content", "",
+			"Mail body.",
+			"Hello from m9m!", 6)).
+			WithDisplayOptions(nodeprops.Show("operation", "send")),
+		nodeprops.Str("Template ID", "templateId", "",
+			"Dynamic template ID (d-…).",
+			"d-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", false).
+			WithDisplayOptions(nodeprops.Show("operation", "sendTemplate")),
+		nodeprops.JSON("Dynamic data", "dynamicData", "{}",
+			"Template variables (name → value).").
+			WithDisplayOptions(nodeprops.Show("operation", "sendTemplate")),
+	}
+	return append(props, nodeprops.Settings()...)
 }

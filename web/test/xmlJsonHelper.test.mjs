@@ -45,7 +45,7 @@ function makeParserFromString(xml) {
 function parseElement(str) {
   // Returns [el, remaining] where `el` is a FakeNode and
   // `remaining` is the unparsed suffix.
-  const m = str.match(/^<\s*([\w:-]+)((?:\s+[\w:-]+\s*=\s*"[^"]*")*)\s*(\/>|>([\s\S]*)<\/\1\s*>)/)
+  const m = str.match(/^<\s*([\w:-]+)((?:\s+[\w:-]+\s*=\s*"[^"]*")*)\s*(\/>|>([\s\S]*?)<\/\1\s*>)/)
   if (!m) throw new Error(`cannot parse: ${str.slice(0, 80)}`)
   const [, name, attrStr, closer, body = ''] = m
   const attrs = []

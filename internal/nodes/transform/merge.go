@@ -6,6 +6,7 @@ import (
 	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
 )
 
 // MergeNode implements the Merge node functionality for combining data from multiple inputs
@@ -20,6 +21,7 @@ func NewMergeNode() *MergeNode {
 		Name:        "Merge",
 		Description: "Merge data from multiple inputs",
 		Category:    "Data Transformation",
+		Group:       []string{"transform"},
 		Properties:  mergeProperties(),
 		Inputs:      []string{"main", "main"},
 		Outputs:     []string{"main"},
@@ -32,39 +34,25 @@ func NewMergeNode() *MergeNode {
 }
 
 // mergeProperties returns the Merge node's property descriptors.
-// The Merge node supports multiple merge modes (append, combine,
-// chooseBranch, multiply) and multiple combination modes
-// (mergeByPosition, mergeByFields). The Parameters tab surfaces
-// both groups so the user can switch between them.
+//
+// The runtime supports four modes — append, merge, combine and
+// chooseBranch — and each mode reads its own parameter:
+// `overwriteExisting` (merge) and `branchCondition` (chooseBranch).
 func mergeProperties() []base.NodeProperty {
 	modes := []base.Option{
 		{Name: "Append", Value: "append"},
+		{Name: "Merge", Value: "merge"},
 		{Name: "Combine", Value: "combine"},
 		{Name: "Choose Branch", Value: "chooseBranch"},
-		{Name: "Multiply", Value: "multiply"},
-	}
-	combinationModes := []base.Option{
-		{Name: "Merge by Position", Value: "mergeByPosition"},
-		{Name: "Merge By Fields", Value: "mergeByFields"},
-	}
-	joinModes := []base.Option{
-		{Name: "Inner Join", Value: "inner"},
-		{Name: "Left Join", Value: "left"},
-		{Name: "Outer Join", Value: "outer"},
-	}
-	preferLeftOptions := []base.Option{
-		{Name: "Left Input", Value: "left"},
-		{Name: "Right Input", Value: "right"},
 	}
 	props := []base.NodeProperty{
-		base.StringOpt("Mode", "mode", "append", "How to combine the inputs.", modes, true),
-		base.StringOpt("Combination mode", "combinationMode", "mergeByPosition", "When Mode is Combine, how to pair items.", combinationModes, false),
-		base.StringProp("Fields to match", "mergeByFields.joinFields", "", "Comma-separated field names used to align items (mergeByFields).", "id", false),
-		base.StringOpt("Join mode", "joinMode", "left", "Type of join to use when aligning by fields.", joinModes, false),
-		base.StringOpt("Prefer", "preferLeft", "left", "When both inputs have the same field, which wins.", preferLeftOptions, false),
-		base.BoolProp("Clash handling", "options.clashHandling.values", true, "When both inputs provide the same field, prefer the left value."),
+		nodeprops.Opt("Mode", "mode", "append", "How to combine the inputs.", modes, true),
+		nodeprops.Bool("Overwrite Existing", "overwriteExisting", false, "When two inputs provide the same field, keep the last value instead of the first one (merge mode).").
+			WithDisplayOptions(nodeprops.Show("mode", "merge")),
+		nodeprops.Str("Branch Condition", "branchCondition", "", "Expression evaluated per item; matching items are emitted (chooseBranch mode).", "={{ $json.enabled }}", false).
+			WithDisplayOptions(nodeprops.Show("mode", "chooseBranch")),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }
 
 // Execute processes the Merge node operation
@@ -183,9 +171,9 @@ func (m *MergeNode) chooseBranchMerge(inputData []model.DataItem, nodeParams map
 	for _, item := range inputData {
 		context := &expressions.ExpressionContext{
 			ActiveNodeName:      "Merge",
-			RunIndex:           0,
-			ItemIndex:          0,
-			Mode:               expressions.ModeManual,
+			RunIndex:            0,
+			ItemIndex:           0,
+			Mode:                expressions.ModeManual,
 			ConnectionInputData: []model.DataItem{item},
 			Workflow: &model.Workflow{
 				Name: "Merge Processing",

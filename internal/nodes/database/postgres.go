@@ -27,21 +27,18 @@ func NewPostgresNode() *PostgresNode {
 		Name:        "PostgreSQL",
 		Description: "Executes queries against PostgreSQL databases",
 		Category:    "Database",
+		Group:       []string{"database"},
 		Properties:  postgresProperties(),
 		Inputs:      []string{"main"},
 		Outputs:     []string{"main"},
+		Credentials: []base.NodeCredentialSpec{
+			{Type: "postgres", DisplayName: "Postgres", Required: true},
+		},
 	}
 
 	return &PostgresNode{
 		BaseNode: base.NewBaseNode(description),
 	}
-}
-
-// postgresProperties returns the property descriptors for the
-// PostgreSQL node. Same shape as MySQL / SQLite — see
-// sqlProperties in properties.go.
-func postgresProperties() []base.NodeProperty {
-	return sqlProperties()
 }
 
 // Description returns the node description
@@ -54,7 +51,7 @@ func (p *PostgresNode) ValidateParameters(params map[string]interface{}) error {
 	if params == nil {
 		return p.CreateError("parameters cannot be nil", nil)
 	}
-	
+
 	// Check required parameters
 	connectionURL := p.GetStringParameter(params, "connectionUrl", "")
 	if connectionURL == "" {
@@ -80,24 +77,24 @@ func (p *PostgresNode) ValidateParameters(params map[string]interface{}) error {
 			return p.CreateError("database is required", nil)
 		}
 	}
-	
+
 	// Check if operation is provided
 	operation := p.GetStringParameter(params, "operation", "")
 	if operation == "" {
 		return p.CreateError("operation is required", nil)
 	}
-	
+
 	validOperations := map[string]bool{
 		"executeQuery": true,
 		"insert":       true,
 		"update":       true,
 		"delete":       true,
 	}
-	
+
 	if !validOperations[operation] {
 		return p.CreateError(fmt.Sprintf("invalid operation: %s", operation), nil)
 	}
-	
+
 	// For executeQuery operation, query is required
 	if operation == "executeQuery" {
 		query := p.GetStringParameter(params, "query", "")
@@ -105,7 +102,7 @@ func (p *PostgresNode) ValidateParameters(params map[string]interface{}) error {
 			return p.CreateError("query is required for executeQuery operation", nil)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -114,7 +111,7 @@ func (p *PostgresNode) Execute(inputData []model.DataItem, nodeParams map[string
 	if len(inputData) == 0 {
 		return []model.DataItem{}, nil
 	}
-	
+
 	// Get connection parameters
 	connectionURL := p.GetStringParameter(nodeParams, "connectionUrl", "")
 
@@ -167,28 +164,28 @@ func (p *PostgresNode) Execute(inputData []model.DataItem, nodeParams map[string
 			log.Printf("SECURITY WARNING: PostgreSQL connection URL contains sslmode=disable. This is insecure for production.")
 		}
 	}
-	
+
 	// Connect to database
 	db, err := sql.Open("postgres", connectionURL)
 	if err != nil {
 		return nil, p.CreateError(fmt.Sprintf("failed to connect to database: %v", err), nil)
 	}
 	defer db.Close()
-	
+
 	// Test the connection
 	if err := db.Ping(); err != nil {
 		return nil, p.CreateError(fmt.Sprintf("failed to ping database: %v", err), nil)
 	}
-	
+
 	// Get operation
 	operation := p.GetStringParameter(nodeParams, "operation", "")
-	
+
 	// Process each input data item
 	result := make([]model.DataItem, len(inputData))
-	
+
 	for i, item := range inputData {
 		var newItem model.DataItem
-		
+
 		switch operation {
 		case "executeQuery":
 			queryResult, err := p.executeQuery(db, nodeParams, item)
@@ -196,15 +193,15 @@ func (p *PostgresNode) Execute(inputData []model.DataItem, nodeParams map[string
 				return nil, p.CreateError(fmt.Sprintf("failed to execute query: %v", err), nil)
 			}
 			newItem = queryResult
-			
+
 		default:
 			// For other operations, just pass through the data
 			newItem = item
 		}
-		
+
 		result[i] = newItem
 	}
-	
+
 	return result, nil
 }
 
@@ -226,20 +223,20 @@ func (p *PostgresNode) executeQuery(db *sql.DB, nodeParams map[string]interface{
 	// SECURITY: Basic validation - reject obviously dangerous patterns
 	// Note: This is defense-in-depth, not a complete SQL injection prevention
 	dangerousPatterns := []string{
-		"--",           // SQL comment
-		";",            // Statement terminator (could chain queries)
-		"/*",           // Block comment start
-		"*/",           // Block comment end
-		"xp_",          // SQL Server extended procedures
-		"EXEC ",        // Execute
-		"EXECUTE ",     // Execute
-		"sp_",          // Stored procedures
-		"DROP ",        // Drop statement
-		"TRUNCATE ",    // Truncate statement
-		"ALTER ",       // Alter statement
-		"CREATE ",      // Create statement
-		"GRANT ",       // Grant privileges
-		"REVOKE ",      // Revoke privileges
+		"--",        // SQL comment
+		";",         // Statement terminator (could chain queries)
+		"/*",        // Block comment start
+		"*/",        // Block comment end
+		"xp_",       // SQL Server extended procedures
+		"EXEC ",     // Execute
+		"EXECUTE ",  // Execute
+		"sp_",       // Stored procedures
+		"DROP ",     // Drop statement
+		"TRUNCATE ", // Truncate statement
+		"ALTER ",    // Alter statement
+		"CREATE ",   // Create statement
+		"GRANT ",    // Grant privileges
+		"REVOKE ",   // Revoke privileges
 	}
 
 	upperQuery := strings.ToUpper(query)
@@ -257,30 +254,30 @@ func (p *PostgresNode) executeQuery(db *sql.DB, nodeParams map[string]interface{
 		return model.DataItem{}, fmt.Errorf("failed to execute query: %v", err)
 	}
 	defer rows.Close()
-	
+
 	// Get column names
 	columns, err := rows.Columns()
 	if err != nil {
 		return model.DataItem{}, fmt.Errorf("failed to get columns: %v", err)
 	}
-	
+
 	// Process rows
 	var results []map[string]interface{}
-	
+
 	for rows.Next() {
 		// Create a slice of interface{} to hold the values
 		values := make([]interface{}, len(columns))
 		valuePtrs := make([]interface{}, len(columns))
-		
+
 		for i := range values {
 			valuePtrs[i] = &values[i]
 		}
-		
+
 		// Scan the row
 		if err := rows.Scan(valuePtrs...); err != nil {
 			return model.DataItem{}, fmt.Errorf("failed to scan row: %v", err)
 		}
-		
+
 		// Create a map for this row
 		rowMap := make(map[string]interface{})
 		for i, col := range columns {
@@ -291,21 +288,21 @@ func (p *PostgresNode) executeQuery(db *sql.DB, nodeParams map[string]interface{
 				rowMap[col] = values[i]
 			}
 		}
-		
+
 		results = append(results, rowMap)
 	}
-	
+
 	// Check for errors after iteration
 	if err := rows.Err(); err != nil {
 		return model.DataItem{}, fmt.Errorf("error during row iteration: %v", err)
 	}
-	
+
 	// Create result item
 	resultItem := model.DataItem{
 		JSON: map[string]interface{}{
 			"rows": results,
 		},
 	}
-	
+
 	return resultItem, nil
 }

@@ -74,9 +74,21 @@ type WorkflowFilters struct {
 	WorkspaceID string
 	Active      *bool
 	Search      string
-	Tags        []string
-	Offset      int
-	Limit       int
+
+	// Tags is the legacy tag filter used by the MCP workflow-list tool:
+	// a workflow matches when it carries ANY of the listed values
+	// (case-insensitive comparison). Only the in-memory backend
+	// implements it — the REST API uses TagIDs instead.
+	Tags []string
+
+	// TagIDs restricts the result to workflows that carry ALL of the
+	// listed tag IDs (AND semantics). The IDs are the exact values
+	// stored in model.Workflow.Tags. An empty list means "no tag
+	// filter" and leaves the result set untouched.
+	TagIDs []string
+
+	Offset int
+	Limit  int
 }
 
 // ExecutionFilters defines filters for listing executions

@@ -10,6 +10,7 @@ import (
 
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
 )
 
 // ElasticsearchHTTPClient abstracts the HTTP client for testing.
@@ -30,6 +31,7 @@ func NewElasticsearchNode() *ElasticsearchNode {
 			Name:        "Elasticsearch",
 			Description: "Perform operations on Elasticsearch indices",
 			Category:    "Database",
+			Group:       []string{"database"},
 			Properties:  elasticsearchProperties(),
 		}),
 		client: &http.Client{},
@@ -258,33 +260,52 @@ func (n *ElasticsearchNode) ValidateParameters(params map[string]interface{}) er
 		return n.CreateError(fmt.Sprintf("invalid operation: %s", operation), nil)
 	}
 
-		return nil
+	return nil
 }
 
 // elasticsearchProperties returns the Elasticsearch node's
-// parameter descriptors. BUG-UI-2026-09-09-001 (final 6-node
-// Properties migration).
+// parameter descriptors.
+//
+// database.ElasticsearchNode reads `baseUrl`, `operation`, `index`,
+// `documentId`, `document`, `query`, `settings`, `username` and
+// `password`. The document body key is `document` (the previous
+// panel advertised `documentBody`, which the executor never read).
 func elasticsearchProperties() []base.NodeProperty {
 	ops := []base.Option{
-		{Name: "Index Document", Value: "index"},
-		{Name: "Update Document", Value: "update"},
-		{Name: "Delete Document", Value: "delete"},
+		{Name: "Index document", Value: "index"},
+		{Name: "Get document", Value: "get"},
 		{Name: "Search", Value: "search"},
-		{Name: "Get", Value: "get"},
-		{Name: "Count", Value: "count"},
+		{Name: "Update document", Value: "update"},
+		{Name: "Delete document", Value: "delete"},
 		{Name: "Bulk", Value: "bulk"},
+		{Name: "Create index", Value: "createIndex"},
 	}
 	props := []base.NodeProperty{
-		base.StringOpt("Operation", "operation", "search", "Elasticsearch operation.", ops, true),
-		base.StringProp("Base URL", "baseUrl", "", "Elasticsearch base URL (e.g. http://es:9200).", "http://elasticsearch:9200", true),
-		base.StringProp("Index", "index", "", "Index name.", "", true),
-		base.StringProp("Document ID", "documentId", "", "Document ID (index, update, delete, get).", "", false),
-		base.JsonProp("Document Body", "documentBody", "{}", "Document body (index, update)."),
-		base.JsonProp("Query", "query", "{\"query\":{\"match_all\":{}}}", "Query DSL (search, count)."),
-		base.NumberProp("Size", "size", 10, "Max hits to return (search).", false),
-		base.StringProp("Sort", "sort", "", "Optional sort JSON (search).", "", false),
-		base.BoolProp("Refresh", "refresh", false, "Refresh the affected shards after the operation (index/update/delete)."),
-		base.JsonProp("Bulk Operations", "bulkOperations", "[]", "Array of {action, body} objects (bulk)."),
+		nodeprops.Opt("Operation", "operation", "search",
+			"Elasticsearch operation to run.",
+			ops, true),
+		nodeprops.Str("Base URL", "baseUrl", "http://localhost:9200",
+			"Elasticsearch base URL.",
+			"http://elasticsearch:9200", true),
+		nodeprops.Str("Index", "index", "",
+			"Index the operation works on.",
+			"users", true),
+		nodeprops.Str("Document ID", "documentId", "",
+			"ID of the document (get / update / delete).",
+			"1", false).
+			WithDisplayOptions(nodeprops.Show("operation", "get", "update", "delete")),
+		nodeprops.JSON("Document", "document", "{}",
+			"Document body (index / update / bulk)."),
+		nodeprops.JSON("Query", "query", "{\"query\":{\"match_all\":{}}}",
+			"Query DSL sent to the search operation."),
+		nodeprops.JSON("Index settings", "settings", "{}",
+			"Settings applied when the index is created."),
+		nodeprops.Str("Username", "username", "",
+			"Username for basic authentication.",
+			"elastic", false),
+		nodeprops.Secret("Password", "password", "",
+			"Password for basic authentication.",
+			"", false),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }

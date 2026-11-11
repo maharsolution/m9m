@@ -74,6 +74,43 @@ type NodeDescription struct {
 	Properties  []NodeProperty `json:"properties,omitempty"`
 	Inputs      []string       `json:"inputs,omitempty"`
 	Outputs     []string       `json:"outputs,omitempty"`
+
+	// Group mirrors n8n's `INodeType.group` — coarse buckets
+	// ("trigger", "transform", "input", ...) the frontend uses to
+	// group nodes in the node creator. Empty when not declared.
+	Group []string `json:"group,omitempty"`
+
+	// Credentials lists the credential types the node can consume.
+	// The frontend renders one credential picker per entry.
+	Credentials []NodeCredentialSpec `json:"credentials,omitempty"`
+
+	// UsableAsTool marks nodes that may be exposed to an AI agent
+	// as a tool (n8n's `usableAsTool` flag).
+	UsableAsTool bool `json:"usableAsTool,omitempty"`
+
+	// Icon / IconColor carry the node's icon identifier and colour
+	// (n8n ships values such as "fa:user" / "#ff6d5a"). Empty when
+	// the node does not declare them.
+	Icon      string `json:"icon,omitempty"`
+	IconColor string `json:"iconColor,omitempty"`
+
+	// Version is the node's own type version — the value n8n stores
+	// in a workflow node's `typeVersion`. Zero means "not declared";
+	// the engine reports version 1 for such nodes so the API keeps
+	// emitting a positive version.
+	Version int `json:"version,omitempty"`
+}
+
+// NodeCredentialSpec describes one credential type a node can use.
+//
+// Type is the credential type key (e.g. "httpBasicAuth") matching the
+// credential types the API exposes; DisplayName is the human-readable
+// label shown in the credential picker; Required tells the frontend
+// whether the node refuses to run without that credential.
+type NodeCredentialSpec struct {
+	Type        string `json:"type"`
+	DisplayName string `json:"displayName"`
+	Required    bool   `json:"required"`
 }
 
 // NodeFactory is a function that creates a new node executor
@@ -238,13 +275,13 @@ type NodeMetadata struct {
 
 // NodeProperty describes a node parameter/property
 type NodeProperty struct {
-	DisplayName string                 `json:"displayName"`
-	Name        string                 `json:"name"`
-	Type        string                 `json:"type"`
-	Default     interface{}            `json:"default"`
-	Description string                 `json:"description"`
-	Required    bool                   `json:"required"`
-	Options     []Option               `json:"options,omitempty"`
+	DisplayName string      `json:"displayName"`
+	Name        string      `json:"name"`
+	Type        string      `json:"type"`
+	Default     interface{} `json:"default"`
+	Description string      `json:"description"`
+	Required    bool        `json:"required"`
+	Options     []Option    `json:"options,omitempty"`
 	// TypeOptions holds n8n-style per-type metadata: rows for
 	// textareas, minValue/maxValue for numbers, password flag for
 	// strings, multipleValues for collections, etc. Mirrors
@@ -257,12 +294,61 @@ type NodeProperty struct {
 	DisplayOptions map[string]interface{} `json:"displayOptions,omitempty"`
 	// Placeholder mirrors n8n's `INodeProperties.placeholder`.
 	Placeholder string `json:"placeholder,omitempty"`
+	// Values enumerates the allowed values of the property's primary
+	// sub-field. It is used by the composite property types —
+	// `resourceMapper` (mapping modes), `filter` (comparison
+	// operators), `file` (binary-property modes) and `icon` (the
+	// curated icon set) — so the frontend can build its selects
+	// straight from the metadata instead of hard-coding them.
+	//
+	// The shape is deliberately narrower than Option: a nested value
+	// never carries a dynamic `action`.
+	Values []OptionValue `json:"values,omitempty"`
 }
 
 // Option represents a selection option for a property
 type Option struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
+
+	// Action names a backend action the frontend can call to fetch
+	// the option list dynamically (n8n's `loadOptions` semantics).
+	// Empty for static option lists.
+	Action string `json:"action,omitempty"`
+
+	// Description is the optional help text rendered next to the
+	// option in the parameter panel.
+	Description string `json:"description,omitempty"`
+
+	// Values enumerates the allowed values of the sub-field this
+	// option stands for — filter operators, mapper modes, file modes
+	// and so on. It is the value-level counterpart of Option: where
+	// an Option is one selectable choice, Values lists every choice
+	// the sub-field accepts.
+	//
+	// The composite property builders shipped with this package
+	// (ResourceMapperProp, FilterProp, FileProp, IconProp) expose the
+	// same lists on the property itself (NodeProperty.Values) because
+	// that is what the parameter renderers read; the field here lets
+	// a node author attach an allowed-value list to an individual
+	// option as well.
+	Values []OptionValue `json:"values,omitempty"`
+}
+
+// OptionValue describes a single allowed value of a nested option list.
+//
+// It is the value-level counterpart of Option: an Option is a choice
+// a user picks, an OptionValue describes one of the values that choice
+// may take. The wire shape mirrors n8n's option entries
+// (`{name, value, description}`) minus the dynamic `action` — a nested
+// value list is always static.
+type OptionValue struct {
+	// Name is the human-readable label shown in the picker.
+	Name string `json:"name"`
+	// Value is the machine-readable value stored in the workflow.
+	Value string `json:"value"`
+	// Description is the optional help text for the value.
+	Description string `json:"description,omitempty"`
 }
 
 // WithDisplayOptions attaches an n8n-style `displayOptions` rule and

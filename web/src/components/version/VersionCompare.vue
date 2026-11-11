@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useVersionStore } from '@/stores'
+import { tagErrorMessage } from '@/api/tags'
 import type { WorkflowVersion, VersionComparison } from '@/types/version'
 import {
   XMarkIcon,
@@ -25,22 +26,48 @@ const emit = defineEmits<{
 
 const versionStore = useVersionStore()
 const comparison = ref<VersionComparison | null>(null)
+const loading = ref(true)
+const errorMessage = ref<string | null>(null)
 
 onMounted(async () => {
+  loading.value = true
+  errorMessage.value = null
   try {
+    // GET /workflows/{id}/versions/compare?from=&to=
+    // → {fromVersion, toVersion, changes}
     comparison.value = await versionStore.compareVersions(
       props.workflowId,
       props.fromVersion.id,
       props.toVersion.id
     )
   } catch (e) {
-    console.error('Failed to compare versions:', e)
+    errorMessage.value = tagErrorMessage(e, 'Failed to compare versions.')
+  } finally {
+    loading.value = false
   }
 })
 
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleString()
 }
+
+function label(version: WorkflowVersion | undefined): string {
+  if (!version) return 'Unknown version'
+  return version.versionTag || `v${version.versionNum}`
+}
+
+// The API echoes both versions back — prefer them over the props so
+// the dialog always shows exactly what the server compared.
+const shownFrom = computed(() => comparison.value?.fromVersion ?? props.fromVersion)
+const shownTo = computed(() => comparison.value?.toVersion ?? props.toVersion)
+
+const changes = computed(() => comparison.value?.changes ?? null)
+const nodesAdded = computed(() => changes.value?.nodesAdded ?? [])
+const nodesRemoved = computed(() => changes.value?.nodesRemoved ?? [])
+const nodesModified = computed(() => changes.value?.nodesModified ?? [])
+const connectionsChanged = computed(() => changes.value?.connectionsChanged ?? false)
+const settingsChanged = computed(() => changes.value?.settingsChanged ?? false)
+const summary = computed(() => changes.value?.summary ?? '')
 
 const fromNodes = computed(() => {
   if (!props.fromVersion.workflow?.nodes) return []
@@ -53,10 +80,9 @@ const toNodes = computed(() => {
 })
 
 function getNodeStatus(nodeName: string): 'added' | 'removed' | 'modified' | 'unchanged' {
-  if (!comparison.value) return 'unchanged'
-  if (comparison.value.changes.nodesAdded.includes(nodeName)) return 'added'
-  if (comparison.value.changes.nodesRemoved.includes(nodeName)) return 'removed'
-  if (comparison.value.changes.nodesModified.includes(nodeName)) return 'modified'
+  if (nodesAdded.value.includes(nodeName)) return 'added'
+  if (nodesRemoved.value.includes(nodeName)) return 'removed'
+  if (nodesModified.value.includes(nodeName)) return 'modified'
   return 'unchanged'
 }
 </script>
@@ -75,7 +101,7 @@ function getNodeStatus(nodeName: string): 'added' | 'removed' | 'modified' | 'un
               Compare Versions
             </h2>
             <p class="text-sm text-slate-500 dark:text-slate-400">
-              {{ fromVersion.versionTag }} vs {{ toVersion.versionTag }}
+              {{ label(shownFrom) }} vs {{ label(shownTo) }}
             </p>
           </div>
         </div>
@@ -88,45 +114,54 @@ function getNodeStatus(nodeName: string): 'added' | 'removed' | 'modified' | 'un
       </div>
 
       <!-- Loading -->
-      <div v-if="versionStore.loading" class="flex-1 flex items-center justify-center p-8">
-        <div class="animate-spin inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+      <div v-if="loading" class="flex-1 flex items-center justify-center p-8">
+        <div class="animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+      </div>
+
+      <!-- Error -->
+      <div
+        v-else-if="errorMessage"
+        class="flex-1 flex flex-col items-center justify-center p-8 text-center gap-3"
+      >
+        <p class="text-red-600 dark:text-red-400">{{ errorMessage }}</p>
+        <button @click="emit('close')" class="btn-secondary">Close</button>
       </div>
 
       <!-- Content -->
       <div v-else-if="comparison" class="flex-1 overflow-hidden flex flex-col">
         <!-- Summary -->
         <div class="px-6 py-4 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between gap-4 flex-wrap">
             <div class="flex items-center gap-6">
               <div class="flex items-center gap-2">
                 <PlusCircleIcon class="w-5 h-5 text-green-500" />
                 <span class="text-sm text-slate-700 dark:text-slate-300">
-                  {{ comparison.changes.nodesAdded.length }} added
+                  {{ nodesAdded.length }} added
                 </span>
               </div>
               <div class="flex items-center gap-2">
                 <MinusCircleIcon class="w-5 h-5 text-red-500" />
                 <span class="text-sm text-slate-700 dark:text-slate-300">
-                  {{ comparison.changes.nodesRemoved.length }} removed
+                  {{ nodesRemoved.length }} removed
                 </span>
               </div>
               <div class="flex items-center gap-2">
                 <PencilSquareIcon class="w-5 h-5 text-amber-500" />
                 <span class="text-sm text-slate-700 dark:text-slate-300">
-                  {{ comparison.changes.nodesModified.length }} modified
+                  {{ nodesModified.length }} modified
                 </span>
               </div>
-              <div v-if="comparison.changes.connectionsChanged" class="flex items-center gap-2">
+              <div v-if="connectionsChanged" class="flex items-center gap-2">
                 <ArrowPathRoundedSquareIcon class="w-5 h-5 text-blue-500" />
                 <span class="text-sm text-slate-700 dark:text-slate-300">Connections changed</span>
               </div>
-              <div v-if="comparison.changes.settingsChanged" class="flex items-center gap-2">
+              <div v-if="settingsChanged" class="flex items-center gap-2">
                 <Cog6ToothIcon class="w-5 h-5 text-purple-500" />
                 <span class="text-sm text-slate-700 dark:text-slate-300">Settings changed</span>
               </div>
             </div>
-            <p class="text-sm text-slate-500 dark:text-slate-400">
-              {{ comparison.changes.summary }}
+            <p v-if="summary" class="text-sm text-slate-500 dark:text-slate-400">
+              {{ summary }}
             </p>
           </div>
         </div>
@@ -139,14 +174,14 @@ function getNodeStatus(nodeName: string): 'added' | 'removed' | 'modified' | 'un
               <div class="flex items-center justify-between">
                 <div>
                   <h3 class="font-medium text-slate-900 dark:text-white">
-                    {{ fromVersion.versionTag }}
+                    {{ label(shownFrom) }}
                   </h3>
                   <p class="text-xs text-slate-500 dark:text-slate-400">
-                    {{ formatDate(fromVersion.createdAt) }} by {{ fromVersion.author }}
+                    {{ formatDate(shownFrom.createdAt) }} by {{ shownFrom.author }}
                   </p>
                 </div>
                 <button
-                  @click="emit('restore', fromVersion)"
+                  @click="emit('restore', shownFrom)"
                   class="px-3 py-1.5 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50 rounded-lg transition-colors"
                 >
                   Restore this version
@@ -184,14 +219,14 @@ function getNodeStatus(nodeName: string): 'added' | 'removed' | 'modified' | 'un
               <div class="flex items-center justify-between">
                 <div>
                   <h3 class="font-medium text-slate-900 dark:text-white">
-                    {{ toVersion.versionTag }}
+                    {{ label(shownTo) }}
                   </h3>
                   <p class="text-xs text-slate-500 dark:text-slate-400">
-                    {{ formatDate(toVersion.createdAt) }} by {{ toVersion.author }}
+                    {{ formatDate(shownTo.createdAt) }} by {{ shownTo.author }}
                   </p>
                 </div>
                 <button
-                  @click="emit('restore', toVersion)"
+                  @click="emit('restore', shownTo)"
                   class="px-3 py-1.5 text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50 rounded-lg transition-colors"
                 >
                   Restore this version

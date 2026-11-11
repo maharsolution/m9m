@@ -33,7 +33,7 @@ func TestWebhookNode_Description(t *testing.T) {
 	desc := node.Description()
 
 	assert.Equal(t, "Webhook", desc.Name)
-	assert.Equal(t, "Receives HTTP webhook requests", desc.Description)
+	assert.Equal(t, "Starts the workflow when an HTTP request hits the configured path.", desc.Description)
 	assert.Equal(t, "Trigger", desc.Category)
 }
 

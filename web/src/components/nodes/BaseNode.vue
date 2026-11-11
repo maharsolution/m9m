@@ -1,8 +1,17 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
+import { NodeResizer } from '@vue-flow/node-resizer'
+import '@vue-flow/node-resizer/dist/style.css'
 import { XMarkIcon, KeyIcon } from '@heroicons/vue/24/outline'
 import { useWorkflowEditorStore } from '@/stores'
+import {
+  STICKY_NOTE_COLORS,
+  STICKY_NOTE_DEFAULT_HEIGHT,
+  STICKY_NOTE_DEFAULT_WIDTH,
+  STICKY_NOTE_TYPE,
+  stickyNoteColor,
+} from '@/types'
 import type { NodeCategory } from '@/types'
 
 interface Props {
@@ -27,6 +36,8 @@ interface Props {
 
 const props = defineProps<Props>()
 const editorStore = useWorkflowEditorStore()
+
+const isSticky = computed(() => props.data.nodeType === STICKY_NOTE_TYPE)
 
 const categoryStyles = computed(() => {
   switch (props.data.category) {
@@ -84,10 +95,151 @@ const deleteNode = (event: MouseEvent) => {
   event.preventDefault()
   editorStore.removeNode(props.id)
 }
+
+// --------------------------------------------------------------------
+// Sticky note
+// --------------------------------------------------------------------
+
+const stickyContent = computed(() => {
+  const content = props.data.parameters?.content
+  return typeof content === 'string' ? content : ''
+})
+
+const stickyBackground = computed(() =>
+  stickyNoteColor(props.data.parameters?.color)
+)
+
+const stickyWidth = computed(() => {
+  const width = Number(props.data.parameters?.width)
+  return Number.isFinite(width) && width > 0 ? width : STICKY_NOTE_DEFAULT_WIDTH
+})
+
+const stickyHeight = computed(() => {
+  const height = Number(props.data.parameters?.height)
+  return Number.isFinite(height) && height > 0 ? height : STICKY_NOTE_DEFAULT_HEIGHT
+})
+
+const editing = ref(false)
+const draft = ref('')
+const textareaRef = ref<HTMLTextAreaElement | null>(null)
+
+const startEditing = () => {
+  draft.value = stickyContent.value
+  editing.value = true
+  nextTick(() => {
+    textareaRef.value?.focus()
+    textareaRef.value?.select()
+  })
+}
+
+const commitEditing = () => {
+  if (!editing.value) {
+    return
+  }
+  editing.value = false
+  if (draft.value !== stickyContent.value) {
+    editorStore.updateStickyNote(props.id, { content: draft.value })
+  }
+}
+
+const cancelEditing = () => {
+  editing.value = false
+}
+
+const setStickyColor = (index: number) => {
+  editorStore.updateStickyNote(props.id, { color: index })
+}
+
+/**
+ * Keeps the note's geometry in the workflow document. n8n stores the
+ * sticky-note width / height inside `node.parameters`, so the note
+ * survives an export / import round-trip unchanged.
+ */
+const onStickyResize = (payload: { params: { width: number; height: number } }) => {
+  editorStore.updateStickyNote(props.id, {
+    width: Math.round(payload.params.width),
+    height: Math.round(payload.params.height),
+  })
+}
 </script>
 
 <template>
+  <!-- Sticky note. n8n's `n8n-nodes-base.stickyNote` — content, colour
+       and geometry live in `node.parameters`, exactly like upstream
+       n8n, so the workflow document stays n8n-compatible. -->
   <div
+    v-if="isSticky"
+    class="sticky-note"
+    :class="selected ? 'selected' : ''"
+    :style="{
+      backgroundColor: stickyBackground,
+      width: `${stickyWidth}px`,
+      height: `${stickyHeight}px`,
+    }"
+  >
+    <NodeResizer
+      :is-visible="selected"
+      :min-width="120"
+      :min-height="80"
+      color="#6366f1"
+      @resize="onStickyResize"
+    />
+
+    <!-- Delete affordance -->
+    <button
+      @click="deleteNode"
+      title="Delete sticky note"
+      aria-label="Delete sticky note"
+      class="node-delete-btn"
+    >
+      <XMarkIcon class="w-3.5 h-3.5" />
+    </button>
+
+    <!-- Colour swatches (n8n offers seven). -->
+    <div
+      v-if="selected || editing"
+      class="sticky-note__colors"
+      @mousedown.stop
+    >
+      <button
+        v-for="color in STICKY_NOTE_COLORS"
+        :key="color.index"
+        type="button"
+        class="sticky-note__swatch"
+        :class="props.data.parameters?.color === color.index ? 'selected' : ''"
+        :style="{ backgroundColor: color.hex }"
+        :title="color.name"
+        @click.stop="setStickyColor(color.index)"
+      />
+    </div>
+
+    <textarea
+      v-if="editing"
+      ref="textareaRef"
+      v-model="draft"
+      class="sticky-note__editor"
+      placeholder="Write a note..."
+      @mousedown.stop
+      @click.stop
+      @dblclick.stop
+      @keydown.esc.stop.prevent="cancelEditing"
+      @keydown.ctrl.enter.stop.prevent="commitEditing"
+      @keydown.meta.enter.stop.prevent="commitEditing"
+      @blur="commitEditing"
+    />
+    <div
+      v-else
+      class="sticky-note__content"
+      :title="'Double click to edit'"
+      @dblclick.stop="startEditing"
+    >
+      {{ stickyContent }}
+    </div>
+  </div>
+
+  <!-- Regular node -->
+  <div
+    v-else
     :class="[
       // Width and minimum height vary with density. The compact
       // (default) size keeps the editor canvas dense; comfortable
@@ -231,6 +383,82 @@ const deleteNode = (event: MouseEvent) => {
   @apply border-primary-500 dark:border-primary-400;
 }
 
+/*
+ * Sticky note. The card fills the Vue Flow node wrapper — the wrapper
+ * is sized from `parameters.width` / `parameters.height` (n8n keeps the
+ * geometry in the node parameters) — so dragging the resize handle
+ * updates the document and the card follows.
+ */
+.sticky-note {
+  width: 100%;
+  height: 100%;
+  min-width: 120px;
+  min-height: 80px;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+  padding: 12px;
+  overflow: hidden;
+  position: relative;
+  cursor: default;
+}
+
+.sticky-note.selected {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.35);
+}
+
+.sticky-note__content {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #1e293b;
+  cursor: text;
+}
+
+.sticky-note__editor {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #1e293b;
+  font-family: inherit;
+}
+
+.sticky-note__colors {
+  position: absolute;
+  top: -34px;
+  left: 0;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
+  z-index: 10;
+}
+
+.sticky-note__swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  cursor: pointer;
+  padding: 0;
+}
+
+.sticky-note__swatch.selected {
+  box-shadow: 0 0 0 2px #6366f1;
+}
+
 /* Delete button — top-right corner, hidden by default, revealed on hover. */
 .node-delete-btn {
   position: absolute;
@@ -254,7 +482,9 @@ const deleteNode = (event: MouseEvent) => {
 }
 
 .workflow-node:hover .node-delete-btn,
-.workflow-node.selected .node-delete-btn {
+.workflow-node.selected .node-delete-btn,
+.sticky-note:hover .node-delete-btn,
+.sticky-note.selected .node-delete-btn {
   opacity: 1;
   transform: scale(1);
 }

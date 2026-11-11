@@ -30,6 +30,7 @@ func NewTwilioNode() *TwilioNode {
 			Name:        "Twilio",
 			Description: "Send SMS messages via Twilio",
 			Category:    "Messaging",
+			Group:       []string{"messaging"},
 			Properties:  twilioProperties(),
 		}),
 		client: &http.Client{},

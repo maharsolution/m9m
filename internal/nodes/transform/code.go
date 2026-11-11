@@ -11,6 +11,7 @@ import (
 	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
 )
 
 // CodeNode implements the Code node functionality for executing custom code
@@ -31,6 +32,7 @@ func NewCodeNode() *CodeNode {
 		Name:        "Code",
 		Description: "Executes custom code in various languages",
 		Category:    "Data Transformation",
+		Group:       []string{"transform"},
 		Properties:  codeProperties(),
 		Inputs:      []string{"main"},
 		Outputs:     []string{"main"},
@@ -42,23 +44,33 @@ func NewCodeNode() *CodeNode {
 }
 
 // codeProperties returns the Code node's property descriptors.
-// Matches n8n's INodeTypeDescription.properties so the editor
-// renders a language picker + multi-line source editor.
+//
+// The runtime picks the source snippet from the language-specific key
+// (`jsCode`, `pythonCode`, `goCode`) and falls back to the generic
+// `code` key, so each language gets its own field and the matching
+// one is shown conditionally.
 func codeProperties() []base.NodeProperty {
 	languages := []base.Option{
-		{Name: "JavaScript", Value: "javaScript"},
-		{Name: "Python (beta)", Value: "python"},
+		{Name: "JavaScript", Value: "javascript"},
+		{Name: "Python", Value: "python"},
+		{Name: "Go", Value: "go"},
 	}
 	modes := []base.Option{
-		{Name: "Run Once for Each Item", Value: "runOnceForEachItem"},
 		{Name: "Run Once for All Items", Value: "runOnceForAllItems"},
+		{Name: "Run Once for Each Item", Value: "runOnceForEachItem"},
 	}
 	props := []base.NodeProperty{
-		base.StringOpt("Language", "language", "javaScript", "Which runtime executes the snippet.", languages, true),
-		base.StringOpt("Mode", "mode", "runOnceForEachItem", "How the snippet is invoked.", modes, true),
-		base.TextProp("Source code", "sourceCode", "", "The snippet to execute.", "// Return items to pass them downstream.", 10),
+		nodeprops.Opt("Language", "language", "javascript", "Which runtime executes the snippet.", languages, true),
+		nodeprops.Opt("Mode", "mode", "runOnceForEachItem", "How the snippet is invoked.", modes, true),
+		nodeprops.Text("Source Code (JavaScript)", "jsCode", "", "JavaScript snippet to execute.", "// Return items to pass them downstream.", 10).
+			WithDisplayOptions(nodeprops.Show("language", "javascript")),
+		nodeprops.Text("Source Code (Python)", "pythonCode", "", "Python snippet to execute.", "return items", 10).
+			WithDisplayOptions(nodeprops.Show("language", "python")),
+		nodeprops.Text("Source Code (Go)", "goCode", "", "Go snippet to execute.", "// Return items to pass them downstream.", 10).
+			WithDisplayOptions(nodeprops.Show("language", "go")),
+		nodeprops.Text("Source Code (generic)", "code", "", "Language-agnostic snippet. Used when the language-specific field above is empty.", "", 10),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }
 
 // Description returns the node description

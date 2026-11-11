@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useVersionStore } from '@/stores'
+import { tagErrorMessage } from '@/api/tags'
 import type { WorkflowVersion, VersionCreateRequest } from '@/types/version'
 import {
   ClockIcon,
@@ -12,6 +13,7 @@ import {
   ChevronUpIcon,
   TagIcon,
   UserIcon,
+  XMarkIcon,
 } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
 
@@ -31,18 +33,24 @@ const versionStore = useVersionStore()
 const showCreateForm = ref(false)
 const expandedVersionId = ref<string | null>(null)
 const selectedVersions = ref<string[]>([])
+// Error of the last action, shown inline in the drawer.
+const errorMessage = ref<string | null>(null)
 
 // Create form data
 const newVersionTag = ref('')
 const newVersionDescription = ref('')
 
 onMounted(() => {
-  versionStore.fetchVersions(props.workflowId)
+  versionStore.fetchVersions(props.workflowId).catch(() => {
+    // The store keeps the message; it is rendered below.
+  })
 })
 
 watch(() => props.workflowId, (newId) => {
   if (newId) {
-    versionStore.fetchVersions(newId)
+    versionStore.fetchVersions(newId).catch(() => {
+      // The store keeps the message; it is rendered below.
+    })
   }
 })
 
@@ -90,13 +98,14 @@ async function handleCreateVersion() {
     description: newVersionDescription.value || undefined,
   }
 
+  errorMessage.value = null
   try {
     await versionStore.createVersion(props.workflowId, data)
     showCreateForm.value = false
     newVersionTag.value = ''
     newVersionDescription.value = ''
   } catch (e) {
-    console.error('Failed to create version:', e)
+    errorMessage.value = tagErrorMessage(e, 'Failed to create the version.')
   }
 }
 
@@ -105,12 +114,16 @@ async function handleRestore(version: WorkflowVersion) {
 }
 
 async function handleDelete(version: WorkflowVersion) {
-  if (confirm(`Delete version ${version.versionTag}? This cannot be undone.`)) {
-    try {
-      await versionStore.deleteVersion(props.workflowId, version.id)
-    } catch (e) {
-      console.error('Failed to delete version:', e)
-    }
+  const label = version.versionTag || `v${version.versionNum}`
+  if (!confirm(`Delete version ${label}? This cannot be undone.`)) {
+    return
+  }
+
+  errorMessage.value = null
+  try {
+    await versionStore.deleteVersion(props.workflowId, version.id)
+  } catch (e) {
+    errorMessage.value = tagErrorMessage(e, 'Failed to delete the version.')
   }
 }
 
@@ -186,6 +199,22 @@ function handleCompare() {
       </div>
     </div>
 
+    <!-- Error -->
+    <div
+      v-if="errorMessage || versionStore.error"
+      class="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-3 py-2 text-xs text-red-700 dark:text-red-300"
+    >
+      <span class="flex-1">{{ errorMessage || versionStore.error }}</span>
+      <button
+        type="button"
+        class="opacity-60 hover:opacity-100"
+        aria-label="Dismiss error"
+        @click="errorMessage = null; versionStore.clearError()"
+      >
+        <XMarkIcon class="w-3.5 h-3.5" />
+      </button>
+    </div>
+
     <!-- Version List -->
     <div class="flex-1 overflow-y-auto">
       <!-- Loading -->
@@ -228,7 +257,10 @@ function handleCompare() {
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">
                   <span class="font-medium text-sm text-slate-900 dark:text-white">
-                    {{ version.versionTag }}
+                    {{ version.versionTag || `v${version.versionNum}` }}
+                  </span>
+                  <span class="text-[10px] font-medium text-slate-400 dark:text-slate-500">
+                    #{{ version.versionNum }}
                   </span>
                   <CheckCircleIcon
                     v-if="version.isCurrent"

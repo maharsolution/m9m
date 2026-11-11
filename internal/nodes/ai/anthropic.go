@@ -36,7 +36,11 @@ func NewAnthropicNode() *AnthropicNode {
 			Name:        "Anthropic",
 			Description: "Use Anthropic's Claude models for text generation and analysis",
 			Category:    "ai",
+			Group:       []string{"ai"},
 			Properties:  anthropicProperties(),
+			Credentials: []base.NodeCredentialSpec{
+				{Type: "anthropic", DisplayName: "Anthropic", Required: true},
+			},
 		}),
 		httpClient: &http.Client{
 			Timeout: 60 * time.Second,
@@ -51,16 +55,22 @@ func NewAnthropicNode() *AnthropicNode {
 // `x-api-key`, `anthropic-version: 2023-06-01`) is spoken by Anthropic
 // and by Anthropic-compatible providers such as MiniMax. Resolution
 // order for the base URL:
-//   1. `baseURL` node parameter (per-call override)
-//   2. `provider` node parameter: "anthropic" (default) | "MiniMax"
-//      — when set, looks up a built-in default endpoint for that
-//      provider unless `baseURL` was also supplied
-//   3. `M9M_MINIMAX_BASE_URL` env var (MiniMax-M3 cluster)
-//   4. `M9M_ANTHROPIC_BASE_URL` env var (any compatible gateway)
-//   5. https://api.anthropic.com/v1
+//  1. `baseURL` node parameter (per-call override)
+//  2. `provider` node parameter: "anthropic" (default) | "MiniMax"
+//     — when set, looks up a built-in default endpoint for that
+//     provider unless `baseURL` was also supplied
+//  3. `M9M_MINIMAX_BASE_URL` env var (MiniMax-M3 cluster)
+//  4. `M9M_ANTHROPIC_BASE_URL` env var (any compatible gateway)
+//  5. https://api.anthropic.com/v1
 func (n *AnthropicNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
-	// Get parameters
-	apiKey := n.GetStringParameter(nodeParams, "apiKey", "")
+	// Get parameters.
+	//
+	// The API key arrives through the credential envelope: the
+	// credential manager flattens the `anthropic` credential into
+	// `anthropic_apiKey` on the node parameters. The legacy plain
+	// `apiKey` parameter is still honoured as a fallback so
+	// workflows that inline the key keep working.
+	apiKey := base.CredentialString(nodeParams, "anthropic_apiKey", "apiKey")
 	modelName := n.GetStringParameter(nodeParams, "model", "claude-3-5-sonnet-20241022")
 	prompt := n.GetStringParameter(nodeParams, "prompt", "")
 	maxTokens := n.GetIntParameter(nodeParams, "maxTokens", 1024)

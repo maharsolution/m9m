@@ -25,6 +25,29 @@ export interface XmlToJsonOptions {
   trimText?: boolean
 }
 
+/**
+ * Read the i-th entry of a DOM `NodeList`/`NamedNodeMap`.
+ *
+ * The browser exposes `item(i)`, but a plain array (as used by the
+ * hermetic test doubles) only supports index access — both shapes are
+ * accepted so the helper works with either.
+ */
+function childAt(nodes: NodeListOf<ChildNode> | ChildNode[], index: number): ChildNode | null {
+  const list = nodes as NodeListOf<ChildNode> & { item?: (i: number) => ChildNode | null }
+  if (typeof list.item === 'function') return list.item(index)
+  return (nodes as ChildNode[])[index] ?? null
+}
+
+/** Same as {@link childAt} but for attribute maps. */
+function attrAt(
+  attributes: NamedNodeMap | Attr[],
+  index: number,
+): Attr | null {
+  const list = attributes as NamedNodeMap & { item?: (i: number) => Attr | null }
+  if (typeof list.item === 'function') return list.item(index)
+  return (attributes as Attr[])[index] ?? null
+}
+
 // toJson is a browser-friendly XML→JSON converter.
 // Uses `DOMParser` in the browser; tests inject a
 // parser via the `parse` parameter. The parser MUST
@@ -57,16 +80,24 @@ function elementToObject(
   // Attributes.
   if (includeAttributes && el.attributes) {
     for (let i = 0; i < el.attributes.length; i++) {
-      const a = el.attributes.item(i)
-      if (a) out[`@${a.name}`] = a.value
+      const a = attrAt(el.attributes, i)
+      if (!a) continue
+      // A DOM `Attr` exposes `name`/`value`; a DOM-less parser may only
+      // provide the node name/value pair.
+      const name = a.name ?? (a as unknown as { nodeName?: string }).nodeName
+      if (!name) continue
+      const value = a.value ?? (a as unknown as { nodeValue?: string | null }).nodeValue ?? ''
+      out[`@${name}`] = value
     }
   }
 
   // Children.
   const childElements: Element[] = []
   let textContent = ''
-  for (let i = 0; i < el.childNodes.length; i++) {
-    const n = el.childNodes.item(i)
+  const childNodes = el.childNodes
+  for (let i = 0; i < childNodes.length; i++) {
+    const n = childAt(childNodes, i)
+    if (!n) continue
     if (n.nodeType === 3 /* TEXT */) {
       textContent += n.nodeValue ?? ''
     } else if (n.nodeType === 1 /* ELEMENT */) {
@@ -125,6 +156,10 @@ export function toXml(
 function objectToXml(value: unknown, tag: string, depth: number, indent: string): string {
   const pad = indent.repeat(depth)
   const closePad = indent.repeat(Math.max(0, depth - 1))
+  // Without an indent string the output stays compact — the same shape
+  // n8n's XML node produces (`<root><a>1</a></root>`). A non-empty
+  // indent switches to the pretty, newline separated form.
+  const pretty = indent.length > 0
   if (value === null || value === undefined) {
     return `${pad}<${tag}/>`
   }
@@ -132,7 +167,7 @@ function objectToXml(value: unknown, tag: string, depth: number, indent: string)
     return `${pad}<${tag}>${escape(String(value))}</${tag}>`
   }
   if (Array.isArray(value)) {
-    return value.map((v) => objectToXml(v, tag, depth + 1, indent)).join('\n')
+    return value.map((v) => objectToXml(v, tag, depth + 1, indent)).join(pretty ? '\n' : '')
   }
   if (typeof value === 'object') {
     const parts: string[] = []
@@ -156,6 +191,9 @@ function objectToXml(value: unknown, tag: string, depth: number, indent: string)
       return text
         ? `${pad}<${tag}${attrStr}>${escape(text)}</${tag}>`
         : `${pad}<${tag}${attrStr}/>`
+    }
+    if (!pretty) {
+      return `${pad}<${tag}${attrStr}>${parts.join('')}</${tag}>`
     }
     return `${pad}<${tag}${attrStr}>\n${parts.join('\n')}\n${closePad}</${tag}>`
   }

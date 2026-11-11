@@ -36,8 +36,9 @@ func NewExecuteWorkflowTriggerNode() *ExecuteWorkflowTriggerNode {
 	return &ExecuteWorkflowTriggerNode{
 		BaseNode: base.NewBaseNode(base.NodeDescription{
 			Name:        "Execute Workflow Trigger",
-			Description: "Trigger node for sub-workflows called via the Execute Workflow node",
+			Description: "Entry point of a workflow that is called by another workflow's Execute Workflow node.",
 			Category:    "Trigger",
+			Group:       []string{"trigger"},
 			Properties:  executeWorkflowTriggerProperties(),
 			Inputs:      []string{},
 			Outputs:     []string{"main"},

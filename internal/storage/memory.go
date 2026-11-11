@@ -114,6 +114,12 @@ func (s *MemoryStorage) ListWorkflows(filters WorkflowFilters) ([]*model.Workflo
 			}
 		}
 
+		// Tag ID filter with AND semantics: the workflow has to carry
+		// every requested tag ID.
+		if !workflowHasAllTags(workflow.Tags, filters.TagIDs) {
+			continue
+		}
+
 		results = append(results, workflow)
 	}
 
@@ -296,6 +302,9 @@ func (s *MemoryStorage) CountWorkflows(filters WorkflowFilters) (int, error) {
 			if !strings.Contains(strings.ToLower(w.Name), needle) {
 				continue
 			}
+		}
+		if !workflowHasAllTags(w.Tags, filters.TagIDs) {
+			continue
 		}
 		count++
 	}
@@ -630,4 +639,3 @@ func generateID(prefix string) string {
 }
 
 var idCounter uint64
-

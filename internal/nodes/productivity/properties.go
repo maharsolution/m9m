@@ -1,37 +1,58 @@
 package productivity
 
-import "github.com/neul-labs/m9m/internal/nodes/base"
+import (
+	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
+)
 
-// BUG-UI-2026-09-09-001 — populate the `Properties` field for
-// the Stripe node.
-
+// stripeProperties describes the Stripe node.
+//
+// productivity.StripeNode reads `operation`, `apiKey`, `baseUrl`,
+// `email`, `name`, `description`, `amount`, `currency`,
+// `customerId` and `limit`. Each operation consumes a different
+// subset, so the operation-specific fields are shown conditionally.
 func stripeProperties() []base.NodeProperty {
-	resources := []base.Option{
-		{Name: "Customer", Value: "customer"},
-		{Name: "Charge", Value: "charge"},
-		{Name: "Payment Intent", Value: "paymentIntent"},
-		{Name: "Subscription", Value: "subscription"},
-		{Name: "Invoice", Value: "invoice"},
-	}
 	ops := []base.Option{
-		{Name: "Create", Value: "create"},
-		{Name: "Get", Value: "get"},
-		{Name: "List", Value: "list"},
-		{Name: "Update", Value: "update"},
-		{Name: "Delete", Value: "delete"},
+		{Name: "Create customer", Value: "createCustomer"},
+		{Name: "Create payment intent", Value: "createPaymentIntent"},
+		{Name: "List payments", Value: "listPayments"},
 	}
 	props := []base.NodeProperty{
-		base.StringOpt("Resource", "resource", "customer", "Stripe resource to operate on.", resources, true),
-		base.StringOpt("Operation", "operation", "create", "Operation on the resource.", ops, true),
-		base.StringProp("Customer Email", "email", "", "Customer email (resource=customer, operation=create).", "", false),
-		base.StringProp("Customer Name", "name", "", "Customer name (resource=customer, operation=create).", "", false),
-		base.NumberProp("Amount", "amount", 0, "Amount in the smallest currency unit (e.g. cents).", false),
-		base.StringProp("Currency", "currency", "usd", "3-letter currency code (lowercase).", "usd", false),
-		base.StringProp("Description", "description", "", "Charge / payment intent description.", "", false),
-		base.StringProp("Payment Method", "paymentMethod", "", "Payment method ID to attach (optional).", "", false),
-		base.StringProp("Customer ID", "customerId", "", "Existing customer ID (for charge / subscription).", "", false),
-		base.StringProp("Price ID", "priceId", "", "Recurring price ID (for subscription).", "", false),
-		base.NumberProp("Limit", "limit", 10, "Max records to return (list).", false),
+		nodeprops.Opt("Operation", "operation", "createCustomer",
+			"Stripe operation to run.",
+			ops, true),
+		nodeprops.Secret("API key", "apiKey", "",
+			"Stripe secret API key.",
+			"sk_live_…", true),
+		nodeprops.Str("Base URL", "baseUrl", "https://api.stripe.com/v1",
+			"Stripe API root.",
+			"https://api.stripe.com/v1", false),
+		nodeprops.Str("Email", "email", "",
+			"Customer email address.",
+			"user@example.com", false).
+			WithDisplayOptions(nodeprops.Show("operation", "createCustomer")),
+		nodeprops.Str("Name", "name", "",
+			"Customer name.",
+			"Jane Doe", false).
+			WithDisplayOptions(nodeprops.Show("operation", "createCustomer")),
+		nodeprops.Str("Description", "description", "",
+			"Description attached to the payment intent.",
+			"Order 1234", false).
+			WithDisplayOptions(nodeprops.Show("operation", "createPaymentIntent")),
+		nodeprops.Num("Amount", "amount", 0,
+			"Amount in the smallest currency unit (e.g. cents).", false).
+			WithDisplayOptions(nodeprops.Show("operation", "createPaymentIntent")),
+		nodeprops.Str("Currency", "currency", "usd",
+			"Three-letter currency code (lowercase).",
+			"usd", false).
+			WithDisplayOptions(nodeprops.Show("operation", "createPaymentIntent")),
+		nodeprops.Str("Customer ID", "customerId", "",
+			"Existing customer the payment intent belongs to.",
+			"cus_…", false).
+			WithDisplayOptions(nodeprops.Show("operation", "createPaymentIntent")),
+		nodeprops.Num("Limit", "limit", 0,
+			"Maximum number of payments to list (0 = the API default).", false).
+			WithDisplayOptions(nodeprops.Show("operation", "listPayments")),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }

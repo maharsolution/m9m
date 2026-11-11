@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import {
   XMarkIcon,
   TrashIcon,
@@ -9,23 +9,44 @@ import {
 import { useRouter } from 'vue-router'
 import {
   useWorkflowEditorStore,
-  useNodesStore,
   useCredentialsStore,
 } from '@/stores'
-import { getNodeCategory, getNodeCredentialTypes } from '@/types/node'
+import { useNodeTypesStore } from '@/stores/nodeTypes'
+import { getNodeCategory } from '@/types/node'
 import type { Credential } from '@/types/api'
 import type { NodeProperty } from '@/types/node'
+import { resolveNodeCredentialTypes } from '@/lib/credentialSchema'
+import {
+  deleteParameterValue,
+  getParameterValue,
+  setParameterValue,
+} from '@/components/workflow/parameters/parameterPath'
+import DisplayOptionsGuard from '@/components/workflow/parameters/DisplayOptionsGuard.vue'
+import ParameterField from '@/components/workflow/parameters/ParameterField.vue'
 
+/**
+ * Node detail panel.
+ *
+ * Everything rendered here comes from the node-type metadata: the
+ * property list, the visibility rules (`displayOptions`) and the
+ * credential slots. There is no hard-coded per-node field list.
+ */
 const workflowEditorStore = useWorkflowEditorStore()
-const nodesStore = useNodesStore()
 const credentialsStore = useCredentialsStore()
+const nodeTypesStore = useNodeTypesStore()
 const router = useRouter()
 
 const node = computed(() => workflowEditorStore.selectedNode)
+
+/** The node-type metadata (properties, credentials, display name). */
 const nodeType = computed(() => {
   if (!node.value) return null
-  return nodesStore.getNodeType(node.value.type)
+  return nodeTypesStore.byName(node.value.type) ?? null
 })
+
+/** Every property the metadata declares — visibility is resolved per field. */
+const properties = computed<NodeProperty[]>(() => nodeType.value?.properties ?? [])
+
 const category = computed(() => {
   if (!node.value) return 'action'
   return getNodeCategory(node.value.type)
@@ -33,69 +54,27 @@ const category = computed(() => {
 
 const localName = ref('')
 const localParameters = ref<Record<string, unknown>>({})
+
 // Mirror of `WorkflowNode.credentials` — id+name are required, type is
-// implicit from the map key. We cast through `any` because TS does not
-// narrow optional id with the dynamic key signature.
+// implicit from the map key.
 const localCredentials = ref<Record<string, BoundCredential>>({})
 
-// Visibility helper for n8n-style `displayOptions`. n8n stores
-// `{show: {param: [value, ...]}}` and `{hide: {param: [value, ...]}}`;
-// a property is visible only when every `show` constraint passes and
-// no `hide` constraint passes. This lets the Kafka form offer
-// distinct REST-Proxy and Native-broker fields without showing the
-// REST URL when `mode=native` (or vice versa).
-//
-// `props` is the full property list — we fall back to the referenced
-// property's `default` when the user hasn't set a value yet, so a
-// freshly-added node with `mode`'s default ("rest") immediately shows
-// the REST-Proxy field without requiring a click round-trip.
-//
-// `matchCondition` returns `null` (no constraint), `true` (constraint
-// satisfied) or `false` (constraint violated). The three-valued result
-// lets `isPropertyVisible` distinguish "absent hide rule" from "hide
-// rule that happens to match" — `!matchCondition(undefined)` would
-// incorrectly read as "this property must be hidden".
-const matchCondition = (
-  cond: Record<string, unknown[]> | undefined,
-  props: NodeProperty[],
-): boolean | null => {
-  if (!cond) return null
-  for (const [key, allowed] of Object.entries(cond)) {
-    let v = localParameters.value[key]
-    if (v === undefined) {
-      const ref = props.find((p) => p.name === key)
-      v = ref?.default
-    }
-    const list = (allowed as unknown[]) ?? []
-    if (v === undefined) return false
-    if (!list.some((a) => a === v)) return false
-  }
-  return true
-}
-const isPropertyVisible = (
-  prop: NodeProperty,
-  props: NodeProperty[],
-): boolean => {
-  const opts = prop.displayOptions
-  if (!opts) return true
-  const showMatch = matchCondition(opts.show, props)
-  const hideMatch = matchCondition(opts.hide, props)
-  if (showMatch === false) return false
-  if (hideMatch === true) return false
-  return true
-}
-const visibleProperties = computed(() => {
-  const all = (nodeType.value?.properties ?? []) as NodeProperty[]
-  return all.filter((p) => isPropertyVisible(p, all))
+type BoundCredential = { id: string; name: string }
+type LocalCredentialsMap = Record<string, BoundCredential>
+
+// Load the catalog once; the detail endpoint carries the authoritative
+// property list for the selected node type.
+onMounted(() => {
+  void nodeTypesStore.ensureLoaded()
 })
 
-// Sync local state with selected node
 watch(
   node,
   (newNode) => {
     if (newNode) {
       localName.value = newNode.name
       localParameters.value = { ...newNode.parameters }
+      void nodeTypesStore.fetchNodeTypeDetail(newNode.type)
       // The WorkflowNode.credentials map values are NodeCredential
       // objects with an optional id; coerce to BoundCredential which
       // requires id+name. n8n guarantees id+name are always present.
@@ -110,7 +89,7 @@ watch(
       localCredentials.value = next
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 const close = () => {
@@ -129,26 +108,40 @@ const updateName = () => {
   }
 }
 
-const updateParameter = (key: string, value: unknown) => {
+/** Current value of a property (nested paths are supported). */
+const parameterValue = (property: NodeProperty): unknown =>
+  getParameterValue(localParameters.value, property.name)
+
+/** Write a property value back to the node (nested paths are supported). */
+const updateParameter = (name: string, value: unknown) => {
   if (!node.value) return
-  const newParams = { ...localParameters.value, [key]: value }
+  // An emptied field is removed from the parameters instead of being
+  // stored as `undefined`.
+  const newParams =
+    value === undefined
+      ? deleteParameterValue(localParameters.value, name)
+      : setParameterValue(localParameters.value, name, value)
   localParameters.value = newParams
   workflowEditorStore.updateNode(node.value.id, { parameters: newParams })
 }
 
-// Credentials section — derives the supported credential types from the
-// static helper map and shows a select per type. The UI matches n8n's
-// node-side "Credential" picker: one dropdown per supported type, with a
-// "Create new" link that jumps to /credentials?type=<type>.
-const supportedCredentialTypes = computed<string[]>(() => {
-  if (!node.value) return []
-  return getNodeCredentialTypes(node.value.type)
-})
+/**
+ * A hidden property must not be submitted — drop its value when the
+ * visibility rule flips to hidden.
+ */
+const clearParameter = (property: NodeProperty) => {
+  if (!node.value) return
+  if (getParameterValue(localParameters.value, property.name) === undefined) return
+  const newParams = deleteParameterValue(localParameters.value, property.name)
+  localParameters.value = newParams
+  workflowEditorStore.updateNode(node.value.id, { parameters: newParams })
+}
+
+// Credentials — the slots come from the node-type metadata
+// (`credentials[]`: type + displayName + required).
+const credentialSlots = computed(() => resolveNodeCredentialTypes(nodeType.value))
 
 const credentialsAvailable = computed(() => credentialsStore.credentials)
-
-type BoundCredential = { id: string; name: string }
-type LocalCredentialsMap = Record<string, BoundCredential>
 
 const setCredential = (credType: string, credId: string) => {
   if (!node.value) return
@@ -170,33 +163,6 @@ const setCredential = (credType: string, credId: string) => {
     id: found.id,
     name: found.name,
   })
-}
-
-const credentialLabel = (credType: string): string => {
-  const known: Record<string, string> = {
-    httpBasicAuth: 'Basic Auth',
-    httpHeaderAuth: 'Header Auth',
-    oAuth2Api: 'OAuth2 API',
-    apiKey: 'API Key',
-    postgres: 'Postgres',
-    mysql: 'MySQL',
-    slackApi: 'Slack API',
-    discord: 'Discord',
-    openAi: 'OpenAI',
-    anthropic: 'Anthropic',
-    jwtAuth: 'JWT Auth',
-    aws: 'AWS',
-    notion: 'Notion',
-    stripe: 'Stripe',
-    sendGrid: 'SendGrid',
-    twilio: 'Twilio',
-    smtp: 'SMTP',
-    googleApi: 'Google API',
-    github: 'GitHub',
-    gitlab: 'GitLab',
-    microsoftTeams: 'Microsoft Teams',
-  }
-  return known[credType] ?? credType
 }
 
 const goToCreateCredential = (credType: string) => {
@@ -252,7 +218,7 @@ const getCategoryColor = () => {
       </div>
 
       <!-- Credentials Section -->
-      <div v-if="supportedCredentialTypes.length > 0" class="space-y-3">
+      <div v-if="credentialSlots.length > 0" class="space-y-3">
         <div class="flex items-center gap-2">
           <KeyIcon class="w-4 h-4 text-slate-500 dark:text-slate-400" />
           <h4 class="font-medium text-slate-900 dark:text-white">
@@ -260,22 +226,23 @@ const getCategoryColor = () => {
           </h4>
         </div>
         <div
-          v-for="credType in supportedCredentialTypes"
-          :key="credType"
+          v-for="slot in credentialSlots"
+          :key="slot.type"
           class="space-y-1"
         >
           <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            {{ credentialLabel(credType) }}
-            <span class="text-xs text-slate-400 ml-1">({{ credType }})</span>
+            {{ slot.displayName }}
+            <span class="text-xs text-slate-400 ml-1">({{ slot.type }})</span>
+            <span v-if="slot.required" class="text-red-500">*</span>
           </label>
           <select
-            :value="localCredentials[credType]?.id ?? ''"
-            @change="setCredential(credType, ($event.target as HTMLSelectElement).value)"
+            :value="localCredentials[slot.type]?.id ?? ''"
+            @change="setCredential(slot.type, ($event.target as HTMLSelectElement).value)"
             class="input"
           >
             <option value="">— None —</option>
             <option
-              v-for="c in credentialsAvailable.filter((c: Credential) => c.type === credType)"
+              v-for="c in credentialsAvailable.filter((c: Credential) => c.type === slot.type)"
               :key="c.id"
               :value="c.id"
             >
@@ -284,11 +251,11 @@ const getCategoryColor = () => {
           </select>
           <button
             type="button"
-            @click="goToCreateCredential(credType)"
+            @click="goToCreateCredential(slot.type)"
             class="text-xs text-primary-600 dark:text-primary-400 hover:underline flex items-center gap-1"
           >
             <PlusIcon class="w-3 h-3" />
-            Create new {{ credentialLabel(credType) }}
+            Create new {{ slot.displayName }}
           </button>
         </div>
       </div>
@@ -297,100 +264,56 @@ const getCategoryColor = () => {
       <div class="space-y-4">
         <h4 class="font-medium text-slate-900 dark:text-white">Parameters</h4>
 
-        <!-- Dynamic parameters based on node type -->
-        <div v-if="visibleProperties.length" class="space-y-4">
+        <!-- Metadata-driven parameters -->
+        <div v-if="properties.length" class="space-y-4">
           <div
-            v-for="prop in visibleProperties"
+            v-for="prop in properties"
             :key="prop.name"
             class="space-y-1"
           >
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
-              {{ prop.displayName }}
-              <span v-if="prop.required" class="text-red-500">*</span>
-            </label>
-
-            <!-- String input -->
-            <input
-              v-if="prop.type === 'string'"
-              :value="localParameters[prop.name] ?? prop.default ?? ''"
-              @input="updateParameter(prop.name, ($event.target as HTMLInputElement).value)"
-              :placeholder="prop.placeholder"
-              class="input"
-            />
-
-            <!-- Number input -->
-            <input
-              v-else-if="prop.type === 'number'"
-              type="number"
-              :value="localParameters[prop.name] ?? prop.default ?? 0"
-              @input="updateParameter(prop.name, Number(($event.target as HTMLInputElement).value))"
-              class="input"
-            />
-
-            <!-- Boolean input -->
-            <label
-              v-else-if="prop.type === 'boolean'"
-              class="flex items-center gap-2"
+            <DisplayOptionsGuard
+              :property="prop"
+              :parameters="localParameters"
+              :properties="properties"
+              @hidden="clearParameter(prop)"
             >
-              <input
-                type="checkbox"
-                :checked="!!localParameters[prop.name]"
-                @change="updateParameter(prop.name, ($event.target as HTMLInputElement).checked)"
-                class="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500"
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                {{ prop.displayName }}
+                <span v-if="prop.required" class="text-red-500">*</span>
+              </label>
+
+              <ParameterField
+                :property="prop"
+                :model-value="parameterValue(prop)"
+                :parameters="localParameters"
+                :node-type-name="node?.type"
+                @update:model-value="updateParameter(prop.name, $event)"
               />
-              <span class="text-sm text-slate-600 dark:text-slate-300">
-                {{ prop.description }}
-              </span>
-            </label>
 
-            <!-- Options select -->
-            <select
-              v-else-if="prop.type === 'options' && prop.options"
-              :value="localParameters[prop.name] ?? prop.default"
-              @change="updateParameter(prop.name, ($event.target as HTMLSelectElement).value)"
-              class="input"
-            >
-              <option
-                v-for="opt in prop.options"
-                :key="String(opt.value)"
-                :value="opt.value"
+              <p
+                v-if="prop.description && prop.type !== 'boolean'"
+                class="text-xs text-slate-500 dark:text-slate-400"
               >
-                {{ opt.name }}
-              </option>
-            </select>
-
-            <!-- JSON input -->
-            <textarea
-              v-else-if="prop.type === 'json'"
-              :value="JSON.stringify(localParameters[prop.name] ?? prop.default ?? {}, null, 2)"
-              @input="updateParameter(prop.name, JSON.parse(($event.target as HTMLTextAreaElement).value || '{}'))"
-              rows="4"
-              class="input font-mono text-sm"
-            />
-
-            <!-- Default to string -->
-            <input
-              v-else
-              :value="localParameters[prop.name] ?? prop.default ?? ''"
-              @input="updateParameter(prop.name, ($event.target as HTMLInputElement).value)"
-              class="input"
-            />
-
-            <p v-if="prop.description && prop.type !== 'boolean'" class="text-xs text-slate-500 dark:text-slate-400">
-              {{ prop.description }}
-            </p>
+                {{ prop.description }}
+              </p>
+            </DisplayOptionsGuard>
           </div>
         </div>
 
         <!-- No properties message -->
         <div v-else class="text-sm text-slate-500 dark:text-slate-400">
-          No configurable parameters for this node.
+          <template v-if="nodeTypesStore.loading">
+            Loading node metadata…
+          </template>
+          <template v-else>
+            No configurable parameters for this node.
+          </template>
         </div>
 
         <!-- Raw Parameters Editor -->
         <div class="pt-4 border-t border-slate-200 dark:border-slate-700">
           <details class="group">
-            <summary class="cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">
+            <summary class="cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 hover:dark:text-white">
               Advanced: Raw Parameters
             </summary>
             <div class="mt-2">

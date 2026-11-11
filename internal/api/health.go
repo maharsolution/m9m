@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/neul-labs/m9m/internal/engine"
 	"github.com/neul-labs/m9m/internal/storage"
 )
 
@@ -167,18 +168,7 @@ func (s *APIServer) ListNodeTypes(w http.ResponseWriter, r *http.Request) {
 	registered := s.engine.GetRegisteredNodeTypes()
 	nodeTypes := make([]map[string]interface{}, 0, len(registered))
 	for _, nt := range registered {
-		entry := map[string]interface{}{
-			"name":        nt.TypeID,
-			"displayName": nt.DisplayName,
-			"description": nt.Description,
-			"category":    nt.Category,
-			"version":     nt.Version,
-			"defaults": map[string]interface{}{
-				"name": nt.DisplayName,
-			},
-			"inputs":  nt.Inputs,
-			"outputs": nt.Outputs,
-		}
+		entry := nodeTypeEntry(nt, false)
 		if len(nt.Properties) > 0 {
 			entry["properties"] = nt.Properties
 		}
@@ -186,6 +176,62 @@ func (s *APIServer) ListNodeTypes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.sendJSON(w, http.StatusOK, nodeTypes)
+}
+
+// nodeTypeEntry renders one registered node type into the JSON shape
+// shared by GET /api/v1/node-types and GET /api/v1/node-types/{name}.
+//
+// The keys below are the frontend contract for the metadata-driven
+// parameter panel: `group`, `version`, `icon`, `iconColor`,
+// `usableAsTool` and `credentials` are additive — every key that
+// existed before keeps its meaning. `group` and `credentials` are
+// always present (as arrays, empty when the node declares none) so
+// the client can iterate them without null checks.
+func nodeTypeEntry(nt engine.NodeTypeInfo, alwaysProperties bool) map[string]interface{} {
+	group := nt.Group
+	if group == nil {
+		group = []string{}
+	}
+
+	credentials := make([]map[string]interface{}, 0, len(nt.Credentials))
+	for _, cred := range nt.Credentials {
+		credentials = append(credentials, map[string]interface{}{
+			// Canonical key — the credential type identifier.
+			"type": cred.Type,
+			// Human-readable label for the credential picker.
+			"displayName": cred.DisplayName,
+			// Whether the node refuses to run without it.
+			"required": cred.Required,
+			// Deprecated alias for "type", kept for the pre-existing
+			// `NodeCredentialType` frontend interface. New code should
+			// read "type".
+			"name": cred.Type,
+		})
+	}
+
+	entry := map[string]interface{}{
+		"name":         nt.TypeID,
+		"displayName":  nt.DisplayName,
+		"description":  nt.Description,
+		"category":     nt.Category,
+		"group":        group,
+		"version":      nt.Version,
+		"icon":         nt.Icon,
+		"iconColor":    nt.IconColor,
+		"usableAsTool": nt.UsableAsTool,
+		"credentials":  credentials,
+		"defaults": map[string]interface{}{
+			"name": nt.DisplayName,
+		},
+		"inputs":  nt.Inputs,
+		"outputs": nt.Outputs,
+	}
+
+	if alwaysProperties {
+		entry["properties"] = nt.Properties
+	}
+
+	return entry
 }
 
 func (s *APIServer) GetNodeType(w http.ResponseWriter, r *http.Request) {
@@ -200,19 +246,7 @@ func (s *APIServer) GetNodeType(w http.ResponseWriter, r *http.Request) {
 
 	for _, nt := range s.engine.GetRegisteredNodeTypes() {
 		if nt.TypeID == name {
-			s.sendJSON(w, http.StatusOK, map[string]interface{}{
-				"name":        nt.TypeID,
-				"displayName": nt.DisplayName,
-				"description": nt.Description,
-				"category":    nt.Category,
-				"version":     nt.Version,
-				"defaults": map[string]interface{}{
-					"name": nt.DisplayName,
-				},
-				"inputs":     nt.Inputs,
-				"outputs":    nt.Outputs,
-				"properties": nt.Properties,
-			})
+			s.sendJSON(w, http.StatusOK, nodeTypeEntry(nt, true))
 			return
 		}
 	}

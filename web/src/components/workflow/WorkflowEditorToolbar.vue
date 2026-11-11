@@ -9,7 +9,14 @@ import {
   SparklesIcon,
   BugAntIcon,
   ArrowDownTrayIcon,
+  ArrowUturnLeftIcon,
+  ArrowUturnRightIcon,
+  Squares2X2Icon,
+  TagIcon,
+  ClockIcon,
 } from '@heroicons/vue/24/outline'
+import type { Tag } from '@/types/tag'
+import TagChip from '@/components/tags/TagChip.vue'
 
 const props = withDefaults(defineProps<{
   workflowName?: string
@@ -22,12 +29,21 @@ const props = withDefaults(defineProps<{
   showNodePalette: boolean
   showAgentAi?: boolean
   isExporting?: boolean
+  /** Whether an undo step is available. */
+  canUndo?: boolean
+  /** Whether a redo step is available. */
+  canRedo?: boolean
+  /** Tags currently attached to the workflow. */
+  workflowTags?: Tag[]
 }>(), {
   workflowName: '',
   workflowActive: false,
   workflowDebug: false,
   showAgentAi: false,
   isExporting: false,
+  canUndo: false,
+  canRedo: false,
+  workflowTags: () => [],
 })
 
 const emit = defineEmits<{
@@ -40,12 +56,23 @@ const emit = defineEmits<{
   execute: []
   save: []
   export: []
+  undo: []
+  redo: []
+  autoLayout: []
+  addStickyNote: []
+  showTags: []
+  showVersions: []
 }>()
 
 const editingName = ref(false)
 const workflowNameInput = ref('')
 
 const displayName = computed(() => props.workflowName || 'Untitled Workflow')
+
+// At most three chips are shown in the toolbar; the rest is collapsed
+// into a counter so the bar never wraps.
+const visibleTags = computed(() => props.workflowTags.slice(0, 3))
+const hiddenTagCount = computed(() => Math.max(0, props.workflowTags.length - visibleTags.value.length))
 
 // Mirror the toggle-panel / toggle-AI props into local refs so the
 // button highlight updates immediately on click. Without this, the
@@ -130,6 +157,27 @@ function cancelEditingName() {
       <span v-if="props.isDirty" class="text-xs text-amber-600 dark:text-amber-400">
         Unsaved changes
       </span>
+
+      <!-- Tags of the current workflow -->
+      <button
+        v-if="!props.isNewWorkflow && props.workflowTags.length > 0"
+        type="button"
+        class="flex items-center gap-1.5 pl-2 border-l border-slate-200 dark:border-slate-700"
+        title="Manage workflow tags"
+        @click="emit('showTags')"
+      >
+        <TagChip
+          v-for="tag in visibleTags"
+          :key="tag.id"
+          :tag="tag"
+        />
+        <span
+          v-if="hiddenTagCount > 0"
+          class="text-xs text-slate-500 dark:text-slate-400"
+        >
+          +{{ hiddenTagCount }}
+        </span>
+      </button>
     </div>
 
     <div class="flex items-center gap-2">
@@ -155,6 +203,70 @@ function cancelEditingName() {
       >
         <SparklesIcon class="w-4 h-4" />
         AI
+      </button>
+
+      <!-- Tag management. Hidden for a draft workflow: it has no id yet,
+           so there is nothing to attach the tags to. -->
+      <button
+        v-if="!props.isNewWorkflow"
+        @click="emit('showTags')"
+        class="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
+        title="Attach tags to this workflow"
+      >
+        <TagIcon class="w-4 h-4" />
+        Tags
+      </button>
+
+      <!-- Version history drawer -->
+      <button
+        v-if="!props.isNewWorkflow"
+        @click="emit('showVersions')"
+        class="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
+        title="Show the version history of this workflow"
+      >
+        <ClockIcon class="w-4 h-4" />
+        Version history
+      </button>
+    </div>
+
+    <!-- Canvas actions: undo / redo / tidy up / sticky note. -->
+    <div class="flex items-center gap-1">
+      <button
+        @click="emit('undo')"
+        :disabled="!props.canUndo"
+        class="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
+        title="Undo (Ctrl+Z)"
+        aria-label="Undo"
+      >
+        <ArrowUturnLeftIcon class="w-4 h-4" />
+      </button>
+      <button
+        @click="emit('redo')"
+        :disabled="!props.canRedo"
+        class="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
+        title="Redo (Ctrl+Shift+Z)"
+        aria-label="Redo"
+      >
+        <ArrowUturnRightIcon class="w-4 h-4" />
+      </button>
+      <button
+        @click="emit('autoLayout')"
+        class="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
+        title="Tidy up — arrange the nodes automatically"
+        aria-label="Tidy up"
+      >
+        <Squares2X2Icon class="w-4 h-4" />
+      </button>
+      <button
+        @click="emit('addStickyNote')"
+        class="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
+        title="Add a sticky note"
+        aria-label="Add sticky note"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 4h14v10l-4 4H5V4z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 18v-4h4" />
+        </svg>
       </button>
     </div>
 

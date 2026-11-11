@@ -96,7 +96,7 @@ type QueryResult struct {
 // NewSQLConnectorNode creates a new SQL connector node
 func NewSQLConnectorNode() *SQLConnectorNode {
 	return &SQLConnectorNode{
-		BaseNode:  base.NewBaseNode(base.NodeDescription{Name: "SQL Database", Description: "n8n-nodes-base.sqlDatabase", Category: "core", Properties: sqlConnectorProperties()}),
+		BaseNode:  base.NewBaseNode(base.NodeDescription{Name: "SQL Database", Description: "n8n-nodes-base.sqlDatabase", Category: "core", Group: []string{"database"}, Properties: sqlConnectorProperties()}),
 		evaluator: expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 	}
 }

@@ -17,6 +17,7 @@ import (
 
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
 )
 
 // RedisHTTPClient abstracts the HTTP client for testing. Used by
@@ -53,7 +54,7 @@ type RedisNode struct {
 	*base.BaseNode
 	httpClient RedisHTTPClient
 
-	mu      sync.Mutex
+	mu       sync.Mutex
 	backends map[string]redisBackend
 }
 
@@ -65,9 +66,13 @@ func NewRedisNode() *RedisNode {
 			Name:        "Redis",
 			Description: "Execute Redis commands",
 			Category:    "Database",
+			Group:       []string{"database"},
 			Properties:  redisProperties(),
 			Inputs:      []string{"main"},
 			Outputs:     []string{"main"},
+			Credentials: []base.NodeCredentialSpec{
+				{Type: "redis", DisplayName: "Redis", Required: true},
+			},
 		}),
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 		backends:   make(map[string]redisBackend),
@@ -83,10 +88,13 @@ func NewRedisNodeWithClient(client RedisHTTPClient) *RedisNode {
 }
 
 // redisProperties returns the Redis node's property descriptors.
-// Mirrors n8n's INodeTypeDescription.properties: a Mode switch
-// (native / http), a Host/Port pair for the native backend, a
-// baseUrl for the HTTP backend, and operation / key / value
-// inputs that follow n8n's existing shape.
+//
+// database.RedisNode reads `mode` (native | http), `host`, `port`,
+// `db`, `tls`, `username`, `password`, `baseUrl`, `operation`,
+// `key`, `field`, `value`, `pattern`, `start`, `stop`, `seconds` and
+// `channel`. The connection fields only apply to the native backend,
+// and the command fields only apply to the operations that use them —
+// hence the conditional visibility rules.
 func redisProperties() []base.NodeProperty {
 	modes := []base.Option{
 		{Name: "Native (TCP / RESP)", Value: "native"},
@@ -97,35 +105,79 @@ func redisProperties() []base.NodeProperty {
 		{Name: "Set", Value: "set"},
 		{Name: "Delete", Value: "delete"},
 		{Name: "Keys", Value: "keys"},
-		{Name: "Hash Get", Value: "hget"},
-		{Name: "Hash Set", Value: "hset"},
-		{Name: "List Push Left", Value: "lpush"},
-		{Name: "List Push Right", Value: "rpush"},
-		{Name: "List Range", Value: "lrange"},
+		{Name: "Hash get", Value: "hget"},
+		{Name: "Hash set", Value: "hset"},
+		{Name: "List push left", Value: "lpush"},
+		{Name: "List push right", Value: "rpush"},
+		{Name: "List range", Value: "lrange"},
 		{Name: "Increment", Value: "incr"},
 		{Name: "Expire", Value: "expire"},
 		{Name: "Publish", Value: "publish"},
 	}
+	native := nodeprops.Show("mode", "native")
 	props := []base.NodeProperty{
-		base.StringOpt("Mode", "mode", "native", "Transport for Redis commands.", modes, true),
-		base.StringProp("Host", "host", "localhost", "Redis server host (native mode).", "127.0.0.1", false),
-		base.NumberProp("Port", "port", 6379, "Redis server port (native mode).", false),
-		base.StringProp("Username", "username", "", "Optional ACL username (Redis 6+).", "default", false),
-		base.StringProp("Password", "password", "", "AUTH password (or token for the HTTP gateway).", "********", false),
-		base.NumberProp("Database", "db", 0, "Logical database index.", false),
-		base.BoolProp("TLS", "tls", false, "Use TLS for the native connection."),
-		base.StringProp("HTTP base URL", "baseUrl", "", "REST gateway URL (http mode).", "http://localhost:6380", false),
-		base.StringOpt("Operation", "operation", "get", "Redis command to run.", ops, true),
-		base.StringProp("Key", "key", "", "The Redis key to operate on.", "session:1234", false),
-		base.StringProp("Field", "field", "", "Hash field (hget / hset).", "name", false),
-		base.StringProp("Value", "value", "", "Value to write (set / hset / lpush / rpush).", "", false),
-		base.StringProp("Pattern", "pattern", "", "Glob pattern (keys).", "*", false),
-		base.NumberProp("Start", "start", 0, "LRANGE start index.", false),
-		base.NumberProp("Stop", "stop", -1, "LRANGE stop index (-1 = end).", false),
-		base.NumberProp("Seconds", "seconds", 60, "EXPIRE TTL in seconds.", false),
-		base.StringProp("Channel", "channel", "", "Pub/Sub channel (publish).", "events", false),
+		nodeprops.Opt("Mode", "mode", "native",
+			"Transport used to talk to Redis.",
+			modes, true),
+		nodeprops.Str("Host", "host", "localhost",
+			"Redis server host (native mode).",
+			"127.0.0.1", false).
+			WithDisplayOptions(native),
+		nodeprops.Num("Port", "port", 6379,
+			"Redis server port (native mode).", false).
+			WithDisplayOptions(native),
+		nodeprops.Num("Database", "db", 0,
+			"Logical database index (native mode).", false).
+			WithDisplayOptions(native),
+		nodeprops.Bool("TLS", "tls", false,
+			"Use TLS for the native connection.").
+			WithDisplayOptions(native),
+		nodeprops.Str("Username", "username", "",
+			"Optional ACL username (native mode).",
+			"default", false).
+			WithDisplayOptions(native),
+		nodeprops.Secret("Password", "password", "",
+			"AUTH password (native mode) or API token (HTTP mode).",
+			"", false).
+			WithDisplayOptions(native),
+		nodeprops.Str("HTTP base URL", "baseUrl", "",
+			"REST gateway URL (http mode).",
+			"http://localhost:6380", false).
+			WithDisplayOptions(nodeprops.Show("mode", "http")),
+		nodeprops.Opt("Operation", "operation", "get",
+			"Redis command to run.",
+			ops, true),
+		nodeprops.Str("Key", "key", "",
+			"Key the command operates on.",
+			"session:1234", false).
+			WithDisplayOptions(nodeprops.Show("operation", "get", "set", "delete", "hget", "hset", "lpush", "rpush", "lrange", "incr", "expire")),
+		nodeprops.Str("Field", "field", "",
+			"Hash field the command operates on.",
+			"name", false).
+			WithDisplayOptions(nodeprops.Show("operation", "hget", "hset")),
+		nodeprops.Str("Value", "value", "",
+			"Value written by the command.",
+			"", false).
+			WithDisplayOptions(nodeprops.Show("operation", "set", "hset", "lpush", "rpush", "publish")),
+		nodeprops.Str("Pattern", "pattern", "*",
+			"Glob pattern matched by the KEYS command.",
+			"*", false).
+			WithDisplayOptions(nodeprops.Show("operation", "keys")),
+		nodeprops.NumRange("Start", "start", 0, -1, 1000000,
+			"First index returned by LRANGE.", false).
+			WithDisplayOptions(nodeprops.Show("operation", "lrange")),
+		nodeprops.NumRange("Stop", "stop", -1, -1, 1000000,
+			"Last index returned by LRANGE (-1 = last element).", false).
+			WithDisplayOptions(nodeprops.Show("operation", "lrange")),
+		nodeprops.Num("Seconds", "seconds", 60,
+			"Time-to-live in seconds set by EXPIRE.", false).
+			WithDisplayOptions(nodeprops.Show("operation", "expire")),
+		nodeprops.Str("Channel", "channel", "",
+			"Pub/Sub channel the message is published to.",
+			"events", false).
+			WithDisplayOptions(nodeprops.Show("operation", "publish")),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }
 
 // backend resolves (and caches) the per-execution backend. The
@@ -138,13 +190,8 @@ func (n *RedisNode) backend(params map[string]interface{}) (redisBackend, error)
 	case "http", "":
 		return newHTTPBackend(n.httpClient, params), nil
 	case "native":
-		host := n.GetStringParameter(params, "host", "localhost")
-		port := n.GetIntParameter(params, "port", 6379)
-		db := n.GetIntParameter(params, "db", 0)
-		tls := n.GetBoolParameter(params, "tls", false)
-		user := n.GetStringParameter(params, "username", "")
-		pass := n.GetStringParameter(params, "password", "")
-		key := fmt.Sprintf("native|%s|%d|%d|%v|%s", host, port, db, tls, user)
+		host, port, db, useTLS, user, pass := resolveRedisConnection(params)
+		key := fmt.Sprintf("native|%s|%d|%d|%v|%s", host, port, db, useTLS, user)
 		if pass != "" {
 			key = fmt.Sprintf("%s|p:%d", key, len(pass))
 		}
@@ -153,7 +200,7 @@ func (n *RedisNode) backend(params map[string]interface{}) (redisBackend, error)
 		if b, ok := n.backends[key]; ok {
 			return b, nil
 		}
-		b, err := newNativeBackend(host, port, pass, user, db, tls)
+		b, err := newNativeBackend(host, port, pass, user, db, useTLS)
 		if err != nil {
 			return nil, err
 		}
@@ -162,6 +209,31 @@ func (n *RedisNode) backend(params map[string]interface{}) (redisBackend, error)
 	default:
 		return nil, fmt.Errorf("unsupported redis mode: %q (expected 'native' or 'http')", mode)
 	}
+}
+
+// resolveRedisConnection reads the Redis connection settings out of the
+// node parameters.
+//
+// The credential manager flattens the `redis` credential into the node
+// parameters under keys shaped `<credentialType>_<field>` — `redis_host`,
+// `redis_port`, `redis_password`, `redis_db`, `redis_tls` — with every
+// value stringified (the envelope carries strings, not numbers or
+// booleans). The legacy plain parameter names (`host`, `port`,
+// `password`, `db`, `tls`) are kept as fallbacks so workflows that
+// inline the connection details into `parameters` keep working.
+//
+// The password is never logged and never appears in an error message.
+func resolveRedisConnection(params map[string]interface{}) (host string, port int, db int, useTLS bool, username string, password string) {
+	host = base.CredentialString(params, "redis_host", "host")
+	if host == "" {
+		host = "localhost"
+	}
+	port = base.CredentialInt(params, 6379, "redis_port", "port")
+	db = base.CredentialInt(params, 0, "redis_db", "db")
+	useTLS = base.CredentialBool(params, "redis_tls", "tls")
+	username = base.CredentialString(params, "redis_username", "username")
+	password = base.CredentialString(params, "redis_password", "password")
+	return host, port, db, useTLS, username, password
 }
 
 // Execute runs the configured Redis operation.
@@ -557,9 +629,12 @@ func newHTTPBackend(client RedisHTTPClient, params map[string]interface{}) *http
 		baseURL = "http://localhost:6380"
 	}
 	return &httpBackend{
-		client:   client,
-		baseURL:  baseURL,
-		password: stringParam(params, "password"),
+		client:  client,
+		baseURL: baseURL,
+		// The API token / password may arrive through the credential
+		// envelope (`redis_password`); the legacy inline `password`
+		// parameter stays supported as a fallback.
+		password: base.CredentialString(params, "redis_password", "password"),
 	}
 }
 

@@ -1,22 +1,71 @@
 package email
 
-import "github.com/neul-labs/m9m/internal/nodes/base"
+import (
+	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
+)
 
-// BUG-UI-2026-09-09-001 — populate the `Properties` field for
-// the SMTP node.
-
+// smtpProperties describes the SMTP node.
+//
+// email.SMTPNode reads `host`, `port`, `username`, `password`,
+// `auth`, `tls`, `to`, `cc`, `bcc`, `from`, `replyTo`, `subject`,
+// `body`, `isHTML`, `headers`, `attachmentName` and
+// `keepOriginalData`. The old panel advertised fromEmail / toEmail /
+// htmlBody / textBody / ignoreSSL / timeout keys that this executor
+// never reads.
 func smtpProperties() []base.NodeProperty {
 	props := []base.NodeProperty{
-		base.StringProp("From Email", "fromEmail", "", "Sender email (SMTP `MAIL FROM`).", "noreply@example.com", true),
-		base.StringProp("To Email", "toEmail", "", "Recipient email (comma-separated for multiple).", "user@example.com", true),
-		base.StringProp("CC", "ccEmail", "", "CC recipients (comma-separated).", "", false),
-		base.StringProp("BCC", "bccEmail", "", "BCC recipients (comma-separated).", "", false),
-		base.StringProp("Subject", "subject", "", "Email subject line.", "", true),
-		base.TextProp("Body (HTML)", "htmlBody", "", "HTML body. Empty = plain text only.", "", 6),
-		base.TextProp("Body (Text)", "textBody", "", "Plain-text body. Used as fallback if HTML is empty.", "Hello from m9m!", 4),
-		base.StringProp("Reply To", "replyTo", "", "Reply-To email address.", "", false),
-		base.BoolProp("Ignore SSL", "ignoreSSL", false, "Skip TLS verification (dev only)."),
-		base.NumberProp("Timeout (s)", "timeout", 30, "SMTP timeout in seconds.", false),
+		nodeprops.Str("SMTP host", "host", "",
+			"Host of the SMTP server.",
+			"smtp.example.com", true),
+		nodeprops.Num("SMTP port", "port", 587,
+			"Port of the SMTP server (465 for implicit TLS).", false),
+		nodeprops.Str("Username", "username", "",
+			"SMTP user name.",
+			"mailer@example.com", false),
+		nodeprops.Secret("Password", "password", "",
+			"SMTP password.",
+			"", false),
+		nodeprops.Opt("Authentication", "auth", "plain",
+			"SMTP authentication mechanism.",
+			[]base.Option{
+				{Name: "Plain", Value: "plain"},
+				{Name: "Login", Value: "login"},
+				{Name: "CRAM-MD5", Value: "crammd5"},
+				{Name: "None", Value: "none"},
+			}, false),
+		nodeprops.Bool("TLS", "tls", false,
+			"Use STARTTLS for the connection."),
+		nodeprops.Required(nodeprops.Text("To", "to", "",
+			"Recipient address (comma-separated for several).",
+			"user@example.com", 2)),
+		nodeprops.Str("CC", "cc", "",
+			"CC recipients (comma-separated).",
+			"", false),
+		nodeprops.Str("BCC", "bcc", "",
+			"BCC recipients (comma-separated).",
+			"", false),
+		nodeprops.Str("From", "from", "",
+			"Sender address.",
+			"noreply@example.com", true),
+		nodeprops.Str("Reply to", "replyTo", "",
+			"Reply-To address.",
+			"", false),
+		nodeprops.Str("Subject", "subject", "",
+			"Subject line of the mail.",
+			"", true),
+		nodeprops.Required(nodeprops.Text("Body", "body", "",
+			"Mail body.",
+			"Hello from m9m!", 6)),
+		nodeprops.Bool("Body is HTML", "isHTML", false,
+			"Treat the body as HTML instead of plain text."),
+		nodeprops.JSON("Headers", "headers", "{}",
+			"Extra mail headers (name → value)."),
+		nodeprops.Str("Attachment name", "attachmentName", "",
+			"Name the binary attachment is stored under.",
+			"attachment", false),
+		nodeprops.Bool("Keep original data", "keepOriginalData", false,
+			"Keep the input item's fields on the output item."),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }

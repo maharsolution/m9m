@@ -9,6 +9,7 @@ import (
 
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
 )
 
 // SlackNode sends messages to Slack
@@ -24,7 +25,11 @@ func NewSlackNode() *SlackNode {
 			Name:        "Slack",
 			Description: "Send messages and interact with Slack",
 			Category:    "communication",
+			Group:       []string{"communication"},
 			Properties:  slackProperties(),
+			Credentials: []base.NodeCredentialSpec{
+				{Type: "slack", DisplayName: "Slack", Required: false},
+			},
 		}),
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
@@ -35,13 +40,10 @@ func NewSlackNode() *SlackNode {
 // Execute sends a message to Slack
 func (n *SlackNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
 	// Get parameters
-	webhookURL := n.GetStringParameter(nodeParams, "webhookUrl", "")
+	webhookURL, token := resolveSlackAuth(nodeParams)
 	text := n.GetStringParameter(nodeParams, "text", "")
 	channel := n.GetStringParameter(nodeParams, "channel", "")
 	username := n.GetStringParameter(nodeParams, "username", "m9m Bot")
-
-	// Also check for authentication token
-	token := n.GetStringParameter(nodeParams, "token", "")
 
 	if webhookURL == "" && token == "" {
 		return nil, fmt.Errorf("either webhookUrl or token is required")
@@ -164,33 +166,50 @@ func (n *SlackNode) sendViaAPI(token, channel, text string) error {
 	return nil
 }
 
+// resolveSlackAuth reads the Slack authentication material out of the
+// node parameters.
+//
+// The credential manager flattens the `slack` credential into the node
+// parameters under keys shaped `<credentialType>_<field>`, i.e.
+// `slack_accessToken`. The legacy plain parameter names (`webhookUrl`,
+// `token`) are kept as fallbacks so workflows that inline the secret
+// directly into `parameters` keep working.
+//
+// The values are never logged and never appear in an error message.
+func resolveSlackAuth(params map[string]interface{}) (webhookURL string, token string) {
+	webhookURL = base.CredentialString(params, "slack_webhookUrl", "webhookUrl")
+	token = base.CredentialString(params, "slack_accessToken", "token")
+	return webhookURL, token
+}
+
 // slackProperties returns the Slack node's parameter descriptors.
-// Mirrors n8n's `INodeTypeDescription.properties` for
-// `n8n-nodes-base.slack`. BUG-UI-2026-09-09-001 — populates the
-// Properties field so the Settings tab renders the structured
-// form instead of falling back to raw JSON.
+//
+// messaging.SlackNode reads `webhookUrl`, `token`, `channel`, `text`
+// and `username`. The old panel advertised n8n's authentication
+// switch, channel type and formatting flags — none of those keys are
+// read by the executor, so they were dropped rather than kept as
+// misleading fields.
+//
+// The `webhookUrl` / `token` properties are the legacy inline form;
+// when a `slack` credential is attached the same values arrive as
+// `slack_webhookUrl` / `slack_accessToken` (see resolveSlackAuth).
 func slackProperties() []base.NodeProperty {
-	authModes := []base.Option{
-		{Name: "OAuth2 (token)", Value: "token"},
-		{Name: "Incoming Webhook", Value: "webhook"},
-	}
 	props := []base.NodeProperty{
-		base.StringOpt("Authentication", "authentication", "token", "How to authenticate with Slack.", authModes, true),
-		base.StringProp("Webhook URL", "webhookUrl", "", "Slack incoming webhook URL (https://hooks.slack.com/...).", "", false),
-		base.StringProp("OAuth Token", "token", "", "Slack OAuth token (xoxb-... or xoxp-...).", "", false),
-		base.StringOpt("Channel Type", "channelType", "channel", "Target a public channel, private channel, direct message, or by ID.", []base.Option{
-			{Name: "Channel", Value: "channel"},
-			{Name: "Group", Value: "group"},
-			{Name: "Direct Message", Value: "im"},
-			{Name: "By ID", Value: "id"},
-		}, true),
-		base.StringProp("Channel", "channel", "", "Channel name (#general), user (@alice), or channel ID (C0123).", "#general", true),
-		base.TextProp("Message", "text", "", "Message body. Newlines render as line breaks.", "Hello from m9m!", 4),
-		base.BoolProp("As User", "asUser", false, "Send the message as the authenticated user (legacy)."),
-		base.StringProp("Username", "username", "", "Override the bot's display name.", "m9m Bot", false),
-		base.StringProp("Icon Emoji", "iconEmoji", "", "Override the bot's icon (e.g. :robot_face:).", ":robot_face:", false),
-		base.BoolProp("Link Names", "linkNames", true, "Auto-link @mentions in the message body."),
-		base.BoolProp("Thread Reply", "threadTs", false, "Reply to a thread instead of posting a new message."),
+		nodeprops.Str("Webhook URL", "webhookUrl", "",
+			"Slack incoming webhook URL. Used when no bot token is set.",
+			"https://hooks.slack.com/services/…", false),
+		nodeprops.Secret("Bot token", "token", "",
+			"Slack bot / OAuth token (xoxb-…). Used when no webhook URL is set.",
+			"xoxb-…", false),
+		nodeprops.Str("Channel", "channel", "",
+			"Target channel (#general), user (@alice) or channel ID (C0123). Required when a bot token is used.",
+			"#general", false),
+		nodeprops.Required(nodeprops.Text("Message", "text", "",
+			"Message body.",
+			"Hello from m9m!", 4)),
+		nodeprops.Str("Username", "username", "m9m Bot",
+			"Display name the message is posted under (webhook mode).",
+			"m9m Bot", false),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }

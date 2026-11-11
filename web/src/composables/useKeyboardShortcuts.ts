@@ -145,8 +145,12 @@ function handleKeyDown(event: KeyboardEvent): void {
     }
 
     if (matchesShortcut(event, shortcut)) {
-      // For most shortcuts, skip if in input (unless it's Escape)
-      if (inInput && shortcut.key.toLowerCase() !== 'escape') {
+      // A focused input / textarea / select / contenteditable owns the
+      // keyboard: none of the canvas shortcuts may fire there. That
+      // keeps typing, selecting text and the browser's own copy /
+      // paste working, and stops Delete from wiping the selection
+      // while the user edits a parameter.
+      if (inInput) {
         continue;
       }
 
@@ -287,7 +291,9 @@ export const WORKFLOW_SHORTCUTS = {
   EXECUTE: 'Ctrl+Enter',
   UNDO: 'Ctrl+Z',
   REDO: 'Ctrl+Shift+Z',
+  REDO_Y: 'Ctrl+Y',
   DELETE: 'Delete',
+  DELETE_BACKSPACE: 'Backspace',
   SELECT_ALL: 'Ctrl+A',
   DESELECT: 'Escape',
   COPY: 'Ctrl+C',
@@ -301,10 +307,21 @@ export const WORKFLOW_SHORTCUTS = {
   NEW_WORKFLOW: 'Ctrl+N',
   SEARCH: 'Ctrl+F',
   HELP: 'Ctrl+/',
+  NUDGE_UP: 'ArrowUp',
+  NUDGE_DOWN: 'ArrowDown',
+  NUDGE_LEFT: 'ArrowLeft',
+  NUDGE_RIGHT: 'ArrowRight',
 } as const;
 
 /**
- * Setup default workflow editor shortcuts
+ * Setup default workflow editor shortcuts.
+ *
+ * The handlers are registered when the owning component mounts and
+ * removed when it unmounts. Shortcuts never fire while an input,
+ * textarea, select or contenteditable element has focus — that keeps
+ * typing, text selection and the browser's own copy / paste working,
+ * and stops Delete from wiping the node selection while a parameter
+ * is being edited.
  */
 export function useWorkflowShortcuts(handlers: {
   onSave?: () => void;
@@ -325,8 +342,15 @@ export function useWorkflowShortcuts(handlers: {
   onNewWorkflow?: () => void;
   onSearch?: () => void;
   onHelp?: () => void;
+  /** Arrow-key nudge of the selected nodes. */
+  onNudge?: (dx: number, dy: number) => void;
 }) {
   const { register } = useKeyboardShortcuts();
+
+  const nudge = (dx: number, dy: number) => {
+    if (!handlers.onNudge) return;
+    handlers.onNudge(dx, dy);
+  };
 
   onMounted(() => {
     if (handlers.onSave) {
@@ -355,12 +379,26 @@ export function useWorkflowShortcuts(handlers: {
         description: 'Redo',
         category: 'Edit',
       });
+      // Ctrl+Y is the Windows / Linux redo shortcut.
+      register(WORKFLOW_SHORTCUTS.REDO_Y, handlers.onRedo, {
+        description: 'Redo',
+        category: 'Edit',
+      });
     }
 
     if (handlers.onDelete) {
-      register(WORKFLOW_SHORTCUTS.DELETE, handlers.onDelete, {
+      const options = {
         description: 'Delete selected nodes',
         category: 'Edit',
+      };
+      register(WORKFLOW_SHORTCUTS.DELETE, handlers.onDelete, options);
+      register(WORKFLOW_SHORTCUTS.DELETE_BACKSPACE, handlers.onDelete, options);
+    }
+
+    if (handlers.onSelectAll) {
+      register(WORKFLOW_SHORTCUTS.SELECT_ALL, handlers.onSelectAll, {
+        description: 'Select all nodes',
+        category: 'Selection',
       });
     }
 
@@ -381,6 +419,13 @@ export function useWorkflowShortcuts(handlers: {
     if (handlers.onPaste) {
       register(WORKFLOW_SHORTCUTS.PASTE, handlers.onPaste, {
         description: 'Paste nodes',
+        category: 'Edit',
+      });
+    }
+
+    if (handlers.onCut) {
+      register(WORKFLOW_SHORTCUTS.CUT, handlers.onCut, {
+        description: 'Cut selected nodes',
         category: 'Edit',
       });
     }
@@ -413,11 +458,43 @@ export function useWorkflowShortcuts(handlers: {
       });
     }
 
+    if (handlers.onToggleActive) {
+      register(WORKFLOW_SHORTCUTS.TOGGLE_ACTIVE, handlers.onToggleActive, {
+        description: 'Toggle workflow active',
+        category: 'File',
+      });
+    }
+
+    if (handlers.onNewWorkflow) {
+      register(WORKFLOW_SHORTCUTS.NEW_WORKFLOW, handlers.onNewWorkflow, {
+        description: 'New workflow',
+        category: 'File',
+      });
+    }
+
+    if (handlers.onSearch) {
+      register(WORKFLOW_SHORTCUTS.SEARCH, handlers.onSearch, {
+        description: 'Search nodes',
+        category: 'View',
+      });
+    }
+
     if (handlers.onHelp) {
       register(WORKFLOW_SHORTCUTS.HELP, handlers.onHelp, {
         description: 'Show keyboard shortcuts',
         category: 'Help',
       });
+    }
+
+    if (handlers.onNudge) {
+      const nudgeOptions = {
+        description: 'Nudge the selected nodes',
+        category: 'Edit',
+      };
+      register(WORKFLOW_SHORTCUTS.NUDGE_UP, () => nudge(0, -10), nudgeOptions);
+      register(WORKFLOW_SHORTCUTS.NUDGE_DOWN, () => nudge(0, 10), nudgeOptions);
+      register(WORKFLOW_SHORTCUTS.NUDGE_LEFT, () => nudge(-10, 0), nudgeOptions);
+      register(WORKFLOW_SHORTCUTS.NUDGE_RIGHT, () => nudge(10, 0), nudgeOptions);
     }
   });
 }

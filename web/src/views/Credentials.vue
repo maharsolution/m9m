@@ -217,10 +217,14 @@ onMounted(async () => {
 
 const openCreateModal = (presetType = '', draft?: CredentialDraft) => {
   editingCredential.value = null
+  const type = presetType || draft?.type || ''
   form.value = {
     name: draft?.name ?? '',
-    type: presetType || draft?.type || '',
-    data: draft?.data ?? {},
+    type,
+    // The alias keys are folded into the canonical fields, so the form
+    // shows one username / one password even when the draft was written
+    // by an older build that used the `saslUsername` spelling.
+    data: applyFieldAliases(draft?.data ?? {}, type),
   }
   testResult.value = null
   revealedFields.value = new Set()
@@ -252,9 +256,15 @@ const openEditModal = async (credential: Credential, restore?: CredentialDraft) 
     form.value = {
       name: full.name,
       type: full.type,
-      data: restore?.data
-        ? { ...applyFieldAliases(full.data ?? {}, full.type), ...restore.data }
-        : applyFieldAliases(full.data ?? {}, full.type),
+      // The stored data and the restored draft are merged first, then
+      // the alias keys are folded into the canonical fields — the draft
+      // wins, and the form still shows a single username / password.
+      data: applyFieldAliases(
+        restore?.data
+          ? { ...(full.data ?? {}), ...restore.data }
+          : full.data ?? {},
+        full.type
+      ),
     }
     if (restore?.scrollTop) restorePanelScroll(restore.scrollTop)
   } catch (e) {
@@ -342,16 +352,6 @@ const toggleReveal = (name: string) => {
   revealedFields.value = next
 }
 
-// Stored fields the schema does not describe (e.g. rabbitmq's
-// `hostname` / `username`). They must stay visible and editable, not
-// silently dropped from the form.
-const extraDataFields = computed(() => {
-  const schemaNames = new Set(
-    (currentSchema.value?.properties ?? []).map((p) => p.name)
-  )
-  return Object.keys(form.value.data).filter((k) => !schemaNames.has(k))
-})
-
 // Synced n8n credentials sometimes use a different key for the same
 // field (rabbitmq stores `hostname` / `username` where the schema says
 // `host` / `user`). Copy the value over so the schema field is not
@@ -364,22 +364,58 @@ const fieldAliases: Record<string, string[]> = {
   password: ['pass', 'pwd'],
 }
 
-// Type specific aliases. The synced n8n kafka credential keeps the
-// native SASL credentials in `username` / `password`, while the schema
-// expects `saslUsername` / `saslPassword`.
+// Type specific aliases. The Kafka credential stores the login as
+// `username` / `password` — that is the n8n shape (see
+// n8n/packages/nodes-base/credentials/Kafka.credentials.ts) and the
+// canonical m9m field name. Credentials written by an older m9m build
+// still carry the `saslUsername` / `saslPassword` spellings, so those
+// are folded into the canonical fields.
 const typeFieldAliases: Record<string, Record<string, string[]>> = {
   kafka: {
-    saslUsername: ['username', 'user'],
-    saslPassword: ['password'],
+    username: ['saslUsername', 'user'],
+    password: ['saslPassword', 'pass', 'pwd'],
   },
 }
+
+// Generic aliases that must not be applied for a given type. The
+// generic `user` ← `username` mapping would create a THIRD username
+// input for Kafka (it would land in "Additional stored fields").
+const typeAliasBlocklist: Record<string, string[]> = {
+  kafka: ['user'],
+}
+
+// Alias keys that are folded into a canonical field. They must not be
+// rendered again: they would duplicate the canonical input and a stale
+// copy could shadow the value the operator just edited.
+const typeAliasKeys = (type: string): Set<string> =>
+  new Set(Object.values(typeFieldAliases[type] ?? {}).flat())
+
+// Stored fields the schema does not describe (e.g. rabbitmq's
+// `hostname` / `username`). They must stay visible and editable, not
+// silently dropped from the form.
+const extraDataFields = computed(() => {
+  const schemaNames = new Set(
+    (currentSchema.value?.properties ?? []).map((p) => p.name)
+  )
+  // Alias keys of a canonical field are not "additional" fields — they
+  // would render a second input for the very same value (the Kafka
+  // credential used to show the username three times).
+  const aliasNames = typeAliasKeys(form.value.type)
+  return Object.keys(form.value.data).filter(
+    (k) => !schemaNames.has(k) && !aliasNames.has(k)
+  )
+})
 
 const applyFieldAliases = (
   data: Record<string, unknown>,
   type = ''
 ): Record<string, unknown> => {
   const out = { ...data }
-  const aliases = { ...fieldAliases, ...(typeFieldAliases[type] ?? {}) }
+  const generic = { ...fieldAliases }
+  for (const blocked of typeAliasBlocklist[type] ?? []) {
+    delete generic[blocked]
+  }
+  const aliases = { ...generic, ...(typeFieldAliases[type] ?? {}) }
   for (const [canonical, aliasList] of Object.entries(aliases)) {
     if (out[canonical] !== undefined) continue
     for (const alias of aliasList) {
@@ -389,6 +425,29 @@ const applyFieldAliases = (
       }
     }
   }
+  // The alias keys are dropped once their value has been folded into the
+  // canonical field: the form then shows exactly ONE username and ONE
+  // password, and a stale copy can no longer shadow the edited value.
+  for (const alias of typeAliasKeys(type)) {
+    delete out[alias]
+  }
+  return out
+}
+
+// Kafka keeps a single username / password pair in the form. The legacy
+// `saslUsername` / `saslPassword` keys are written with the same value so
+// the node's credential bridge (`ApplyKafkaCredentialAuth`) and the
+// credential connection test always use the login the operator sees — a
+// stale copy left over from an earlier save would otherwise win at
+// runtime.
+const normalizeCredentialData = (
+  type: string,
+  data: Record<string, unknown>
+): Record<string, unknown> => {
+  if (type !== 'kafka') return data
+  const out = { ...data }
+  out.saslUsername = out.username ?? ''
+  out.saslPassword = out.password ?? ''
   return out
 }
 
@@ -409,13 +468,18 @@ const updateJsonField = (key: string, raw: string) => {
 // Save / Test / Delete
 const saveCredential = async () => {
   try {
+    const payload = {
+      name: form.value.name,
+      type: form.value.type,
+      data: normalizeCredentialData(form.value.type, form.value.data),
+    }
     if (editingCredential.value) {
       await credentialsStore.updateCredential(
         editingCredential.value.id,
-        form.value
+        payload
       )
     } else {
-      await credentialsStore.createCredential(form.value as any)
+      await credentialsStore.createCredential(payload as any)
     }
     clearDraft()
     closeModal()
@@ -441,7 +505,7 @@ const runTest = async () => {
   try {
     testResult.value = await credentialsStore.testPayload(
       form.value.type,
-      form.value.data
+      normalizeCredentialData(form.value.type, form.value.data)
     )
   } catch (e) {
     testResult.value = {
@@ -547,6 +611,8 @@ const fallbackCredentialTypes = [
   'openai',
   'anthropic',
   'jwtAuth',
+  'rabbitmq',
+  'redis',
 ]
 
 const allCredentialTypes = computed(() => {

@@ -15,6 +15,7 @@ import (
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
 	"github.com/neul-labs/m9m/internal/nodes/messaging"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -58,9 +59,13 @@ func NewKafkaTriggerNode() *KafkaTriggerNode {
 			Name:        "Kafka Trigger",
 			Description: "Trigger a workflow on Kafka messages (REST Proxy or native TCP).",
 			Category:    "Triggers",
+			Group:       []string{"trigger"},
 			Properties:  kafkaTriggerProperties(),
 			Inputs:      []string{},
 			Outputs:     []string{"main"},
+			Credentials: []base.NodeCredentialSpec{
+				{Type: "kafka", DisplayName: "Kafka", Required: true},
+			},
 		}),
 		client:  &http.Client{Timeout: 30 * time.Second},
 		nativeC: map[string]*messaging.KafkaNativeClient{},
@@ -78,38 +83,39 @@ func kafkaTriggerProperties() []base.NodeProperty {
 		{Name: "API key", Value: "apiKey"},
 	}
 	saslMechs := []base.Option{
+		{Name: "None (no SASL)", Value: ""},
 		{Name: "PLAIN", Value: "PLAIN"},
 		{Name: "SCRAM-SHA-256", Value: "SCRAM-SHA-256"},
 		{Name: "SCRAM-SHA-512", Value: "SCRAM-SHA-512"},
 	}
 	props := []base.NodeProperty{
-		base.StringOpt("Transport", "mode", "rest", "REST Proxy hops through a sidecar proxy; Native opens TCP to the brokers via segmentio/kafka-go.", modes, true),
+		nodeprops.Opt("Transport", "mode", "rest", "REST Proxy hops through a sidecar proxy; Native opens TCP to the brokers via segmentio/kafka-go.", modes, true),
 		// REST Proxy fields (mode=rest only)
-		base.StringProp("REST Proxy URL", "restProxyUrl", "", "Confluent-compatible REST Proxy base URL.", "http://kafka-rest:8082", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"rest"})),
-		base.StringOpt("Authentication", "authentication", "none", "How to authenticate against the REST Proxy.", authModes, false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"rest"})),
-		base.StringProp("Username", "username", "", "Username for Basic auth.", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"rest"})),
-		base.StringProp("Password", "password", "", "Password for Basic auth.", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"rest"})),
-		base.StringProp("API key", "apiKey", "", "API key (alternative to Basic).", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"rest"})),
+		nodeprops.Str("REST Proxy URL", "restProxyUrl", "", "Confluent-compatible REST Proxy base URL.", "http://kafka-rest:8082", false).WithDisplayOptions(nodeprops.Show("mode", "rest")),
+		nodeprops.Opt("Authentication", "authentication", "none", "How to authenticate against the REST Proxy.", authModes, false).WithDisplayOptions(nodeprops.Show("mode", "rest")),
+		nodeprops.Str("Username", "username", "", "Username for Basic auth.", "", false).WithDisplayOptions(nodeprops.Show("mode", "rest")),
+		nodeprops.Str("Password", "password", "", "Password for Basic auth.", "", false).WithDisplayOptions(nodeprops.Show("mode", "rest")),
+		nodeprops.Str("API key", "apiKey", "", "API key (alternative to Basic).", "", false).WithDisplayOptions(nodeprops.Show("mode", "rest")),
 		// Native fields (mode=native only)
-		base.StringProp("Bootstrap Servers", "brokers", "", "Comma-separated broker list (e.g. broker1:9092,broker2:9092).", "broker1:9092", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
-		base.StringOpt("SASL Mechanism", "saslMechanism", "", "PLAIN / SCRAM-SHA-256 / SCRAM-SHA-512 — leave empty for no SASL.", saslMechs, false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
-		base.StringProp("SASL Username", "saslUsername", "", "Username for SASL.", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
-		base.StringProp("SASL Password", "saslPassword", "", "Password for SASL.", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
-		base.BoolProp("TLS", "tls", false, "Enable TLS for the native broker connection.").WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
-		base.StringProp("CA Cert (PEM)", "ca", "", "PEM-encoded CA cert chain used to verify the broker (Aiven / Confluent Cloud).", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
-		base.StringProp("Client Cert (PEM)", "clientCert", "", "PEM-encoded client certificate for mTLS. Leave empty to use SASL only.", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
-		base.StringProp("Client Key (PEM)", "clientKey", "", "PEM-encoded client private key for mTLS (must pair with Client Cert).", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("mode", []string{"native"})),
+		nodeprops.Str("Bootstrap Servers", "brokers", "", "Comma-separated broker list (e.g. broker1:9092,broker2:9092).", "broker1:9092", false).WithDisplayOptions(nodeprops.Show("mode", "native")),
+		nodeprops.Opt("SASL Mechanism", "saslMechanism", "", "PLAIN / SCRAM-SHA-256 / SCRAM-SHA-512 — leave empty for no SASL.", saslMechs, false).WithDisplayOptions(nodeprops.Show("mode", "native")),
+		nodeprops.Str("SASL Username", "saslUsername", "", "Username for SASL.", "", false).WithDisplayOptions(nodeprops.Show("mode", "native")),
+		nodeprops.Str("SASL Password", "saslPassword", "", "Password for SASL.", "", false).WithDisplayOptions(nodeprops.Show("mode", "native")),
+		nodeprops.Bool("TLS", "tls", false, "Enable TLS for the native broker connection.").WithDisplayOptions(nodeprops.Show("mode", "native")),
+		nodeprops.Str("CA Cert (PEM)", "ca", "", "PEM-encoded CA cert chain used to verify the broker (Aiven / Confluent Cloud).", "", false).WithDisplayOptions(nodeprops.Show("mode", "native")),
+		nodeprops.Str("Client Cert (PEM)", "clientCert", "", "PEM-encoded client certificate for mTLS. Leave empty to use SASL only.", "", false).WithDisplayOptions(nodeprops.Show("mode", "native")),
+		nodeprops.Str("Client Key (PEM)", "clientKey", "", "PEM-encoded client private key for mTLS (must pair with Client Cert).", "", false).WithDisplayOptions(nodeprops.Show("mode", "native")),
 		// Shared
-		base.StringProp("Group ID", "groupId", "", "Consumer group id (used by the broker to track offsets).", "m9m-trigger", true),
-		base.StringProp("Topic", "topic", "", "Topic to subscribe to.", "events.user", true),
-		base.StringOpt("Start position", "startPosition", "last", "Where a consumer group with no committed offset starts reading.", []base.Option{
+		nodeprops.Str("Group ID", "groupId", "", "Consumer group id (used by the broker to track offsets).", "m9m-trigger", true),
+		nodeprops.Str("Topic", "topic", "", "Topic to subscribe to.", "events.user", true),
+		nodeprops.Opt("Start position", "startPosition", "last", "Where a consumer group with no committed offset starts reading.", []base.Option{
 			{Name: "First — replay from the beginning of the topic", Value: "first"},
 			{Name: "Last — only messages produced after the join", Value: "last"},
 		}, false),
-		base.NumberProp("Poll interval (s)", "intervalSeconds", 5, "How often to poll for new records.", false),
-		base.NumberProp("Max records per poll", "maxRecords", 100, "Upper bound on records returned per poll (1-1000).", false),
+		nodeprops.Num("Poll interval (s)", "intervalSeconds", 5, "How often to poll for new records.", false),
+		nodeprops.Num("Max records per poll", "maxRecords", 100, "Upper bound on records returned per poll (1-1000).", false),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }
 
 // Execute polls the configured transport for new records and

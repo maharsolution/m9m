@@ -22,6 +22,7 @@ import (
 	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
 )
 
 // DataTableStore is the storage subset the dataTable node needs.
@@ -99,6 +100,7 @@ func NewDataTableNode(store DataTableStore) *DataTableNode {
 			Name:        "Data Table",
 			Description: "Read, write, update, and delete rows in an m9m data table (n8n-compatible Data Tables).",
 			Category:    "Data",
+			Group:       []string{"database"},
 			Properties:  dataTableProperties(),
 			Inputs:      []string{"main"},
 			Outputs:     []string{"main"},
@@ -107,11 +109,12 @@ func NewDataTableNode(store DataTableStore) *DataTableNode {
 	}
 }
 
-// dataTableProperties mirrors n8n's `INodeTypeDescription.properties`
-// for the dataTable node. The `dataTableId` field is a free-form
-// string (n8n renders it as a resource locator pointing at the
-// `/projects/.../datatables/{id}` URL, but the executor only needs
-// the id).
+// dataTableProperties describes the Data Table node.
+//
+// data.DataTableNode reads `dataTableId`, `operation`, `matchType`,
+// `filters`, `dataToSend`, `columnToMatchOn`, `returnAll` and
+// `limit`. Each operation consumes a different subset, so the
+// operation-specific fields are shown conditionally.
 func dataTableProperties() []base.NodeProperty {
 	ops := []base.Option{
 		{Name: "Get", Value: "get"},
@@ -121,20 +124,38 @@ func dataTableProperties() []base.NodeProperty {
 		{Name: "Delete", Value: "delete"},
 	}
 	matchTypes := []base.Option{
-		{Name: "All Conditions (AND)", Value: "allConditions"},
-		{Name: "Any Condition (OR)", Value: "anyCondition"},
+		{Name: "All conditions (AND)", Value: "allConditions"},
+		{Name: "Any condition (OR)", Value: "anyCondition"},
 	}
 	props := []base.NodeProperty{
-		base.StringProp("Data Table ID", "dataTableId", "", "Opaque table id (e.g. STeu50G0h27glAL8).", "STeu50G0h27glAL8", true),
-		base.StringOpt("Operation", "operation", "get", "Data table operation.", ops, true),
-		base.StringOpt("Match Type", "matchType", "allConditions", "How to combine multiple filter conditions.", matchTypes, false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("operation", []string{"get", "update", "upsert", "delete"})),
-		base.JsonProp("Filters", "filters", "{\"conditions\": []}", "Filter conditions (get / update / upsert / delete). Each condition: {keyName, keyValue, condition}."),
-		base.JsonProp("Data to Send", "dataToSend", "{}", "Row data (insert / update / upsert)."),
-		base.StringProp("Column to Match On (upsert)", "columnToMatchOn", "", "Column name used as the upsert key. If empty, falls back to the first key of `dataToSend`.", "id", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("operation", []string{"upsert"})),
-		base.NumberProp("Return All", "returnAll", 0, "If 1, return all matching rows. If 0, return at most `limit` rows.", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("operation", []string{"get"})),
-		base.NumberProp("Limit", "limit", 50, "Max rows to return when returnAll=0.", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("operation", []string{"get"})),
+		nodeprops.Str("Data table ID", "dataTableId", "",
+			"Opaque table id (e.g. STeu50G0h27glAL8).",
+			"STeu50G0h27glAL8", true),
+		nodeprops.Opt("Operation", "operation", "get",
+			"Data table operation.",
+			ops, true),
+		nodeprops.Opt("Match type", "matchType", "allConditions",
+			"How multiple filter conditions are combined.",
+			matchTypes, false).
+			WithDisplayOptions(nodeprops.Show("operation", "get", "update", "upsert", "delete")),
+		nodeprops.JSON("Filters", "filters", "{\"conditions\": []}",
+			"Filter conditions (get / update / upsert / delete). Each condition: {keyName, keyValue, condition}.").
+			WithDisplayOptions(nodeprops.Show("operation", "get", "update", "upsert", "delete")),
+		nodeprops.JSON("Data to send", "dataToSend", "{}",
+			"Row data (insert / update / upsert).").
+			WithDisplayOptions(nodeprops.Show("operation", "insert", "update", "upsert")),
+		nodeprops.Str("Column to match on", "columnToMatchOn", "",
+			"Column used as the upsert key. Empty = the first key of `dataToSend`.",
+			"id", false).
+			WithDisplayOptions(nodeprops.Show("operation", "upsert")),
+		nodeprops.Num("Return all", "returnAll", 0,
+			"Set to 1 to return every matching row instead of the first `limit` rows.", false).
+			WithDisplayOptions(nodeprops.Show("operation", "get")),
+		nodeprops.Num("Limit", "limit", 50,
+			"Maximum number of rows to return when \"Return all\" is off.", false).
+			WithDisplayOptions(nodeprops.Show("operation", "get")),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }
 
 // Execute dispatches to the configured operation. Parameter
@@ -260,7 +281,7 @@ func (n *DataTableNode) evaluateSlice(in []interface{}, eval *expressions.Expres
 // generated on insert; the rest is whatever the user put in
 // `dataToSend` (or whatever n8n wrote via the Data Tables UI).
 type row struct {
-	ID  string                 `json:"id"`
+	ID   string                 `json:"id"`
 	Data map[string]interface{} `json:"data"`
 }
 
@@ -572,10 +593,10 @@ func (n *DataTableNode) doUpsert(tableID string, evaluated map[string]interface{
 				return nil, n.CreateError(err.Error(), nil)
 			}
 			return []model.DataItem{{JSON: map[string]interface{}{
-				"action":   "updated",
-				"id":       r.ID,
-				"row":      r.Data,
-				"matched":  true,
+				"action":  "updated",
+				"id":      r.ID,
+				"row":     r.Data,
+				"matched": true,
 			}}}, nil
 		}
 	}
@@ -584,11 +605,11 @@ func (n *DataTableNode) doUpsert(tableID string, evaluated map[string]interface{
 		return nil, n.CreateError(err.Error(), nil)
 	}
 	return []model.DataItem{{JSON: map[string]interface{}{
-		"action":      "inserted",
-		"id":          r.ID,
-		"row":         r.Data,
-		"insertedId":  r.ID,
-		"matched":     false,
+		"action":     "inserted",
+		"id":         r.ID,
+		"row":        r.Data,
+		"insertedId": r.ID,
+		"matched":    false,
 	}}}, nil
 }
 

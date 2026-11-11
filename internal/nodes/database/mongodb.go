@@ -57,6 +57,7 @@ import (
 	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
 )
 
 // MongoDBNode implements `n8n-nodes-base.mongoDb` over the official
@@ -91,9 +92,13 @@ func NewMongoDBNode() *MongoDBNode {
 			Name:        "MongoDB",
 			Description: "Perform operations on MongoDB collections via the official driver (supports mongodb:// and mongodb+srv://).",
 			Category:    "Database",
+			Group:       []string{"database"},
 			Properties:  mongoProperties(),
 			Inputs:      []string{"main"},
 			Outputs:     []string{"main"},
+			Credentials: []base.NodeCredentialSpec{
+				{Type: "mongoDb", DisplayName: "MongoDB", Required: true},
+			},
 		}),
 	}
 }
@@ -110,44 +115,81 @@ func NewMongoDBNode() *MongoDBNode {
 // directly. The `password` flag on a stringProp masks the value in
 // the UI but breaks the URI parser — the URI itself is the secret,
 // not a single sub-field.
+// mongoProperties describes the MongoDB node.
+//
+// database.MongoDBNode reads `connectionString` (or host / port),
+// `database`, `collection`, `operation`, `filter`, `query`, `sort`,
+// `limit`, `skip`, `document`, `documents`, `update`, `updateKey`,
+// `fields`, `upsert` and `pipeline`. The operation-specific fields
+// are only shown for the operations that consume them.
 func mongoProperties() []base.NodeProperty {
 	ops := []base.Option{
 		{Name: "Find", Value: "find"},
-		{Name: "Find One", Value: "findOne"},
+		{Name: "Find one", Value: "findOne"},
 		{Name: "Insert", Value: "insert"},
-		{Name: "Insert Many", Value: "insertMany"},
+		{Name: "Insert many", Value: "insertMany"},
 		{Name: "Update", Value: "update"},
-		{Name: "Find One And Replace", Value: "findOneAndReplace"},
+		{Name: "Find one and replace", Value: "findOneAndReplace"},
 		{Name: "Delete", Value: "delete"},
 		{Name: "Aggregate", Value: "aggregate"},
 		{Name: "Count", Value: "count"},
 	}
 	props := []base.NodeProperty{
-		base.StringProp(
-			"Connection String",
-			"connectionString",
-			"",
-			"mongodb:// or mongodb+srv:// URI (e.g. mongodb+srv://user:pass@cluster0.x.mongodb.net/?appName=Cluster0).",
-			"mongodb://localhost:27017",
-			true,
-		),
-		base.StringProp("Database", "database", "", "MongoDB database name.", "mydb", true),
-		base.StringProp("Collection", "collection", "", "MongoDB collection name.", "users", true),
-		base.StringOpt("Operation", "operation", "find", "MongoDB operation to run.", ops, true),
-		base.JsonProp("Filter", "filter", "{}", "MongoDB filter expression (find / findOne / update / delete / count)."),
-		base.JsonProp("Query", "query", "{}", "Alias for filter (n8n mongoDb parameter name)."),
-		base.JsonProp("Sort", "sort", "{}", "MongoDB sort spec (find)."),
-		base.NumberProp("Limit", "limit", 0, "Max documents to return (find). 0 = no limit.", false),
-		base.NumberProp("Skip", "skip", 0, "Documents to skip (find).", false),
-		base.JsonProp("Document", "document", "{}", "Single document (insert). Falls back to input data when empty."),
-		base.JsonProp("Documents", "documents", "[]", "Array of documents (insertMany). Falls back to input items."),
-		base.JsonProp("Update", "update", "{}", "MongoDB update spec (update). e.g. {\"$set\": {\"name\": \"x\"}}."),
-		base.StringProp("Update Key", "updateKey", "id", "Field used as the filter key for findOneAndReplace.", "id", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("operation", []string{"findOneAndReplace"})),
-		base.StringProp("Fields", "fields", "", "Comma-separated fields to include in the replacement document (findOneAndReplace). Empty = all input fields.", "", false).WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("operation", []string{"findOneAndReplace"})),
-		base.BoolProp("Upsert", "upsert", false, "Insert if no match (update / findOneAndReplace).").WithDisplayOptions(base.NodeProperty_DisplayOptions_Show("operation", []string{"update", "findOneAndReplace"})),
-		base.JsonProp("Pipeline", "pipeline", "[]", "Aggregation pipeline (aggregate)."),
+		nodeprops.Str("Connection string", "connectionString", "",
+			"mongodb:// or mongodb+srv:// URI used to reach the server.",
+			"mongodb://localhost:27017", true),
+		nodeprops.Str("Host", "host", "localhost",
+			"Server host (used when no connection string is set).",
+			"localhost", false),
+		nodeprops.Num("Port", "port", 27017,
+			"Server port (used when no connection string is set).", false),
+		nodeprops.Str("Database", "database", "",
+			"MongoDB database name.",
+			"mydb", true),
+		nodeprops.Str("Collection", "collection", "",
+			"MongoDB collection name.",
+			"users", true),
+		nodeprops.Opt("Operation", "operation", "find",
+			"MongoDB operation to run.",
+			ops, true),
+		nodeprops.JSON("Filter", "filter", "{}",
+			"MongoDB filter expression (find / findOne / update / delete / count)."),
+		nodeprops.JSON("Query", "query", "{}",
+			"Alias of Filter — n8n's mongoDb parameter name."),
+		nodeprops.JSON("Sort", "sort", "{}",
+			"MongoDB sort specification (find).").
+			WithDisplayOptions(nodeprops.Show("operation", "find")),
+		nodeprops.Num("Limit", "limit", 0,
+			"Maximum number of documents to return (0 = no limit, find).", false).
+			WithDisplayOptions(nodeprops.Show("operation", "find")),
+		nodeprops.Num("Skip", "skip", 0,
+			"Number of documents to skip (find).", false).
+			WithDisplayOptions(nodeprops.Show("operation", "find")),
+		nodeprops.JSON("Document", "document", "{}",
+			"Document to insert (insert). Falls back to the input item when empty.").
+			WithDisplayOptions(nodeprops.Show("operation", "insert")),
+		nodeprops.JSON("Documents", "documents", "[]",
+			"Documents to insert (insertMany). Falls back to the input items.").
+			WithDisplayOptions(nodeprops.Show("operation", "insertMany")),
+		nodeprops.JSON("Update", "update", "{}",
+			"MongoDB update specification, e.g. {\"$set\": {\"name\": \"x\"}} (update).").
+			WithDisplayOptions(nodeprops.Show("operation", "update")),
+		nodeprops.Str("Update key", "updateKey", "id",
+			"Field used as the filter key (findOneAndReplace).",
+			"id", false).
+			WithDisplayOptions(nodeprops.Show("operation", "findOneAndReplace")),
+		nodeprops.Str("Fields", "fields", "",
+			"Comma-separated fields to keep in the replacement document (findOneAndReplace). Empty = all input fields.",
+			"", false).
+			WithDisplayOptions(nodeprops.Show("operation", "findOneAndReplace")),
+		nodeprops.Bool("Upsert", "upsert", false,
+			"Insert the document when no match is found (update / findOneAndReplace).").
+			WithDisplayOptions(nodeprops.Show("operation", "update", "findOneAndReplace")),
+		nodeprops.JSON("Pipeline", "pipeline", "[]",
+			"Aggregation pipeline stages (aggregate).").
+			WithDisplayOptions(nodeprops.Show("operation", "aggregate")),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }
 
 // ExecuteWithRun lets $('OtherNode') resolve inside query/filter

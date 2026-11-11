@@ -2,15 +2,23 @@ export interface NodeType {
   name: string
   displayName: string
   description: string
+  /** Backend-provided category (e.g. "Core", "Transform"). Empty string when the
+   *  backend does not report one. */
+  category?: string
   version: number
   defaults: NodeDefaults
   inputs: string[]
   outputs: string[]
   properties?: NodeProperty[]
+  /** Credential slots the node can be bound to. The backend always emits the
+   *  array (empty when the node declares none). */
   credentials?: NodeCredentialType[]
+  /** Icon identifiers (Heroicons-style names). "" when the node has none. */
   icon?: string
   iconColor?: string
+  /** n8n-style grouping (e.g. ["transform"], ["trigger"]). [] when none. */
   group?: string[]
+  usableAsTool?: boolean
   subtitle?: string
 }
 
@@ -30,6 +38,26 @@ export interface NodeProperty {
   options?: NodePropertyOption[]
   displayOptions?: NodePropertyDisplayOptions
   typeOptions?: NodePropertyTypeOptions
+  /**
+   * Allowed values of the property's primary sub-field.
+   *
+   * The backend emits this list for the composite property types:
+   * `resourceMapper` (mapping modes), `filter` (comparison operators),
+   * `file` (binary-property modes) and `icon` (the curated icon set).
+   */
+  values?: NodePropertyOptionValue[]
+}
+
+/**
+ * One allowed value of a composite property's sub-field.
+ *
+ * The wire shape mirrors the backend's `OptionValue`:
+ * `{ name, value, description }`.
+ */
+export interface NodePropertyOptionValue {
+  name: string
+  value: string
+  description?: string
 }
 
 export type NodePropertyType =
@@ -41,21 +69,59 @@ export type NodePropertyType =
   | 'collection'
   | 'fixedCollection'
   | 'json'
+  | 'code'
   | 'dateTime'
   | 'color'
+  | 'resourceLocator'
+  | 'resourceMapper'
+  | 'filter'
+  | 'file'
+  | 'icon'
 
 export interface NodePropertyOption {
   name: string
   value: string | number | boolean
   description?: string
+  /** Backend action name used to fetch this option list dynamically
+   *  (n8n's `loadOptions` semantics). Empty for static lists. */
   action?: string
+  // n8n-style nested sub-property definitions. Only present when the
+  // backend emits a `collection` / `fixedCollection` with child properties
+  // (n8n's `INodePropertyOptions` / `INodePropertyCollection`).
+  type?: string
+  displayName?: string
+  default?: unknown
+  required?: boolean
+  placeholder?: string
+  options?: NodePropertyOption[]
+  typeOptions?: NodePropertyTypeOptions
+  displayOptions?: NodePropertyDisplayOptions
+  /**
+   * Child field definitions of a collection bucket (n8n's
+   * `INodePropertyCollection.values`). When present the collection
+   * renderer builds one control per declared field instead of falling
+   * back to the generic name/value rows.
+   */
+  values?: NodePropertyOption[]
 }
 
+/**
+ * n8n `displayOptions` — `{ show: { <param>: [<values>] }, hide: { <param>: [<values>] } }`.
+ *
+ * The field is visible when every `show` condition matches and no `hide`
+ * condition matches. A property without `displayOptions` is always visible.
+ */
 export interface NodePropertyDisplayOptions {
   show?: Record<string, unknown[]>
   hide?: Record<string, unknown[]>
 }
 
+/**
+ * Free-form per-property hints. The backend sends whatever the node author
+ * declared (`multipleValues`, `rows`, `minValue`, `maxValue`,
+ * `numberPrecision`, `password`, `loadOptionsMethod`, …), so unknown keys are
+ * allowed and preserved.
+ */
 export interface NodePropertyTypeOptions {
   multipleValues?: boolean
   multipleValueButtonText?: string
@@ -65,13 +131,42 @@ export interface NodePropertyTypeOptions {
   password?: boolean
   rows?: number
   alwaysOpenEditWindow?: boolean
+  /** n8n resource-locator modes, when the property is a `resourceLocator`. */
+  modes?: NodePropertyOption[]
+  /** n8n `loadOptions` method name for dynamic option lists. */
+  loadOptionsMethod?: string
+  [key: string]: unknown
 }
 
+/**
+ * A credential slot declared by a node type.
+ *
+ * `type` is the canonical credential-type identifier; `name` is the
+ * deprecated alias the backend still emits for backwards compatibility.
+ */
 export interface NodeCredentialType {
-  name: string
+  /** Canonical credential type id (e.g. "httpBasicAuth"). */
+  type?: string
+  /** Human-readable label shown in the credential picker. */
+  displayName?: string
   required?: boolean
+  /** @deprecated alias of `type`, kept for backwards compatibility. */
+  name?: string
   displayOptions?: NodePropertyDisplayOptions
 }
+
+/** A parameter value as stored in `node.parameters`. */
+export type NodeParameterValue =
+  | string
+  | number
+  | boolean
+  | null
+  | NodeParameterValue[]
+  | { [key: string]: NodeParameterValue }
+  | undefined
+
+/** Map of parameter name → value, as stored on a workflow node. */
+export type NodeParameters = Record<string, NodeParameterValue>
 
 export type NodeCategory =
   | 'trigger'
@@ -143,15 +238,18 @@ export function getNodeCategory(nodeType: string): NodeCategory {
 }
 
 /**
- * getNodeCredentialTypes returns the credential-type names a node can be
- * bound to. If the NodeType metadata exposed by the backend includes a
- * `credentials` array, use that. Otherwise, fall back to a static map
- * mirroring n8n's shipped nodes so the UI can render the bind UI without
- * waiting for the backend to start returning the metadata.
+ * FALLBACK credential-type table.
+ *
+ * This mirrors n8n's shipped nodes so the UI can render the credential bind
+ * UI even when the backend metadata does not declare any credential slot.
+ *
+ * It is a fallback only: the node-type metadata (`credentials[]`) is
+ * authoritative whenever it declares at least one credential slot. See
+ * `resolveNodeCredentialTypes` in `@/lib/credentialSchema`.
  *
  * The map is keyed by the long n8n node-type name (e.g.
- * `n8n-nodes-base.httpRequest`) but `getNodeCredentialTypes` also accepts
- * the short name (`httpRequest`) for convenience.
+ * `n8n-nodes-base.httpRequest`) but the lookup also accepts the short name
+ * (`httpRequest`) for convenience.
  */
 const NODE_CREDENTIAL_TYPE_MAP: Record<string, string[]> = {
   // HTTP
@@ -189,8 +287,16 @@ const NODE_CREDENTIAL_TYPE_MAP: Record<string, string[]> = {
   'n8n-nodes-base.elasticsearch': [],
 }
 
+/**
+ * FALLBACK lookup of the credential-type names a node can be bound to.
+ *
+ * Prefer the node-type metadata (`credentials[]`) — see
+ * `resolveNodeCredentialTypes` in `@/lib/credentialSchema`. This helper only
+ * mirrors n8n's shipped nodes so the UI still works for node types whose
+ * metadata declares no credential slots.
+ */
 export function getNodeCredentialTypes(nodeType: string): string[] {
-  // 1. Static map (most reliable in m9m since metadata is sparse).
+  // 1. Static map (fallback — the backend metadata is authoritative).
   if (NODE_CREDENTIAL_TYPE_MAP[nodeType]) {
     return NODE_CREDENTIAL_TYPE_MAP[nodeType]
   }

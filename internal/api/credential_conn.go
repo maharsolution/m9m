@@ -318,12 +318,40 @@ func redisCommand(conn net.Conn, args ...string) (string, error) {
 // Broker credentials
 // ---------------------------------------------------------------------------
 
-// testKafkaConnection authenticates against the Kafka brokers with the
-// stored credentials. A plain TCP dial would not prove anything about
-// the password, so the SASL handshake runs and a metadata request must
-// be answered.
+// testKafkaConnection authenticates with the stored credentials —
+// against the Kafka brokers (native SASL) or against a
+// Confluent-compatible REST Proxy (HTTP Basic auth / API key).
+//
+// A plain TCP dial would not prove anything about the password, so the
+// SASL handshake runs and a metadata request must be answered. The
+// username / password come from kafkaCredentialUserPass: the canonical
+// keys are `username` / `password` (n8n parity), the legacy
+// `saslUsername` / `saslPassword` spellings are honoured as aliases.
 func testKafkaConnection(data map[string]interface{}) (testCredentialResult, bool) {
+	// The login comes from the canonical `username` / `password` keys
+	// (n8n parity) with the legacy `saslUsername` / `saslPassword`
+	// spellings honoured as aliases.
+	user, password := kafkaCredentialUserPass(data)
+	mechanism := kafkaSASLMechanism(data)
 	brokers := kafkaBrokerList(data)
+	restURL := strings.TrimSpace(kafkaExactString(data, "restProxyUrl"))
+	authMode, explicitAuth := kafkaRESTAuthMode(data)
+
+	// REST-proxy mode: the credential selects HTTP auth (Basic / API
+	// key) or only carries a REST Proxy URL. The single
+	// username / password pair is then exercised as HTTP Basic auth.
+	if explicitAuth {
+		if restURL == "" {
+			return testCredentialResult{
+				Status:  "Error",
+				Message: "Kafka REST Proxy URL (restProxyUrl) is required when the authentication mode is " + string(authMode),
+			}, true
+		}
+		return testKafkaRESTConnection(restURL, authMode, user, password, data)
+	}
+	if restURL != "" && len(brokers) == 0 {
+		return testKafkaRESTConnection(restURL, authMode, user, password, data)
+	}
 	if len(brokers) == 0 {
 		return testCredentialResult{}, false
 	}
@@ -333,26 +361,15 @@ func testKafkaConnection(data map[string]interface{}) (testCredentialResult, boo
 		return testCredentialResult{Status: "Error", Message: err.Error()}, true
 	}
 
-	user := dataString(data, "user")
-	password := dataString(data, "password")
-
-	var mechanisms []sasl.Mechanism
-	if user != "" {
-		mechanisms = append(mechanisms, plain.Mechanism{Username: user, Password: password})
-		if m, err := scram.Mechanism(scram.SHA256, user, password); err == nil {
-			mechanisms = append(mechanisms, m)
-		}
-		if m, err := scram.Mechanism(scram.SHA512, user, password); err == nil {
-			mechanisms = append(mechanisms, m)
-		}
-	}
-
-	if len(mechanisms) == 0 {
-		count, err := kafkaMetadata(brokers, tlsCfg, nil)
+	// Nothing configured — no mechanism, no login. The broker may or
+	// may not allow anonymous metadata requests; that is a legitimate
+	// configuration, so probe without SASL.
+	if mechanism == "" && user == "" && password == "" {
+		count, err := kafkaMetadataFunc(brokers, tlsCfg, nil, user, password)
 		if err != nil {
 			return testCredentialResult{
 				Status:  "Error",
-				Message: "Kafka connection failed: " + scrubSecret(err.Error(), password),
+				Message: "Kafka connection failed: " + scrubKafkaSecrets(err.Error(), user, password),
 			}, true
 		}
 		return testCredentialResult{
@@ -361,9 +378,28 @@ func testKafkaConnection(data map[string]interface{}) (testCredentialResult, boo
 		}, true
 	}
 
+	// SASL is expected — a mechanism was picked or a login was stored —
+	// but there is no username. Say so explicitly instead of silently
+	// falling back to an unauthenticated probe the broker happens to
+	// allow: that reported a misleading OK for a wrong username.
+	if user == "" {
+		return testCredentialResult{
+			Status:  "Error",
+			Message: "Kafka authentication failed: username is required for SASL authentication",
+		}, true
+	}
+
+	mechanisms, err := kafkaSASLMechanisms(mechanism, user, password)
+	if err != nil {
+		return testCredentialResult{
+			Status:  "Error",
+			Message: "Kafka authentication failed: " + scrubKafkaSecrets(err.Error(), user, password),
+		}, true
+	}
+
 	var lastErr error
 	for _, mech := range mechanisms {
-		count, err := kafkaMetadata(brokers, tlsCfg, mech)
+		count, err := kafkaMetadataFunc(brokers, tlsCfg, mech, user, password)
 		if err == nil {
 			return testCredentialResult{
 				Status: "OK",
@@ -380,13 +416,222 @@ func testKafkaConnection(data map[string]interface{}) (testCredentialResult, boo
 	if isKafkaAuthError(lastErr) {
 		return testCredentialResult{
 			Status:  "Error",
-			Message: "Kafka authentication failed: " + scrubSecret(lastErr.Error(), password),
+			Message: "Kafka authentication failed: " + scrubKafkaSecrets(lastErr.Error(), user, password),
 		}, true
 	}
 	return testCredentialResult{
 		Status:  "Error",
-		Message: "Kafka connection failed: " + scrubSecret(lastErr.Error(), password),
+		Message: "Kafka connection failed: " + scrubKafkaSecrets(lastErr.Error(), user, password),
 	}, true
+}
+
+// kafkaAuthMode is the REST Proxy authentication mode of a Kafka
+// credential.
+type kafkaAuthMode string
+
+const (
+	kafkaAuthNone   kafkaAuthMode = "none"
+	kafkaAuthBasic  kafkaAuthMode = "basic"
+	kafkaAuthAPIKey kafkaAuthMode = "apiKey"
+)
+
+// kafkaRESTAuthMode reads the credential's `authentication` selector.
+//
+// m9m's REST-proxy mode uses `none` / `basic` / `apiKey`; n8n stores a
+// boolean in the same field (`true` means "the username / password are
+// required"). Only an explicit Basic / API-key selection puts the
+// credential into REST-proxy mode — an n8n-synced credential keeps the
+// native SASL path, which is what n8n itself does.
+func kafkaRESTAuthMode(data map[string]interface{}) (kafkaAuthMode, bool) {
+	raw := strings.ToLower(strings.TrimSpace(kafkaExactString(data, "authentication")))
+	switch raw {
+	case "basic":
+		return kafkaAuthBasic, true
+	case "apikey", "api-key", "api_key":
+		return kafkaAuthAPIKey, true
+	}
+	return kafkaAuthNone, false
+}
+
+// testKafkaRESTConnection probes a Confluent-compatible REST Proxy with
+// the credential's authentication settings. A wrong username or
+// password comes back as HTTP 401 / 403 and is reported as an
+// authentication failure — never as a successful connection.
+func testKafkaRESTConnection(restURL string, mode kafkaAuthMode, user, password string, data map[string]interface{}) (testCredentialResult, bool) {
+	apiKey := strings.TrimSpace(kafkaExactString(data, "apiKey"))
+	switch mode {
+	case kafkaAuthBasic:
+		if user == "" {
+			return testCredentialResult{
+				Status:  "Error",
+				Message: "Kafka authentication failed: username is required for Basic authentication against the REST Proxy",
+			}, true
+		}
+	case kafkaAuthAPIKey:
+		if apiKey == "" {
+			return testCredentialResult{
+				Status:  "Error",
+				Message: "Kafka authentication failed: an API key is required for API key authentication against the REST Proxy",
+			}, true
+		}
+	}
+
+	endpoint := strings.TrimRight(restURL, "/") + "/topics"
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return testCredentialResult{Status: "Error", Message: "Kafka connection failed: " + err.Error()}, true
+	}
+	switch mode {
+	case kafkaAuthBasic:
+		req.SetBasicAuth(user, password)
+	case kafkaAuthAPIKey:
+		req.Header.Set("X-Api-Key", apiKey)
+	}
+
+	resp, body, err := kafkaRESTProbe(req)
+	if err != nil {
+		return testCredentialResult{
+			Status:  "Error",
+			Message: "Kafka connection failed: " + scrubKafkaSecrets(err.Error(), user, password),
+		}, true
+	}
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return testCredentialResult{
+			Status:  "Error",
+			Message: fmt.Sprintf("Kafka authentication failed: the REST Proxy rejected the credentials (HTTP %d)", resp.StatusCode),
+		}, true
+	}
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return testCredentialResult{
+			Status:  "OK",
+			Message: fmt.Sprintf("Connected to the Kafka REST Proxy at %s", restURL),
+		}, true
+	}
+	return testCredentialResult{
+		Status:  "Error",
+		Message: fmt.Sprintf("Kafka connection failed: the REST Proxy returned HTTP %d: %s", resp.StatusCode, truncate(body, 180)),
+	}, true
+}
+
+// kafkaCredentialUserPass resolves the single username / password pair
+// of a Kafka credential.
+//
+// The canonical keys are `username` / `password` — n8n parity, see
+// n8n/packages/nodes-base/credentials/Kafka.credentials.ts (the n8n
+// Kafka credential stores the login as `username` / `password`). The
+// legacy m9m spellings `saslUsername` / `saslPassword` and the generic
+// `user` alias are honoured as fallbacks so credentials stored by an
+// older build keep working.
+//
+// The canonical key always wins when it carries a value: a stale alias
+// key left over from an earlier save must never shadow the value the
+// operator just edited — otherwise the test authenticates with the old,
+// correct login and reports a misleading OK for a wrong username.
+func kafkaCredentialUserPass(data map[string]interface{}) (string, string) {
+	user := kafkaExactString(data, "username")
+	if user == "" {
+		user = kafkaExactString(data, "saslUsername")
+	}
+	if user == "" {
+		user = kafkaExactString(data, "user")
+	}
+	password := kafkaExactString(data, "password")
+	if password == "" {
+		password = kafkaExactString(data, "saslPassword")
+	}
+	return user, password
+}
+
+// kafkaSASLMechanism normalises the credential's SASL mechanism.
+//
+// n8n stores the lowercase spelling (`plain`, `scram-sha-256`,
+// `scram-sha-512` — see
+// n8n/packages/nodes-base/credentials/Kafka.credentials.ts) while the
+// m9m schema uses the uppercase one. Both are accepted.
+func kafkaSASLMechanism(data map[string]interface{}) string {
+	raw := strings.TrimSpace(kafkaExactString(data, "saslMechanism"))
+	switch strings.ToLower(raw) {
+	case "", "none":
+		return ""
+	case "plain":
+		return "PLAIN"
+	case "scram-sha-256", "scram-sha256":
+		return "SCRAM-SHA-256"
+	case "scram-sha-512", "scram-sha512":
+		return "SCRAM-SHA-512"
+	}
+	return strings.ToUpper(raw)
+}
+
+// kafkaSASLMechanisms builds the SASL mechanism list used by the
+// connection test.
+//
+// An explicitly selected mechanism is used on its own: the operator
+// asked for PLAIN / SCRAM-SHA-256 / SCRAM-SHA-512 and the test must not
+// silently succeed with a different one. Only when no mechanism is
+// configured does the test fall back to PLAIN, then SCRAM-SHA-256, then
+// SCRAM-SHA-512 — the order a managed broker most likely uses.
+func kafkaSASLMechanisms(mechanism, user, password string) ([]sasl.Mechanism, error) {
+	switch mechanism {
+	case "PLAIN":
+		return []sasl.Mechanism{plain.Mechanism{Username: user, Password: password}}, nil
+	case "SCRAM-SHA-256":
+		m, err := scram.Mechanism(scram.SHA256, user, password)
+		if err != nil {
+			return nil, err
+		}
+		return []sasl.Mechanism{m}, nil
+	case "SCRAM-SHA-512":
+		m, err := scram.Mechanism(scram.SHA512, user, password)
+		if err != nil {
+			return nil, err
+		}
+		return []sasl.Mechanism{m}, nil
+	case "":
+		out := []sasl.Mechanism{plain.Mechanism{Username: user, Password: password}}
+		if m, err := scram.Mechanism(scram.SHA256, user, password); err == nil {
+			out = append(out, m)
+		}
+		if m, err := scram.Mechanism(scram.SHA512, user, password); err == nil {
+			out = append(out, m)
+		}
+		return out, nil
+	}
+	return nil, fmt.Errorf("unsupported SASL mechanism %q (supported: PLAIN, SCRAM-SHA-256, SCRAM-SHA-512)", mechanism)
+}
+
+// kafkaExactString reads a credential field by its exact key, bypassing
+// the generic alias map. `dataString(data, "user")` resolves to the
+// `username` alias, so a stale `username` key would shadow the value
+// the operator just edited.
+func kafkaExactString(data map[string]interface{}, key string) string {
+	v, ok := data[key]
+	if !ok || v == nil {
+		return ""
+	}
+	switch t := v.(type) {
+	case string:
+		return strings.TrimSpace(t)
+	case bool:
+		return strconv.FormatBool(t)
+	case float64:
+		return strconv.FormatFloat(t, 'f', -1, 64)
+	default:
+		return strings.TrimSpace(fmt.Sprintf("%v", t))
+	}
+}
+
+// scrubKafkaSecrets removes the Kafka username and the password from an
+// error message. The password is always scrubbed; the username is
+// scrubbed too, but only when it is long enough to be a real
+// identifier — scrubbing a one or two character username would mangle
+// unrelated words in the message.
+func scrubKafkaSecrets(msg, user, password string) string {
+	out := scrubSecret(msg, password)
+	if len(user) >= 3 {
+		out = scrubSecret(out, user)
+	}
+	return out
 }
 
 // kafkaBrokerList parses the comma separated bootstrap broker list.
@@ -480,6 +725,24 @@ func normalizePEM(raw string) string {
 	}
 	out.WriteString(footer + "\n")
 	return out.String()
+}
+
+// kafkaMetadataFunc is the metadata probe used by the Kafka credential
+// connection test. It is a package variable so the unit tests can
+// substitute a stub instead of talking to a live broker.
+//
+// The resolved login is passed alongside the mechanism so a stub can
+// assert which username / password the SASL handshake is built from —
+// the SCRAM mechanisms do not expose the credentials themselves.
+var kafkaMetadataFunc = func(brokers []string, tlsCfg *tls.Config, mech sasl.Mechanism, user, password string) (int, error) {
+	return kafkaMetadata(brokers, tlsCfg, mech)
+}
+
+// kafkaRESTProbe performs the REST Proxy HTTP probe used by the Kafka
+// credential connection test. It is a package variable so the unit
+// tests can substitute a stub.
+var kafkaRESTProbe = func(req *http.Request) (*http.Response, string, error) {
+	return doCredentialHTTP(req)
 }
 
 // kafkaMetadata performs an authenticated metadata request and returns

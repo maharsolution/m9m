@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, markRaw } from 'vue'
-import { VueFlow, useVueFlow } from '@vue-flow/core'
+import { computed, markRaw, onMounted, onUnmounted, ref, watch } from 'vue'
+import { VueFlow, useVueFlow, SelectionMode } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -13,16 +13,166 @@ import '@vue-flow/minimap/dist/style.css'
 import BaseNode from '@/components/nodes/BaseNode.vue'
 import { useWorkflowEditorStore, useWorkflowStore, useNodesStore } from '@/stores'
 import { buildFlowEdges, buildFlowNodes, parseEdgeId } from '@/lib/workflowGraph'
+import {
+  STICKY_NOTE_DEFAULT_HEIGHT,
+  STICKY_NOTE_DEFAULT_WIDTH,
+  STICKY_NOTE_TYPE,
+} from '@/types'
 import type { WorkflowNode } from '@/types'
+
+/**
+ * Vue Flow's public `Node` input type does not declare `selected`, but
+ * the library copies the whole input object onto the graph node — so
+ * the flag is honoured at runtime. The local type makes that explicit.
+ */
+type FlowNode = Node & { selected?: boolean }
 
 const workflowStore = useWorkflowStore()
 const workflowEditorStore = useWorkflowEditorStore()
 const nodesStore = useNodesStore()
 
-const { onNodesChange, onEdgesChange, onConnect, project } = useVueFlow()
+const {
+  onNodesChange,
+  onEdgesChange,
+  onConnect,
+  onNodeDragStart,
+  onNodeDragStop,
+  onSelectionDragStart,
+  onSelectionDragStop,
+  project,
+  zoomIn,
+  zoomOut,
+  fitView,
+  // The canvas mode is written straight into the store: Vue Flow
+  // copies the props into its state once, at setup time, so a
+  // reactive prop would not switch the mode at runtime.
+  panOnDrag,
+  selectionKeyCode,
+} = useVueFlow()
 
-const flowNodes = computed<Node[]>(() => buildFlowNodes(workflowStore.currentWorkflow))
+const flowNodes = computed<FlowNode[]>(() => {
+  const nodes = buildFlowNodes(workflowStore.currentWorkflow)
+  const workflowNodes = workflowStore.currentWorkflow?.nodes ?? []
+  const selected = new Set(workflowEditorStore.selectedNodeIds)
+
+  return nodes.map((node) => {
+    const workflowNode = workflowNodes.find((candidate) => candidate.id === node.id)
+    const isSticky = workflowNode?.type === STICKY_NOTE_TYPE
+
+    const next: FlowNode = { ...node, selected: selected.has(node.id) }
+
+    if (isSticky) {
+      // Sticky notes carry their geometry in `node.parameters` (n8n's
+      // wire format). Vue Flow needs it as an explicit size so the
+      // card — and the resize handle — match the document.
+      const width = Number(workflowNode?.parameters?.width)
+      const height = Number(workflowNode?.parameters?.height)
+      next.width = Number.isFinite(width) && width > 0 ? width : STICKY_NOTE_DEFAULT_WIDTH
+      next.height = Number.isFinite(height) && height > 0 ? height : STICKY_NOTE_DEFAULT_HEIGHT
+    }
+
+    return next
+  })
+})
+
 const flowEdges = computed<Edge[]>(() => buildFlowEdges(workflowStore.currentWorkflow))
+
+// --------------------------------------------------------------------
+// Panning vs. marquee selection
+//
+// n8n's canvas uses the *left* mouse button for the drag-box marquee
+// and reserves the middle button (plus the space bar) for panning.
+// Vue Flow supports the same split, but the pan mode has to be
+// toggled explicitly, because `pan-on-drag` is a static list of mouse
+// buttons.
+//
+// While panning mode is off:
+//   * left drag on the empty canvas  -> marquee (box) selection
+//   * middle drag                     -> pan
+// While panning mode is on (space held):
+//   * left drag                       -> pan
+// --------------------------------------------------------------------
+
+const panningMode = ref(false)
+const isPanningKeyDown = (event: KeyboardEvent) => event.code === 'Space'
+
+/**
+ * Writes the current canvas mode into the Vue Flow store.
+ *
+ * `panOnDrag` lists the mouse buttons that pan the canvas and
+ * `selectionKeyCode` arms the marquee:
+ *
+ *   * marquee mode (default): `panOnDrag = [1]` (middle button pans),
+ *     `selectionKeyCode = true` (left drag on the pane draws the
+ *     selection rectangle).
+ *   * panning mode (space held): `panOnDrag = [0, 1]` (left button
+ *     pans as well), `selectionKeyCode = null` (no marquee).
+ */
+const applyCanvasMode = () => {
+  panOnDrag.value = panningMode.value ? [0, 1] : [1]
+  selectionKeyCode.value = panningMode.value ? null : true
+}
+
+watch(panningMode, applyCanvasMode)
+
+const onKeyDown = (event: KeyboardEvent) => {
+  if (isPanningKeyDown(event) && !isEditableTarget(event.target)) {
+    panningMode.value = true
+    // Stop the browser from scrolling the page while space is held.
+    event.preventDefault()
+  }
+}
+
+const onKeyUp = (event: KeyboardEvent) => {
+  if (isPanningKeyDown(event)) {
+    panningMode.value = false
+  }
+}
+
+/** True when the event target is a text input (space must type there). */
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  const tag = target.tagName.toLowerCase()
+  return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('keyup', onKeyUp)
+  // Vue Flow applies its props once, when the <VueFlow> component is
+  // set up, so the initial mode has to be pushed into the store
+  // afterwards.
+  applyCanvasMode()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('keyup', onKeyUp)
+  panningMode.value = false
+})
+
+/**
+ * A drag is one undo step: the pre-drag document is captured once,
+ * when the drag starts, instead of on every mouse-move.
+ */
+let dragSnapshotTaken = false
+
+const captureDragSnapshot = () => {
+  if (dragSnapshotTaken) {
+    return
+  }
+  dragSnapshotTaken = true
+  workflowEditorStore.beginNodeDrag()
+}
+
+const releaseDragSnapshot = () => {
+  dragSnapshotTaken = false
+}
+
+onNodeDragStart(captureDragSnapshot)
+onNodeDragStop(releaseDragSnapshot)
+onSelectionDragStart(captureDragSnapshot)
+onSelectionDragStop(releaseDragSnapshot)
 
 onNodesChange((changes) => {
   changes.forEach((change) => {
@@ -35,11 +185,17 @@ onNodesChange((changes) => {
       }
     }
     if (change.type === 'select') {
+      // Vue Flow owns the click / marquee behaviour (shift- or
+      // ctrl-click toggles, drag-box selects). The editor store keeps
+      // the resulting set of selected ids so the rest of the app
+      // (toolbar, node panel, clipboard) can work with it.
+      const next = new Set(workflowEditorStore.selectedNodeIds)
       if (change.selected) {
-        workflowEditorStore.selectNode(change.id)
+        next.add(change.id)
       } else {
-        workflowEditorStore.clearSelection()
+        next.delete(change.id)
       }
+      workflowEditorStore.selectNodes([...next])
     }
     if (change.type === 'remove') {
       workflowEditorStore.removeNode(change.id)
@@ -164,6 +320,25 @@ const getMinimapNodeColor = (node: Node) => {
     default: return '#94a3b8'
   }
 }
+
+// --------------------------------------------------------------------
+// Viewport helpers (exposed to the editor view so the keyboard
+// shortcuts can drive the zoom).
+// --------------------------------------------------------------------
+
+const zoomInCanvas = () => {
+  void zoomIn({ duration: 150 })
+}
+
+const zoomOutCanvas = () => {
+  void zoomOut({ duration: 150 })
+}
+
+const resetZoomCanvas = () => {
+  void fitView({ padding: 0.2, duration: 200 })
+}
+
+defineExpose({ zoomIn: zoomInCanvas, zoomOut: zoomOutCanvas, resetZoom: resetZoomCanvas })
 </script>
 
 <template>
@@ -172,6 +347,16 @@ const getMinimapNodeColor = (node: Node) => {
     @drop="onDrop"
     @dragover="onDragOver"
   >
+    <!--
+      Canvas behaviour:
+        * `selection-mode="partial"` + `multi-selection-key-code` make
+          shift- / ctrl-click toggle a node in / out of the selection
+          and drag a box on the pane to marquee-select.
+        * `delete-key-code` is disabled because deleting is handled by
+          the editor store, so the deletion ends up in the undo history.
+        * `disable-keyboard-a11y` is on because the editor implements
+          its own keyboard handling (delete, nudge, escape, …).
+    -->
     <VueFlow
       :nodes="flowNodes"
       :edges="flowEdges"
@@ -188,6 +373,10 @@ const getMinimapNodeColor = (node: Node) => {
       :fit-view-on-init-options="{ padding: 0.2, minZoom: 0.6, maxZoom: 1, includeHiddenNodes: false }"
       fit-view-on-init
       class="bg-[#f5f5f7] dark:bg-slate-900"
+      :selection-mode="SelectionMode.Partial"
+      multi-selection-key-code="['Shift', 'Control', 'Meta']"
+      :delete-key-code="null"
+      :disable-keyboard-a11y="true"
     >
       <Background
         :pattern-color="'#cbd5e1'"
@@ -201,6 +390,14 @@ const getMinimapNodeColor = (node: Node) => {
         class="!bg-white dark:!bg-slate-800 !border-slate-200 dark:!border-slate-700 !shadow-lg"
       />
     </VueFlow>
+
+    <!-- Selection badge -->
+    <div
+      v-if="workflowEditorStore.selectedNodeCount > 1"
+      class="absolute top-3 left-3 z-10 pointer-events-none px-2.5 py-1 rounded-full text-xs font-medium bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300 shadow-sm"
+    >
+      {{ workflowEditorStore.selectedNodeCount }} nodes selected
+    </div>
 
     <!-- Empty state overlay -->
     <div

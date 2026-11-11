@@ -60,9 +60,12 @@ func NewRespondToWebhookNode() *RespondToWebhookNode {
 	return &RespondToWebhookNode{
 		BaseNode: base.NewBaseNode(base.NodeDescription{
 			Name:        "Respond to Webhook",
-			Description: "Returns data from the workflow back to the webhook caller (responseMode: responseNode)",
+			Description: "Returns the workflow result to the webhook caller (used with Response Mode: Response Node).",
 			Category:    "Trigger",
+			Group:       []string{"trigger"},
 			Properties:  respondToWebhookProperties(),
+			Inputs:      []string{"main"},
+			Outputs:     []string{"main"},
 		}),
 		evaluator: expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig()),
 	}
@@ -231,7 +234,6 @@ func (r *RespondToWebhookNode) evaluateResponseBody(expr string, inputData []mod
 		return fmt.Sprintf("%v", v), nil
 	}
 }
-
 
 // evaluateResponseHeaders resolves `options.responseHeaders` against
 // the upstream input item. Finnet's Respond to Webhook sets

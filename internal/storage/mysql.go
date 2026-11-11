@@ -26,7 +26,8 @@ type MySQLStorage struct {
 // NewMySQLStorage opens a MySQL/MariaDB connection and initializes schema.
 //
 // The connection string follows the go-sql-driver/mysql DSN format, e.g.
-//   user:pass@tcp(127.0.0.1:3306)/m9m?parseTime=true&charset=utf8mb4&loc=UTC
+//
+//	user:pass@tcp(127.0.0.1:3306)/m9m?parseTime=true&charset=utf8mb4&loc=UTC
 //
 // Caller should pass parseTime=true so TIMESTAMP/DATETIME columns scan into
 // time.Time without manual conversion. utf8mb4 is required for full unicode
@@ -293,6 +294,13 @@ func (s *MySQLStorage) ListWorkflows(filters WorkflowFilters) ([]*model.Workflow
 	if filters.Search != "" {
 		conditions = append(conditions, "LOWER(name) LIKE ?")
 		args = append(args, "%"+strings.ToLower(filters.Search)+"%")
+	}
+
+	// Tag ID filter with AND semantics: every requested tag ID has to be
+	// present in the JSON `tags` array. The comparison is exact.
+	for _, tagID := range filters.TagIDs {
+		conditions = append(conditions, "JSON_CONTAINS(tags, JSON_QUOTE(?)) = 1")
+		args = append(args, tagID)
 	}
 
 	whereClause := ""
@@ -613,6 +621,12 @@ func (s *MySQLStorage) CountWorkflows(filters WorkflowFilters) (int, error) {
 	if filters.Search != "" {
 		conditions = append(conditions, "LOWER(name) LIKE ?")
 		args = append(args, "%"+strings.ToLower(filters.Search)+"%")
+	}
+
+	// Tag ID filter with AND semantics, mirroring ListWorkflows.
+	for _, tagID := range filters.TagIDs {
+		conditions = append(conditions, "JSON_CONTAINS(tags, JSON_QUOTE(?)) = 1")
+		args = append(args, tagID)
 	}
 
 	whereClause := ""
@@ -987,7 +1001,7 @@ func (s *MySQLStorage) DeleteWorkspace(id string) error {
 
 func (s *MySQLStorage) SaveRaw(key string, value []byte) error {
 	_, err := s.db.Exec(`
-		INSERT INTO raw_data (` + "`key`" + `, value, created_at, updated_at)
+		INSERT INTO raw_data (`+"`key`"+`, value, created_at, updated_at)
 		VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		ON DUPLICATE KEY UPDATE
 			value = VALUES(value),

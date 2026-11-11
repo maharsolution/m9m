@@ -29,6 +29,7 @@ func NewTeamsNode() *TeamsNode {
 			Name:        "Microsoft Teams",
 			Description: "Send messages and manage Microsoft Teams channels",
 			Category:    "Messaging",
+			Group:       []string{"messaging"},
 			Properties:  teamsProperties(),
 		}),
 		client: &http.Client{},

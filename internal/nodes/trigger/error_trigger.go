@@ -17,9 +17,12 @@ func NewErrorTriggerNode() *ErrorTriggerNode {
 	return &ErrorTriggerNode{
 		BaseNode: base.NewBaseNode(base.NodeDescription{
 			Name:        "Error Trigger",
-			Description: "Triggers when a workflow error occurs",
+			Description: "Starts the workflow when a previous run ended in an error.",
 			Category:    "Trigger",
+			Group:       []string{"trigger"},
 			Properties:  errorTriggerProperties(),
+			Inputs:      []string{},
+			Outputs:     []string{"main"},
 		}),
 	}
 }
@@ -48,9 +51,9 @@ func (n *ErrorTriggerNode) Execute(inputData []model.DataItem, nodeParams map[st
 	// No input data — generate a default error trigger item
 	return []model.DataItem{
 		{JSON: map[string]interface{}{
-			"error":    "Unknown error",
-			"message":  "Error trigger activated without error context",
-			"trigger":  "error",
+			"error":     "Unknown error",
+			"message":   "Error trigger activated without error context",
+			"trigger":   "error",
 			"timestamp": time.Now().UTC().Format(time.RFC3339),
 		}},
 	}, nil

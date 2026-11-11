@@ -19,6 +19,7 @@ import (
 	"github.com/neul-labs/m9m/internal/expressions"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
+	"github.com/neul-labs/m9m/internal/nodes/nodeprops"
 	"github.com/neul-labs/m9m/internal/otel"
 	"go.opentelemetry.io/otel/propagation"
 )
@@ -53,17 +54,17 @@ var (
 
 	// blockedHosts contains specific hostnames that should not be accessed
 	blockedHosts = map[string]bool{
-		"localhost":                          true,
-		"metadata.google.internal":           true, // GCP metadata
-		"metadata.goog":                      true, // GCP metadata
-		"169.254.169.254":                    true, // AWS/Azure/GCP metadata
-		"169.254.170.2":                      true, // AWS ECS metadata
-		"fd00:ec2::254":                      true, // AWS EC2 IPv6 metadata
-		"[fd00:ec2::254]":                    true,
-		"instance-data":                      true, // OpenStack metadata
-		"metadata":                           true,
-		"kubernetes.default":                 true, // Kubernetes API
-		"kubernetes.default.svc":             true,
+		"localhost":                            true,
+		"metadata.google.internal":             true, // GCP metadata
+		"metadata.goog":                        true, // GCP metadata
+		"169.254.169.254":                      true, // AWS/Azure/GCP metadata
+		"169.254.170.2":                        true, // AWS ECS metadata
+		"fd00:ec2::254":                        true, // AWS EC2 IPv6 metadata
+		"[fd00:ec2::254]":                      true,
+		"instance-data":                        true, // OpenStack metadata
+		"metadata":                             true,
+		"kubernetes.default":                   true, // Kubernetes API
+		"kubernetes.default.svc":               true,
 		"kubernetes.default.svc.cluster.local": true,
 	}
 )
@@ -138,9 +139,15 @@ func NewHTTPRequestNode() *HTTPRequestNode {
 		Name:        "HTTP Request",
 		Description: "Makes HTTP requests to REST APIs and other web services",
 		Category:    "HTTP",
+		Group:       []string{"transform"},
 		Properties:  httpRequestProperties(),
 		Inputs:      []string{"main"},
 		Outputs:     []string{"main"},
+		Credentials: []base.NodeCredentialSpec{
+			{Type: "httpBasicAuth", DisplayName: "Basic Auth", Required: false},
+			{Type: "httpHeaderAuth", DisplayName: "Header Auth", Required: false},
+			{Type: "apiKey", DisplayName: "API Key", Required: false},
+		},
 	}
 
 	return &HTTPRequestNode{
@@ -154,25 +161,15 @@ func NewHTTPRequestNode() *HTTPRequestNode {
 // httpRequestProperties returns the property descriptors for the
 // n8n-style HTTP Request Parameters tab. Mirrors n8n's
 // `INodeTypeDescription.properties` so the m9m NDV-style UI can
-// render the same form n8n's editor does. The actual execution
-// only reads the keys it knows (method, url, headers, body, …);
-// extra fields are ignored so adding new metadata here is safe.
+// render the same form n8n's editor does.
+//
+// Every name below is a key the runtime actually reads:
+// `method`, `url`, `headers`, `headerParameters`, `specifyBody`,
+// `jsonBody`, `body`, `rawContentType`, `contentType`,
+// `allowInternalRequests` and `includeResponseHeadersAndStatus`.
+// Authentication is supplied through the node's credential (see
+// NodeDescription.Credentials), not through a node parameter.
 func httpRequestProperties() []base.NodeProperty {
-	authOptions := []base.Option{
-		{Name: "None", Value: "none"},
-		{Name: "Predefined credential type", Value: "predefinedCredentialType"},
-		{Name: "Generic credential type", Value: "genericCredentialType"},
-	}
-	genericAuthTypes := []base.Option{
-		{Name: "Basic auth", Value: "basicAuth"},
-		{Name: "Custom auth", Value: "customAuth"},
-		{Name: "Digest auth", Value: "digestAuth"},
-		{Name: "Header auth", Value: "headerAuth"},
-		{Name: "OAuth1 API", Value: "oAuth1Api"},
-		{Name: "OAuth2 API", Value: "oAuth2Api"},
-		{Name: "Query auth", Value: "queryAuth"},
-		{Name: "Simplified Custom Auth", Value: "simplifiedCustomAuth"},
-	}
 	methods := []base.Option{
 		{Name: "DELETE", Value: "DELETE"},
 		{Name: "GET", Value: "GET"},
@@ -182,57 +179,25 @@ func httpRequestProperties() []base.NodeProperty {
 		{Name: "POST", Value: "POST"},
 		{Name: "PUT", Value: "PUT"},
 	}
-	bodyContentTypes := []base.Option{
-		{Name: "Form URLencoded", Value: "form-urlencoded"},
-		{Name: "Form-Data (multipart)", Value: "multipart-form-data"},
+	bodyTypes := []base.Option{
+		{Name: "None", Value: ""},
 		{Name: "JSON", Value: "json"},
-		{Name: "n8n Binary File", Value: "n8nBinary"},
-		{Name: "Raw", Value: "raw"},
 	}
-	arrayFormats := []base.Option{
-		{Name: "No Brackets", Value: "noBrackets"},
-		{Name: "Brackets Only", Value: "bracketsOnly"},
-		{Name: "Brackets with Indices", Value: "bracketsWithIndices"},
-	}
-	responseFormats := []base.Option{
-		{Name: "Autodetect", Value: "autodetect"},
-		{Name: "File", Value: "file"},
-		{Name: "JSON", Value: "json"},
-		{Name: "Text", Value: "text"},
-	}
-	paginationModes := []base.Option{
-		{Name: "Off", Value: "off"},
-		{Name: "Update a parameter in each request", Value: "updateAParameterInEachRequest"},
-		{Name: "Response contains next URL", Value: "responseContainsNextURL"},
-	}
-
 	props := []base.NodeProperty{
-		base.StringOpt("Method", "method", "GET", "HTTP method to use.", methods, true),
-		base.StringProp("URL", "url", "", "Endpoint to call. Expressions are evaluated.", "https://example.com/path", true),
-		base.StringOpt("Authentication", "authentication", "none", "How to authenticate this request.", authOptions, false),
-		base.StringProp("Predefined credential type", "nodeCredentialType", "", "Pick a credential the node knows about.", "Choose a credential", false),
-		base.StringOpt("Generic auth type", "genericAuthType", "", "When using a generic credential, pick its auth scheme.", genericAuthTypes, false),
-		base.BoolProp("Send Query Parameters", "sendQuery", false, "Add query string parameters to the request."),
-		base.CollectionProp("Query Parameters", "queryParameters", "Name/value pairs to send as the URL query.", nil),
-		base.BoolProp("Send Headers", "sendHeaders", false, "Add headers to the request."),
-		base.CollectionProp("Header Parameters", "headerParameters", "Name/value pairs to send as headers.", nil),
-		base.BoolProp("Send Body", "sendBody", false, "Add a request body."),
-		base.StringOpt("Body Content Type", "bodyContentType", "json", "How to encode the body.", bodyContentTypes, false),
-		base.JsonProp("Body (JSON)", "body", "{}", "Raw JSON body sent when Body Content Type is JSON."),
-		base.BoolProp("Ignore SSL issues", "ignoreSSLIssues", false, "Allow requests to servers with invalid TLS certificates."),
-		base.BoolProp("Lowercase headers", "lowercaseHeaders", true, "Force lowercase header names."),
-		base.BoolProp("Redirects", "redirects", true, "Follow HTTP redirects."),
-		base.NumberProp("Max redirects", "maxRedirects", 5, "Maximum number of redirects to follow.", false),
-		base.StringOpt("Response format", "response.responseFormat", "autodetect", "How the response body should be parsed.", responseFormats, false),
-		base.BoolProp("Include response headers and status", "response.includeResponseHeadersAndStatus", false, "Add the response status code and headers to the output."),
-		base.BoolProp("Never error", "response.neverError", false, "Treat non-2xx responses as success."),
-		base.StringOpt("Pagination mode", "pagination.paginationMode", "off", "How to fetch additional pages.", paginationModes, false),
-		base.StringProp("Next URL expression", "pagination.nextURLExpression", "", "When pagination.responseContainsNextURL, the expression that resolves to the next page URL.", "{{ $response.body.next }}", false),
-		base.StringProp("Proxy", "proxy", "", "HTTP proxy URL (overrides HTTP_PROXY env).", "http://proxy.local:3128", false),
-		base.NumberProp("Timeout (ms)", "timeout", 30000, "Maximum time to wait for response headers.", false),
-		base.StringOpt("Array format in query parameters", "arrayFormatInQueryParameters", "bracketsOnly", "How arrays appear in query strings.", arrayFormats, false),
+		nodeprops.Opt("Method", "method", "GET", "HTTP method to use.", methods, true),
+		nodeprops.Str("URL", "url", "", "Endpoint to call. Expressions are evaluated.", "https://example.com/path", true),
+		nodeprops.JSON("Headers", "headers", "{}", "Header name/value map added to the request."),
+		nodeprops.Collection("Header Parameters", "headerParameters", "n8n-style list of {name, value} header rows. Accepts a plain array or n8n's `{parameters: [...]}` wrapper.", nil),
+		nodeprops.Opt("Body Content Type", "specifyBody", "", "How the request body is supplied. `json` sends the JSON body field.", bodyTypes, false),
+		nodeprops.JSON("Body (JSON)", "jsonBody", "{}", "JSON body sent when Body Content Type is JSON.").
+			WithDisplayOptions(nodeprops.Show("specifyBody", "json")),
+		nodeprops.JSON("Body", "body", "{}", "Raw request body. Sent for POST, PUT and PATCH requests."),
+		nodeprops.Str("Raw Content-Type", "rawContentType", "", "Content-Type header used for the raw body.", "application/json", false),
+		nodeprops.Str("Content-Type", "contentType", "", "Legacy alias for Raw Content-Type.", "application/json", false),
+		nodeprops.Bool("Allow Internal Requests", "allowInternalRequests", false, "Allow requests to private / loopback addresses. Disabled by default because of SSRF protection."),
+		nodeprops.Bool("Include Response Headers and Status", "includeResponseHeadersAndStatus", false, "Add the response status code and headers to the output item."),
 	}
-	return append(props, base.CommonSettings()...)
+	return append(props, nodeprops.Settings()...)
 }
 
 // Description returns the node description
@@ -245,23 +210,23 @@ func (h *HTTPRequestNode) ValidateParameters(params map[string]interface{}) erro
 	if params == nil {
 		return h.CreateError("parameters cannot be nil", nil)
 	}
-	
+
 	// Check if url exists
 	url := h.GetStringParameter(params, "url", "")
 	if url == "" {
 		return h.CreateError("url parameter is required", nil)
 	}
-	
+
 	// Check if method exists
 	method := h.GetStringParameter(params, "method", "GET")
-	
+
 	// Allow expressions in method parameter
 	if expressions.IsExpression(method) {
 		// Method is an expression, so we can't validate it at this stage
 		// It will be validated during execution after expression evaluation
 		return nil
 	}
-	
+
 	// Validate method if it's not an expression
 	validMethods := map[string]bool{
 		"GET":     true,
@@ -272,11 +237,11 @@ func (h *HTTPRequestNode) ValidateParameters(params map[string]interface{}) erro
 		"HEAD":    true,
 		"OPTIONS": true,
 	}
-	
+
 	if !validMethods[strings.ToUpper(method)] {
 		return h.CreateError(fmt.Sprintf("invalid HTTP method: %s", method), nil)
 	}
-	
+
 	return nil
 }
 
@@ -294,28 +259,28 @@ func (h *HTTPRequestNode) ExecuteWithContext(ctx context.Context, inputData []mo
 	if len(inputData) == 0 {
 		return []model.DataItem{}, nil
 	}
-	
+
 	// Create execution context for expression evaluation
 	execContext := &expressions.ExecutionContext{
 		InputData: inputData,
 		ItemIndex: 0,
 		Variables: make(map[string]interface{}),
 	}
-	
+
 	// Process each input data item
 	result := make([]model.DataItem, len(inputData))
-	
+
 	for i, item := range inputData {
 		// Update execution context for current item
 		execContext.ItemIndex = i
 		execContext.Variables["json"] = item.JSON
-		
+
 		// Evaluate node parameters with expression context
 		evaluatedParams, err := h.evaluateParameters(nodeParams, execContext)
 		if err != nil {
 			return nil, h.CreateError(fmt.Sprintf("failed to evaluate parameters: %v", err), nil)
 		}
-		
+
 		// Get required parameters from evaluated parameters
 		requestURL := h.GetStringParameter(evaluatedParams, "url", "")
 		if requestURL == "" {
@@ -334,7 +299,7 @@ func (h *HTTPRequestNode) ExecuteWithContext(ctx context.Context, inputData []mo
 		}
 
 		method := h.GetStringParameter(evaluatedParams, "method", "GET")
-		
+
 		// Validate method after evaluation
 		validMethods := map[string]bool{
 			"GET":     true,
@@ -345,17 +310,17 @@ func (h *HTTPRequestNode) ExecuteWithContext(ctx context.Context, inputData []mo
 			"HEAD":    true,
 			"OPTIONS": true,
 		}
-		
+
 		if !validMethods[strings.ToUpper(method)] {
 			return nil, h.CreateError(fmt.Sprintf("invalid HTTP method: %s", method), nil)
 		}
-		
+
 		// Create HTTP request
 		req, err := http.NewRequest(strings.ToUpper(method), requestURL, nil)
 		if err != nil {
 			return nil, h.CreateError(fmt.Sprintf("failed to create request: %v", err), nil)
 		}
-		
+
 		// Add headers if provided. n8n's HTTP Request node exports
 		// headers in two shapes:
 		//
@@ -390,7 +355,7 @@ func (h *HTTPRequestNode) ExecuteWithContext(ctx context.Context, inputData []mo
 		if err := applyCredentialAuth(req, evaluatedParams); err != nil {
 			return nil, h.CreateError(fmt.Sprintf("credential auth: %v", err), nil)
 		}
-		
+
 		// Add body for POST, PUT, PATCH requests.
 		// n8n HTTP Request v4 uses `jsonBody` + `specifyBody: "json"`
 		// (Finnet ServiceRoutePlans / Call SvcRule). Older m9m only
@@ -408,7 +373,7 @@ func (h *HTTPRequestNode) ExecuteWithContext(ctx context.Context, inputData []mo
 				}
 			}
 		}
-		
+
 		// Set default user agent if not provided
 		if req.Header.Get("User-Agent") == "" {
 			req.Header.Set("User-Agent", "m9m/1.0")
@@ -431,19 +396,19 @@ func (h *HTTPRequestNode) ExecuteWithContext(ctx context.Context, inputData []mo
 		defer cancel()
 
 		req = req.WithContext(callCtx)
-		
+
 		resp, err := h.client.Do(req)
 		if err != nil {
 			return nil, h.CreateError(fmt.Sprintf("request failed: %v", err), nil)
 		}
 		defer resp.Body.Close()
-		
+
 		// Read response body
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, h.CreateError(fmt.Sprintf("failed to read response body: %v", err), nil)
 		}
-		
+
 		// Parse response headers
 		headers := make(map[string]interface{})
 		for key, values := range resp.Header {
@@ -451,7 +416,7 @@ func (h *HTTPRequestNode) ExecuteWithContext(ctx context.Context, inputData []mo
 				headers[key] = values[0] // Take first value
 			}
 		}
-		
+
 		// Build the n8n-shaped response item.
 		//
 		// n8n HTTP Request (default): `$json` IS the parsed response body
@@ -482,16 +447,16 @@ func (h *HTTPRequestNode) ExecuteWithContext(ctx context.Context, inputData []mo
 
 		result[i] = responseData
 	}
-	
+
 	return result, nil
 }
 
 // evaluateParameters evaluates node parameters with expression context
 func (h *HTTPRequestNode) evaluateParameters(params map[string]interface{}, context *expressions.ExecutionContext) (map[string]interface{}, error) {
 	evaluator := expressions.NewExpressionEvaluator()
-	
+
 	evaluatedParams := make(map[string]interface{})
-	
+
 	for key, value := range params {
 		switch v := value.(type) {
 		case string:
@@ -575,6 +540,7 @@ func flattenHeaderSpec(raw interface{}) []map[string]interface{} {
 //  1. `jsonBody` when `specifyBody` is "json" (or jsonBody is set and
 //     body is empty) — Finnet ServiceRoutePlans / Call SvcRule
 //  2. `body` string / map (Call External Svc raw XML, legacy shapes)
+//
 // Content-Type defaults to application/json for jsonBody; raw bodies
 // honour `rawContentType` / `contentType` when provided.
 func resolveRequestBody(params map[string]interface{}) ([]byte, string, error) {
@@ -760,22 +726,14 @@ func (h *HTTPRequestNode) shapeHTTPResponse(statusCode int, headers map[string]i
 // fields are missing (silent-fail would be a worse outcome than
 // a clear 4xx — the user can see the missing-field message in
 // the execution record).
-// stringFromMap reads a string parameter injected by the credential
-// envelope. Non-string values are ignored so a numeric field cannot
-// accidentally become an Authorization header.
+//
+// The envelope keys are the only source of auth material for this
+// node (there is no inline auth parameter in the n8n HTTP Request
+// shape), so no legacy fallback key is needed here. The values are
+// read through base.CredentialString, which treats a present but
+// empty value as absent and ignores non-string values.
 func stringFromMap(params map[string]interface{}, key string) string {
-	if params == nil {
-		return ""
-	}
-	value, ok := params[key]
-	if !ok || value == nil {
-		return ""
-	}
-	str, ok := value.(string)
-	if !ok {
-		return ""
-	}
-	return str
+	return base.CredentialString(params, key)
 }
 
 func applyCredentialAuth(req *http.Request, params map[string]interface{}) error {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -29,6 +30,21 @@ func (s *APIServer) ListWorkflows(w http.ResponseWriter, r *http.Request) {
 	if active != "" {
 		activeBool := active == "true"
 		filters.Active = &activeBool
+	}
+
+	// Tag filter. The values may be tag IDs or tag names and may be sent
+	// as a comma separated list (`?tags=id-1,Production`) or as repeated
+	// query parameters (`?tags=id-1&tags=Production`); both carry the same
+	// meaning. A workflow matches when it carries ALL of the requested
+	// tags (AND semantics).
+	tagValues := parseTagIDFilter(r.URL.Query()["tags"])
+	if len(tagValues) > 0 {
+		tagIDs, err := s.resolveWorkflowTagIDs(tagValues)
+		if err != nil {
+			s.sendError(w, http.StatusInternalServerError, "Failed to list workflows", err)
+			return
+		}
+		filters.TagIDs = tagIDs
 	}
 
 	workflows, total, err := s.storage.ListWorkflows(filters)
@@ -248,4 +264,84 @@ func (s *APIServer) DuplicateWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.sendJSON(w, http.StatusCreated, duplicate)
+}
+
+// parseTagIDFilter extracts the tag IDs from the `tags` query parameter.
+//
+// The parameter accepts both shapes used by clients:
+//
+//	?tags=id-1,id-2      comma separated
+//	?tags=id-1&tags=id-2 repeated parameters
+//
+// Empty entries are dropped so `?tags=` behaves like "no filter".
+func parseTagIDFilter(values []string) []string {
+	var ids []string
+	seen := make(map[string]struct{})
+
+	for _, value := range values {
+		for _, part := range strings.Split(value, ",") {
+			id := strings.TrimSpace(part)
+			if id == "" {
+				continue
+			}
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			ids = append(ids, id)
+		}
+	}
+
+	return ids
+}
+
+// resolveWorkflowTagIDs maps the raw `tags` query values to canonical
+// tag IDs.
+//
+// The parameter accepts tag IDs as well as tag names; names are matched
+// case-insensitively. A value that matches neither a known tag ID nor a
+// known tag name is passed through unchanged — the storage layer then
+// compares it against the tag IDs carried by the workflows, so an
+// unknown tag simply matches nothing instead of raising an error.
+//
+// The resolution costs one ListTags() call per filtered request. The
+// tag catalog is small, so this stays cheap; a deployment with
+// thousands of tags would want a cached lookup table.
+func (s *APIServer) resolveWorkflowTagIDs(values []string) ([]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+
+	tags, err := s.storage.ListTags()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load tags: %w", err)
+	}
+
+	ids := make(map[string]struct{}, len(tags))
+	names := make(map[string]string, len(tags))
+	for _, tag := range tags {
+		if tag == nil {
+			continue
+		}
+		ids[tag.ID] = struct{}{}
+		names[strings.ToLower(tag.Name)] = tag.ID
+	}
+
+	resolved := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		id := value
+		if _, ok := ids[value]; !ok {
+			if mapped, ok := names[strings.ToLower(value)]; ok {
+				id = mapped
+			}
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		resolved = append(resolved, id)
+	}
+
+	return resolved, nil
 }

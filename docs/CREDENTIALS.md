@@ -83,7 +83,7 @@ Every attempt is bounded by `credentialConnectTimeout = 10 * time.Second`
 | `mysql`, `mySql` | `database/sql` + `go-sql-driver/mysql` | `sql.Open("mysql", dsn)` + `PingContext`; DSN carries `timeout`/`readTimeout`/`writeTimeout` and optional `tls` | `Connected to MySQL <host>/<db> as <user>` | `MySQL connection failed: …` |
 | `mongoDb`, `mongodb` | official `mongo-driver` | `mongo.Connect` + `client.Ping`; accepts a `mongodb://` / `mongodb+srv://` URI, or a host/port/user/password form | `Connected to MongoDB database <db>` | `MongoDB connection failed: …` |
 | `redis` | raw RESP over TCP | `AUTH [user] password` then `PING`; the reply is parsed and a `-` prefix is treated as an error | `Connected to Redis <host>:<port>` | `Redis connection failed: …`, `Redis authentication failed: …`, `Redis check failed: …` |
-| `kafka` | `segmentio/kafka-go` | TLS + SASL handshake (`plain.Mechanism`, then `scram.SHA256`, then `scram.SHA512`) followed by a real `Metadata` request answered by the broker (`kafkaMetadata`) | `Connected to Kafka broker(s) <brokers> (authenticated as <user>, <n> broker(s) reported)` | `Kafka authentication failed: …`, `Kafka connection failed: …`, `Kafka CA certificate could not be parsed` |
+| `kafka` | `segmentio/kafka-go` | Native mode: TLS + SASL handshake with the **selected** mechanism (`plain.Mechanism`, `scram.SHA256`, `scram.SHA512`) followed by a real `Metadata` request answered by the broker (`kafkaMetadata`). REST-proxy mode: an authenticated `GET <restProxyUrl>/topics` (Basic auth or `X-Api-Key`) | `Connected to Kafka broker(s) <brokers> (authenticated as <user>, <n> broker(s) reported)`, `Connected to the Kafka REST Proxy at <url>` | `Kafka authentication failed: …`, `Kafka connection failed: …`, `Kafka CA certificate could not be parsed` |
 | `rabbitmq` | `rabbitmq/amqp091-go` | full AMQP 0-9-1 handshake via `amqp.DialConfig` with `amqp.PlainAuth`; the configured `vhost` is part of the dial | `Connected to RabbitMQ <host>:<port> (vhost <vhost>, authenticated as <user>)` | `RabbitMQ authentication failed: …`, `RabbitMQ connection failed: …` |
 | `openai`, `openAiApi` | `net/http` | authenticated `GET https://api.openai.com/v1/models` with `Authorization: Bearer <key>` | `OpenAI API key is valid` | `OpenAI rejected the API key (HTTP <code>): <body>`, `OpenAI request failed: …` |
 | `anthropic` | `net/http` | authenticated `GET https://api.anthropic.com/v1/models` with `x-api-key` and `anthropic-version: 2023-06-01` | `Anthropic API key is valid` | `Anthropic rejected the API key (HTTP <code>): <body>`, `Anthropic request failed: …` |
@@ -96,15 +96,77 @@ validation result stands.
 
 ### Kafka helpers
 
+- `kafkaCredentialUserPass(data)` — resolves the **single** username / password pair
+  of the credential. The canonical keys are `username` / `password` (n8n parity — see
+  `n8n/packages/nodes-base/credentials/Kafka.credentials.ts`); `saslUsername` /
+  `saslPassword` and the generic `user` alias are honoured as fallbacks. The canonical
+  key always wins when it holds a value, so a stale alias left over from an earlier
+  save can never shadow the username the operator just edited.
+- `kafkaSASLMechanism(data)` — normalises the mechanism: n8n stores the lowercase
+  spelling (`plain`, `scram-sha-256`, `scram-sha-512`), m9m the uppercase one.
+- `kafkaSASLMechanisms(mechanism, user, password)` — an explicitly selected mechanism
+  is used on its own; only when no mechanism is configured does the test fall back to
+  PLAIN → SCRAM-SHA-256 → SCRAM-SHA-512.
 - `kafkaBrokerList(data)` — splits the comma-separated `brokers` field, defaulting a
   bare host to port `9092`.
 - `kafkaTLSConfig(data)` — builds the TLS config (min TLS 1.2) and adds the
   credential's `ca` certificate to the system trust store.
 - `kafkaMetadata(brokers, tlsCfg, mech)` — performs the metadata request and returns
-  the number of brokers the cluster reported.
+  the number of brokers the cluster reported. The connection test calls it through
+  the `kafkaMetadataFunc` seam so the unit tests can stub the broker.
+- `kafkaRESTAuthMode(data)` — reads the REST-proxy authentication selector
+  (`none` / `basic` / `apiKey`). n8n stores a boolean in the same field; that value
+  keeps the credential on the native SASL path.
+- `testKafkaRESTConnection(...)` — probes `<restProxyUrl>/topics` with Basic auth or
+  `X-Api-Key`. HTTP 401 / 403 is reported as `Kafka authentication failed`.
 - `isKafkaAuthError(err)` — distinguishes "the broker refused the credentials" from a
-  transport failure, so the loop over PLAIN → SCRAM-SHA-256 → SCRAM-SHA-512 only
-  continues on an auth rejection.
+  transport failure, so the fallback loop only continues on an auth rejection.
+- `scrubKafkaSecrets(msg, user, password)` — scrubs the password **and** the username
+  from an error message.
+
+#### Kafka connection-test behaviour
+
+| Credential state | What the test does |
+| --- | --- |
+| `brokers` + username + mechanism | SASL handshake with **that** mechanism, then a metadata request. A wrong username or password ⇒ `Kafka authentication failed`. |
+| `brokers` + username, no mechanism | Falls back to PLAIN → SCRAM-SHA-256 → SCRAM-SHA-512 (in that order) until one succeeds. |
+| `brokers` + mechanism, **no** username | Explicit error — the test never falls back to an unauthenticated metadata request that the broker happens to allow. |
+| `brokers`, no credentials at all | Anonymous metadata request (a legitimate broker configuration). |
+| `restProxyUrl` (+ `authentication: basic` / `apiKey`), or `restProxyUrl` without `brokers` | `GET <restProxyUrl>/topics` with the credentials. HTTP 401 / 403 ⇒ `Kafka authentication failed`. |
+| `authentication: basic` / `apiKey` without `restProxyUrl` | Explicit error — the REST Proxy URL is required. |
+
+Mode selection: an explicit `authentication: basic` / `apiKey` always means REST-proxy
+mode; a `restProxyUrl` without `brokers` means REST-proxy mode as well. When both
+`brokers` and `restProxyUrl` are stored and no authentication mode is selected, the
+native broker path is exercised (that is the n8n-parity path — an n8n credential
+never carries a REST Proxy URL).
+
+### Kafka credential fields
+
+The schema (`credentialSchemas["kafka"]` in `internal/api/credentials.go`) declares
+**exactly one** username and **exactly one** password:
+
+| Property | Type | Purpose |
+| --- | --- | --- |
+| `brokers` | string | Comma-separated bootstrap servers (native mode). |
+| `clientId` | string | Client id surfaced in the broker logs. |
+| `saslMechanism` | options | `None` / `PLAIN` / `SCRAM-SHA-256` / `SCRAM-SHA-512`. |
+| `username` | string | **The** username — SASL (native) and Basic auth (REST Proxy). |
+| `password` | password | **The** password — SASL (native) and Basic auth (REST Proxy). |
+| `tls` | boolean | TLS for the native broker connection. |
+| `restProxyUrl` | string | Confluent-compatible REST Proxy base URL. |
+| `authentication` | options | `none` / `basic` / `apiKey` for the REST Proxy. |
+| `apiKey` | password | API key (alternative to Basic) for the REST Proxy. |
+
+The legacy `saslUsername` / `saslPassword` spellings are still accepted as **aliases**
+(see [Field aliases](#field-aliases)) — they are never declared as a second pair of
+properties, so the editor shows a single username input and a single password input.
+
+The node side (`internal/nodes/messaging/kafka.go`, `ApplyKafkaCredentialAuth`)
+cross-bridges `username` ↔ `saslUsername` and `password` ↔ `saslPassword`, so a
+credential that stores only the canonical names still authenticates against the
+native brokers, and one that stores only the `sasl`-prefixed names still authenticates
+against a REST proxy with Basic auth.
 
 ### RabbitMQ helpers
 
@@ -142,8 +204,18 @@ Type-specific aliases live in the UI (`web/src/views/Credentials.vue`,
 
 | Schema field (type `kafka`) | Accepted aliases |
 | --- | --- |
-| `saslUsername` | `username`, `user` |
-| `saslPassword` | `password` |
+| `username` | `saslUsername`, `user` |
+| `password` | `saslPassword`, `pass`, `pwd` |
+
+The alias keys are folded into the canonical field and then removed from the form, so
+the editor renders exactly one username input and one password input, and the
+"Additional stored fields" section does not list a second copy of either. The generic
+`user` ← `username` alias is skipped for Kafka (`typeAliasBlocklist`), because it
+would create a third username input.
+
+The backend mirrors the same resolution in `kafkaCredentialUserPass`
+(`internal/api/credential_conn.go`) for the connection test, so the test always uses
+the login the operator sees in the form.
 
 ---
 

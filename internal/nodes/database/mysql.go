@@ -27,9 +27,13 @@ func NewMySQLNode() *MySQLNode {
 		Name:        "MySQL",
 		Description: "Executes queries against MySQL databases",
 		Category:    "Database",
-		Properties:  sqlProperties(),
+		Group:       []string{"database"},
+		Properties:  mysqlProperties(),
 		Inputs:      []string{"main"},
 		Outputs:     []string{"main"},
+		Credentials: []base.NodeCredentialSpec{
+			{Type: "mySql", DisplayName: "MySQL", Required: true},
+		},
 	}
 
 	return &MySQLNode{
@@ -47,7 +51,7 @@ func (m *MySQLNode) ValidateParameters(params map[string]interface{}) error {
 	if params == nil {
 		return m.CreateError("parameters cannot be nil", nil)
 	}
-	
+
 	// Check required parameters
 	connectionURL := m.GetStringParameter(params, "connectionUrl", "")
 	if connectionURL == "" {
@@ -73,24 +77,24 @@ func (m *MySQLNode) ValidateParameters(params map[string]interface{}) error {
 			return m.CreateError("database is required", nil)
 		}
 	}
-	
+
 	// Check if operation is provided
 	operation := m.GetStringParameter(params, "operation", "")
 	if operation == "" {
 		return m.CreateError("operation is required", nil)
 	}
-	
+
 	validOperations := map[string]bool{
 		"executeQuery": true,
 		"insert":       true,
 		"update":       true,
 		"delete":       true,
 	}
-	
+
 	if !validOperations[operation] {
 		return m.CreateError(fmt.Sprintf("invalid operation: %s", operation), nil)
 	}
-	
+
 	// For executeQuery operation, query is required
 	if operation == "executeQuery" {
 		query := m.GetStringParameter(params, "query", "")
@@ -98,7 +102,7 @@ func (m *MySQLNode) ValidateParameters(params map[string]interface{}) error {
 			return m.CreateError("query is required for executeQuery operation", nil)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -107,7 +111,7 @@ func (m *MySQLNode) Execute(inputData []model.DataItem, nodeParams map[string]in
 	if len(inputData) == 0 {
 		return []model.DataItem{}, nil
 	}
-	
+
 	// Get connection parameters
 	connectionURL := m.GetStringParameter(nodeParams, "connectionUrl", "")
 
@@ -152,28 +156,28 @@ func (m *MySQLNode) Execute(inputData []model.DataItem, nodeParams map[string]in
 			log.Printf("SECURITY WARNING: MySQL connection URL does not specify TLS settings. Consider adding tls=preferred or tls=true.")
 		}
 	}
-	
+
 	// Connect to database
 	db, err := sql.Open("mysql", connectionURL)
 	if err != nil {
 		return nil, m.CreateError(fmt.Sprintf("failed to connect to database: %v", err), nil)
 	}
 	defer db.Close()
-	
+
 	// Test the connection
 	if err := db.Ping(); err != nil {
 		return nil, m.CreateError(fmt.Sprintf("failed to ping database: %v", err), nil)
 	}
-	
+
 	// Get operation
 	operation := m.GetStringParameter(nodeParams, "operation", "")
-	
+
 	// Process each input data item
 	result := make([]model.DataItem, len(inputData))
-	
+
 	for i, item := range inputData {
 		var newItem model.DataItem
-		
+
 		switch operation {
 		case "executeQuery":
 			queryResult, err := m.executeQuery(db, nodeParams, item)
@@ -181,15 +185,15 @@ func (m *MySQLNode) Execute(inputData []model.DataItem, nodeParams map[string]in
 				return nil, m.CreateError(fmt.Sprintf("failed to execute query: %v", err), nil)
 			}
 			newItem = queryResult
-			
+
 		default:
 			// For other operations, just pass through the data
 			newItem = item
 		}
-		
+
 		result[i] = newItem
 	}
-	
+
 	return result, nil
 }
 
@@ -211,20 +215,20 @@ func (m *MySQLNode) executeQuery(db *sql.DB, nodeParams map[string]interface{}, 
 	// SECURITY: Basic validation - reject obviously dangerous patterns
 	// Note: This is defense-in-depth, not a complete SQL injection prevention
 	dangerousPatterns := []string{
-		"--",           // SQL comment
-		";",            // Statement terminator (could chain queries)
-		"/*",           // Block comment start
-		"*/",           // Block comment end
-		"xp_",          // SQL Server extended procedures
-		"EXEC ",        // Execute
-		"EXECUTE ",     // Execute
-		"sp_",          // Stored procedures
-		"DROP ",        // Drop statement
-		"TRUNCATE ",    // Truncate statement
-		"ALTER ",       // Alter statement
-		"CREATE ",      // Create statement
-		"GRANT ",       // Grant privileges
-		"REVOKE ",      // Revoke privileges
+		"--",        // SQL comment
+		";",         // Statement terminator (could chain queries)
+		"/*",        // Block comment start
+		"*/",        // Block comment end
+		"xp_",       // SQL Server extended procedures
+		"EXEC ",     // Execute
+		"EXECUTE ",  // Execute
+		"sp_",       // Stored procedures
+		"DROP ",     // Drop statement
+		"TRUNCATE ", // Truncate statement
+		"ALTER ",    // Alter statement
+		"CREATE ",   // Create statement
+		"GRANT ",    // Grant privileges
+		"REVOKE ",   // Revoke privileges
 	}
 
 	upperQuery := strings.ToUpper(query)
@@ -242,30 +246,30 @@ func (m *MySQLNode) executeQuery(db *sql.DB, nodeParams map[string]interface{}, 
 		return model.DataItem{}, fmt.Errorf("failed to execute query: %v", err)
 	}
 	defer rows.Close()
-	
+
 	// Get column names
 	columns, err := rows.Columns()
 	if err != nil {
 		return model.DataItem{}, fmt.Errorf("failed to get columns: %v", err)
 	}
-	
+
 	// Process rows
 	var results []map[string]interface{}
-	
+
 	for rows.Next() {
 		// Create a slice of interface{} to hold the values
 		values := make([]interface{}, len(columns))
 		valuePtrs := make([]interface{}, len(columns))
-		
+
 		for i := range values {
 			valuePtrs[i] = &values[i]
 		}
-		
+
 		// Scan the row
 		if err := rows.Scan(valuePtrs...); err != nil {
 			return model.DataItem{}, fmt.Errorf("failed to scan row: %v", err)
 		}
-		
+
 		// Create a map for this row
 		rowMap := make(map[string]interface{})
 		for i, col := range columns {
@@ -276,21 +280,21 @@ func (m *MySQLNode) executeQuery(db *sql.DB, nodeParams map[string]interface{}, 
 				rowMap[col] = values[i]
 			}
 		}
-		
+
 		results = append(results, rowMap)
 	}
-	
+
 	// Check for errors after iteration
 	if err := rows.Err(); err != nil {
 		return model.DataItem{}, fmt.Errorf("error during row iteration: %v", err)
 	}
-	
+
 	// Create result item
 	resultItem := model.DataItem{
 		JSON: map[string]interface{}{
 			"rows": results,
 		},
 	}
-	
+
 	return resultItem, nil
 }

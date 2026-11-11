@@ -5,7 +5,7 @@ package transform
 
 import (
 	"fmt"
-	
+
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/nodes/base"
 )
@@ -21,7 +21,10 @@ func NewItemListsNode() *ItemListsNode {
 		Name:        "Item Lists",
 		Description: "Splits or combines items in a list",
 		Category:    "Data Transformation",
+		Group:       []string{"transform"},
 		Properties:  itemListsProperties(),
+		Inputs:      []string{"main"},
+		Outputs:     []string{"main"},
 	}
 
 	return &ItemListsNode{
@@ -40,30 +43,30 @@ func (i *ItemListsNode) ValidateParameters(params map[string]interface{}) error 
 	if params == nil {
 		return nil
 	}
-	
+
 	// Check if mode exists
 	mode, ok := params["mode"]
 	if !ok {
 		// Mode is optional, default to "combine"
 		return nil
 	}
-	
+
 	// Check if mode is a string
 	modeStr, ok := mode.(string)
 	if !ok {
 		return i.CreateError("mode must be a string", nil)
 	}
-	
+
 	// Validate mode
 	validModes := map[string]bool{
 		"combine": true,
 		"split":   true,
 	}
-	
+
 	if !validModes[modeStr] {
 		return i.CreateError(fmt.Sprintf("invalid mode: %s", modeStr), nil)
 	}
-	
+
 	return nil
 }
 
@@ -72,10 +75,10 @@ func (i *ItemListsNode) Execute(inputData []model.DataItem, nodeParams map[strin
 	if len(inputData) == 0 {
 		return []model.DataItem{}, nil
 	}
-	
+
 	// Get mode from node parameters, default to "combine"
 	mode := i.GetStringParameter(nodeParams, "mode", "combine")
-	
+
 	switch mode {
 	case "combine":
 		return i.combineMode(inputData), nil
@@ -92,20 +95,20 @@ func (i *ItemListsNode) combineMode(inputData []model.DataItem) []model.DataItem
 	if len(inputData) == 0 {
 		return []model.DataItem{}
 	}
-	
+
 	// Create items array
 	items := make([]interface{}, len(inputData))
 	for j, item := range inputData {
 		items[j] = item.JSON
 	}
-	
+
 	// Create combined item
 	combinedItem := model.DataItem{
 		JSON: map[string]interface{}{
 			"items": items,
 		},
 	}
-	
+
 	// Copy binary data if present
 	if len(inputData) > 0 && inputData[0].Binary != nil {
 		combinedItem.Binary = make(map[string]model.BinaryData)
@@ -113,12 +116,12 @@ func (i *ItemListsNode) combineMode(inputData []model.DataItem) []model.DataItem
 			combinedItem.Binary[k] = v
 		}
 	}
-	
+
 	// Copy paired item data if present
 	if len(inputData) > 0 && inputData[0].PairedItem != nil {
 		combinedItem.PairedItem = inputData[0].PairedItem
 	}
-	
+
 	return []model.DataItem{combinedItem}
 }
 
@@ -127,10 +130,10 @@ func (i *ItemListsNode) splitMode(inputData []model.DataItem) []model.DataItem {
 	if len(inputData) == 0 {
 		return []model.DataItem{}
 	}
-	
+
 	// For each input item, check if it has an 'items' field
 	var result []model.DataItem
-	
+
 	for _, item := range inputData {
 		// Check if there's an 'items' field with an array
 		if items, ok := item.JSON["items"]; ok {
@@ -141,7 +144,7 @@ func (i *ItemListsNode) splitMode(inputData []model.DataItem) []model.DataItem {
 						newItem := model.DataItem{
 							JSON: itemMap,
 						}
-						
+
 						// Copy binary data if present
 						if item.Binary != nil {
 							newItem.Binary = make(map[string]model.BinaryData)
@@ -149,12 +152,12 @@ func (i *ItemListsNode) splitMode(inputData []model.DataItem) []model.DataItem {
 								newItem.Binary[k] = v
 							}
 						}
-						
+
 						// Copy paired item data if present
 						if item.PairedItem != nil {
 							newItem.PairedItem = item.PairedItem
 						}
-						
+
 						result = append(result, newItem)
 					}
 				}
@@ -167,6 +170,6 @@ func (i *ItemListsNode) splitMode(inputData []model.DataItem) []model.DataItem {
 			result = append(result, item)
 		}
 	}
-	
+
 	return result
 }

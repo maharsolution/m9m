@@ -104,6 +104,22 @@ type NodeTypeInfo struct {
 	Inputs      []string            `json:"inputs"`
 	Outputs     []string            `json:"outputs"`
 	Properties  []base.NodeProperty `json:"properties,omitempty"`
+
+	// Group mirrors n8n's `INodeType.group` (e.g. ["trigger"],
+	// ["transform"]) — coarse buckets the frontend uses to group
+	// entries in the node creator.
+	Group []string `json:"group,omitempty"`
+
+	// Credentials lists the credential types the node can consume.
+	Credentials []base.NodeCredentialSpec `json:"credentials,omitempty"`
+
+	// UsableAsTool marks nodes that may be exposed to an AI agent
+	// as a tool.
+	UsableAsTool bool `json:"usableAsTool,omitempty"`
+
+	// Icon / IconColor carry the node's icon identifier and colour.
+	Icon      string `json:"icon,omitempty"`
+	IconColor string `json:"iconColor,omitempty"`
 }
 
 // workflowEngineImpl is the concrete implementation of WorkflowEngine
@@ -225,15 +241,27 @@ func (e *workflowEngineImpl) GetRegisteredNodeTypes() []NodeTypeInfo {
 		if len(outputs) == 0 {
 			outputs = []string{"main"}
 		}
+		// The node's own declared version wins. Nodes that never
+		// declare one (the pre-metadata nodes) keep reporting
+		// version 1 so existing consumers see no change.
+		version := desc.Version
+		if version <= 0 {
+			version = 1
+		}
 		result = append(result, NodeTypeInfo{
-			TypeID:      typeID,
-			DisplayName: desc.Name,
-			Description: desc.Description,
-			Category:    desc.Category,
-			Version:     1,
-			Inputs:      inputs,
-			Outputs:     outputs,
-			Properties:  desc.Properties,
+			TypeID:       typeID,
+			DisplayName:  desc.Name,
+			Description:  desc.Description,
+			Category:     desc.Category,
+			Version:      version,
+			Inputs:       inputs,
+			Outputs:      outputs,
+			Properties:   desc.Properties,
+			Group:        desc.Group,
+			Credentials:  desc.Credentials,
+			UsableAsTool: desc.UsableAsTool,
+			Icon:         desc.Icon,
+			IconColor:    desc.IconColor,
 		})
 	}
 	return result
@@ -809,6 +837,15 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 			}
 		}
 
+		// Normalise the parameter shapes so validation and execution
+		// see the same values. A dotted property stored as a flat key
+		// ("response.includeResponseHeadersAndStatus") and the same
+		// property stored as the nested path the editor writes
+		// ({"response": {"includeResponseHeadersAndStatus": ...}}) are
+		// both made reachable. The normaliser works on a copy, so the
+		// persisted workflow JSON stays n8n-clean.
+		finalNodeParams = NormalizeNodeParameters(finalNodeParams)
+
 		// Validate the post-injection parameters so credential-only
 		// nodes (e.g. an n8n MySQL node whose connection settings live
 		// entirely on the synced credential envelope) don't trip the
@@ -995,6 +1032,22 @@ func (e *workflowEngineImpl) executeNodeWithContext(
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+
+	// Normalise the parameter shapes before the executor sees them.
+	//
+	// The metadata-driven editor stores a dotted property name
+	// ("response.includeResponseHeadersAndStatus") as a nested object
+	// ({"response": {"includeResponseHeadersAndStatus": ...}}), while a
+	// few executors read the literal flat key instead. Normalising here
+	// makes every value reachable in both shapes.
+	//
+	// This is the single funnel every executor call goes through
+	// (main loop, splitInBatches body chain, if/retry body chain, if
+	// guard and loop done chain), and it runs *after* the credential
+	// envelope has been injected, so injected keys are covered too.
+	// The normaliser works on a copy: `node.Parameters` - and therefore
+	// the persisted workflow JSON - is never modified.
+	nodeParams = NormalizeNodeParameters(nodeParams)
 
 	// Prefer the per-run execFrame on ctx so concurrent webhook +
 	// Kafka executions cannot clobber each other's runExecutionData.
@@ -1291,6 +1344,9 @@ func (e *workflowEngineImpl) runLoopBodyChain(
 				return nil, fmt.Errorf("body node %q credential injection: %w", name, err)
 			}
 		}
+		// Normalise the parameter shapes (see NormalizeNodeParameters):
+		// flat dotted keys and nested paths are both made reachable.
+		finalParams = NormalizeNodeParameters(finalParams)
 		if err := executor.ValidateParameters(finalParams); err != nil {
 			return nil, fmt.Errorf("body node %q invalid parameters: %w", name, err)
 		}
@@ -1604,6 +1660,9 @@ func (e *workflowEngineImpl) runIfRetryBodyChain(
 				return nil, fmt.Errorf("body node %q credential injection: %w", name, err)
 			}
 		}
+		// Normalise the parameter shapes (see NormalizeNodeParameters):
+		// flat dotted keys and nested paths are both made reachable.
+		finalParams = NormalizeNodeParameters(finalParams)
 		if err := executor.ValidateParameters(finalParams); err != nil {
 			return nil, fmt.Errorf("body node %q validation: %w", name, err)
 		}
@@ -1750,6 +1809,9 @@ func (e *workflowEngineImpl) evaluateIfRetryGuard(
 			return false, err
 		}
 	}
+	// Normalise the parameter shapes (see NormalizeNodeParameters):
+	// flat dotted keys and nested paths are both made reachable.
+	finalParams = NormalizeNodeParameters(finalParams)
 	if err := executor.ValidateParameters(finalParams); err != nil {
 		return false, err
 	}
@@ -1860,6 +1922,9 @@ func (e *workflowEngineImpl) runLoopDoneChain(
 				return nil, fmt.Errorf("done node %q credential injection: %w", name, err)
 			}
 		}
+		// Normalise the parameter shapes (see NormalizeNodeParameters):
+		// flat dotted keys and nested paths are both made reachable.
+		finalParams = NormalizeNodeParameters(finalParams)
 		if err := executor.ValidateParameters(finalParams); err != nil {
 			return nil, fmt.Errorf("done node %q invalid parameters: %w", name, err)
 		}
@@ -1961,7 +2026,7 @@ func (e *workflowEngineImpl) ExecuteWorkflowParallel(workflows []*model.Workflow
 
 	if len(workflows) != len(inputData) {
 		return nil, fmt.Errorf("number of workflows (%d) must match number of input data arrays (%d)", len(workflows), len(inputData))
-}
+	}
 
 	// Create channel for results
 	results := make([]*ExecutionResult, len(workflows))

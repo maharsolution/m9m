@@ -249,6 +249,16 @@ func (s *SQLiteStorage) ListWorkflows(filters WorkflowFilters) ([]*model.Workflo
 		args = append(args, "%"+strings.ToLower(filters.Search)+"%")
 	}
 
+	// Tag ID filter with AND semantics: every requested tag ID has to be
+	// present in the JSON `tags` array. The comparison is exact. The
+	// json_valid() guard keeps rows with a NULL or malformed `tags`
+	// column from breaking the query.
+	for _, tagID := range filters.TagIDs {
+		conditions = append(conditions,
+			"EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(tags) THEN tags ELSE '[]' END) WHERE json_each.value = ?)")
+		args = append(args, tagID)
+	}
+
 	whereClause := ""
 	if len(conditions) > 0 {
 		whereClause = "WHERE " + strings.Join(conditions, " AND ")
@@ -587,6 +597,13 @@ func (s *SQLiteStorage) CountWorkflows(filters WorkflowFilters) (int, error) {
 	if filters.Search != "" {
 		conditions = append(conditions, "LOWER(name) LIKE ?")
 		args = append(args, "%"+strings.ToLower(filters.Search)+"%")
+	}
+
+	// Tag ID filter with AND semantics, mirroring ListWorkflows.
+	for _, tagID := range filters.TagIDs {
+		conditions = append(conditions,
+			"EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(tags) THEN tags ELSE '[]' END) WHERE json_each.value = ?)")
+		args = append(args, tagID)
 	}
 
 	whereClause := ""
