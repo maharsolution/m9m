@@ -1,0 +1,14 @@
+{
+  "suite": "C12_drift",
+  "description": "C12 drift guard - the Markdown document and the sheet must agree with the live report.",
+  "cases": [
+    {
+      "id": "c1201",
+      "name": "C12 workflow-test.MD verdicts agree with the live report",
+      "check": "drift",
+      "document": "workflow-test.MD",
+      "offline": true,
+      "notes": "Parses the real document format (bullet lines and Markdown tables) and compares every case id with the live verdict. The sheet rows are never reused as the document fixture."
+    }
+  ]
+}

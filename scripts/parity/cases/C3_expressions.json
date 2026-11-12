@@ -1,0 +1,24 @@
+{
+  "suite": "C3_expressions",
+  "description": "C3 expression contract - executable Go checks (no network, no runtime change).",
+  "cases": [
+    {
+      "id": "c301",
+      "name": "C3 expression contract: nested path, bracket access, method call, $json/$input/$now/$node/$execution",
+      "check": "go_test",
+      "package": "./internal/expressions",
+      "run": "TestParityC3ExpressionContract",
+      "offline": true,
+      "notes": "Runs internal/expressions/parity_c3_contract_test.go. Test-only file; the runtime is untouched."
+    },
+    {
+      "id": "c302",
+      "name": "C3 node parameters: flat dotted key and nested shape stay equivalent",
+      "check": "go_test",
+      "package": "./internal/engine",
+      "run": "TestParityC3FlatAndNestedParamsAreEquivalent",
+      "offline": true,
+      "notes": "Runs internal/engine/parity_c3_params_test.go. Test-only file; the runtime is untouched."
+    }
+  ]
+}

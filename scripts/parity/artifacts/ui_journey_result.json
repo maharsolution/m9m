@@ -1,0 +1,109 @@
+{
+  "case_id": "c1002",
+  "suite": "C10_ui",
+  "recorded_at": "2026-11-12T07:02:00+07:00",
+  "driver": "cursor-ide-browser MCP (Chromium via CDP)",
+  "instance": {
+    "base_url": "http://127.0.0.1:18099",
+    "mode": "disposable local m9m",
+    "flags": ["serve", "--dev", "--db-type", "memory", "--queue", "memory"],
+    "shared_infrastructure_touched": false
+  },
+  "workflow": {
+    "id": "workflow_0f59d13d-f79a-43d6-b0ae-8b0ca03a5e0a",
+    "name": "Parity UI Journey Webhook",
+    "nodes": [
+      {"name": "Webhook", "type": "n8n-nodes-base.webhook", "typeVersion": 2},
+      {"name": "Set", "type": "n8n-nodes-base.set", "typeVersion": 3}
+    ],
+    "source": "n8n workflow JSON imported through the UI import dialog"
+  },
+  "steps": [
+    {
+      "id": 1,
+      "name": "import_n8n_json",
+      "result": "PASS",
+      "detail": "Workflows -> Import -> file picker fed an n8n workflow JSON. The workflow 'Parity UI Journey Webhook (2 nodes)' was created and opened in the canvas editor.",
+      "evidence": "GET /api/v1/workflows/workflow_0f59d13d-f79a-43d6-b0ae-8b0ca03a5e0a returns 2 nodes (n8n-nodes-base.webhook v2, n8n-nodes-base.set v3) and connections Webhook.main[0] -> Set."
+    },
+    {
+      "id": 2,
+      "name": "canvas_editor",
+      "result": "PASS",
+      "detail": "The React Flow canvas rendered both nodes (Webhook, Set) with the Webhook -> Set edge; the node palette (Triggers/Actions/Transform/Flow/Core/Data/Communication) was reachable.",
+      "evidence": "Screenshot of the canvas in the browser session; node headings 'Webhook' and 'Set' present in the accessibility tree."
+    },
+    {
+      "id": 3,
+      "name": "node_parameter_panel",
+      "result": "PASS",
+      "detail": "Selecting the Set node opened the Parameters panel with the node type 'n8n-nodes-base.set', an 'Advanced: Raw Parameters' editor and the raw parameter JSON {'assignments':{'assignments':[{'name':'greeting','value':'={{ $json.name || \"world\" }}'}]}}.",
+      "evidence": "Panel textbox value contained the assignment array; node type label 'n8n-nodes-base.set' rendered."
+    },
+    {
+      "id": 4,
+      "name": "expression_validation",
+      "result": "PASS",
+      "detail": "In the Webhook node parameter field an expression '={{ parity_ui_journey }}' was typed. The expression editor evaluated it live and reported a parse/identifier error with a highlighted source snippet, i.e. expression validation is live in the parameter panel.",
+      "evidence": "Error snippet rendered by web/src/components/workflow/parameters/ExpressionField.vue (evaluation error + highlighted span)."
+    },
+    {
+      "id": 5,
+      "name": "expression_preview_row",
+      "result": "BLOCKED",
+      "detail": "The preview row below an expression field never renders. ExpressionField.vue computes the preview only when props.sampleInput !== undefined, and no caller supplies it: grep over web/src shows 'sampleInput' only inside ExpressionField.vue and expression/evaluator.ts, while ParameterField.vue renders <ExpressionField> without a sample-input binding. The Set node panel itself falls back to the raw-parameter editor, so there is no other surface that exposes a preview.",
+      "missing_piece": "web/src/components/workflow/parameters/ParameterField.vue must bind :sample-input to the node's input sample (last execution input) and expose a structured parameter editor for n8n-nodes-base.set. Both files live in web/, outside the scripts/parity + test-only-Go ownership of this task, so the wiring was not changed here."
+    },
+    {
+      "id": 6,
+      "name": "credentials_create",
+      "result": "PASS",
+      "detail": "Credentials -> New credential -> Basic Auth -> created 'Parity UI Journey Basic Auth'. The credential appears in the credentials list.",
+      "evidence": "GET /api/v1/credentials lists cred_1794441340949561000_3 'Parity UI Journey Basic Auth' type httpBasicAuth."
+    },
+    {
+      "id": 7,
+      "name": "tags_create_and_attach",
+      "result": "PASS",
+      "detail": "Tags panel -> New tag -> created 'parity-journey' and attached it to the workflow; the tag chip is shown in the editor toolbar.",
+      "evidence": "GET /api/v1/tags returns tag_1794441439584462600_4 'parity-journey'; the workflow payload carries tags:['tag_1794441439584462600_4']."
+    },
+    {
+      "id": 8,
+      "name": "version_history_create",
+      "result": "PASS",
+      "detail": "Version history panel opened ('No versions yet'), 'Create new version' -> tag v1.0.0 + description 'Parity UI journey checkpoint version' -> Create. The version is listed as the current version.",
+      "evidence": "GET /api/v1/workflows/workflow_0f59d13d-f79a-43d6-b0ae-8b0ca03a5e0a/versions returns ver_1794441513553482800 versionTag v1.0.0 versionNum 1 isCurrent true changes ['Initial version']."
+    },
+    {
+      "id": 9,
+      "name": "run_workflow",
+      "result": "PASS",
+      "detail": "Execute button on the canvas toolbar turned into 'Running...' and back to 'Execute'; the workflow was saved and executed manually.",
+      "evidence": "Execution exec_1794441526209998100 status 'completed', mode 'manual', startedAt 2026-11-12T06:58:46.2099981+07:00, finishedAt 2026-11-12T06:58:46.2110401+07:00."
+    },
+    {
+      "id": 10,
+      "name": "execution_detail",
+      "result": "PASS",
+      "detail": "Executions page listed the new run; /executions/exec_1794441526209998100 rendered the Execution Detail view (Started/Finished/Duration 2ms/Mode manual), the node panes 'Webhook' and 'Set', the Input/Output tabs and 'Download as JSON'. The Output pane showed the Set node result.",
+      "evidence": "GET /api/v1/executions/exec_1794441526209998100 returns data [{'json':{'greeting':'world'}}] and nodeData for Webhook and Set."
+    }
+  ],
+  "findings": [
+    {
+      "id": "C10-F1",
+      "severity": "gap",
+      "area": "web/src/components/workflow/parameters",
+      "summary": "Expression preview row is unreachable: ExpressionField.vue needs props.sampleInput, ParameterField.vue never passes it, and the Set node has no structured parameter editor (raw JSON only).",
+      "owner": "web UI (outside this task's file ownership)"
+    }
+  ],
+  "summary": {
+    "steps_total": 10,
+    "pass": 9,
+    "fail": 0,
+    "blocked": 1,
+    "blocked_steps": ["expression_preview_row"]
+  }
+}

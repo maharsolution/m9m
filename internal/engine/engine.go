@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -734,6 +735,19 @@ func (e *workflowEngineImpl) ExecuteWorkflowWithContext(ctx context.Context, wor
 		// connection graph and start the workflow even when their
 		// nodeResults entry happens to be empty at this point.
 		if len(inputDataForNode) == 0 && !isTriggerOnlyNodeType(node.Type) {
+			// Consumer triggers (Kafka today) are long-lived
+			// daemons in n8n: n8n keeps a consumer running for every
+			// active workflow and feeds records into the workflow.
+			// m9m has no such daemon during a webhook-driven run,
+			// so the node ends up here with no input. Say so
+			// instead of skipping it silently — a silently skipped
+			// consumer is indistinguishable from "the trigger fired
+			// but nothing arrived", which is exactly the
+			// misdiagnosis that made the Finnet post_balance poll
+			// wait for a reply that no consumer would ever write.
+			if isConsumerTriggerType(node.Type) {
+				log.Printf("[m9m] node %q (%s) skipped: m9m does not run an always-on consumer daemon during this execution — workflows driven by this trigger will not receive messages while m9m is serving this request", node.Name, node.Type)
+			}
 			nodeResults[nodeName] = []model.DataItem{}
 			continue
 		}
@@ -1509,6 +1523,19 @@ func (e *workflowEngineImpl) executeIfRetryLoop(
 	// right reading order of n8n's UI).
 	bodyOrder := loop.BodyNodes
 
+	// How long to wait between two iterations. Resolved from the
+	// workflow's own setting, the M9M_RETRY_LOOP_POLL_INTERVAL
+	// environment variable or the 200 ms default — never a
+	// hard-coded 2 s (that single sleep was ~20 s of the Finnet
+	// post_balance latency).
+	pollInterval := resolveRetryLoopPollInterval(workflow, guardNode, loop)
+
+	// The counter node's output for the current iteration. On the
+	// first iteration this is the output the top-level execution
+	// produced; from the second iteration on it is the
+	// re-executed counter (which increments `attempt`).
+	counterOutput := nodeResults[loop.CounterNode]
+
 	for iter := 0; iter < loop.MaxIterations; iter++ {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -1519,6 +1546,43 @@ func (e *workflowEngineImpl) executeIfRetryLoop(
 		// push one slot so `$("Set Counter").all()` reflects
 		// the running history.
 		iterRunIndex := e.runIndex + 1 + iter
+
+		// Re-execute the counter node so the `attempt` field
+		// actually advances. n8n wires the counter into the
+		// cycle; in this workflow the counter sits upstream of
+		// the back-edge target, so without an explicit
+		// re-execution `attempt` stayed at 1 and the
+		// `attempt < maxAttempts` guard could never trip — the
+		// loop only stopped because the iteration cap was
+		// reached. Feeding the previous iteration's output back
+		// into the counter makes the guard advance (1, 2, 3,
+		// …) and terminate the loop deterministically.
+		if loop.CounterNode != "" {
+			if iter > 0 {
+				updated, err := e.executeIfRetryCounter(
+					ctx,
+					workflow,
+					nodeMap[loop.CounterNode],
+					counterOutput,
+					iterRunIndex,
+				)
+				if err != nil {
+					return fmt.Errorf("iteration %d counter %q: %w", iter, loop.CounterNode, err)
+				}
+				if len(updated) > 0 {
+					counterOutput = updated
+					nodeResults[loop.CounterNode] = updated
+					// The body entry is fed by the counter; keep
+					// the seed in sync with the new attempt.
+					nodeResults[loop.BackEdgeTarget] = updated
+				}
+			}
+			// Publish the counter output at this iteration's slot
+			// so `$('Set Counter').item.json.attempt` resolves
+			// against the live iteration instead of the stale
+			// first run.
+			publishRetryNodeData(runData, loop.CounterNode, iterRunIndex, counterOutput)
+		}
 
 		// Run the body chain.
 		bodyOutput, err := e.runIfRetryBodyChain(
@@ -1538,7 +1602,7 @@ func (e *workflowEngineImpl) executeIfRetryLoop(
 
 		// Evaluate the guard's condition. If it returns
 		// false (i.e. the loop should stop), break.
-		shouldContinue, err := e.evaluateIfRetryGuard(ctx, workflow, guardNode, bodyOutput)
+		shouldContinue, err := e.evaluateIfRetryGuard(ctx, workflow, guardNode, bodyOutput, iterRunIndex)
 		if err != nil {
 			return fmt.Errorf("iteration %d guard evaluation: %w", iter, err)
 		}
@@ -1558,9 +1622,6 @@ func (e *workflowEngineImpl) executeIfRetryLoop(
 		// poll never observes the Kafka/mongo write.
 		// Keep the previous seed (Set Counter / prior
 		// Find input) across empty misses.
-		// Sleep briefly between polls so the Kafka consumer
-		// path can write the mongo reply (Finnet sticky:
-		// "Counter Max 10 retry" over ~20s wall clock).
 		if iter < loop.MaxIterations-1 {
 			if len(bodyOutput) > 0 {
 				nodeResults[loop.BackEdgeTarget] = bodyOutput
@@ -1568,7 +1629,7 @@ func (e *workflowEngineImpl) executeIfRetryLoop(
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(2 * time.Second):
+			case <-time.After(pollInterval):
 			}
 		}
 	}
@@ -1608,6 +1669,41 @@ func (e *workflowEngineImpl) runIfRetryBodyChain(
 		return nil, nil
 	}
 
+	// Per-iteration routing table.
+	//
+	// n8n re-runs the loop body with fresh items on every
+	// iteration — the previous iteration's items must not
+	// accumulate. When they did, the body's terminal If node
+	// ("Check Key Exists1") saw the stale items of every earlier
+	// poll next to the current one, so the guard kept receiving
+	// `_ifResult=false` items long after the reply had arrived and
+	// the loop never exited early.
+	bodySet := make(map[string]bool, len(bodyOrder))
+	for _, name := range bodyOrder {
+		bodySet[name] = true
+	}
+	// bodyPredecessors maps a body node to the body nodes that feed
+	// it, so a node whose upstream produced nothing can be skipped
+	// (n8n's "0 items → node doesn't run" rule).
+	bodyPredecessors := map[string][]string{}
+	for _, src := range bodyOrder {
+		conns, ok := workflow.Connections[src]
+		if !ok {
+			continue
+		}
+		for _, branch := range conns.Main {
+			for _, c := range branch {
+				if c.Node == "" || !bodySet[c.Node] {
+					continue
+				}
+				bodyPredecessors[c.Node] = append(bodyPredecessors[c.Node], src)
+			}
+		}
+	}
+	// iterationInputs holds the items routed to a body node during
+	// the current iteration.
+	iterationInputs := map[string][]model.DataItem{}
+
 	var lastTaggedOutput []model.DataItem
 	for _, name := range bodyOrder {
 		if err := ctx.Err(); err != nil {
@@ -1623,7 +1719,20 @@ func (e *workflowEngineImpl) runIfRetryBodyChain(
 		// This is what `$("Find Respond").item.json` should
 		// see during the body — the live items the loop is
 		// currently processing, not the cumulative history.
+		//
+		// The input comes from THIS iteration's routing: a body
+		// node fed by another body node takes the items that node
+		// produced in this iteration, never the leftovers of the
+		// previous one.
 		inputSnapshot := nodeResults[name]
+		if len(bodyPredecessors[name]) > 0 {
+			// The node is fed by another body node: it takes the
+			// items that were routed to it during THIS iteration.
+			// When the upstream produced nothing, the routed slice
+			// is empty and the node is skipped below — n8n's
+			// "0 input items → node does not run" rule.
+			inputSnapshot = iterationInputs[name]
+		}
 		if runData != nil && runData.ResultData != nil {
 			results := runData.ResultData.NodeData[name]
 			for len(results) <= runIndexSlot {
@@ -1639,10 +1748,12 @@ func (e *workflowEngineImpl) runIfRetryBodyChain(
 		// Skip decorative / trigger-only nodes.
 		if isDecorativeNodeType(bodyNode.Type) {
 			nodeResults[name] = []model.DataItem{}
+			lastTaggedOutput = []model.DataItem{}
 			continue
 		}
 		if isTriggerOnlyNodeType(bodyNode.Type) {
 			nodeResults[name] = []model.DataItem{}
+			lastTaggedOutput = []model.DataItem{}
 			continue
 		}
 
@@ -1673,6 +1784,7 @@ func (e *workflowEngineImpl) runIfRetryBodyChain(
 		// the live runExecutionData (plain Execute cannot).
 		if len(inputSnapshot) == 0 && !isTriggerOnlyNodeType(bodyNode.Type) {
 			nodeResults[name] = []model.DataItem{}
+			lastTaggedOutput = []model.DataItem{}
 			continue
 		}
 		prevRunIndex := e.runIndex
@@ -1706,7 +1818,7 @@ func (e *workflowEngineImpl) runIfRetryBodyChain(
 		} else {
 			nodeResults[name] = cleaned
 		}
-		lastTaggedOutput = outputData
+		lastTaggedOutput = copyRoutingTags(outputData)
 
 		// Route the output to all downstream nodes, except
 		// the back-edge target (the body entry). The
@@ -1727,11 +1839,17 @@ func (e *workflowEngineImpl) runIfRetryBodyChain(
 				// prematurely.
 				continue
 			}
-			if nodeResults[target] == nil {
-				nodeResults[target] = data
-			} else {
-				nodeResults[target] = append(nodeResults[target], data...)
+			if bodySet[target] {
+				// Body nodes receive THIS iteration's items
+				// only — see the iterationInputs comment.
+				iterationInputs[target] = data
+				continue
 			}
+			// Downstream (exit-branch) nodes get the items of
+			// the current iteration; the previous iteration's
+			// items are replaced, not appended, so an exit
+			// branch never fires twice for one loop run.
+			nodeResults[target] = data
 		}
 	}
 
@@ -1769,11 +1887,24 @@ func isInBody(bodyOrder []string, target string) bool {
 // items the body explicitly routed into the loop's back-edge),
 // so the guard's `attempt < maxAttempts` check is run against
 // the right set of items.
+//
+// The condition table is evaluated with the canonical n8n
+// semantics (internal/connections/if_conditions.go): every row is
+// considered, AND requires all of them, OR requires any of them,
+// and both short-circuit. That matters for guards that combine the
+// retry predicate with a "the reply already arrived" predicate —
+// the loop has to leave as soon as the reply shows up.
+//
+// `iterRunIndex` is the run-index slot of the current iteration.
+// Expressions such as `$('Set Counter').item.json.attempt` resolve
+// against that slot, which is where the loop driver publishes the
+// freshly re-executed counter.
 func (e *workflowEngineImpl) evaluateIfRetryGuard(
 	ctx context.Context,
 	workflow *model.Workflow,
 	guardNode *model.Node,
 	bodyOutput []model.DataItem,
+	iterRunIndex int,
 ) (bool, error) {
 	if guardNode.Type != "n8n-nodes-base.if" {
 		return false, fmt.Errorf("guard %q is not an If node", guardNode.Name)
@@ -1784,33 +1915,91 @@ func (e *workflowEngineImpl) evaluateIfRetryGuard(
 	// terminal node tags every item with `_ifResult`; the
 	// items with `_ifResult=false` are the ones routed to
 	// the guard.
-	// Empty body output means Find Respond / upstream returned
-	// no items (mongo miss). Keep polling — do NOT treat this
-	// as "exit branch taken".
-	if len(bodyOutput) == 0 {
-		return true, nil
-	}
+	//
+	// An EMPTY body output means the body produced no items at
+	// all (e.g. the Mongo lookup missed). That is not "the reply
+	// arrived" — the loop must keep polling — but the guard still
+	// has to be consulted, otherwise `attempt < maxAttempts` can
+	// never end the loop and every poll runs to the iteration cap.
+	// The guard is then evaluated against an empty item; its
+	// operands come from the live counter, not from the item.
+	emptyBody := len(bodyOutput) == 0
 	guardItems := filterIfRetryGuardItems(bodyOutput)
-	if len(guardItems) == 0 {
+	if emptyBody {
+		guardItems = []model.DataItem{{JSON: map[string]interface{}{}}}
+	} else if len(guardItems) == 0 {
 		// The body found what it was looking for (routed
 		// every item to the exit branch). Don't loop.
 		return false, nil
 	}
 
+	// Normalise the parameter shapes (see NormalizeNodeParameters):
+	// flat dotted keys and nested paths are both made reachable.
+	params := NormalizeNodeParameters(guardNode.Parameters)
+
+	conditions, err := connections.ExtractIfConditions(params)
+	if err != nil || len(conditions) == 0 {
+		// The canonical reader could not make sense of the
+		// parameter shape — fall back to the registered IF
+		// executor, which understands the same shapes but with
+		// its own comparison rules.
+		return e.evaluateIfRetryGuardViaExecutor(ctx, workflow, guardNode, guardItems, params)
+	}
+
+	combinator := connections.ResolveIfCombinator(params)
+	evaluator := expressions.NewGojaExpressionEvaluator(expressions.DefaultEvaluatorConfig())
+
+	if emptyBody {
+		// The guard's operands must be resolvable, otherwise it
+		// cannot decide anything (e.g. the workflow has no counter
+		// node, so `$('Set Counter')` stays undefined). An
+		// undecidable guard must not stop the loop — keep polling
+		// exactly like before.
+		probe := e.ifOperandResolver(ctx, workflow, evaluator, iterRunIndex, 0, guardItems[0])
+		left := probe(conditions[0].Left)
+		right := probe(conditions[0].Right)
+		if left == nil && right == nil {
+			return true, nil
+		}
+	}
+
+	// Evaluate the guard per item: n8n routes each item to the
+	// true or the false branch on its own, and the loop keeps
+	// running while at least one item takes the true branch.
+	for itemIndex, item := range guardItems {
+		resolve := e.ifOperandResolver(ctx, workflow, evaluator, iterRunIndex, itemIndex, item)
+		if connections.EvaluateIfConditions(conditions, combinator, resolve) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// evaluateIfRetryGuardViaExecutor is the legacy guard evaluation:
+// the registered `n8n-nodes-base.if` executor runs the whole
+// condition table and the loop continues when at least one item is
+// tagged `_ifResult=true`.
+//
+// It is used when the canonical reader cannot parse the guard's
+// parameters, so unusual-but-valid workflows keep working.
+func (e *workflowEngineImpl) evaluateIfRetryGuardViaExecutor(
+	ctx context.Context,
+	workflow *model.Workflow,
+	guardNode *model.Node,
+	guardItems []model.DataItem,
+	finalParams map[string]interface{},
+) (bool, error) {
 	// The IF node executor is registered under its n8n type.
 	executor, err := e.GetNodeExecutor(guardNode.Type)
 	if err != nil {
 		return false, err
 	}
-	finalParams := guardNode.Parameters
 	if e.credentialManager != nil {
 		finalParams, err = e.credentialManager.InjectCredentialsIntoNodeParameters(guardNode.ID, guardNode.Parameters)
 		if err != nil {
 			return false, err
 		}
 	}
-	// Normalise the parameter shapes (see NormalizeNodeParameters):
-	// flat dotted keys and nested paths are both made reachable.
 	finalParams = NormalizeNodeParameters(finalParams)
 	if err := executor.ValidateParameters(finalParams); err != nil {
 		return false, err
@@ -1832,6 +2021,171 @@ func (e *workflowEngineImpl) evaluateIfRetryGuard(
 		}
 	}
 	return false, nil
+}
+
+// ifOperandResolver builds the resolver used by the canonical If
+// evaluation: it turns a raw operand (literal or n8n expression)
+// into its evaluated value for the given item.
+func (e *workflowEngineImpl) ifOperandResolver(
+	ctx context.Context,
+	workflow *model.Workflow,
+	evaluator *expressions.GojaExpressionEvaluator,
+	runIndex, itemIndex int,
+	item model.DataItem,
+) func(interface{}) interface{} {
+	runData := e.activeRunData(ctx)
+	return func(operand interface{}) interface{} {
+		return resolveIfOperand(workflow, evaluator, runData, runIndex, itemIndex, item, operand)
+	}
+}
+
+// resolveIfOperand evaluates one IF-node operand.
+//
+//   - Non-string operands are literals and returned unchanged.
+//   - A bare `$json.<path>` reference is resolved against the item.
+//   - An n8n expression (`={{ ... }}` or `{{ ... }}`) is evaluated
+//     with the expression runtime against the live run data.
+//
+// A broken expression falls back to the raw operand, matching the
+// IF node executor's behaviour.
+func resolveIfOperand(
+	workflow *model.Workflow,
+	evaluator *expressions.GojaExpressionEvaluator,
+	runData *expressions.RunExecutionData,
+	runIndex, itemIndex int,
+	item model.DataItem,
+	operand interface{},
+) interface{} {
+	value, ok := operand.(string)
+	if !ok {
+		return operand
+	}
+
+	// Bare `$json.<path>` reference — local lookup.
+	if strings.HasPrefix(value, "$json.") && !strings.ContainsAny(value, " '\"[]()") {
+		return getIfValueAtPath(item.JSON, strings.TrimPrefix(value, "$json."))
+	}
+
+	if evaluator == nil || !looksLikeIfExpression(value) {
+		return operand
+	}
+
+	expr := value
+	if strings.HasPrefix(expr, "=") {
+		expr = strings.TrimPrefix(expr, "=")
+	}
+	if workflow == nil {
+		workflow = &model.Workflow{Name: "IF"}
+	}
+	ctxExpr := &expressions.ExpressionContext{
+		ActiveNodeName:      "IF",
+		RunIndex:            runIndex,
+		ItemIndex:           itemIndex,
+		Mode:                expressions.ModeManual,
+		ConnectionInputData: []model.DataItem{{JSON: item.JSON}},
+		Workflow:            workflow,
+		RunExecutionData:    runData,
+	}
+	resolved, err := evaluator.EvaluateExpression(expr, ctxExpr)
+	if err != nil {
+		return operand
+	}
+	return resolved
+}
+
+// looksLikeIfExpression reports whether a string carries one of the
+// markers that signal an n8n expression.
+func looksLikeIfExpression(value string) bool {
+	if strings.HasPrefix(value, "=") {
+		return true
+	}
+	return strings.HasPrefix(value, "{{") && strings.HasSuffix(value, "}}")
+}
+
+// getIfValueAtPath walks a dotted path inside a JSON map.
+func getIfValueAtPath(data map[string]interface{}, path string) interface{} {
+	if path == "" {
+		return data
+	}
+	parts := strings.Split(path, ".")
+	current := data
+	for i, part := range parts {
+		if i == len(parts)-1 {
+			return current[part]
+		}
+		next, ok := current[part].(map[string]interface{})
+		if !ok {
+			return nil
+		}
+		current = next
+	}
+	return nil
+}
+
+// executeIfRetryCounter re-executes the loop's counter node with
+// the previous iteration's output as its input, so the `attempt`
+// field advances the way n8n's counter does.
+func (e *workflowEngineImpl) executeIfRetryCounter(
+	ctx context.Context,
+	workflow *model.Workflow,
+	counterNode *model.Node,
+	previous []model.DataItem,
+	iterRunIndex int,
+) ([]model.DataItem, error) {
+	if counterNode == nil {
+		return nil, fmt.Errorf("counter node not found")
+	}
+	if len(previous) == 0 {
+		return nil, nil
+	}
+
+	executor, err := e.GetNodeExecutor(counterNode.Type)
+	if err != nil {
+		return nil, err
+	}
+
+	params := counterNode.Parameters
+	if e.credentialManager != nil {
+		params, err = e.credentialManager.InjectCredentialsIntoNodeParameters(counterNode.ID, counterNode.Parameters)
+		if err != nil {
+			return nil, fmt.Errorf("credential injection: %w", err)
+		}
+	}
+	params = NormalizeNodeParameters(params)
+	if err := executor.ValidateParameters(params); err != nil {
+		return nil, fmt.Errorf("validation: %w", err)
+	}
+
+	prevRunIndex := e.runIndex
+	if f := execFrameFrom(ctx); f != nil {
+		prevRunIndex = f.runIndex
+	}
+	e.setActiveRunIndex(ctx, iterRunIndex)
+	output, err := e.executeNodeWithContext(ctx, executor, previous, params)
+	e.setActiveRunIndex(ctx, prevRunIndex)
+	if err != nil {
+		return nil, err
+	}
+	return output, nil
+}
+
+// publishRetryNodeData stores a node's output at a specific
+// run-index slot of the live run data. The If-retry loop uses it to
+// publish the freshly re-executed counter so the guard's
+// `$('Set Counter')` reference sees the current iteration.
+func publishRetryNodeData(runData *expressions.RunExecutionData, nodeName string, slot int, data []model.DataItem) {
+	if runData == nil || runData.ResultData == nil || nodeName == "" {
+		return
+	}
+	results := runData.ResultData.NodeData[nodeName]
+	for len(results) <= slot {
+		results = append(results, expressions.NodeExecutionResult{})
+	}
+	results[slot] = expressions.NodeExecutionResult{
+		Data:      stripRoutingMetadata(data),
+		StartTime: time.Now(),
+	}
+	runData.ResultData.NodeData[nodeName] = results
 }
 
 // filterIfRetryGuardItems returns the items from `items` that
@@ -2171,6 +2525,75 @@ func isTriggerOnlyNodeType(nodeType string) bool {
 		return true
 	}
 	return false
+}
+
+// isConsumerTriggerType reports whether a node type is a long-lived
+// consumer trigger — a node that in n8n runs as a daemon for every
+// active workflow and feeds records into that workflow.
+//
+// m9m does not run such a daemon during a webhook-driven execution,
+// so these nodes are skipped. The skip is logged (see the
+// empty-input guard in the main execution loop) because a silently
+// skipped consumer is indistinguishable from "the trigger fired but
+// nothing arrived".
+func isConsumerTriggerType(nodeType string) bool {
+	switch nodeType {
+	case "n8n-nodes-base.kafkaTrigger":
+		return true
+	}
+	return false
+}
+
+// copyRoutingTags returns a copy of `items` that keeps the internal
+// routing tags (`_ifResult`, `_switchRuleIndex`, `_loopDone`).
+//
+// The connection router deletes those tags from the items it routes
+// — they must not leak into downstream node inputs — and it does so
+// *in place*, on the very maps the body chain handed it. The guard
+// evaluation of a retry loop needs those tags to tell "the body took
+// the exit branch" (reply found) from "the body wants to be polled
+// again", so the tagged output is snapshotted before the routing
+// happens.
+//
+// Items without any routing tag are returned as-is (no copy).
+func copyRoutingTags(items []model.DataItem) []model.DataItem {
+	if len(items) == 0 {
+		return items
+	}
+	needsCopy := false
+	for i := range items {
+		if items[i].JSON == nil {
+			continue
+		}
+		if _, ok := items[i].JSON["_ifResult"]; ok {
+			needsCopy = true
+			break
+		}
+		if _, ok := items[i].JSON["_switchRuleIndex"]; ok {
+			needsCopy = true
+			break
+		}
+		if _, ok := items[i].JSON["_loopDone"]; ok {
+			needsCopy = true
+			break
+		}
+	}
+	if !needsCopy {
+		return items
+	}
+	out := make([]model.DataItem, len(items))
+	for i := range items {
+		out[i] = items[i]
+		if items[i].JSON == nil {
+			continue
+		}
+		newJSON := make(map[string]interface{}, len(items[i].JSON))
+		for k, v := range items[i].JSON {
+			newJSON[k] = v
+		}
+		out[i].JSON = newJSON
+	}
+	return out
 }
 
 // stripRoutingMetadata returns a copy of items with internal routing

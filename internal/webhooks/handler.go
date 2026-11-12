@@ -147,14 +147,19 @@ func (h *Handler) handleWebhookRequest(w http.ResponseWriter, r *http.Request, i
 		}
 		switch {
 		case errors.Is(err, errJWTExpired):
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			w.WriteHeader(http.StatusForbidden)
-			_, _ = w.Write([]byte("jwt expired"))
+			writeAuthFailure(w, newAuthFailure(http.StatusForbidden, authMessageExpiredToken))
 			return
 		case errors.Is(err, errJWTNotYetValid):
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			w.WriteHeader(http.StatusForbidden)
-			_, _ = w.Write([]byte("jwt not yet valid"))
+			writeAuthFailure(w, newAuthFailure(http.StatusForbidden, authMessageNotYetValidToken))
+			return
+		case errors.Is(err, errJWTMalformed):
+			writeAuthFailure(w, newAuthFailure(http.StatusForbidden, authMessageMalformedToken))
+			return
+		case errors.Is(err, errJWTInvalidAlgorithm):
+			writeAuthFailure(w, newAuthFailure(http.StatusForbidden, authMessageInvalidAlgorithm))
+			return
+		case errors.Is(err, errJWTSignatureRequired):
+			writeAuthFailure(w, newAuthFailure(http.StatusForbidden, authMessageSignatureRequired))
 			return
 		}
 		writeJSONError(w, http.StatusUnauthorized, webhookErrorBody{
@@ -506,9 +511,21 @@ func (h *Handler) authenticateRequest(r *http.Request, webhook *Webhook) error {
 		if err := verifyJWT(token, authData); err != nil {
 			switch {
 			case errors.Is(err, errJWTExpired):
-				return newAuthFailure(http.StatusForbidden, "jwt expired")
+				return newAuthFailure(http.StatusForbidden, authMessageExpiredToken)
 			case errors.Is(err, errJWTNotYetValid):
-				return newAuthFailure(http.StatusForbidden, "jwt not yet valid")
+				return newAuthFailure(http.StatusForbidden, authMessageNotYetValidToken)
+			case errors.Is(err, errJWTMalformed):
+				// n8n: a token that is not made of three segments →
+				// 403 "jwt malformed".
+				return newAuthFailure(http.StatusForbidden, authMessageMalformedToken)
+			case errors.Is(err, errJWTInvalidAlgorithm):
+				// n8n: the credential allows exactly one algorithm →
+				// 403 "invalid algorithm".
+				return newAuthFailure(http.StatusForbidden, authMessageInvalidAlgorithm)
+			case errors.Is(err, errJWTSignatureRequired):
+				// n8n: an "alg: none" token without a signature →
+				// 403 "jwt signature is required".
+				return newAuthFailure(http.StatusForbidden, authMessageSignatureRequired)
 			}
 			// n8n: a token that is present but not valid → 403
 			// "invalid token".

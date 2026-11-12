@@ -1,0 +1,36 @@
+{
+  "suite": "C6_sync",
+  "description": "C6 synchronized workflow structure - every n8n workflow must exist on m9m with the same nodes, parameters, credentials and connections. typeVersion is excluded because m9m stores it as an int; the truncation is asserted separately by c650.",
+  "cases": [
+    {"id": "c601", "name": "C6 AI Workflow", "check": "sync", "workflow_name": "AI Workflow", "ignore_fields": ["typeVersion"]},
+    {"id": "c602", "name": "C6 Batch Order Processing System", "check": "sync", "workflow_name": "Batch Order Processing System", "ignore_fields": ["typeVersion"]},
+    {"id": "c603", "name": "C6 Finnet - Event Log", "check": "sync", "workflow_name": "Finnet - Event Log", "ignore_fields": ["typeVersion"]},
+    {"id": "c604", "name": "C6 Finnet - Webhook  (SYNC / ASYNC)", "check": "sync", "workflow_name": "Finnet - Webhook  (SYNC / ASYNC)", "ignore_fields": ["typeVersion"]},
+    {"id": "c605", "name": "C6 Finnet - Webhook Not use Redist - Kafka/Rabbit", "check": "sync", "workflow_name": "Finnet - Webhook Not use Redist - Kafka/Rabbit", "ignore_fields": ["typeVersion"]},
+    {"id": "c606", "name": "C6 Integrasi Aiven", "check": "sync", "workflow_name": "Integrasi Aiven", "ignore_fields": ["typeVersion"]},
+    {"id": "c607", "name": "C6 My workflow", "check": "sync", "workflow_name": "My workflow", "ignore_fields": ["typeVersion"]},
+    {"id": "c608", "name": "C6 Simple Basic Auth", "check": "sync", "workflow_name": "Simple Basic Auth", "ignore_fields": ["typeVersion"]},
+    {"id": "c609", "name": "C6 Simple CronWorkflow", "check": "sync", "workflow_name": "Simple CronWorkflow", "ignore_fields": ["typeVersion"]},
+    {"id": "c610", "name": "C6 Simple Webhook", "check": "sync", "workflow_name": "Simple Webhook", "ignore_fields": ["typeVersion"]},
+    {"id": "c611", "name": "C6 Simple Webhook - ApiKey", "check": "sync", "workflow_name": "Simple Webhook - ApiKey", "ignore_fields": ["typeVersion"]},
+    {"id": "c612", "name": "C6 Simple Webhook - Call Sub", "check": "sync", "workflow_name": "Simple Webhook - Call Sub", "ignore_fields": ["typeVersion"]},
+    {"id": "c613", "name": "C6 Simple Webhook - Code", "check": "sync", "workflow_name": "Simple Webhook - Code", "ignore_fields": ["typeVersion"]},
+    {"id": "c614", "name": "C6 Simple Webhook - Loop", "check": "sync", "workflow_name": "Simple Webhook - Loop", "ignore_fields": ["typeVersion"]},
+    {"id": "c615", "name": "C6 Simple Webhook - Set", "check": "sync", "workflow_name": "Simple Webhook - Set", "ignore_fields": ["typeVersion"]},
+    {"id": "c616", "name": "C6 Simple Webhook - Set Condition", "check": "sync", "workflow_name": "Simple Webhook - Set Condition", "ignore_fields": ["typeVersion"]},
+    {"id": "c617", "name": "C6 Simple Webhook - XML", "check": "sync", "workflow_name": "Simple Webhook - XML", "ignore_fields": ["typeVersion"]},
+    {"id": "c618", "name": "C6 Simple Webhook - mysql", "check": "sync", "workflow_name": "Simple Webhook - mysql", "ignore_fields": ["typeVersion"]},
+    {"id": "c619", "name": "C6 Simple Workflow - Set Calculation", "check": "sync", "workflow_name": "Simple Workflow - Set Calculation", "ignore_fields": ["typeVersion"]},
+    {"id": "c620", "name": "C6 SubWorflow", "check": "sync", "workflow_name": "SubWorflow", "ignore_fields": ["typeVersion"]},
+    {"id": "c621", "name": "C6 Webhook - Jwt Auth", "check": "sync", "workflow_name": "Webhook - Jwt Auth", "ignore_fields": ["typeVersion"]},
+    {"id": "c622", "name": "C6 Webhook Processing", "check": "sync", "workflow_name": "Webhook Processing", "ignore_fields": ["typeVersion"]},
+    {"id": "c623", "name": "C6 simple webhook - Call Http", "check": "sync", "workflow_name": "simple webhook - Call Http", "ignore_fields": ["typeVersion"]},
+    {
+      "id": "c650",
+      "name": "C6 typeVersion contract: m9m stores the integer part of the n8n typeVersion",
+      "check": "type_version",
+      "workflow_names": ["Simple Webhook", "Simple Webhook - Set", "Simple Webhook - Code", "Simple Webhook - XML", "Simple Webhook - mysql", "Webhook Processing", "Simple CronWorkflow"],
+      "notes": "The only structural delta the sync cases see is the documented truncation: n8n keeps 2.1/3.5, m9m's model stores an int (internal/model/workflow.go TypeVersion int). This case asserts that m9m == int(n8n) for every node, so the limitation is measured instead of hidden."
+    }
+  ]
+}

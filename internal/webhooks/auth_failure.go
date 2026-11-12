@@ -57,6 +57,20 @@ const (
 	// authMessageBadToken is n8n's answer when a bearer token was
 	// supplied but is not valid.
 	authMessageBadToken = "invalid token"
+	// authMessageMalformedToken is n8n's answer when the bearer token
+	// does not have the three JWT segments.
+	authMessageMalformedToken = "jwt malformed"
+	// authMessageInvalidAlgorithm is n8n's answer when the token was
+	// signed with an algorithm the credential does not allow.
+	authMessageInvalidAlgorithm = "invalid algorithm"
+	// authMessageSignatureRequired is n8n's answer for an "alg: none"
+	// token that carries no signature.
+	authMessageSignatureRequired = "jwt signature is required"
+	// authMessageExpiredToken is n8n's answer for an expired token.
+	authMessageExpiredToken = "jwt expired"
+	// authMessageNotYetValidToken is n8n's answer for a token whose
+	// `nbf` claim is in the future.
+	authMessageNotYetValidToken = "jwt not yet valid"
 )
 
 // writeAuthFailure writes an authentication rejection in n8n's wire

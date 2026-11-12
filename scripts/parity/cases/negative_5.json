@@ -45,9 +45,9 @@
       "headers": {
         "Authorization": "Bearer invalid.token.value"
       },
-      "expected_status": 401,
+      "expected_status": 403,
       "compare": "json",
-      "notes": "A malformed bearer token must be rejected with 401."
+      "notes": "A malformed bearer token must be rejected with 403: both n8n and m9m answer 403 when a bearer token is present but not valid (401 is reserved for a missing token, see n02)."
     },
     {
       "id": "n05",

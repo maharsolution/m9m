@@ -165,6 +165,11 @@ func (s *APIServer) RegisterRoutes(router *mux.Router) {
 	api.HandleFunc("/credentials/schema/{type}", s.GetCredentialSchema).Methods("GET", "OPTIONS")
 	api.HandleFunc("/credentials/types", s.ListCredentialTypes).Methods("GET", "OPTIONS")
 	api.HandleFunc("/credentials/test", s.TestCredentialPayload).Methods("POST", "OPTIONS")
+	// Credential export/import (n8n parity): a full workflow export can
+	// carry the credential data, encrypted with the instance key, so the
+	// bundle can be imported somewhere else and still run. Static paths
+	// must precede "/credentials/{id}".
+	s.RegisterCredentialExportRoutes(api)
 	api.HandleFunc("/credentials/{id}", s.GetCredential).Methods("GET", "OPTIONS")
 	api.HandleFunc("/credentials/{id}", s.UpdateCredential).Methods("PUT", "OPTIONS")
 	api.HandleFunc("/credentials/{id}", s.PatchCredential).Methods("PATCH", "OPTIONS")

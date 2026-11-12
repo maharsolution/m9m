@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -178,10 +179,12 @@ func TestVerifyJWT_Fuzz_UnsupportedAlg(t *testing.T) {
 
 // TestVerifyJWT_Fuzz_AlgorithmConfusion — classic CVE-2015-9235:
 // an RS256 token (header claims RS256) is verified against the
-// HS256 secret path. m9m must reject this. We don't have a real
-// RS256 key in this fuzz; we just check that passing a
-// `{"alg":"RS256"}` header with only an HS256 secret returns
-// "missing public key", not nil.
+// HS256 secret path. m9m must reject this.
+//
+// n8n hands the credential's algorithm to jsonwebtoken as the only
+// allowed one, so an RS256 token against an HS256 credential is
+// rejected with "invalid algorithm" — verified live against
+// http://187.77.113.218:5678/webhook/token_auth on 2026-11-12.
 func TestVerifyJWT_Fuzz_AlgorithmConfusion(t *testing.T) {
 	hb, _ := json.Marshal(map[string]string{"alg": "RS256", "typ": "JWT"})
 	pb, _ := json.Marshal(map[string]string{"sub": "x"})
@@ -190,10 +193,10 @@ func TestVerifyJWT_Fuzz_AlgorithmConfusion(t *testing.T) {
 		base64.RawURLEncoding.EncodeToString([]byte("sig"))
 	err := verifyJWT(tok, map[string]interface{}{"algorithm": "HS256", "secret": "x"})
 	if err == nil {
-		t.Fatal("expected error (no public key), got nil")
+		t.Fatal("expected error (algorithm not allowed), got nil")
 	}
-	if !strings.Contains(err.Error(), "public key") {
-		t.Fatalf("expected 'public key' error, got %v", err)
+	if !errors.Is(err, errJWTInvalidAlgorithm) {
+		t.Fatalf("expected 'invalid algorithm' error, got %v", err)
 	}
 }
 

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import statistics
 import sys
@@ -46,7 +47,7 @@ def percentile(values: list[float], pct: float) -> float:
     if not values:
         return 0.0
     ordered = sorted(values)
-    index = min(len(ordered) - 1, max(0, int(round((pct / 100) * len(ordered))) - 1))
+    index = min(len(ordered) - 1, max(0, math.ceil((pct / 100) * len(ordered)) - 1))
     return ordered[index]
 
 
@@ -61,7 +62,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--p95-budget-ms", type=float, default=5000.0)
     parser.add_argument("--out", default=None)
+    parser.add_argument("--expected-status", type=int, default=200)
     args = parser.parse_args(argv)
+    if args.count < 1 or args.timeout <= 0 or args.p95_budget_ms <= 0:
+        parser.error("count, timeout and latency budget must be positive")
 
     body_text = args.body
     candidate = Path(args.body)
@@ -87,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  [{i + 1}/{args.count}] status={status} "
                   f"latency={elapsed:.0f}ms")
 
-    distinct_bodies = len({b for b in bodies if b})
+    distinct_bodies = len(set(bodies))
     summary = {
         "url": url,
         "count": args.count,
@@ -101,7 +105,10 @@ def main(argv: list[str] | None = None) -> int:
             "max": round(max(latencies), 1) if latencies else 0,
         },
         "distinct_bodies": distinct_bodies,
-        "stable_body": distinct_bodies <= 1,
+        "stable_body": distinct_bodies == 1 and all(bodies),
+        "unexpected_statuses": [s for s in statuses if s != args.expected_status],
+        "goroutine_leak_check": "NOT_RUN: requires process metrics and settling window",
+        "state_isolation_check": "NOT_RUN: identical input stability does not prove isolation",
     }
     print(json.dumps(summary, indent=2))
 
@@ -112,8 +119,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"summary written to {out}")
 
     failures: list[str] = []
-    if summary["non_2xx"]:
-        failures.append(f"{len(summary['non_2xx'])} non-2xx responses")
+    if summary["unexpected_statuses"]:
+        failures.append(f"{len(summary['unexpected_statuses'])} unexpected HTTP statuses")
     if not summary["stable_body"]:
         failures.append("response body changed between runs (state leak)")
     if summary["latency_ms"]["p95"] > args.p95_budget_ms:

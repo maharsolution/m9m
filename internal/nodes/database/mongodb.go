@@ -45,6 +45,7 @@ package database
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -235,23 +236,17 @@ func (n *MongoDBNode) execute(inputData []model.DataItem, nodeParams map[string]
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(connStr))
+	// Reuse a pooled client per (connection string + options). The
+	// old code connected, pinged and disconnected on every single
+	// execution, which cost ~0.5 s per poll against a remote Atlas
+	// cluster — and a retry loop polls once per iteration.
+	client, err := mongoPool.get(ctx, mongoClientKey(connStr, mongoServerSelectionTimeout()), mongoClientOptions(connStr))
 	if err != nil {
+		var poolErr *mongoPoolError
+		if errors.As(err, &poolErr) && poolErr.stage == "ping" {
+			return nil, n.CreateError(fmt.Sprintf("mongo ping (check connectionString, network ACL, credentials): %v", poolErr.err), nil)
+		}
 		return nil, n.CreateError(fmt.Sprintf("mongo connect: %v", err), nil)
-	}
-	defer func() {
-		// Use a fresh context for Disconnect — the per-op context
-		// may already be cancelled by the time we get here.
-		dctx, dcancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer dcancel()
-		_ = client.Disconnect(dctx)
-	}()
-
-	// Ping to verify the URI resolved AND the cluster is reachable.
-	// Connect() above only initialises the client; Ping is what
-	// actually round-trips to the server.
-	if err := client.Ping(ctx, nil); err != nil {
-		return nil, n.CreateError(fmt.Sprintf("mongo ping (check connectionString, network ACL, credentials): %v", err), nil)
 	}
 
 	coll := client.Database(database).Collection(collection)

@@ -1,0 +1,29 @@
+{
+  "suite": "C9_stability",
+  "description": "C9 stability - 50 sequential webhooks, p95 latency, no state bleed and no goroutine leak.",
+  "cases": [
+    {
+      "id": "c901",
+      "name": "C9 50 sequential webhooks on a disposable local m9m: p95, stable body, goroutine count",
+      "check": "load",
+      "target": "local",
+      "count": 50,
+      "path": "simple_webhook",
+      "body": "{\"variable\":\"1\"}",
+      "p95_budget_ms": 5000,
+      "offline": true,
+      "notes": "The disposable instance owns its own workflow, so the probe never touches shared state. The goroutine check reads go_goroutines from the Prometheus endpoint before and after the burst. Measured 2026-11-12: the local /metrics endpoint serves only the m9m_up gauge, so go_goroutines is absent and the leak check reports 'goroutine metrics unavailable'. Missing piece (runtime, outside this task's file ownership): internal/monitoring must register the Prometheus Go collector (prometheus.NewGoCollector) so /metrics exports go_goroutines. p95 latency and the no-state-bleed assertion (identical body across all 50 runs) are fully checked today."
+    },
+    {
+      "id": "c902",
+      "name": "C9 50 sequential webhooks against the shared m9m: p95 and stable body",
+      "check": "load",
+      "target": "live",
+      "count": 50,
+      "path": "simple_webhook",
+      "body": "{\"variable\":\"1\"}",
+      "p95_budget_ms": 5000,
+      "notes": "Read-only webhook POSTs against the shared deployment. The goroutine metric is not exposed there (no metrics port), so the leak check is covered by c901."
+    }
+  ]
+}

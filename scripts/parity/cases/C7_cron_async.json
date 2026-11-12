@@ -1,0 +1,26 @@
+{
+  "suite": "C7_cron_async",
+  "description": "C7 cron and asynchronous sub-workflow - both hosts must record the autonomous/child execution.",
+  "cases": [
+    {
+      "id": "c701",
+      "name": "C7 Simple CronWorkflow records an autonomous execution on both hosts",
+      "check": "cron",
+      "workflow_name": "Simple CronWorkflow",
+      "poll_seconds": 75,
+      "notes": "No webhook is fired: the cron trigger must produce its own execution record within one schedule interval."
+    },
+    {
+      "id": "c702",
+      "name": "C7 call_subworkflow records a child execution of SubWorflow on both hosts",
+      "check": "subworkflow",
+      "workflow_name": "Simple Webhook - Call Sub",
+      "child_workflow_name": "SubWorflow",
+      "path": "call_subworkflow",
+      "body": "{\"name\":\"erwan\",\"address\":\"puri depok mas blok QF 12\"}",
+      "expected_status": 200,
+      "poll_seconds": 25,
+      "notes": "The parent webhook is fired, then the child workflow execution list is polled for a new record."
+    }
+  ]
+}

@@ -1,15 +1,95 @@
 {
-  "as_of": "2026-09-09T07:49:00Z",
+  "as_of": "2026-11-12T00:56:04.941556+00:00",
+  "latest_report": "tmp/parity-results/docs-pass2/parity-results.json",
+  "latest_result": {
+    "total": 79,
+    "passed": 67,
+    "failed_or_blocked": 12,
+    "positive": "9/14 (2 FAIL, 3 BLOCKED)",
+    "negative": "5/5",
+    "focus": "4/4",
+    "credentials": "2/2",
+    "content_type": "5/6 (1 FAIL)",
+    "C1_auth": "2/2",
+    "C2_roundtrip": "3/3",
+    "C3_expressions": "2/2",
+    "C5_telemetry": "1/1",
+    "C6_sync": "22/24 (2 FAIL)",
+    "C7_cron_async": "0/2 (1 FAIL, 1 BLOCKED)",
+    "C8_faults": "3/4 (1 FAIL)",
+    "C9_stability": "2/2",
+    "C10_ui": "1/2 (1 BLOCKED)",
+    "C11_regression": "5/5",
+    "C12_drift": "1/1"
+  },
+  "previous_core_report": {
+    "path": "tmp/parity-results/live-final2/parity-results.json",
+    "generated_at": "2026-11-12T00:39:37.744066+00:00",
+    "result": "66/79 PASS; 8 FAIL, 5 BLOCKED; the C12 drift guard failed with 26 drifted rows",
+    "status": "superseded by latest_report"
+  },
+  "superseded_reports": [
+    {"path": "tmp/parity-results/live-final2/parity-results.json", "generated_at": "2026-11-12T00:39:37.744066+00:00", "result": "66/79 PASS; 8 FAIL, 5 BLOCKED (C12 drift guard: 26 drifted rows)", "status": "superseded by latest_report"},
+    {"path": "tmp/parity-results/live-final/parity-results.json", "generated_at": "2026-11-12T00:36:57.519058+00:00", "result": "66/79 PASS; 8 FAIL, 5 BLOCKED (verdict-identical to live-final2)", "status": "superseded by latest_report"},
+    {"path": "tmp/parity-results/offline-c9/parity-results.json", "generated_at": "2026-11-12T00:39:23.499177+00:00", "result": "2 cases, 1 PASS, 1 SKIPPED (offline C9 probe)", "status": "offline evidence, not the live canonical report"},
+    {"path": "tmp/parity-results/offline-final2/parity-results.json", "generated_at": "2026-11-12T00:36:53.980673+00:00", "result": "79 cases, 10 PASS, 0 FAIL, 1 BLOCKED, 68 SKIPPED (offline mode)", "status": "offline evidence, not the live canonical report"},
+    {"path": "tmp/parity-results/offline-final/parity-results.json", "generated_at": "2026-11-12T00:32:27.772881+00:00", "result": "79 cases, 10 PASS, 0 FAIL, 1 BLOCKED, 68 SKIPPED (offline mode)", "status": "offline evidence, not the live canonical report"},
+    {"path": "tmp/parity-results/offline/parity-results.json", "generated_at": "2026-11-11T23:46:12.079786+00:00", "result": "79 cases, 10 PASS, 0 FAIL, 1 BLOCKED, 68 SKIPPED (offline mode)", "status": "offline evidence, not the live canonical report"},
+    {"path": "tmp/parity-results/fase-d-2026-11-12/parity-results.json", "generated_at": "2026-11-11T22:50:30.399439+00:00", "result": "25/55 PASS; 30 FAIL or BLOCKED", "status": "superseded by latest_report"},
+    {"path": "tmp/parity-results/2026-11-12/parity-results.json", "generated_at": "2026-11-11T18:25:19.638387+00:00", "result": "22/55 PASS; negative 1/5", "status": "superseded by latest_report"},
+    {"path": "tmp/parity-results/extended-all/parity-results.json", "generated_at": "2026-11-11T14:37:45.418509+00:00", "result": "19/57 PASS; focus 1/4 (m9m client timeouts)", "status": "superseded by latest_report"},
+    {"path": "tmp/parity-results/2026-11-11/parity-results.json", "generated_at": "2026-11-11T12:49:30.691654+00:00", "result": "14/23 PASS; focus 4/4", "status": "superseded by latest_report"}
+  ],
+  "canonical_selection_rule": "The canonical report is the newest saved report under tmp/parity-results/ that contains both the positive and the negative suite, validated against its own case verdicts. scripts/update_parity_sheets.py applies that rule and never merges older reports into the totals.",
+  "current_observations": [
+    {"id": "GAP-2026-11-11-POST-BALANCE-TIMEOUT", "status": "RESOLVED", "cases": ["f01", "f02", "f03", "f04"], "evidence": "Final live report (tmp/parity-results/docs-pass2/parity-results.json): f01/f02/f04 XML round-trip equivalent (n8n HTTP 200, m9m HTTP 200) and f03 malformed JSON answers HTTP 422 on both hosts. The m9m client timeouts recorded in the superseded extended-all run no longer reproduce.", "resolved_at": "2026-11-11T22:50:30.399439+00:00", "reconfirmed_at": "2026-11-12T00:56:04.941556+00:00", "resolution_scope": "The post_balance focus workflow matches n8n again. This closes the timeout observation only; it proves nothing about the remaining open cases."},
+    {"id": "GAP-2026-11-11-AUTH-WIRE", "status": "RESOLVED", "cases": ["n01", "n02", "n05"], "evidence": "Final live report: n01, n02 and n05 are PASS - both hosts answer HTTP 401 with the identical plain-text body ('Authorization is required!', 'No token provided', 'Authentication data is wrong!'), no Content-Type header and the challenge WWW-Authenticate: Basic realm=\"Webhook\". Live probe on 2026-11-12 (read-only webhook POST, dummy credentials) reproduced the same shape on http://187.77.113.218:5678 and http://187.77.113.218:8080. The earlier 'Content-Type differs' observation no longer reproduces.", "resolved_at": "2026-11-11T22:50:30.399439+00:00", "reconfirmed_at": "2026-11-12T00:56:04.941556+00:00", "resolution_scope": "Closes the rejection wire format (plain-text body, no Content-Type, WWW-Authenticate challenge, 401 for missing or wrong basic-auth credentials). The 403 branch is tracked separately in GAP-2026-11-11-AUTH-STATUS and GAP-2026-11-12-JWT-ERROR-BODY."},
+    {"id": "GAP-2026-11-11-AUTH-STATUS", "status": "RESOLVED", "cases": ["n04"], "evidence": "The 403-versus-401 split is gone and the harness expectation was corrected in the phase-C pass: n04 expects HTTP 403 now and passes - both hosts answer HTTP 403 for an invalid bearer token with the identical body. The negative suite is 5/5 PASS in the final live report (n01, n02, n03, n04, n05).", "resolved_at": "2026-11-12T00:56:04.941556+00:00", "resolution_scope": "Closes the status-code observation for the invalid bearer token. p08 and p09 are no longer status questions: both hosts reject the stored fixture credential with HTTP 403, so they are tracked as fixture BLOCKEDs in GAP-2026-11-12-JWT-FIXTURE-EXPIRED and GAP-2026-11-12-APIKEY-FIXTURE-MISSING."},
+    {"id": "GAP-2026-11-11-APIKEY-TRANSPORT", "status": "RESOLVED", "cases": ["p09"], "evidence": "Final live report: n8n HTTP 403 and m9m HTTP 403 with the identical plain-text body 'Authorization data is wrong!'. The m9m connection reset recorded in the superseded run is not reproduced, so the transport failure is closed and no status-code difference remains.", "resolved_at": "2026-11-11T22:50:30.399439+00:00", "reconfirmed_at": "2026-11-12T00:56:04.941556+00:00", "resolution_scope": "Closes the API-key transport and status observation. p09 is BLOCKED (not FAIL) because the fixture credential is rejected by n8n as well (expected 200), which is tracked in GAP-2026-11-12-APIKEY-FIXTURE-MISSING."},
+    {"id": "GAP-2026-11-12-JWT-ERROR-BODY", "status": "OPEN", "cases": ["p08"], "evidence": "Live probe on 2026-11-12: for a bearer token that is not a JWT, n8n answers HTTP 403 'jwt malformed' while the deployed m9m build answers HTTP 403 'invalid token'; for a token signed with an algorithm the credential does not allow, n8n answers 'invalid algorithm' and m9m still answers 'invalid token'. The working tree source (internal/webhooks/jwt.go, internal/webhooks/auth_failure.go, uncommitted) implements the n8n error taxonomy (jwt malformed, invalid algorithm, jwt signature is required, jwt expired, jwt not yet valid), but that build is not deployed, so the live behaviour is still the older one. In the final live report p08 is BLOCKED for a different reason - the fixture token is expired (see GAP-2026-11-12-JWT-FIXTURE-EXPIRED) - so the error-body difference is currently unobserved by the suite.", "residual": "Deploy the committed-and-reviewed webhook error taxonomy and re-probe p08 with a fresh token; no document or sheet change can close this."},
+    {"id": "GAP-2026-11-11-SIGNUP-BASELINE", "status": "BLOCKED", "cases": ["p10"], "evidence": "Final live report: p10 is BLOCKED because the signup workflow calls an external signup service that is not reachable from this network; both hosts answer HTTP 500 the same way, so the two runtimes agree and the fixture is the blocker. The earlier 'rules parameter is required' divergence (n8n: 'No item to return was found' vs m9m: 'Webhook execution failed: ... Validation Switch: rules parameter is required') is no longer the reported reason.", "residual": "The external signup upstream has to be reachable for the happy path; the harness cannot create it and the shared instance must not be mutated."},
+    {"id": "GAP-2026-11-11-DATABASE-BODY", "status": "OPEN", "cases": ["p12", "p14"], "evidence": "Final live report: both hosts answer HTTP 200 and the row-per-item shape matches (10 array items per database branch), but the credential rows themselves differ. n8n returns the credential list as id/name/type/data (the data object is the decoded credential), m9m returns created_at/createdAt plus the encrypted blob as a base64 string, and the id/name/type/timestamp values differ. Dataset drift versus execution divergence is not established.", "residual": "Compare the credential rows the two hosts read (same rows, same encoding) before the JSON comparison can be judged; the m9m credential envelope shape is a runtime change."},
+    {"id": "GAP-2026-11-11-N8N-API-AUTH", "status": "RESOLVED", "cases": ["c105", "c201", "c501", "c605"], "evidence": "The n8n REST API answers HTTP 200 and every comparison now executes instead of being blocked by 401. In the final live report the credential inventory (c105), the export round trip (c201), the execution telemetry (c501) and the cron workflow sync (c605) are PASS. The remaining API-suite failures are payload differences, not authentication problems: c601 (AI Workflow connections) and c607 (My workflow node name and connections); c701 is a probe-window problem.", "resolved_at": "2026-11-12T00:56:04.941556+00:00", "resolution_scope": "Closes the authentication observation for the n8n REST API. The payload differences move to GAP-2026-11-12-AI-WORKFLOW-SYNC and GAP-2026-11-12-SYNC-NODE-NAME-QUOTE."},
+    {"id": "GAP-2026-11-11-UNEXECUTED-CONTRACTS", "status": "RESOLVED", "cases": ["c301", "c302", "c602", "c603", "c604", "c606", "c607", "c608", "c609", "c610", "c611", "c612", "c613", "c702", "c802", "c901", "c902", "c1001", "c1101", "c1201"], "evidence": "The phase-C pass added the dedicated fixtures, so the contracts that were blocked now execute: the expression runtime contract (c301, c302), the n8n C6 sync fixtures (c602-c613), the fault injection cases (c801-c804), the 50-request load runs (c901, c902), the web UI surface case (c1001), the Go runtime regression locks (c1101-c1105) and the drift guard (c1201). In the final live report only c1002 (recorded browser journey) and c701 (autonomous cron execution) remain blocked, for prerequisites that cannot be satisfied from this side.", "resolved_at": "2026-11-12T00:56:04.941556+00:00", "resolution_scope": "Closes the 'no fixture' observation: every listed case now executes. RESOLVED describes the fixture availability, not the case verdicts - the current verdicts of these cases are the PASS/FAIL/BLOCKED rows of the final live report and are tracked in their own entries. The two prerequisites that are still blocked (c1002, c701) are tracked in GAP-2026-11-12-UI-EXPRESSION-PREVIEW and GAP-2026-11-12-CRON-PROBE-WINDOW."},
+    {"id": "GAP-2026-11-12-SHEET-REQUEST-MISMATCH", "status": "OPEN", "cases": [], "evidence": "Sheet rows whose stored request was never probed by the canonical run, so they were left unchanged: 'Webhook Controlling' rows 7 (/webhook/simple_webhook_3), 8 (request is byte-identical to the negative case n01), 17 and 18 (/webhook/post_balance with a {nama,id,balance} payload instead of the focus {customer,transaction} payload) and row 13 n8n side (/webhook-test/process-batch-orders instead of /webhook/process-batch-orders). The 'Webhook Auth' rows 6-8 store real credential headers and payloads, so they differ from the harness fixtures on payload and auth headers - this is also why the four drifted cases n04, p08 and p09 have no attributable sheet row. The 'Webhook Controlling Negative Test' tab cannot be attributed at all: its header row places the request in column D while its data rows keep responses in columns E-H, so the stored request and the stored status do not line up. The final sync plan leaves 12 sheet rows and 15 cases unchanged and writes 30 cells over 9 rows.", "residual": "The sheet owner has to repair the request columns of the rows above (and the negative tab layout) before those rows can carry a parity verdict."},
+    {"id": "GAP-2026-11-12-DB-ROW-COLUMN-CROSSING", "status": "OPEN", "cases": ["p12", "p14"], "evidence": "In the 'Webhook Controlling' tab the db_quiry rows have crossed request columns: row 14 stores the n8n request for one branch and the m9m request for the other branch, row 15 stores the reverse. Both rows still carry FAILED and m9m HTTP 200 from the p12/p14 evidence, and the two failing database cases are the credential-row shape difference, but the crossed request cells must be repaired by the sheet owner before the rows can be read per branch. Credential-bearing response bodies were withheld, not published."},
+    {"id": "GAP-2026-11-12-C12-DOC-DRIFT", "status": "RESOLVED", "cases": ["c1201"], "evidence": "The C12 drift guard failed in the previous live run with 26 drifted rows: c1001, c105, c1101, c201, c301, c501, c602-c607, c608-c613, c701, c702, c802, c901, n04, p08, p09, p10. Every one of them was a stale verdict in workflow-test.MD (the sheet itself produced no drift). After the documentation pass the live run tmp/parity-results/docs-pass2/parity-results.json reports c1201 PASS - 'the sheet, workflow-test.MD and the live report agree' - and python scripts/parity/report.py --results tmp/parity-results/docs-pass2/parity-results.json --drift-check prints 'no drift detected between sheet and live report'.", "resolved_at": "2026-11-12T00:56:04.941556+00:00", "resolution_scope": "Closes the documentation drift for this report only. The guard must be re-run whenever a newer live report lands, because the document verdicts are bound to the report named in its header."},
+    {"id": "GAP-2026-11-12-CONTENT-TYPE-BINARY", "status": "OPEN", "cases": ["c406"], "evidence": "Final live report: the binary request body case sends application/octet-stream to /webhook/simple_webhook. Both hosts answer HTTP 200, but the bodies differ: n8n returns body: {} for the binary payload, m9m returns the raw bytes as a JSON string. The webhook must accept binary bytes without a 415, and the echoed body is compared as-is (invalid UTF-8 handling is not normalised away).", "residual": "The m9m binary echo has to match the n8n body shape (an empty object for a non-decodable payload); that is a runtime change in internal/nodes or internal/webhooks and is owned by the runtime worker."},
+    {"id": "GAP-2026-11-12-AI-WORKFLOW-SYNC", "status": "OPEN", "cases": ["c601"], "evidence": "Final live report: the AI Workflow comparison fails on the connections only. n8n maps 'OpenAI Chat Model' -> ai_languageModel and 'Simple Memory' -> ai_memory, both pointing at the AI Agent; m9m stores both connection maps empty. Nodes, parameters and credentials are otherwise identical.", "residual": "m9m has to persist the ai_languageModel and ai_memory connection types on workflow import; the AI node types are owned by the runtime worker."},
+    {"id": "GAP-2026-11-12-SYNC-NODE-NAME-QUOTE", "status": "OPEN", "cases": ["c607"], "evidence": "Final live report: the 'My workflow' comparison fails on the node name and on the connections. m9m stores the trigger node as \"When clicking 'Execute workflow'\" while n8n stores \"When clicking \u2018Execute workflow\u2019\" (curly apostrophes), so the node does not match by name, and the connection map differs around it (the 'When chat message received' style main connections of the n8n map are missing on m9m).", "residual": "The node name must be preserved byte-for-byte on import and the connection map has to be reproduced; both are runtime changes outside the documentation ownership."},
+    {"id": "GAP-2026-11-12-SUBWORKFLOW-CHILD-EXECUTION", "status": "OPEN", "cases": ["c702"], "evidence": "Final live report: the parent webhook call_subworkflow answers HTTP 200 on both hosts, but no child execution record for 'SubWorflow' exists on m9m. The child workflow list is polled for a new record after the parent call.", "residual": "m9m has to record a child execution with a parent correlation for an invoked subworkflow; that is a runtime change in internal/engine and is owned by the runtime worker."},
+    {"id": "GAP-2026-11-12-MISSING-PARAM-ERROR-SHAPE", "status": "OPEN", "cases": ["c802"], "evidence": "Final live report: the db_quiry case without the required db_type parameter answers HTTP 200 on n8n (with a structured NodeOperationError in the body) and HTTP 500 on m9m (plain text error). No expected status is pinned by the case: the contract is that both hosts answer the same way.", "residual": "m9m has to answer the missing-parameter call the way n8n does - HTTP 200 with the structured node error - which is a runtime change in internal/nodes/database."},
+    {"id": "GAP-2026-11-12-JWT-FIXTURE-EXPIRED", "status": "BLOCKED", "cases": ["p08"], "evidence": "Final live report: p08 is BLOCKED. The fixture token is a fixed JWT from an earlier cycle; both hosts answer HTTP 403 because it is expired or signed with the old secret. The harness cannot mint a token because the instance's JWT secret is not exposed to it.", "residual": "A freshly minted token for the shared instance has to be provided to the fixture; the case is blocked on both hosts, so it is not a parity difference."},
+    {"id": "GAP-2026-11-12-APIKEY-FIXTURE-MISSING", "status": "BLOCKED", "cases": ["p09"], "evidence": "Final live report: p09 is BLOCKED. The header-auth API key of the shared instance is not in the repository, so the fixture key is rejected with HTTP 403 by both hosts.", "residual": "The key configured on the shared instance is required to exercise this path; both hosts answer the same way, so it is not a parity difference."},
+    {"id": "GAP-2026-11-12-SIGNUP-UPSTREAM-UNREACHABLE", "status": "BLOCKED", "cases": ["p10"], "evidence": "Final live report: p10 is BLOCKED. The signup workflow calls an external signup service that is not reachable from this network; both hosts answer HTTP 500 the same way.", "residual": "The upstream service has to be available for the happy path; both hosts fail identically, so it is not a parity difference."},
+    {"id": "GAP-2026-11-12-UI-EXPRESSION-PREVIEW", "status": "BLOCKED", "cases": ["c1002"], "evidence": "Final live report: c1002 is BLOCKED. 9 of the 10 recorded browser-journey steps pass on a disposable instance; the blocked step is expression_preview_row - web/src/components/workflow/parameters/ParameterField.vue must bind :sample-input to the node's input sample (last execution input) and expose a structured parameter editor for n8n-nodes-base.set. The files live in web/, outside the parity-harness ownership.", "residual": "The web/ wiring has to be changed by the web owner; the journey artifact cannot pass while the step is missing."},
+    {"id": "GAP-2026-11-12-CRON-PROBE-WINDOW", "status": "BLOCKED", "cases": ["c701"], "evidence": "Final live report: c701 is BLOCKED. No autonomous cron execution appears on either host within the 75s probe window because the fixture's schedule is longer than the window; no webhook is fired, the cron trigger has to produce its own execution record.", "residual": "A fixture with a schedule inside the probe window (or a longer window) is needed; the shared instance must not be mutated to force it."},
+    {"id": "GAP-2026-11-12-GOROUTINE-METRIC", "status": "OPEN", "cases": ["c901", "c902"], "evidence": "The C9 goroutine-leak check is implemented but its metric is missing: the local /metrics endpoint of the disposable instance serves only m9m_up, so the go_goroutines count before and after the 50-request burst cannot be read. c901 and c902 are PASS on p95, status and body stability (c901: p95=31ms, c902: p95=1063ms, identical body across runs) and both record 'goroutine metrics unavailable' in their evidence. The sub-gap is kept documented, not silently dropped.", "residual": "The Prometheus Go collector that exposes go_goroutines has to be registered in the runtime; that is a runtime change and is out of the documentation ownership. OPEN describes the missing metric, not the case verdicts: c901 and c902 are PASS in the final live report."}
+  ],
+  "historical_record_note": "Entries under gaps and iteration_plan preserve September evidence. Claims that credential APIs/store do not exist are historical, not current source facts. Current routes are documented in credentials_n8n_api.MD. The September 19/19 claim, the earlier 12:49 14/23 core run, the 19/57 extended-all run and the 18:25 22/55 core run are superseded by latest_result; no verdict is carried over from them.",
   "resolved_at": "2026-09-09T07:04:00Z",
-  "summary": "Two new parity gaps surfaced during the 2026-09-09 verification cycle. Both are wire-level mismatches between n8n (port 5678) and m9m (port 8080). They were previously masked by the orchestrator's body-only comparator and the sheet's status-only H column. The end-to-end iteration cycle must be re-run from the top with these two items added to the test scope.",
+  "summary": "Final live report: 67/79 PASS; 7 FAIL, 5 BLOCKED, 0 SKIPPED. Positive 9/14, negative 5/5, focus 4/4, credentials 2/2, content type 5/6, C1 auth 2/2, C2 round trip 3/3, C3 expressions 2/2, C5 telemetry 1/1, C6 sync 22/24, C7 cron/async 0/2, C8 faults 3/4, C9 stability 2/2, C10 UI 1/2, C11 regression 5/5, C12 drift 1/1. Full parity is not established; no resolutions are inferred from older or partial reports. The seven remaining failures and the five fixture blocks are listed in current_observations; the C12 drift guard passes (0 drifted rows).",
+  "sheet_sync": {
+    "spreadsheet_id": "1PAz38gDk2Fa_6SlBtC3fWss3YfL_KgroEAwCpiY7aDQ",
+    "synced_at": "2026-11-12T00:56:04.941556+00:00",
+    "cells_written": 30,
+    "ranges_written": 30,
+    "rows_updated": 9,
+    "readback_verified": true,
+    "rows_unchanged": ["Webhook Controlling 7, 8, 13 (n8n side), 14 (D/F), 15 (D/F), 17, 18", "Webhook Auth 6, 7, 8", "Capabilty Gap 5, 6 (correction already present)", "Webhook Controlling Negative Test (whole tab: header and data columns disagree)"],
+    "withheld": "n8n/m9m response bodies for the db_quiry rows 14 and 15 were withheld because they carry credential material; status code and comparison status were still written.",
+    "value_diff": "All 30 written cells already held the planned value (every DIFF printed as '='), so the write re-asserted the same values and verified them by readback. No sheet value changed in this pass: the 26 drifted rows of the C12 guard were document-side only. The sheet produced no drift line in the drift check; the seven sheet rows that cannot be attributed to a canonical case (ambiguous path or unmatched body digest) stay unchanged, and that is why the drifted cases n04, p08 and p09 have no attributable sheet row."
+  },
   "cycle_owner": "agent",
-  "cycle_name": "2026-09-09 rerun",
+  "cycle_name": "2026-11-12 fase-D docs pass 2 (final live parity report)",
   "exit_criteria": [
-    "positive/6 (webhook_xml) returns Content-Type: application/xml from m9m — header parity with n8n",
-    "positive/3 (webhook_callrest) and any other authed node resolve their credential envelope via m9m's credential store",
-    "All 14 parity cases still PASS after the two fixes",
-    "Google Sheet columns G and H reflect the new state",
-    "workflow-test.MD and credentials_n8n_api.MD regenerated and committed"
+    "workflow-test.MD regenerated from tmp/parity-results/docs-pass2/parity-results.json (67/79 PASS; 7 FAIL, 5 BLOCKED) with one machine-readable status-line format",
+    "Every drifted row of the C12 guard matches the live verdict: 26 drifted rows before, 0 after",
+    "Section B and Section J state the same canonical numbers (positive 9/14, negative 5/5, focus 4/4)",
+    "python scripts/parity/report.py --results tmp/parity-results/docs-pass2/parity-results.json --drift-check reports no drift",
+    "Google Sheet parity cells refreshed with the service account; request columns, unrelated rows and tabs untouched; readback verified",
+    "parity/parity_gaps.json carries the seven remaining failures, the five fixture blocks and the C9 goroutine-metric sub-gap with factual evidence",
+    "No secret value printed or persisted; no commit, no push, no deploy"
   ],
   "gaps": [
     {
@@ -21,7 +101,7 @@
       "status": "RESOLVED",
       "resolved_at": "2026-09-09T07:04:00Z",
       "resolved_in_commit": "f92b76b",
-      "resolution_summary": "Added internal/webhooks/manager.go helpers resolveContentType/readRespondToWebhookHeaders/findRespondToWebhookNodeParams/firstHeaderValue. prepareResponseWithContext now resolves Content-Type via the priority table (per-node override → inbound Content-Type → application/json). Verified live: m9m now returns Content-Type: application/xml for row 6 (matches n8n's wire shape). 14/14 suite still green. 9 new unit tests in internal/webhooks/manager_content_type_test.go.",
+      "resolution_summary": "Added internal/webhooks/manager.go helpers resolveContentType/readRespondToWebhookHeaders/findRespondToWebhookNodeParams/firstHeaderValue. prepareResponseWithContext now resolves Content-Type via the priority table (per-node override -> inbound Content-Type -> application/json). Verified live: m9m now returns Content-Type: application/xml for row 6 (matches n8n's wire shape). 14/14 suite still green. 9 new unit tests in internal/webhooks/manager_content_type_test.go.",
       "discovery": "Manual curl on 2026-09-09: row 6 of the positive sheet sends Content-Type: application/xml. n8n responds with Content-Type: application/xml. m9m responds with Content-Type: application/json. The orchestrator only stores bodies, not headers, so the discrepancy was hidden. The user explicitly asked for parity at the header level.",
       "n8n_observed": {
         "status": 200,
@@ -39,15 +119,15 @@
       "blocking_rows": ["positive/6"],
       "regression_risk_rows": ["positive/1", "positive/2", "positive/4", "positive/5", "positive/7", "positive/8", "negative/1..6"],
       "verification_steps": [
-        "1. Unit test respond_to_webhook.go: (a) inbound XML, no override → response Content-Type=application/xml; (b) inbound JSON, no override → application/json; (c) explicit `options.responseContentType=text/plain` → text/plain.",
+        "1. Unit test respond_to_webhook.go: (a) inbound XML, no override -> response Content-Type=application/xml; (b) inbound JSON, no override -> application/json; (c) explicit `options.responseContentType=text/plain` -> text/plain.",
         "2. Run parity orchestrator validate; capture -v headers; ensure m9m response for webhook_xml has Content-Type: application/xml (n8n baseline preserved).",
         "3. Re-run the full 14-case suite to confirm no regression."
       ],
       "verification_results": [
-        "✅ Unit tests in internal/webhooks/manager_content_type_test.go all PASS (9/9).",
-        "✅ Live curl -i against m9m:row6 returns `Content-Type: application/xml`. n8n returns `application/xml; charset=utf-8`. Base type now matches.",
-        "✅ Live spot-checks: row 1, row 3, row 7 all still return `application/json` (no regression).",
-        "✅ Full parity suite: 14/14 PASS, 0 FAILED. Sheet row 10 (positive/6) shows G=200, H=OK."
+        "PASS: Unit tests in internal/webhooks/manager_content_type_test.go all PASS (9/9).",
+        "PASS: Live curl -i against m9m:row6 returns `Content-Type: application/xml`. n8n returns `application/xml; charset=utf-8`. Base type now matches.",
+        "PASS: Live spot-checks: row 1, row 3, row 7 all still return `application/json` (no regression).",
+        "PASS: Full parity suite: 14/14 PASS, 0 FAILED. Sheet row 10 (positive/6) shows G=200, H=OK."
       ]
     },
     {
@@ -57,7 +137,8 @@
       "sheet": "n/a (infra)",
       "row": null,
       "path": "n/a",
-      "discovery": "Manual workflow diff on 2026-09-09: `node.credentials` is a non-empty object on at least 1 active n8n workflow (Simple Basic Auth `BZ6M9tFegX5fWPIh`) and on the `process-batch-orders` workflow (`hxePxjCyvoFFaIlO`, uses `postgres`). m9m currently stores the workflow with `credentials: null` because (a) sync-service strips the field and (b) m9m has no credential API. n8n has full credential REST endpoints (see `credentials_n8n_api.MD`). Without the envelope, authed nodes resolve to anonymous — that's why positive/3's m9m response is `{\"body\":{\"variable\":\"1\"}}` (anon upstream echo) instead of an authed `{\"Response\":\"OK\"}`.",
+      "current_evidence": "The m9m side of this gap is closed by the current source and by the canonical report: the credential store, the /api/v1/credentials routes and the per-node credential envelope exist (internal/credentials, internal/api/credentials.go) and the canonical credentials suite is 2/2 PASS (c101 basic-auth credential resolution in a workflow, c103 HTTP Request with embedded credentials). What is still open is not the m9m API but the parity of the n8n-side inventory (c105: credential names/types differ) and the credential upsert ordering of the n8n-to-m9m bridge, which no webhook case proves.",
+      "discovery": "Manual workflow diff on 2026-09-09: `node.credentials` is a non-empty object on at least 1 active n8n workflow (Simple Basic Auth `BZ6M9tFegX5fWPIh`) and on the `process-batch-orders` workflow (`hxePxjCyvoFFaIlO`, uses `postgres`). m9m currently stores the workflow with `credentials: null` because (a) sync-service strips the field and (b) m9m has no credential API. n8n has full credential REST endpoints (see `credentials_n8n_api.MD`). Without the envelope, authed nodes resolve to anonymous - that's why positive/3's m9m response is `{\"body\":{\"variable\":\"1\"}}` (anon upstream echo) instead of an authed `{\"Response\":\"OK\"}`.",
       "n8n_observed": {
         "credentials_on_workflows": [
           {"workflow_id": "BZ6M9tFegX5fWPIh", "name": "Simple Basic Auth", "nodes_with_credentials": ["HTTP Request"], "types": ["httpBasicAuth"]},
@@ -65,22 +146,71 @@
         ]
       },
       "m9m_observed": {
-        "credentials_api": false,
-        "credentials_stored_in_workflow_json": false,
-        "credential_resolver_at_engine_level": false
+        "credentials_api": true,
+        "credentials_stored_in_workflow_json": true,
+        "credential_resolver_at_engine_level": true
       },
-      "constraint": "Workflow execution in m9m must look up `node.credentials[typeName]` against the m9m credential store and pass the resolved {user, password, ...} to the node's Execute method. If the credential is missing the node must fail with the same error n8n emits (e.g. `No credentials found for type 'httpBasicAuth'`), NOT fall back to anonymous. sync-service must upsert credentials before POSTing workflows that reference them — same order as n8n's UI imports.",
+      "constraint": "Workflow execution in m9m must look up `node.credentials[typeName]` against the m9m credential store and pass the resolved {user, password, ...} to the node's Execute method. If the credential is missing the node must fail with the same error n8n emits (e.g. `No credentials found for type 'httpBasicAuth'`), NOT fall back to anonymous. sync-service must upsert credentials before POSTing workflows that reference them - same order as n8n's UI imports.",
       "root_cause_hypothesis": "Three-layer gap: (1) sync-service/sync.py drops `credentials` from the workflow payload; (2) m9m has no `/api/v1/credentials` endpoints and no `internal/credentials` store; (3) `BaseNode.credentialManager` either doesn't exist or returns nil. Fix requires all three layers.",
-      "scope_estimate": "M — sync-service/sync.py additions, new internal/credentials package + storage, REST handlers in internal/api, integration into BaseNode, m9m REST surface mirroring the 7 endpoints in credentials_n8n_api.MD Section 2/3, tests for the sync layer. Roughly 5-7 files touched.",
+      "scope_estimate": "M - sync-service/sync.py additions, new internal/credentials package + storage, REST handlers in internal/api, integration into BaseNode, m9m REST surface mirroring the 7 endpoints in credentials_n8n_api.MD Section 2/3, tests for the sync layer. Roughly 5-7 files touched.",
       "blocking_rows": ["positive/3 (webhook_callrest)", "positive/8 (process-batch-orders)"],
-      "regression_risk_rows": ["all positive + all negative — every node lookup hits the credential resolver path"],
+      "regression_risk_rows": ["all positive + all negative - every node lookup hits the credential resolver path"],
       "verification_steps": [
         "1. After implementation, GET /api/v1/credentials on m9m returns the same set (id, name, type) as GET /api/v1/credentials on n8n (minus any marked managed).",
         "2. After implementation, GET /api/v1/workflows/{id} on m9m returns the same `nodes[*].credentials` map as n8n (id-stable).",
         "3. The basic auth test in m9m (`webhook_callrest`) returns the same authed upstream body as n8n, not the anon echo.",
         "4. The Postgres lookup in `process-batch-orders` returns the same rows as n8n (a real DB connection, not a 500 error).",
         "5. Re-run parity orchestrator validate; expect 14/14 still PASS."
+      ],
+      "verification_results": [
+        "PASS (m9m side): c101 and c103 PASS in the canonical report - credentials resolve inside a workflow and the HTTP Request node runs with embedded credentials.",
+        "OPEN: c105 still reports 'credential names/types differ', and the bridge ordering is not covered by any webhook case."
       ]
+    },
+    {
+      "id": "GAP-2026-09-10-1",
+      "title": "IF/Switch empty-branch routing drops downstream node results",
+      "status": "RESOLVED",
+      "resolved_at": "2026-09-10T00:00:00Z",
+      "resolved_in_commit": "fcb3e56",
+      "evidence": "Commit fcb3e56 'fix(engine): skip nodes with empty input + seed downstream nodeResults' makes an empty branch skip the node and still seed the downstream results, which was the routing bug behind the September positive-case failures. The canonical report no longer shows a routing failure: focus f01/f02/f04 are XML round-trip equivalent against n8n (HTTP 200 on both hosts) and p07 (webhook_loop) is PASS.",
+      "verification": "Focus suite 4/4 PASS in tmp/parity-results/fase-d-2026-11-12/parity-results.json; the current database-body failures are payload differences and do not show this routing bug back."
+    },
+    {
+      "id": "GAP-2026-09-10-2",
+      "title": "PostgreSQL default sslMode differs from the n8n default",
+      "status": "RESOLVED",
+      "resolved_at": "2026-09-10T00:00:00Z",
+      "resolved_in_commit": "9eb90e2",
+      "evidence": "Commit 9eb90e2 'fix(database): default postgres sslMode to disable to match n8n default' aligns the PostgreSQL branch with the n8n default. The PostgreSQL branch (p14) now answers HTTP 200 on both hosts with the same 10-item shape; the remaining p14 difference is one timestamp field on 2 of 10 rows, not the connection mode.",
+      "verification": "Canonical report p14: n8n HTTP 200, m9m HTTP 200, 10 items on both sides with identical key sets; item-level diff limited to createdAt on 2 of 10 items."
+    },
+    {
+      "id": "G1",
+      "title": "Code node $input.item is undefined",
+      "status": "RESOLVED",
+      "resolved_at": "2026-09-10T00:00:00Z",
+      "resolved_in_commit": "4028e41",
+      "evidence": "Commit 4028e41 'fix(expressions): expose $input.item as property for Code node parity' exposes $input.item as a property (not a function) in internal/expressions/data_proxy.go and internal/nodes/transform/code.go, with the regression test internal/nodes/transform/code_input_item_debug_test.go (TestSetCounter_InputItemProperty). The focus workflow that used to fail with 'Cannot read property attempt of undefined' is green: f01/f02/f04 XML round-trip equivalent, f03 HTTP 422 on both hosts.",
+      "verification": "Canonical focus suite 4/4 PASS; tracked Go test covers the property shape."
+    },
+    {
+      "id": "G2",
+      "title": "Merge chooseBranch requires branchCondition, n8n defaults to branch 0",
+      "status": "RESOLVED",
+      "resolved_at": "2026-09-10T00:00:00Z",
+      "resolved_in_commit": "f28fcc7",
+      "evidence": "Commit f28fcc7 'fix(merge): allow chooseBranch without branchCondition (n8n parity)' makes branchCondition optional and defaults to branch 0; commit 258c962 'fix(engine): Merge chooseBranch emits only selected input like n8n' makes the node emit only the selected branch. Regression test: internal/nodes/transform/merge_choose_branch_test.go (TestMerge_ChooseBranch_NoBranchCondition).",
+      "verification": "Canonical focus suite 4/4 PASS - the post_balance workflow runs its Merge node without a branchCondition."
+    },
+    {
+      "id": "G3",
+      "title": "HTTP Request URL expression/nested path and unclear SSRF error",
+      "status": "RESOLVED",
+      "resolved_at": "2026-09-10T00:00:00Z",
+      "resolved_in_commit": "16bb77f",
+      "evidence": "Commit 16bb77f 'feat(parity): typed collection metadata, HTTP expression eval, parity harness' rewrote internal/nodes/http/request.go so the URL is evaluated as an expression (nested paths such as $json.data.request.target_url resolve) and the rejection message names the offending value: 'only http and https' plus the scheme and the path. Regression tests: internal/nodes/http/request_expression_test.go.",
+      "verification": "Canonical focus suite 4/4 PASS - the HTTP Request node inside post_balance executes with an evaluated URL."
     }
   ],
   "iteration_plan": [
@@ -90,7 +220,7 @@
       "status": "DONE",
       "steps": [
         "Confirm n8n credential list: GET /api/v1/credentials on n8n and write snapshot to tmp/validation-2026-09-09/credentials.json",
-        "Draft the new m9m REST surface (mirroring n8n) — type signatures, route paths, request/response shapes per credentials_n8n_api.MD Section 3",
+        "Draft the new m9m REST surface (mirroring n8n) - type signatures, route paths, request/response shapes per credentials_n8n_api.MD Section 3",
         "Sketch the order of operations inside sync-service/sync.py so workflows that reference a credential always follow the credential upsert (avoid race)",
         "Decide Content-Type policy for Respond to Webhook: priority (override > inbound > JSON fallback) per the row 6 evidence"
       ],
@@ -108,7 +238,7 @@
         "Add unit tests in internal/nodes/transform/respond_to_webhook_test.go covering the three branches",
         "Commit, push, redeploy via scripts/deploy_m9m.ps1",
         "Re-run validate for row 6 only; confirm n8n + m9m both emit application/xml with matching body",
-        "Re-run the full 14-case suite to confirm no regression on rows that previously passed"
+        "Re-run the full 14-case suite for regression"
       ],
       "deliverables": [
         "internal/webhooks/manager.go (resolveContentType, readRespondToWebhookHeaders, findRespondToWebhookNodeParams, firstHeaderValue)",
@@ -119,36 +249,80 @@
     {
       "phase": 3,
       "name": "Credential sync (positive/3 + positive/8)",
-      "status": "PENDING",
+      "status": "PARTIAL - m9m side DONE, bridge ordering not covered by evidence",
       "steps": [
-        "Implement internal/credentials package: store keyed by id, n8n-compatible envelope, no data field",
-        "Implement m9m REST handlers for /api/v1/credentials/{list,get,create,update,delete,test,schema}: mirror credentials_n8n_api.MD Section 3 verbatim",
-        "Unmarshal `credentials` field in POST /api/v1/workflows (was being dropped at unmarshal)",
-        "Update BaseNode.credentialManager (or add it) — per-node `credentials` map resolves to the store at execution time",
-        "Patch sync-service/sync.py: at every poll, GET /api/v1/credentials on n8n BEFORE POSTing workflows; resolve node.credentials[name] → n8n id; pass the resolved map into the workflow body",
-        "Add integration test: simulate n8n → sync-service → m9m cycle for one auth'd workflow; assert m9m record matches",
-        "Commit, push, redeploy",
-        "Re-run validate; expect positive/3 and positive/8 to PASS via real credential resolution (not anonymous)",
-        "Re-run full 14-case suite for regression"
-      ]
+        "DONE: Implement internal/credentials package: store keyed by id, n8n-compatible envelope, no data field",
+        "DONE: Implement m9m REST handlers for /api/v1/credentials/{list,get,create,update,delete,test,schema}: mirror credentials_n8n_api.MD Section 3 verbatim",
+        "DONE: Unmarshal `credentials` field in POST /api/v1/workflows (was being dropped at unmarshal)",
+        "DONE: Update BaseNode.credentialManager: per-node `credentials` map resolves to the store at execution time",
+        "OPEN: Patch sync-service/sync.py: at every poll, GET /api/v1/credentials on n8n BEFORE POSTing workflows; resolve node.credentials[name] -> n8n id; pass the resolved map into the workflow body",
+        "OPEN: Add integration test: simulate n8n -> sync-service -> m9m cycle for one auth'd workflow; assert m9m record matches",
+        "DONE: Commit, push, redeploy",
+        "DONE: Re-run validate; positive/3 and positive/8 PASS via real credential resolution",
+        "DONE: Re-run full 14-case suite for regression"
+      ],
+      "verification": "Canonical credentials suite 2/2 PASS (c101, c103); c105 still reports 'credential names/types differ'."
     },
     {
       "phase": 4,
       "name": "Update artefacts (sheet + MD)",
-      "status": "IN_PROGRESS (after phase 3)",
+      "status": "DONE",
       "steps": [
-        "Update sheet 'Webhook Controlling' row 6 columns G/H with the new (200, OK)",
-        "Update sheet 'Webhook Controlling' row 3 and row 12 columns G/H with the new (200, OK) — these were already 200/OK but the body now reflects real authed execution",
-        "Regenerate workflow-test.MD from tmp/pull_sheet.py + tmp/generate_workflow_test_md.py; the new Section I from tmp/parity_gaps.json becomes Section I of the MD",
-        "Commit workflow-test.MD + parity_gaps.json + credentials_n8n_api.MD in a single docs commit"
+        "DONE: Update sheet 'Webhook Controlling' rows with the new status/code from the canonical report (30 cells across 9 rows, service-account write, readback verified)",
+        "DONE: Regenerate workflow-test.MD from the canonical report tmp/parity-results/fase-d-2026-11-12/parity-results.json (25/55 PASS)",
+        "DONE: Standardise every status-bearing line on one Markdown table shape and document it in Section F",
+        "DONE: Reconcile Section B with Section J (both now state the canonical numbers of the same report)",
+        "DONE: Refresh parity/parity_gaps.json and credentials_n8n_api.MD / docs/N8N_UI_PARITY_PLAN.md"
+      ],
+      "verification": "python scripts/parity/report.py --results tmp/parity-results/fase-d-2026-11-12/parity-results.json --drift-check reports no drift"
+    },
+    {
+      "phase": 5,
+      "name": "Fase D - documentation and sheet sync",
+      "status": "DONE",
+      "steps": [
+        "Regenerate workflow-test.MD from the canonical report",
+        "Apply the sheet parity status refresh with the service account and verify every written range by readback",
+        "Reconcile parity/parity_gaps.json with the current evidence, keeping the stable ids",
+        "Align credentials_n8n_api.MD and docs/N8N_UI_PARITY_PLAN.md with the implemented behaviour",
+        "Run the drift guard and the graphify update; leave the tree uncommitted"
+      ],
+      "deliverables": [
+        "workflow-test.MD",
+        "parity/parity_gaps.json",
+        "credentials_n8n_api.MD",
+        "docs/N8N_UI_PARITY_PLAN.md",
+        "scripts/update_parity_sheets.py"
       ]
+    },
+    {
+      "phase": 6,
+      "name": "Fase D - documentation and sheet sync, pass 2 (final live parity report)",
+      "status": "DONE",
+      "steps": [
+        "Read the final live report (79 cases) and the 26 drifted rows printed by the C12 guard",
+        "Regenerate workflow-test.MD from the live report so every case row carries the live verdict and evidence; the table format, row ids and section structure are unchanged",
+        "Make the generated prose report-driven (header counts, capability-gap counts, the negative-suite and database paragraphs) so a regenerated document cannot carry a stale number again",
+        "Sync the sheet with the service account; 30 cells over 9 rows written and readback verified, 12 sheet rows and 15 cases left unchanged with their reasons",
+        "Reconcile parity/parity_gaps.json: seven remaining failures, five fixture blocks and the C9 goroutine-metric sub-gap recorded with factual evidence",
+        "Run the full live suite (tmp/parity-results/docs-pass2) - the C12 guard reports PASS with 0 drifted rows",
+        "Run the graphify update; leave the tree uncommitted"
+      ],
+      "deliverables": [
+        "workflow-test.MD",
+        "parity/parity_gaps.json",
+        "scripts/update_parity_sheets.py",
+        "tmp/parity-results/docs-pass2/parity-results.json"
+      ],
+      "verification": "tmp/parity-results/docs-pass2/parity-results.json: 67/79 PASS, 7 FAIL, 5 BLOCKED, 0 SKIPPED; c1201 PASS ('the sheet, workflow-test.MD and the live report agree'). python scripts/parity/report.py --results tmp/parity-results/docs-pass2/parity-results.json --drift-check prints 'no drift detected between sheet and live report'."
     }
   ],
   "guardrails": [
-    "Do NOT modify sync-service/sync.py to mask a parity gap (Section G hard constraint still applies). The credential sync addition IS a real implementation step, not a bypass — it has to exist because m9m has no other way to know what credential envelope to use.",
+    "Do NOT modify sync-service/sync.py to mask a parity gap (Section G hard constraint still applies). The credential sync addition IS a real implementation step, not a bypass - it has to exist because m9m has no other way to know what credential envelope to use.",
     "Do NOT modify any n8n workflow JSON. All fixes go in Go under internal/nodes, internal/api, internal/credentials, and in sync-service/sync.py for the credential sync orchestration only.",
-    "Every executed workflow step must produce a WorkflowExecution record visible in /api/v1/executions — apply to the new authed positive/3 and positive/8 cases in particular",
-    "Update both the Google Sheet and workflow-test.MD atomically (single git commit for the docs pass)"
+    "Every executed workflow step must produce a WorkflowExecution record visible in /api/v1/executions - apply to the new authed positive/3 and positive/8 cases in particular",
+    "Update both the Google Sheet and workflow-test.MD atomically (single git commit for the docs pass)",
+    "Never write a credential value into a document, a sheet cell, a report or a log line; response bodies that carry credential material are withheld and listed instead.",
+    "Do not delete or reset sheet rows, tabs or formulas; only result cells of attributable rows may be rewritten."
   ]
 }
-

@@ -1,0 +1,17 @@
+{
+  "suite": "C5_telemetry",
+  "description": "C5 telemetry - every trigger must leave an execution record with status, data and timestamps on both hosts.",
+  "cases": [
+    {
+      "id": "c501",
+      "name": "C5 Simple Webhook trigger produces an execution record on both hosts",
+      "check": "telemetry",
+      "workflow_name": "Simple Webhook",
+      "path": "simple_webhook",
+      "body": "{\"variable\":\"1\"}",
+      "expected_status": 200,
+      "poll_seconds": 20,
+      "notes": "GET /api/v1/executions?workflowId=<id>&includeData=true is polled for a new record that carries status, data and started/finished timestamps."
+    }
+  ]
+}

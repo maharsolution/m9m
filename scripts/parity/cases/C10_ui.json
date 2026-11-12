@@ -1,0 +1,21 @@
+{
+  "suite": "C10_ui",
+  "description": "C10 UI journey - the web UI must be served by a disposable local m9m and the browser journey must be recorded step by step.",
+  "cases": [
+    {
+      "id": "c1001",
+      "name": "C10 web UI unit tests pass and a local m9m serves the UI",
+      "check": "ui_surface",
+      "offline": true,
+      "notes": "Runs the vitest suite in web/ and boots a disposable m9m to prove the SPA is served at /."
+    },
+    {
+      "id": "c1002",
+      "name": "C10 recorded browser journey (import -> canvas -> panel -> expression -> credentials -> tags -> versions -> run -> execution)",
+      "check": "ui_journey",
+      "artifact": "scripts/parity/artifacts/ui_journey_result.json",
+      "offline": true,
+      "notes": "The journey is executed against a disposable local instance and stored as a step list. When the artifact is missing the case is BLOCKED with the missing prerequisite."
+    }
+  ]
+}

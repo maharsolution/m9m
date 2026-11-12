@@ -1,0 +1,65 @@
+{
+  "suite": "C8_faults",
+  "description": "C8 error and negative behaviour. The shared hosts are only read / POSTed to. Fault injection (upstream 500, database down) runs against a disposable local m9m.",
+  "cases": [
+    {
+      "id": "c801",
+      "name": "C8 malformed JSON is rejected with the same status on both hosts",
+      "path": "simple_webhook",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{broken",
+      "expected_status": 422,
+      "compare": "json",
+      "notes": "n8n answers 422 with a V8 parser hint, m9m answers 422 with a Go parser hint; the comparator treats the two hints as the same failure."
+    },
+    {
+      "id": "c802",
+      "name": "C8 db_quiry without the required db_type parameter",
+      "path": "db_quiry",
+      "method": "POST",
+      "content_type": "application/json",
+      "body": "{\"operation\":\"inquiry\",\"table_name\":\"credentials\"}",
+      "compare": "json",
+      "notes": "No expected status is pinned: the contract is that both hosts answer the same way. n8n answers 200 with a structured NodeOperationError, m9m answers 500 with a plain text error - a real m9m-side parity gap."
+    },
+    {
+      "id": "c803",
+      "name": "C8 upstream HTTP failure is surfaced as a server error, not a crash",
+      "check": "local_error",
+      "path": "parity_fault_upstream",
+      "body": "{}",
+      "expected_status": 200,
+      "workflow": {
+        "name": "Parity Fault Upstream",
+        "nodes": [
+          {"name": "Webhook", "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [0, 0], "parameters": {"path": "parity_fault_upstream", "httpMethod": "POST", "options": {}}},
+          {"name": "HTTP Request", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [220, 0], "parameters": {"method": "GET", "url": "http://127.0.0.1:9/parity-unreachable", "options": {"timeout": 2000}}}
+        ],
+        "connections": {"Webhook": {"main": [[{"node": "HTTP Request", "type": "main", "index": 0}]]}},
+        "active": true,
+        "settings": {}
+      },
+      "notes": "The HTTP Request node points at a closed loopback port. n8n acknowledges the webhook with HTTP 200 and records the upstream failure on the execution; m9m must do the same and must stay healthy (healthz 200). The n8n counterpart fixture cannot be created without mutating the shared n8n."
+    },
+    {
+      "id": "c804",
+      "name": "C8 database outage is surfaced as a server error, not a crash",
+      "check": "local_error",
+      "path": "parity_fault_db",
+      "body": "{}",
+      "expected_status": 200,
+      "workflow": {
+        "name": "Parity Fault Database",
+        "nodes": [
+          {"name": "Webhook", "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [0, 0], "parameters": {"path": "parity_fault_db", "httpMethod": "POST", "options": {}}},
+          {"name": "Execute a SQL query", "type": "n8n-nodes-base.postgres", "typeVersion": 2.4, "position": [220, 0], "parameters": {"host": "127.0.0.1", "port": 1, "database": "parity", "user": "parity", "password": "parity", "sslMode": "disable", "operation": "executeQuery", "query": "SELECT 1"}}
+        ],
+        "connections": {"Webhook": {"main": [[{"node": "Execute a SQL query", "type": "main", "index": 0}]]}},
+        "active": true,
+        "settings": {}
+      },
+      "notes": "The PostgreSQL node points at a closed loopback port, so the connection fails. The webhook is acknowledged with HTTP 200, the database outage is recorded as a failed execution and m9m stays healthy."
+    }
+  ]
+}

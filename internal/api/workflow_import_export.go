@@ -59,6 +59,9 @@ type WorkflowImportSummary struct {
 	ActiveState string                `json:"activeState"`
 	Workflows   []WorkflowImportItem  `json:"workflows"`
 	Errors      []WorkflowImportError `json:"errors"`
+	// Credentials reports the credential import of a bundle envelope.
+	// It is nil for a plain workflow import.
+	Credentials *credentialImportSummary `json:"credentials,omitempty"`
 }
 
 // ExportWorkflow writes one workflow in n8n format.
@@ -96,10 +99,42 @@ func (s *APIServer) ExportWorkflow(w http.ResponseWriter, r *http.Request) {
 		filename = "workflow"
 	}
 
+	// Bundle mode: the export carries the credentials of the workflow
+	// as well, encrypted with the instance key. The envelope is
+	//
+	//	{"workflows":[<workflow>], "credentials":[<credential>, ...]}
+	//
+	// which is the m9m equivalent of the n8n CLI export with
+	// `--separate` (n8n writes the two documents into two files, m9m
+	// keeps them together so one POST restores the workflow).
+	if includeCredentialsRequested(r) {
+		bundle, bundleErr := s.buildWorkflowCredentialBundle(workflow, data)
+		if bundleErr != nil {
+			s.sendError(w, http.StatusInternalServerError, "Failed to export the workflow bundle", bundleErr)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename+".json"))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(bundle)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename+".json"))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(data)
+}
+
+// includeCredentialsRequested reports whether the caller asked for the
+// bundle mode of a workflow export (`?includeCredentials=true`).
+func includeCredentialsRequested(r *http.Request) bool {
+	value := strings.TrimSpace(r.URL.Query().Get("includeCredentials"))
+	switch strings.ToLower(value) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
 }
 
 // ExportWorkflows writes a list of workflows in n8n format.
@@ -200,7 +235,7 @@ func (s *APIServer) ImportWorkflows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entries, honourActive, err := parseImportPayload(payload)
+	entries, credentialEntries, honourActive, plainCredentials, err := parseImportBundlePayload(payload)
 	if err != nil {
 		s.sendError(w, http.StatusBadRequest, "Invalid import payload", err)
 		return
@@ -210,10 +245,23 @@ func (s *APIServer) ImportWorkflows(w http.ResponseWriter, r *http.Request) {
 		honourActive = true
 	}
 
+	// A bundle envelope carries the credentials of the workflows. They
+	// are imported FIRST so the node credential references can be
+	// resolved against them - a credential that is imported afterwards
+	// would leave the workflow with unresolved references (and the
+	// usual "could not be resolved" warning).
+	var importedCredentials *importedCredentialSet
+	var credentialSummary *credentialImportSummary
+	if len(credentialEntries) > 0 {
+		credentialSummary, importedCredentials = s.importCredentialEntries(credentialEntries, plainCredentials)
+	}
+
 	importer := compatibility.NewN8nWorkflowImporter()
 	importOptions := compatibility.ImportOptions{
-		HonourActive:       honourActive,
-		CredentialResolver: s.resolveCredentialRef,
+		HonourActive: honourActive,
+		// The resolver consults the credentials of the bundle first and
+		// falls back to the local credential store.
+		CredentialResolver: s.resolveCredentialRefWithImported(importedCredentials),
 		IDExists: func(id string) bool {
 			if id == "" {
 				return false
@@ -231,6 +279,7 @@ func (s *APIServer) ImportWorkflows(w http.ResponseWriter, r *http.Request) {
 		ActiveState: activeStateValue(honourActive),
 		Workflows:   []WorkflowImportItem{},
 		Errors:      []WorkflowImportError{},
+		Credentials: credentialSummary,
 	}
 
 	for index, entry := range entries {

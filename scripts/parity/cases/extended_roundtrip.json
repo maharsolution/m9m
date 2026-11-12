@@ -1,0 +1,30 @@
+{
+  "suite": "C2_roundtrip",
+  "description": "C2 import/export roundtrip - the n8n workflow JSON is imported into a disposable local m9m, read back and exported. The shared deployment is never written to.",
+  "cases": [
+    {
+      "id": "c201",
+      "name": "C2 Simple Webhook: n8n JSON -> local m9m import -> GET -> export",
+      "check": "roundtrip",
+      "workflow_name": "Simple Webhook",
+      "ignore_fields": ["typeVersion"],
+      "notes": "typeVersion is excluded because m9m stores it as an int (documented model limitation, asserted separately by the C6 typeVersion contract). Nodes, parameters, credentials and connections must survive the roundtrip."
+    },
+    {
+      "id": "c202",
+      "name": "C2 Simple Webhook - Set: n8n JSON -> local m9m import -> GET -> export",
+      "check": "roundtrip",
+      "workflow_name": "Simple Webhook - Set",
+      "ignore_fields": ["typeVersion"],
+      "notes": "Second roundtrip fixture with a Set node and its parameter tree."
+    },
+    {
+      "id": "c203",
+      "name": "C2 Simple Webhook - mysql: n8n JSON -> local m9m import -> GET -> export",
+      "check": "roundtrip",
+      "workflow_name": "Simple Webhook - mysql",
+      "ignore_fields": ["typeVersion"],
+      "notes": "Roundtrip fixture that carries a database credential reference."
+    }
+  ]
+}

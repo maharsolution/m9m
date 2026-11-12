@@ -94,6 +94,7 @@
       },
       "expected_status": 200,
       "compare": "json",
+      "environment_blocked": "The fixture token is a fixed JWT from an earlier cycle: both hosts reject it with 403 because it is expired or signed with the old secret. A freshly minted token for the shared instance is required, and the harness cannot mint one because the instance's JWT secret is not exposed.",
       "notes": "Webhook with JWT bearer authentication."
     },
     {
@@ -108,6 +109,7 @@
       },
       "expected_status": 200,
       "compare": "json",
+      "environment_blocked": "The header-auth API key of the shared instance is not in the repository, so the fixture key is rejected with 403 by both hosts. The key configured on the instance is required to exercise this path.",
       "notes": "Webhook with an API-key header."
     },
     {
@@ -119,6 +121,7 @@
       "body": "{\"email\":\"parity@example.com\",\"name\":\"Parity User\"}",
       "expected_status": 200,
       "compare": "json",
+      "environment_blocked": "The signup workflow calls an external signup service that is not reachable from this network; both hosts answer 500 in the same way. The upstream service has to be available for the happy path.",
       "notes": "Full signup flow: webhook -> code -> http -> respond."
     },
     {

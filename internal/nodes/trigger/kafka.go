@@ -39,11 +39,31 @@ const (
 //     to the broker list via segmentio/kafka-go (see
 //     `messaging.KafkaNativeClient`). No proxy hop, lower latency.
 //
-// In production the polling is wrapped in a ticker (default 5s)
-// and runs in the workflow scheduler's goroutine; the node's
-// `Execute` path is invoked on each tick with the polled records
-// as `inputData`. The `intervalSeconds` parameter controls the
-// cadence.
+// # Execution model — no always-on consumer daemon
+//
+// n8n runs one consumer per active workflow: the trigger is a
+// long-lived daemon that keeps polling the broker and pushes every
+// record into the workflow, whether or not a request is in flight.
+// m9m does NOT do that today. The trigger node here is a *poll*
+// primitive: `Execute` reads whatever the broker has right now and
+// returns the records as items. During a webhook-driven execution
+// m9m never calls it for a workflow that is driven by another
+// trigger, so the node is skipped with an explicit warning (see
+// `isConsumerTriggerType` in internal/engine/engine.go) instead of
+// silently disappearing.
+//
+// The practical consequence: a workflow that waits for a Kafka
+// message to arrive while another trigger (e.g. a webhook) is
+// serving the request will never see that message under m9m. The
+// poll interval (`intervalSeconds`) only applies once something
+// calls `Execute`.
+//
+// Wiring up a real daemon needs, at minimum: an active-workflow
+// registry, credential resolution for stored workflows, consumer
+// start/stop + rebalance handling, offset commit policy, and a path
+// that feeds the polled records into the engine. Those parts live
+// outside internal/nodes/trigger, so this node deliberately stays a
+// poll primitive.
 type KafkaTriggerNode struct {
 	*base.BaseNode
 	client *http.Client
@@ -123,6 +143,9 @@ func kafkaTriggerProperties() []base.NodeProperty {
 // keeps its existing create-consumer + poll-records shape; the
 // native path opens a segmentio/kafka-go reader and returns
 // whatever the broker fetched in the poll window.
+//
+// This is a one-shot poll — see the type documentation for why m9m
+// has no always-on consumer daemon.
 func (n *KafkaTriggerNode) Execute(inputData []model.DataItem, nodeParams map[string]interface{}) ([]model.DataItem, error) {
 	// Apply the engine-injected credential envelope (BUG-2026-10-12-002)
 	// BEFORE dispatching so both `pollNative` and `pollREST` see the

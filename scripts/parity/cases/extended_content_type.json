@@ -1,0 +1,72 @@
+{
+  "suite": "content_type",
+  "description": "C4: Content-Type parity - XML / JSON / text / binary / form-urlencoded",
+  "cases": [
+    {
+      "id": "c401",
+      "name": "XML request with UTF-8 declaration",
+      "path": "webhook_xml",
+      "method": "POST",
+      "content_type": "application/xml; charset=utf-8",
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><buku id=\"001\"><judul>Belajar Pemrograman Web</judul><penulis>John Doe</penulis><tahun>2026</tahun><harga mataUang=\"IDR\">120000</harga></buku>",
+      "expected_status": 200,
+      "compare": "xml",
+      "notes": "XML Content-Type with charset parameter must parse correctly (base media type comparison)"
+    },
+    {
+      "id": "c402",
+      "name": "JSON request with explicit charset",
+      "path": "simple_webhook",
+      "method": "POST",
+      "content_type": "application/json; charset=utf-8",
+      "body": "{\"variable\":\"1\"}",
+      "expected_status": 200,
+      "compare": "json",
+      "notes": "JSON Content-Type with charset parameter - base media type must be recognized"
+    },
+    {
+      "id": "c403",
+      "name": "plain text request body",
+      "path": "simple_webhook",
+      "method": "POST",
+      "content_type": "text/plain",
+      "body": "plain text payload without JSON structure",
+      "expected_status": 200,
+      "compare": "json",
+      "notes": "text/plain Content-Type - webhook should accept and pass through (status/headers only comparison)"
+    },
+    {
+      "id": "c404",
+      "name": "form-urlencoded body",
+      "path": "simple_webhook",
+      "method": "POST",
+      "content_type": "application/x-www-form-urlencoded",
+      "body": "variable=1&name=test",
+      "expected_status": 200,
+      "compare": "json",
+      "notes": "application/x-www-form-urlencoded - webhook parser must decode into JSON equivalent"
+    },
+    {
+      "id": "c405",
+      "name": "XML without charset parameter",
+      "path": "webhook_xml",
+      "method": "POST",
+      "content_type": "application/xml",
+      "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><buku id=\"001\"><judul>Belajar Pemrograman Web</judul><penulis>John Doe</penulis><tahun>2026</tahun><harga mataUang=\"IDR\">120000</harga></buku>",
+      "expected_status": 200,
+      "compare": "xml",
+      "notes": "XML Content-Type without charset - must parse identical to the charset=utf-8 variant (roundtrip equivalence)"
+    },
+    {
+      "id": "c406",
+      "name": "binary request body",
+      "path": "simple_webhook",
+      "method": "POST",
+      "content_type": "application/octet-stream",
+      "body": "\u0000\u0001\u0002\u0003ÿþ\n\r",
+      "expected_status": 200,
+      "compare": "json",
+      "notes": "application/octet-stream - the webhook must accept binary bytes without a 415; the echoed body is compared as-is (invalid UTF-8 handling is not normalised away)"
+    }
+  ]
+}

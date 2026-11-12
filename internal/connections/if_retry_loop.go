@@ -4,9 +4,9 @@ Package connections — If-retry loop detection.
 n8n supports a "retry loop" construction that is not encoded as a
 `splitInBatches` node. The pattern is:
 
-  Webhook → ... → Set Counter (Code) → Find Respond → ... → Check
-   Key Exists → If (true) → back to "Find Respond"
-                          └─false→ Respond Failed
+	Webhook → ... → Set Counter (Code) → Find Respond → ... → Check
+	 Key Exists → If (true) → back to "Find Respond"
+	                        └─false→ Respond Failed
 
 The "If" node's condition is `attempt < maxAttempts`, and its
 `main[0]` ("true") branch sends the data back into the body of
@@ -21,18 +21,18 @@ loop manually, matching n8n's behavior.
 
 Detection rules (all must be true):
 
-  1. The workflow has a `n8n-nodes-base.code` or `n8n-nodes-base.set`
-     node that produces fields named `attempt` and `maxAttempts`.
-     (Either as the body's `assignments` or as the literal keys
-     produced by the `jsCode`.)
-  2. The workflow has a `n8n-nodes-base.if` node whose `leftValue`
-     references `attempt` and whose `rightValue` references
-     `maxAttempts`, with operator `lt` (less than). This is the
-     "guard" node.
-  3. The guard's `main[0]` ("true") branch creates a back-edge to
-     a node in the cycle body (i.e. a node that also eventually
-     reaches the guard). Without this back-edge, the workflow is
-     a DAG and there's nothing to loop over.
+ 1. The workflow has a `n8n-nodes-base.code` or `n8n-nodes-base.set`
+    node that produces fields named `attempt` and `maxAttempts`.
+    (Either as the body's `assignments` or as the literal keys
+    produced by the `jsCode`.)
+ 2. The workflow has a `n8n-nodes-base.if` node whose `leftValue`
+    references `attempt` and whose `rightValue` references
+    `maxAttempts`, with operator `lt` (less than). This is the
+    "guard" node.
+ 3. The guard's `main[0]` ("true") branch creates a back-edge to
+    a node in the cycle body (i.e. a node that also eventually
+    reaches the guard). Without this back-edge, the workflow is
+    a DAG and there's nothing to loop over.
 
 When all three are satisfied, `DetectIfRetryLoops` returns one
 `IfRetryLoop` per guard. The body of the loop is the set of
@@ -85,6 +85,18 @@ type IfRetryLoop struct {
 	// `maxAttempts: 10` (literal) yields 10; otherwise we fall
 	// back to the default.
 	MaxIterations int
+
+	// CounterNode is the node that produces the `attempt` (and
+	// usually `maxAttempts`) fields the guard compares against —
+	// e.g. the `Set Counter` Code node in the Finnet workflow.
+	//
+	// It sits *upstream* of the back-edge target, so it is not
+	// part of BodyNodes. The engine re-executes it on every
+	// iteration after the first, feeding the previous iteration's
+	// output back in, so `attempt` actually advances and the
+	// `attempt < maxAttempts` guard terminates the loop instead
+	// of spinning until MaxIterations is exhausted.
+	CounterNode string
 }
 
 // attemptPattern matches the If node's `leftValue` referencing
@@ -170,6 +182,7 @@ func DetectIfRetryLoops(workflow *model.Workflow) []IfRetryLoop {
 			BackEdgeTarget: backEdge,
 			BodyNodes:      body,
 			MaxIterations:  maxIters,
+			CounterNode:    detectCounterNode(workflow, byName, backEdge, guard, body),
 		})
 	}
 	return loops
@@ -213,30 +226,26 @@ func IsIfRetryLoopGuard(workflow *model.Workflow, nodeName string) bool {
 
 // findIfRetryGuardNames returns the names of `If` nodes whose
 // condition is the standard `attempt < maxAttempts` pattern.
+//
+// Every condition of the node is inspected, not just the first one:
+// n8n's IF node stores a full condition table, and a guard that
+// combines the retry predicate with a "reply already arrived"
+// predicate (e.g. `attempt < maxAttempts OR replyFound`) is still a
+// retry guard. Only the first row was inspected before, which made
+// multi-condition guards invisible to the detector — the workflow
+// was then rejected as "contains cycles" or ran without a loop
+// driver.
 func findIfRetryGuardNames(workflow *model.Workflow) []string {
 	var guards []string
 	for _, n := range workflow.Nodes {
 		if n.Type != "n8n-nodes-base.if" {
 			continue
 		}
-		conds := ifRetryGetConditionsArray(n.Parameters)
-		if len(conds) == 0 {
+		conditions, err := ExtractIfConditions(n.Parameters)
+		if err != nil || len(conditions) == 0 {
 			continue
 		}
-		first, ok := conds[0].(map[string]interface{})
-		if !ok {
-			continue
-		}
-		leftVal, _ := first["leftValue"].(string)
-		rightVal, _ := first["rightValue"].(string)
-		op, _ := extractOperatorOp(first["operator"])
-		if op != "lessThan" && op != "lt" {
-			continue
-		}
-		if !attemptPattern.MatchString(leftVal) {
-			continue
-		}
-		if !maxAttemptsPattern.MatchString(rightVal) {
+		if !ifConditionsContainAttemptGuard(conditions) {
 			continue
 		}
 		guards = append(guards, n.Name)
@@ -246,42 +255,158 @@ func findIfRetryGuardNames(workflow *model.Workflow) []string {
 	return guards
 }
 
-// ifRetryGetConditionsArray unwraps the n8n `conditions` shape
-// (either a bare array or a wrapper object with `.conditions`).
-func ifRetryGetConditionsArray(params map[string]interface{}) []interface{} {
-	if params == nil {
-		return nil
-	}
-	raw, ok := params["conditions"]
-	if !ok {
-		return nil
-	}
-	switch v := raw.(type) {
-	case []interface{}:
-		return v
-	case map[string]interface{}:
-		inner, ok := v["conditions"]
-		if !ok {
-			return nil
+// ifConditionsContainAttemptGuard reports whether any condition of
+// the table is the `attempt < maxAttempts` retry predicate.
+func ifConditionsContainAttemptGuard(conditions []IfCondition) bool {
+	for _, condition := range conditions {
+		if condition.Op != "lessThan" && condition.Op != "lessThanOrEqual" {
+			continue
 		}
-		arr, _ := inner.([]interface{})
-		return arr
+		leftVal, _ := condition.Left.(string)
+		rightVal, _ := condition.Right.(string)
+		if !attemptPattern.MatchString(leftVal) {
+			continue
+		}
+		if !maxAttemptsPattern.MatchString(rightVal) {
+			continue
+		}
+		return true
 	}
-	return nil
+	return false
 }
 
-// extractOperatorOp pulls the canonical operation name from the
-// IF node's `operator` field, which can be either a bare string
-// (`"lessThan"`) or an object (`{operation: "lt", type: "number"}`).
-func extractOperatorOp(op interface{}) (string, bool) {
-	switch v := op.(type) {
-	case string:
-		return v, true
-	case map[string]interface{}:
-		name, ok := v["operation"].(string)
-		return name, ok
+// detectCounterNode finds the node that produces the `attempt`
+// counter the guard compares against.
+//
+// The counter must feed the loop body entry (the back-edge target)
+// and must not be part of the body itself — in the Finnet workflow
+// it is `Set Counter` (a Code node) wired straight into
+// `Find Respond`. Nodes that merely mention "attempt" without
+// producing it are ignored.
+//
+// The search prefers a node that produces *both* `attempt` and
+// `maxAttempts` (that is the real counter) over a node that only
+// produces `attempt`.
+func detectCounterNode(workflow *model.Workflow, byName map[string]model.Node, backEdge, guard string, body []string) string {
+	if workflow == nil || backEdge == "" {
+		return ""
 	}
-	return "", false
+	bodySet := make(map[string]bool, len(body))
+	for _, name := range body {
+		bodySet[name] = true
+	}
+
+	best := ""
+	bestScore := 0
+	for i := range workflow.Nodes {
+		node := workflow.Nodes[i]
+		if node.Name == guard || node.Name == backEdge || bodySet[node.Name] {
+			continue
+		}
+		score := counterNodeScore(node)
+		if score == 0 {
+			continue
+		}
+		// The counter has to feed the loop body entry, otherwise
+		// re-executing it would not influence the body at all.
+		if !nodeReaches(workflow, node.Name, backEdge) {
+			continue
+		}
+		if score > bestScore {
+			bestScore = score
+			best = node.Name
+		}
+	}
+	return best
+}
+
+// counterNodeScore rates how likely a node is the retry counter:
+// 2 = produces both `attempt` and `maxAttempts`, 1 = produces
+// `attempt` only, 0 = not a counter.
+func counterNodeScore(node model.Node) int {
+	switch node.Type {
+	case "n8n-nodes-base.code":
+		js, _ := node.Parameters["jsCode"].(string)
+		if js == "" {
+			return 0
+		}
+		hasAttempt := attemptPattern.MatchString(js)
+		hasMax := maxAttemptsPattern.MatchString(js)
+		switch {
+		case hasAttempt && hasMax:
+			return 2
+		case hasAttempt:
+			return 1
+		}
+	case "n8n-nodes-base.set":
+		names := setAssignmentNames(node.Parameters)
+		hasAttempt := names["attempt"]
+		hasMax := names["maxAttempts"]
+		switch {
+		case hasAttempt && hasMax:
+			return 2
+		case hasAttempt:
+			return 1
+		}
+	}
+	return 0
+}
+
+// setAssignmentNames collects the field names assigned by a Set
+// node (both the modern `assignments.assignments` shape and the
+// legacy flat `assignments` array).
+func setAssignmentNames(params map[string]interface{}) map[string]bool {
+	out := map[string]bool{}
+	root, ok := params["assignments"].(map[string]interface{})
+	if !ok {
+		return out
+	}
+	rows, ok := root["assignments"].([]interface{})
+	if !ok {
+		return out
+	}
+	for _, raw := range rows {
+		row, ok := raw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _ := row["name"].(string)
+		if name != "" {
+			out[name] = true
+		}
+	}
+	return out
+}
+
+// nodeReaches reports whether `from` can reach `to` by following
+// the workflow's main connections.
+func nodeReaches(workflow *model.Workflow, from, to string) bool {
+	if from == to {
+		return true
+	}
+	visited := map[string]bool{from: true}
+	queue := []string{from}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		conns, ok := workflow.Connections[cur]
+		if !ok {
+			continue
+		}
+		for _, branch := range conns.Main {
+			for _, c := range branch {
+				if c.Node == "" || visited[c.Node] {
+					continue
+				}
+				if c.Node == to {
+					return true
+				}
+				visited[c.Node] = true
+				queue = append(queue, c.Node)
+			}
+		}
+	}
+	return false
 }
 
 // extractMaxAttempts looks for a literal `maxAttempts: N` in the

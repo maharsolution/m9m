@@ -180,7 +180,7 @@ def xml_round_trip_equivalent(n8n_xml: str, m9m_xml: str) -> bool:
         b = ET.fromstring(m9m_xml)
     except ET.ParseError:
         return n8n_xml.strip() == m9m_xml.strip()
-    return _canon_xml(a) == _canon_xml(b)
+    return a.tag == b.tag and _canon_xml(a) == _canon_xml(b)
 
 
 def base_media_type(content_type: str) -> str:
@@ -211,6 +211,8 @@ def classify(case: dict[str, Any], n8n: dict[str, Any], m9m: dict[str, Any]) -> 
     Returns ``(verdict, reason)``. ``verdict`` is ``PASS`` or ``FAIL``;
     ``reason`` explains a failure in one short line.
     """
+    if not n8n.get("status_code") or not m9m.get("status_code"):
+        return "FAIL", "transport failure"
     if n8n.get("status_code", 0) != m9m.get("status_code", 0):
         return "FAIL", (
             f"HTTP status differs: n8n={n8n.get('status_code')} "
@@ -221,10 +223,7 @@ def classify(case: dict[str, Any], n8n: dict[str, Any], m9m: dict[str, Any]) -> 
         return "FAIL", (
             f"n8n status {n8n.get('status_code')} != expected {expected}")
 
-    if not case.get("compare_content_type", True):
-        return "PASS", "status only (content type comparison disabled)"
-
-    if not headers_equivalent(n8n.get("headers", {}), m9m.get("headers", {})):
+    if case.get("compare_content_type", True) and not headers_equivalent(n8n.get("headers", {}), m9m.get("headers", {})):
         return "FAIL", (
             "Content-Type differs: n8n="
             f"{base_media_type(n8n.get('headers', {}).get('Content-Type', ''))} "

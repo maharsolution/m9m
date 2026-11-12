@@ -20,6 +20,7 @@ import argparse
 import datetime as _dt
 import json
 import os
+import re
 import sys
 import urllib.parse
 import urllib.request
@@ -29,6 +30,10 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 OUT_ROOT = ROOT / "tmp" / "parity-results"
+
+sys.path.insert(0, str(HERE))
+
+from signatures import curl_body_signature  # noqa: E402  (local module, path set above)
 
 SHEET_ID = "1PAz38gDk2Fa_6SlBtC3fWss3YfL_KgroEAwCpiY7aDQ"
 SHEET_API_KEY = os.environ.get(
@@ -113,58 +118,269 @@ def _sheet_rows(tab: str) -> list[dict[str, str]]:
             "name": (cells[1] or "").strip(),
             "status": (cells[7] or "").strip().upper(),
             "code": (cells[6] or "").strip(),
+            "request": request,
+            "suite": "negative" if tab == NEGATIVE_TAB else "positive",
         })
     return rows
 
 
 def _path_of(row: dict[str, str]) -> str:
     """Extract the webhook path from a sheet row name or request."""
-    for field in (row.get("name", ""),):
+    for field in (row.get("request", ""), row.get("name", "")):
         low = field.lower()
         marker = "webhook/"
         if marker in low:
             rest = low.split(marker, 1)[1]
-            return rest.split("'")[0].split('"')[0].strip()
+            return re.split(r"[\s\'\"?]", rest)[0].strip("/")
     return ""
 
 
-def drift_check(payload: dict[str, Any]) -> int:
+# Status vocabulary understood by the document drift check.
+_PASS_STATUSES = {"PASS", "PASSED", "OK", "DONE"}
+_FAIL_STATUSES = {"FAIL", "FAILED"}
+_BLOCKED_STATUSES = {"BLOCKED", "SKIPPED"}
+_KNOWN_STATUSES = _PASS_STATUSES | _FAIL_STATUSES | _BLOCKED_STATUSES
+
+# ``p01``, ``n03``, ``c501``, ``f01`` - a harness case id in backticks.
+_CASE_ID = re.compile(r"`([A-Za-z]{1,4}\d{1,4})`")
+
+
+def _live_index(payload: dict[str, Any]) -> tuple[dict[str, list[dict]], dict[str, list[dict]]]:
+    """Index the live results by (path, body digest) and by path alone."""
+    by_pair: dict[str, list[dict]] = {}
+    by_path: dict[str, list[dict]] = {}
+    for row in payload.get("results", []):
+        path = str(row.get("path", "")).lstrip("/")
+        if path.startswith("webhook/"):
+            path = path[len("webhook/"):]
+        digest = str(row.get("body_hash", ""))
+        by_pair.setdefault(f"{path}|{digest}", []).append(row)
+        by_path.setdefault(path, []).append(row)
+    return by_pair, by_path
+
+
+def drift_check(payload: dict[str, Any], document: Path | None = None) -> int:
     """Compare the live report with the sheet verdicts.
 
-    Returns the number of drifted rows. A drifted row is one where the
-    sheet still says FAILED but the live run passed, or vice versa.
+    A sheet row is paired with a harness case by webhook path AND the
+    digest of the request body, never by the sheet's own "no" column:
+    that column is the sheet's 1..N row number, not a harness case id,
+    and two rows can share one path (``db_quiry`` has a MySQL and a
+    PostgreSQL branch). Every harness case is matched at most once, so
+    one case can never be counted twice.
+
+    Returns the number of drifted rows.
     """
     print("[drift] reading parity sheet …")
     sheet_rows = _sheet_rows(POSITIVE_TAB) + _sheet_rows(NEGATIVE_TAB)
     if not sheet_rows:
-        print("[drift] skipped: sheet rows unavailable")
-        return 0
+        print("[drift] BLOCKED: sheet rows unavailable")
+        return 1  # unavailable verification is not a successful drift check
 
-    live_by_path: dict[str, list[dict[str, Any]]] = {}
-    for r in payload["results"]:
-        live_by_path.setdefault(str(r["path"]).lstrip("/"), []).append(r)
-
+    by_pair, by_path = _live_index(payload)
+    matched = 0
     drifted = 0
+    used: set[str] = set()
+
     for row in sheet_rows:
-        sheet_failed = row["status"] in {"FAILED", "FAIL"}
+        sheet_failed = row["status"] in _FAIL_STATUSES
         path = _path_of(row)
         if not path:
             continue
-        runs = live_by_path.get(path)
-        if not runs:
+        digest = curl_body_signature(row.get("request", ""))
+
+        candidates = list(by_pair.get(f"{path}|{digest}", []))
+        matched_by = "path+body"
+        if not candidates:
+            # The sheet row carries no body digest, or the digest is not
+            # stored in the report. Fall back to the path, but only when
+            # exactly one harness case uses that path - an ambiguous path
+            # is never guessed.
+            fallback = [case for case in by_path.get(path, [])
+                        if str(case.get("id")) not in used]
+            if len(fallback) == 1:
+                candidates = fallback
+                matched_by = "path"
+        candidates = [case for case in candidates if str(case.get("id")) not in used]
+
+        if not candidates:
+            print(f"[drift] sheet row {row.get('no') or '-'} "
+                  f"{row['name'][:44]!r}: no harness case left for path {path!r} "
+                  f"(body digest {digest[:8] or '-'})")
             continue
-        for run in runs:
-            live_failed = run["verdict"] != "PASS"
-            if live_failed != sheet_failed:
-                drifted += 1
-                print(f"[drift] {row['no'] or '-'} {row['name'][:48]!r}: "
-                      f"sheet={row['status'] or 'OK'} live={run['verdict']} "
-                      f"({run['id']})")
+        if len(candidates) > 1:
+            print(f"[drift] sheet row {row.get('no') or '-'} "
+                  f"{row['name'][:44]!r}: {len(candidates)} harness cases share path "
+                  f"{path!r}; not guessed")
+            continue
+
+        run = candidates[0]
+        used.add(str(run.get("id")))
+        matched += 1
+
+        if row["status"] not in _KNOWN_STATUSES:
+            drifted += 1
+            print(f"[drift] sheet row {row.get('no') or '-'} {row['name'][:44]!r}: "
+                  f"unknown sheet status {row['status']!r}")
+            continue
+
+        if row["status"] in _BLOCKED_STATUSES:
+            # The sheet marks the row as not executed - nothing to compare.
+            continue
+
+        live_verdict = str(run.get("verdict", "FAIL"))
+        if live_verdict == "SKIPPED":
+            # The harness case did not run in this mode: no verdict.
+            continue
+
+        live_failed = live_verdict != "PASS"
+        if live_failed != sheet_failed:
+            drifted += 1
+            print(f"[drift] {row.get('no') or '-'} {row['name'][:48]!r}: "
+                  f"sheet={row['status'] or 'OK'} live={live_verdict} "
+                  f"({run['id']}, matched by {matched_by})")
+
+    # The document guard is part of the same check: the Markdown report
+    # and the sheet must agree with the live run.
+    drifted += document_drift(payload, document or (ROOT / "workflow-test.MD"))
 
     if drifted:
         print(f"[drift] {drifted} drifted row(s) — sheet and report disagree")
     else:
         print("[drift] no drift detected between sheet and live report")
+    return drifted + (0 if matched else 1)
+
+
+def _document_case_ids(line: str, live: dict[str, dict],
+                        live_only: bool = True) -> list[str]:
+    """Harness case ids referenced by one Markdown line.
+
+    Explicit ids (```p01```) win. When a line only names a webhook path
+    the path is used, but only if exactly one live case uses it -
+    an ambiguous path is never guessed.
+
+    With ``live_only=False`` the explicit ids of the document are
+    returned even when the harness did not run them; the path fallback
+    is disabled because it needs the live index.
+    """
+    explicit = _CASE_ID.findall(line)
+    if live_only:
+        explicit = [match for match in explicit if match in live]
+    if explicit:
+        return sorted(set(explicit))
+    if not live_only:
+        return []
+
+    by_path: dict[str, list[str]] = {}
+    for case_id, row in live.items():
+        path = str(row.get("path", "")).lstrip("/")
+        if path.startswith("webhook/"):
+            path = path[len("webhook/"):]
+        by_path.setdefault(path, []).append(case_id)
+    for token in re.findall(r"[A-Za-z0-9_.-]+", line):
+        candidates = by_path.get(token, [])
+        if len(candidates) == 1:
+            return candidates
+    return []
+
+
+def document_drift(payload: dict[str, Any], path: Path,
+                    require_evidence: bool = True,
+                    compare_verdicts: bool = True) -> int:
+    """Check status-bearing Markdown rows, including contradictory B/J rows.
+
+    Both document shapes are understood: the bullet lines written by the
+    sheet updater (``- `p01` `simple_webhook`: **PASS**``) and the
+    Markdown tables of the report renderer (``| positive | `p01` | ... |``).
+    The document is never confused with the sheet: the sheet rows are
+    not reused as the document's own fixture.
+
+    Unmatched prose is not guessed into a verdict. Missing evidence fails
+    closed. Every case id contributes at most one drift event, so one
+    harness case can never be counted twice.
+
+    ``require_evidence`` is switched off for the offline run: there the
+    shared-host cases have no verdict, so only the internal consistency
+    of the document (no case may claim PASS and FAIL at the same time)
+    is checked.
+
+    ``compare_verdicts`` is switched off for the offline run as well:
+    the document records the live (shared-host) run while the offline
+    run has no live verdicts, so comparing the two would compare two
+    different evidence domains. The live run keeps the comparison.
+    """
+    if not path.is_file():
+        print(f"[drift] document unavailable: {path}")
+        return 1
+
+    live: dict[str, dict] = {}
+    for row in payload.get("results", []):
+        live.setdefault(str(row.get("id")), row)
+
+    statuses_per_case: dict[str, list[str]] = {}
+    matched_evidence = 0
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if not (stripped.startswith("|") or stripped.startswith("-")
+                or stripped.startswith("*")):
+            continue
+        statuses = [match.upper() for match in
+                    re.findall(r"\b(PASS(?:ED)?|FAIL(?:ED)?|OK|DONE|BLOCKED|SKIPPED)\b",
+                               line, re.I)]
+        if not statuses:
+            continue
+        case_ids = _document_case_ids(line, live, live_only=False)
+        if any(case_id in live for case_id in case_ids):
+            matched_evidence += 1
+        for case_id in case_ids:
+            statuses_per_case.setdefault(case_id, []).extend(statuses)
+
+    if not statuses_per_case:
+        print(f"[drift] document {path.name}: no case evidence found")
+        return 1
+    if require_evidence and matched_evidence == 0:
+        print(f"[drift] document {path.name}: no status line refers to a harness case")
+        return 1
+
+    drifted = 0
+    for case_id, statuses in sorted(statuses_per_case.items()):
+        expected = str(live.get(case_id, {}).get("verdict", ""))
+        document_failed = any(status in _FAIL_STATUSES for status in statuses)
+        document_blocked = any(status in _BLOCKED_STATUSES for status in statuses)
+        document_passed = any(status in _PASS_STATUSES for status in statuses)
+
+        if document_failed and document_passed:
+            drifted += 1
+            print(f"[drift] document row disagrees: {case_id} "
+                  f"states both PASS and FAIL")
+            continue
+
+        if not compare_verdicts:
+            # Offline mode: the document and the offline run describe two
+            # different evidence domains, so only the internal consistency
+            # of the document is judged here.
+            continue
+
+        if not expected:
+            # The document mentions a case the harness did not run in this
+            # mode: there is no verdict to compare, never guessed.
+            continue
+        if expected == "SKIPPED":
+            # Not executed in this mode: there is no verdict at all.
+            continue
+
+        if expected == "PASS":
+            agrees = document_passed
+        elif expected == "BLOCKED":
+            agrees = document_blocked
+        else:
+            agrees = document_failed
+        if not agrees:
+            drifted += 1
+            print(f"[drift] document row disagrees: {case_id} "
+                  f"(document={'/'.join(sorted(set(statuses)))}, live={expected})")
     return drifted
 
 

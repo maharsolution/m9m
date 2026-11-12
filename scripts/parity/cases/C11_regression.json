@@ -1,0 +1,51 @@
+{
+  "suite": "C11_regression",
+  "description": "C11 regression locks - one executable Go test per documented gap. Test files only, no runtime change.",
+  "cases": [
+    {
+      "id": "c1101",
+      "name": "C11 G1: $input.item is visible inside the Code node",
+      "check": "go_test",
+      "package": "./internal/nodes/transform",
+      "run": "TestSetCounter_InputItemProperty",
+      "offline": true,
+      "notes": "G1 lock: internal/nodes/transform/code_input_item_debug_test.go."
+    },
+    {
+      "id": "c1102",
+      "name": "C11 G2: Merge chooseBranch keeps the input of branch 1",
+      "check": "go_test",
+      "package": "./internal/engine",
+      "run": "TestChooseBranchInput_DefaultsToInput1",
+      "offline": true,
+      "notes": "G2 lock: internal/engine/choose_branch_input_test.go."
+    },
+    {
+      "id": "c1103",
+      "name": "C11 G3: HTTP Request resolves a nested URL expression and rejects private targets with a clear message",
+      "check": "go_test",
+      "package": "./internal/nodes/http",
+      "run": "TestHTTPRequestNode_Execute_ResolvesURLFromNestedPath|TestValidateURLForSSRF_ExplainsProblem|TestEvaluateParameters_BracketAccessAndMethod",
+      "offline": true,
+      "notes": "G3 lock: internal/nodes/http/request_expression_test.go."
+    },
+    {
+      "id": "c1104",
+      "name": "C11 GAP-2026-09-10-1: the IF node marks only the taken edges",
+      "check": "go_test",
+      "package": "./internal/engine",
+      "run": "TestRecordEdgesTaken_IFRoute|TestExecuteWorkflowPopulatesEdgesTaken",
+      "offline": true,
+      "notes": "GAP-2026-09-10-1 lock: internal/engine/execution_edges_taken_test.go."
+    },
+    {
+      "id": "c1105",
+      "name": "C11 GAP-2026-09-10-2: the PostgreSQL node defaults to sslmode=disable",
+      "check": "go_test",
+      "package": "./internal/nodes/database",
+      "run": "TestParityC11PostgresSSLModeDefaultDisable|TestParityC11PostgresSSLModeExplicitRequire",
+      "offline": true,
+      "notes": "GAP-2026-09-10-2 lock: internal/nodes/database/parity_c11_sslmode_test.go (behavioural, no source inspection)."
+    }
+  ]
+}
