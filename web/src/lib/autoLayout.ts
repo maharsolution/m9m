@@ -45,8 +45,43 @@ export interface LayoutPosition {
   y: number
 }
 
-const DEFAULT_NODE_WIDTH = 220
-const DEFAULT_NODE_HEIGHT = 80
+/**
+ * Canvas grid size (n8n parity). Every node position the layout
+ * produces is snapped to this grid, so the tidy-up result lines up
+ * with the canvas' snap grid.
+ */
+export const GRID_SIZE = 16
+
+/** The size of a default canvas node (n8n: `GRID_SIZE * 6`). */
+export const DEFAULT_NODE_SIZE: [number, number] = [GRID_SIZE * 6, GRID_SIZE * 6]
+
+/**
+ * Horizontal gap the auto-layout leaves between adjacent nodes
+ * (dagre `ranksep`, n8n's `NODE_X_SPACING`).
+ */
+export const NODE_X_SPACING = GRID_SIZE * 8
+
+/**
+ * Center-to-center horizontal step when placing a node directly after
+ * another. Equals the node width plus the spacing above, so a freshly
+ * placed node lands exactly where the layout would put it.
+ */
+export const HORIZONTAL_NODE_STEP = DEFAULT_NODE_SIZE[0] + NODE_X_SPACING
+
+const DEFAULT_NODE_WIDTH = DEFAULT_NODE_SIZE[0]
+const DEFAULT_NODE_HEIGHT = DEFAULT_NODE_SIZE[1]
+
+/** Vertical gap between nodes of the same rank (four grid cells). */
+const DEFAULT_NODESEP = GRID_SIZE * 4
+
+/** Outer margin around the whole layout (two grid cells). */
+const DEFAULT_MARGIN = GRID_SIZE * 2
+
+/** Snaps a coordinate onto the 16px canvas grid. */
+export function snapToGrid(value: number): number {
+  const snapped = Math.round(value / GRID_SIZE) * GRID_SIZE
+  return snapped === 0 ? 0 : snapped
+}
 
 function readNumber(value: unknown, fallback: number): number {
   const parsed = typeof value === 'number' ? value : Number(value)
@@ -136,10 +171,10 @@ export function computeAutoLayout(
   const graph = new graphlib.Graph({ directed: true, multigraph: false })
   graph.setGraph({
     rankdir: options.direction ?? 'LR',
-    nodesep: options.nodesep ?? 60,
-    ranksep: options.ranksep ?? 120,
-    marginx: options.margin ?? 20,
-    marginy: options.margin ?? 20,
+    nodesep: options.nodesep ?? DEFAULT_NODESEP,
+    ranksep: options.ranksep ?? NODE_X_SPACING,
+    marginx: options.margin ?? DEFAULT_MARGIN,
+    marginy: options.margin ?? DEFAULT_MARGIN,
   })
   // dagre writes the edge geometry (`points`) onto the edge label, so
   // every edge needs a label object. Without this default the layout
@@ -167,9 +202,11 @@ export function computeAutoLayout(
     const size = layoutNodeSize(node, options)
     positions.set(node.id, {
       // dagre reports the centre of the node, Vue Flow wants the
-      // top-left corner.
-      x: Math.round(laidOut.x - size.width / 2),
-      y: Math.round(laidOut.y - size.height / 2),
+      // top-left corner. The result is snapped onto the canvas grid
+      // so the tidy-up lands on the same 16px rhythm as manual
+      // placement.
+      x: snapToGrid(laidOut.x - size.width / 2),
+      y: snapToGrid(laidOut.y - size.height / 2),
     })
   })
 

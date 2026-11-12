@@ -11,6 +11,7 @@ import type { Schedule, ScheduleCreateRequest, ScheduleUpdateRequest } from '@/t
 import ScheduleList from '@/components/schedule/ScheduleList.vue'
 import ScheduleForm from '@/components/schedule/ScheduleForm.vue'
 import ScheduleHistory from '@/components/schedule/ScheduleHistory.vue'
+import Button from '@/components/common/Button.vue'
 
 const scheduleStore = useScheduleStore()
 const workflowStore = useWorkflowStore()
@@ -114,74 +115,85 @@ async function openHistory(schedule: Schedule) {
 </script>
 
 <template>
-  <div class="p-6">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-6">
+  <div>
+    <!-- Page header -->
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
-          <CalendarDaysIcon class="w-8 h-8 text-violet-500" />
+        <h1 class="flex items-center gap-3 text-2xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50">
+          <CalendarDaysIcon class="h-6 w-6 text-brand-500" />
           Schedules
         </h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-1">
+        <p class="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
           Automate workflow execution with cron schedules
         </p>
       </div>
-      <button
+      <Button
+        variant="primary"
+        size="sm"
         @click="openCreateForm"
-        class="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors"
       >
-        <PlusIcon class="w-5 h-5" />
-        Create Schedule
-      </button>
+        <template #icon>
+          <PlusIcon class="h-4 w-4" />
+        </template>
+        <span>Create schedule</span>
+      </Button>
     </div>
 
     <!-- Stats Cards -->
-    <div class="grid grid-cols-4 gap-4 mb-6">
-      <div class="card p-4">
-        <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Total</p>
-        <p class="text-2xl font-bold text-slate-900 dark:text-white mt-1">
+    <div class="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div class="rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+        <p class="text-2xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+          Total
+        </p>
+        <p class="mt-1 text-2xl font-semibold text-neutral-950 dark:text-neutral-50">
           {{ scheduleStore.total }}
         </p>
       </div>
-      <div class="card p-4 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
-        <p class="text-xs font-medium text-green-600 dark:text-green-400 uppercase">Active</p>
-        <p class="text-2xl font-bold text-green-700 dark:text-green-300 mt-1">
+      <div class="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950/50">
+        <p class="text-2xs font-medium uppercase tracking-wide text-green-700 dark:text-green-400">
+          Active
+        </p>
+        <p class="mt-1 text-2xl font-semibold text-green-800 dark:text-green-300">
           {{ scheduleStore.enabledSchedules.length }}
         </p>
       </div>
-      <div class="card p-4 bg-slate-50 dark:bg-slate-700/50">
-        <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Inactive</p>
-        <p class="text-2xl font-bold text-slate-700 dark:text-slate-300 mt-1">
+      <div class="rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+        <p class="text-2xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+          Inactive
+        </p>
+        <p class="mt-1 text-2xl font-semibold text-neutral-700 dark:text-neutral-300">
           {{ scheduleStore.disabledSchedules.length }}
         </p>
       </div>
-      <div class="card p-4 bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-800">
-        <p class="text-xs font-medium text-violet-600 dark:text-violet-400 uppercase">Upcoming</p>
-        <p class="text-2xl font-bold text-violet-700 dark:text-violet-300 mt-1">
+      <div class="rounded-lg border border-brand-200 bg-brand-50 p-4 dark:border-brand-900 dark:bg-brand-950/50">
+        <p class="text-2xs font-medium uppercase tracking-wide text-brand-700 dark:text-brand-400">
+          Upcoming
+        </p>
+        <p class="mt-1 text-2xl font-semibold text-brand-800 dark:text-brand-300">
           {{ scheduleStore.schedulesWithUpcomingRuns.length }}
         </p>
       </div>
     </div>
 
     <!-- Filters -->
-    <div class="flex items-center gap-4 mb-6">
+    <div class="mb-6 flex flex-wrap items-center gap-3">
       <!-- Search -->
-      <div class="relative flex-1 max-w-md">
-        <MagnifyingGlassIcon class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+      <div class="relative w-full max-w-sm">
+        <MagnifyingGlassIcon class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Search schedules..."
-          class="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
-        />
+          placeholder="Search schedules…"
+          class="h-9 w-full rounded-lg border border-neutral-300 bg-white pl-9 pr-4 text-sm text-neutral-950 transition-colors duration-200 placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:focus:border-neutral-100 dark:focus:ring-neutral-100/10"
+        >
       </div>
 
       <!-- Status Filter -->
       <div class="flex items-center gap-2">
-        <FunnelIcon class="w-5 h-5 text-slate-400" />
+        <FunnelIcon class="h-4 w-4 text-neutral-400" />
         <select
           v-model="statusFilter"
-          class="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+          class="h-9 rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-950 transition-colors duration-200 focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:focus:border-neutral-100 dark:focus:ring-neutral-100/10"
         >
           <option value="all">All Status</option>
           <option value="enabled">Active</option>
@@ -192,7 +204,7 @@ async function openHistory(schedule: Schedule) {
       <!-- Workflow Filter -->
       <select
         v-model="workflowFilter"
-        class="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+        class="h-9 rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-950 transition-colors duration-200 focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:focus:border-neutral-100 dark:focus:ring-neutral-100/10"
       >
         <option value="">All Workflows</option>
         <option

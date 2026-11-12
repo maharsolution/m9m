@@ -7,6 +7,7 @@ import type { WorkflowVersion } from '@/types/version'
 import VersionHistory from './VersionHistory.vue'
 import VersionCompare from './VersionCompare.vue'
 import VersionRestoreDialog from './VersionRestoreDialog.vue'
+import IconButton from '@/components/common/IconButton.vue'
 
 const props = defineProps<{
   workflowId: string
@@ -82,87 +83,95 @@ function formatDate(dateString: string): string {
 
 <template>
   <div
-    class="fixed inset-0 z-40 bg-black/30 flex justify-end"
+    class="fixed inset-0 z-40 flex justify-end bg-black/30"
     @click.self="emit('close')"
   >
     <!-- Drawer -->
-    <aside
-      class="w-full sm:w-96 h-full bg-white dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700 shadow-xl flex flex-col"
-    >
+    <aside class="flex h-full w-full flex-col border-l border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-900 sm:w-96">
       <!-- Header -->
-      <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+      <div class="flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
         <div class="flex items-center gap-2">
-          <ClockIcon class="w-5 h-5 text-violet-500" />
-          <h3 class="font-semibold text-slate-900 dark:text-white">Version history</h3>
+          <ClockIcon class="h-4 w-4 text-brand-500" />
+          <h3 class="font-semibold text-neutral-950 dark:text-neutral-50">
+            Version history
+          </h3>
         </div>
-        <button
-          type="button"
-          class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
-          title="Close version history"
-          aria-label="Close version history"
+        <IconButton
+          label="Close version history"
           @click="emit('close')"
         >
-          <XMarkIcon class="w-5 h-5" />
-        </button>
+          <XMarkIcon class="h-4 w-4" />
+        </IconButton>
       </div>
 
       <!-- Notice -->
       <div
         v-if="notice"
-        :class="notice.type === 'success'
-          ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300'
-          : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300'"
         class="mx-4 mt-3 flex items-start gap-2 rounded-lg border px-3 py-2 text-sm"
+        :class="notice.type === 'success'
+          ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/50 dark:text-green-300'
+          : 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300'"
       >
         <p class="flex-1">{{ notice.message }}</p>
-        <button type="button" class="opacity-60 hover:opacity-100" @click="notice = null">
-          <XMarkIcon class="w-4 h-4" />
+        <button
+          type="button"
+          class="rounded-sm opacity-60 transition-opacity hover:opacity-100"
+          aria-label="Dismiss"
+          @click="notice = null"
+        >
+          <XMarkIcon class="h-4 w-4" />
         </button>
       </div>
 
       <!-- Version preview -->
       <div
         v-if="preview"
-        class="mx-4 mt-3 rounded-lg border border-slate-200 dark:border-slate-700 p-3"
+        class="mx-4 mt-3 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800"
       >
         <div class="flex items-start justify-between gap-2">
           <div>
-            <p class="text-sm font-medium text-slate-900 dark:text-white">
+            <p class="text-sm font-medium text-neutral-950 dark:text-neutral-50">
               {{ preview.versionTag || `v${preview.versionNum}` }}
             </p>
-            <p class="text-xs text-slate-500 dark:text-slate-400">
+            <p class="text-xs text-neutral-500 dark:text-neutral-400">
               {{ formatDate(preview.createdAt) }} by {{ preview.author }}
             </p>
           </div>
           <button
             type="button"
-            class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+            class="rounded-sm p-1 text-neutral-400 transition-colors hover:text-neutral-700 dark:hover:text-neutral-200"
             title="Close preview"
             aria-label="Close preview"
             @click="preview = null"
           >
-            <XMarkIcon class="w-4 h-4" />
+            <XMarkIcon class="h-4 w-4" />
           </button>
         </div>
-        <p v-if="preview.description" class="mt-2 text-xs text-slate-600 dark:text-slate-400">
+        <p
+          v-if="preview.description"
+          class="mt-2 text-xs text-neutral-600 dark:text-neutral-400"
+        >
           {{ preview.description }}
         </p>
-        <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+        <p class="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
           {{ preview.workflow?.nodes?.length ?? 0 }} nodes ·
           {{ preview.workflow?.connections ? Object.keys(preview.workflow.connections).length : 0 }} connection groups
         </p>
         <ul
           v-if="preview.workflow?.nodes?.length"
-          class="mt-2 max-h-40 overflow-y-auto text-xs text-slate-600 dark:text-slate-400 space-y-0.5"
+          class="mt-2 max-h-40 space-y-0.5 overflow-y-auto text-xs text-neutral-600 dark:text-neutral-400"
         >
-          <li v-for="node in preview.workflow.nodes" :key="node.name">
+          <li
+            v-for="node in preview.workflow.nodes"
+            :key="node.name"
+          >
             · {{ node.name }}
           </li>
         </ul>
       </div>
 
       <!-- History list -->
-      <div class="flex-1 min-h-0">
+      <div class="min-h-0 flex-1">
         <VersionHistory
           :workflow-id="workflowId"
           @restore="openRestore"
@@ -172,11 +181,15 @@ function formatDate(dateString: string): string {
       </div>
 
       <!-- Footer -->
-      <div class="px-4 py-2 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 flex items-center justify-between">
+      <div class="flex items-center justify-between border-t border-neutral-200 px-4 py-2 text-xs text-neutral-500 dark:border-neutral-800 dark:text-neutral-400">
         <span>
           {{ versionStore.total }} version{{ versionStore.total !== 1 ? 's' : '' }}
         </span>
-        <button type="button" class="btn-ghost py-1 px-2 text-xs" @click="emit('close')">
+        <button
+          type="button"
+          class="btn-ghost px-2 py-1 text-xs"
+          @click="emit('close')"
+        >
           Close
         </button>
       </div>
@@ -203,11 +216,11 @@ function formatDate(dateString: string): string {
     <!-- Restoring overlay -->
     <div
       v-if="restoring"
-      class="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center"
+      class="fixed inset-0 z-[60] flex items-center justify-center bg-black/40"
     >
-      <div class="flex items-center gap-3 rounded-lg bg-white dark:bg-slate-800 px-5 py-4 shadow-xl">
-        <ArrowPathIcon class="w-5 h-5 animate-spin text-violet-500" />
-        <span class="text-sm text-slate-700 dark:text-slate-200">Restoring version...</span>
+      <div class="flex items-center gap-3 rounded-lg bg-white px-5 py-4 shadow-xl dark:bg-neutral-900">
+        <ArrowPathIcon class="h-5 w-5 animate-spin text-brand-500" />
+        <span class="text-sm text-neutral-700 dark:text-neutral-200">Restoring version…</span>
       </div>
     </div>
   </div>

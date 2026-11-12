@@ -37,6 +37,8 @@ import type {
   AIProviderId,
   AIProviderInfo,
 } from '@/types/ai'
+import Button from '@/components/common/Button.vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
 
 const themeStore = useThemeStore()
 const authStore = useAuthStore()
@@ -477,870 +479,954 @@ const changePassword = async () => {
 </script>
 
 <template>
-  <div class="p-6 max-w-4xl mx-auto">
-    <h1 class="text-2xl font-bold text-slate-900 dark:text-white mb-6">Settings</h1>
+  <div class="max-w-4xl space-y-6">
+    <!-- Page header -->
+    <div>
+      <h1 class="text-2xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50">
+        Settings
+      </h1>
+      <p class="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
+        Appearance, telemetry, AI and account preferences
+      </p>
+    </div>
 
-    <div class="space-y-6">
-      <!-- Appearance -->
-      <div class="card p-6">
-        <div class="flex items-center gap-3 mb-4">
-          <SunIcon class="w-5 h-5 text-slate-500" />
-          <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Appearance</h2>
-        </div>
-
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              Theme
-            </label>
-            <div class="flex gap-3">
-              <button
-                v-for="theme in themes"
-                :key="theme.value"
-                @click="themeStore.setTheme(theme.value)"
-                :class="[
-                  'flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-colors',
-                  themeStore.theme === theme.value
-                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400'
-                    : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600'
-                ]"
-              >
-                <component :is="theme.icon" class="w-5 h-5" />
-                <span>{{ theme.label }}</span>
-              </button>
-            </div>
-          </div>
-        </div>
+    <!-- Appearance -->
+    <section class="card p-6">
+      <div class="mb-4 flex items-center gap-3">
+        <SunIcon class="h-5 w-5 text-neutral-500" />
+        <h2 class="text-lg font-semibold text-neutral-950 dark:text-neutral-50">
+          Appearance
+        </h2>
       </div>
 
-      <!-- Telemetry (OpenTelemetry) -->
-      <div class="card p-6">
-        <div class="flex items-center gap-3 mb-4">
-          <ChartBarIcon class="w-5 h-5 text-slate-500" />
-          <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Telemetry</h2>
-          <span class="ml-auto text-xs uppercase tracking-wide px-2 py-0.5 rounded-full"
-                :class="otelEffective?.enabled
-                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200'
-                  : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'">
-            {{ otelEffective?.enabled ? 'enabled' : 'disabled' }}
-          </span>
-        </div>
-
-        <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">
-          OpenTelemetry traces are exported via OTLP to any OTel-compatible
-          collector (Jaeger, SigNoz, Tempo, Honeycomb, Datadog, etc.).
-          Settings below <strong>override</strong> the environment defaults —
-          leave a field's checkbox unchecked to keep using the value from
-          your shell / <code>.env</code>.
-        </p>
-
-        <!-- Master switch -->
-        <div class="grid grid-cols-12 gap-4 items-start mb-4">
-          <div class="col-span-12">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                :checked="otelEnabled.useEnv"
-                @change="otelEnabled.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-sm text-slate-700 dark:text-slate-300">
-                Use environment default for <strong>enabled</strong>
-              </span>
-            </label>
-            <label class="flex items-center gap-3 mt-1 pl-6">
-              <input
-                type="checkbox"
-                v-model="otelEnabled.value"
-                :disabled="otelEnabled.useEnv"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-sm text-slate-700 dark:text-slate-300">
-                Export traces to the configured collector
-              </span>
-            </label>
-          </div>
-        </div>
-
-        <!-- Endpoint + protocol -->
-        <div class="grid grid-cols-12 gap-4 items-start border-t border-slate-100 dark:border-slate-800 pt-4 mb-4">
-          <div class="col-span-12 md:col-span-8">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              OTLP endpoint
-            </label>
-            <label class="flex items-center gap-2 mb-1">
-              <input
-                type="checkbox"
-                :checked="otelEndpoint.useEnv"
-                @change="otelEndpoint.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default (M9M_OTEL_ENDPOINT)</span>
-            </label>
-            <input
-              v-model="otelEndpoint.value"
-              :disabled="otelEndpoint.useEnv"
-              type="text"
-              :placeholder="otelEnvSource?.endpoint || 'host:4317'"
-              class="input font-mono text-sm"
-            />
-          </div>
-
-          <div class="col-span-12 md:col-span-4">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Protocol
-            </label>
-            <label class="flex items-center gap-2 mb-1">
-              <input
-                type="checkbox"
-                :checked="otelProtocol.useEnv"
-                @change="otelProtocol.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default</span>
-            </label>
-            <select
-              :value="otelProtocol.value"
-              :disabled="otelProtocol.useEnv"
-              @change="otelProtocol.value = ($event.target as HTMLSelectElement).value as OtelProtocol"
-              class="input"
+      <div class="space-y-4">
+        <div>
+          <label class="mb-2 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            Theme
+          </label>
+          <div class="flex gap-3">
+            <button
+              v-for="theme in themes"
+              :key="theme.value"
+              type="button"
+              class="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors duration-200"
+              :class="themeStore.theme === theme.value
+                ? 'border-brand-500 bg-brand-50 font-medium text-brand-700 dark:bg-brand-950/50 dark:text-brand-300'
+                : 'border-neutral-200 text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-neutral-600 dark:hover:bg-neutral-800'"
+              @click="themeStore.setTheme(theme.value)"
             >
-              <option v-for="p in protocols" :key="p.value" :value="p.value">{{ p.label }}</option>
-            </select>
+              <component
+                :is="theme.icon"
+                class="h-4 w-4"
+              />
+              <span>{{ theme.label }}</span>
+            </button>
           </div>
-        </div>
-
-        <!-- Headers -->
-        <div class="grid grid-cols-12 gap-4 items-start mb-4">
-          <div class="col-span-12 md:col-span-6">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Headers
-            </label>
-            <label class="flex items-center gap-2 mb-1">
-              <input
-                type="checkbox"
-                :checked="otelHeaders.useEnv"
-                @change="otelHeaders.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default (M9M_OTEL_HEADERS)</span>
-            </label>
-            <input
-              v-model="otelHeaders.value"
-              :disabled="otelHeaders.useEnv"
-              type="text"
-              placeholder="Authorization=Bearer xyz"
-              class="input font-mono text-sm"
-            />
-          </div>
-          <div class="col-span-12 md:col-span-6">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Headers file
-            </label>
-            <label class="flex items-center gap-2 mb-1">
-              <input
-                type="checkbox"
-                :checked="otelHeadersFile.useEnv"
-                @change="otelHeadersFile.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default</span>
-            </label>
-            <input
-              v-model="otelHeadersFile.value"
-              :disabled="otelHeadersFile.useEnv"
-              type="text"
-              placeholder="/etc/m9m/otel-headers.json"
-              class="input font-mono text-sm"
-            />
-          </div>
-        </div>
-
-        <!-- Service identity — the value your backend labels traces with. -->
-        <div class="grid grid-cols-12 gap-4 items-start border-t border-slate-100 dark:border-slate-800 pt-4 mb-4">
-          <div class="col-span-12 md:col-span-6">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Service name
-              <span class="text-xs text-slate-500 ml-2">
-                (becomes <code>service.name</code> in every span)
-              </span>
-            </label>
-            <label class="flex items-center gap-2 mb-1">
-              <input
-                type="checkbox"
-                :checked="otelServiceName.useEnv"
-                @change="otelServiceName.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default (M9M_OTEL_SERVICE_NAME)</span>
-            </label>
-            <input
-              v-model="otelServiceName.value"
-              :disabled="otelServiceName.useEnv"
-              type="text"
-              placeholder="m9m"
-              class="input font-mono text-sm"
-            />
-          </div>
-
-          <div class="col-span-12 md:col-span-6">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Service version
-              <span class="text-xs text-slate-500 ml-2">
-                (becomes <code>service.version</code>)
-              </span>
-            </label>
-            <label class="flex items-center gap-2 mb-1">
-              <input
-                type="checkbox"
-                :checked="otelServiceVersion.useEnv"
-                @change="otelServiceVersion.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default (M9M_OTEL_SERVICE_VERSION)</span>
-            </label>
-            <input
-              v-model="otelServiceVersion.value"
-              :disabled="otelServiceVersion.useEnv"
-              type="text"
-              placeholder="1.0.0"
-              class="input font-mono text-sm"
-            />
-          </div>
-        </div>
-
-        <!-- Sampling + toggles -->
-        <div class="grid grid-cols-12 gap-4 items-start border-t border-slate-100 dark:border-slate-800 pt-4 mb-4">
-          <div class="col-span-12 md:col-span-4">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Sample rate
-            </label>
-            <label class="flex items-center gap-2 mb-1">
-              <input
-                type="checkbox"
-                :checked="otelSampleRate.useEnv"
-                @change="otelSampleRate.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default</span>
-            </label>
-            <input
-              v-model.number="otelSampleRate.value"
-              :disabled="otelSampleRate.useEnv"
-              type="number"
-              step="0.05"
-              min="0"
-              max="1"
-              class="input font-mono text-sm"
-            />
-          </div>
-
-          <div class="col-span-12 md:col-span-8 grid grid-cols-1 gap-2">
-            <label class="flex items-center gap-2">
-              <input
-                type="checkbox"
-                :checked="otelProductionOnly.useEnv"
-                @change="otelProductionOnly.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default</span>
-            </label>
-            <label class="flex items-center gap-3 -mt-5">
-              <input
-                type="checkbox"
-                v-model="otelProductionOnly.value"
-                :disabled="otelProductionOnly.useEnv"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-sm text-slate-700 dark:text-slate-300">
-                Drop dev / test execution modes at sampling
-              </span>
-            </label>
-
-            <label class="flex items-center gap-2">
-              <input
-                type="checkbox"
-                :checked="otelIncludeNodeSpans.useEnv"
-                @change="otelIncludeNodeSpans.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default</span>
-            </label>
-            <label class="flex items-center gap-3 -mt-5">
-              <input
-                type="checkbox"
-                v-model="otelIncludeNodeSpans.value"
-                :disabled="otelIncludeNodeSpans.useEnv"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-sm text-slate-700 dark:text-slate-300">
-                Emit per-node <code>node.execute</code> spans
-              </span>
-            </label>
-
-            <label class="flex items-center gap-2">
-              <input
-                type="checkbox"
-                :checked="otelInjectOutbound.useEnv"
-                @change="otelInjectOutbound.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default</span>
-            </label>
-            <label class="flex items-center gap-3 -mt-5">
-              <input
-                type="checkbox"
-                v-model="otelInjectOutbound.value"
-                :disabled="otelInjectOutbound.useEnv"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-sm text-slate-700 dark:text-slate-300">
-                Inject traceparent into outbound HTTP requests
-              </span>
-            </label>
-          </div>
-        </div>
-
-        <!-- AI agent tracing -->
-        <details class="border-t border-slate-100 dark:border-slate-800 pt-4">
-          <summary class="cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-300">
-            AI agent tracing (OpenAI / Anthropic / etc.)
-          </summary>
-          <div class="space-y-2 mt-3">
-            <label class="flex items-center gap-2">
-              <input
-                type="checkbox"
-                :checked="otelAgentsEnabled.useEnv"
-                @change="otelAgentsEnabled.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default (M9M_AGENTS_TRACING_ENABLED)</span>
-            </label>
-            <label class="flex items-center gap-3">
-              <input
-                type="checkbox"
-                v-model="otelAgentsEnabled.value"
-                :disabled="otelAgentsEnabled.useEnv"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-sm text-slate-700 dark:text-slate-300">
-                Emit <code>&lt;agent&gt;.generate</code> spans for AI calls
-              </span>
-            </label>
-
-            <label class="flex items-center gap-2 mt-2">
-              <input
-                type="checkbox"
-                :checked="otelRecordInputs.useEnv"
-                @change="otelRecordInputs.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default</span>
-            </label>
-            <label class="flex items-center gap-3">
-              <input
-                type="checkbox"
-                v-model="otelRecordInputs.value"
-                :disabled="otelRecordInputs.useEnv"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-sm text-slate-700 dark:text-slate-300">
-                Record prompts (<code>gen_ai.prompt</code>)
-              </span>
-            </label>
-
-            <label class="flex items-center gap-2 mt-2">
-              <input
-                type="checkbox"
-                :checked="otelRecordOutputs.useEnv"
-                @change="otelRecordOutputs.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default</span>
-            </label>
-            <label class="flex items-center gap-3">
-              <input
-                type="checkbox"
-                v-model="otelRecordOutputs.value"
-                :disabled="otelRecordOutputs.useEnv"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-sm text-slate-700 dark:text-slate-300">
-                Record responses (<code>gen_ai.response</code>)
-              </span>
-            </label>
-            <p class="text-xs text-slate-500 mt-1">
-              Privacy gate — leave OFF unless your collector is GDPR-compliant
-              and you have an explicit business reason to record LLM traffic.
-            </p>
-          </div>
-        </details>
-
-        <!-- Status + actions -->
-        <div v-if="otelError" class="mt-4 p-3 rounded-md bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-200 text-sm">
-          {{ otelError }}
-        </div>
-        <div v-if="otelInfo" class="mt-4 p-3 rounded-md bg-emerald-50 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200 text-sm">
-          {{ otelInfo }}
-        </div>
-
-        <div class="flex flex-wrap gap-3 mt-4">
-          <button
-            type="button"
-            class="btn-primary"
-            :disabled="otelSaving || otelLoading"
-            @click="saveOtel"
-          >
-            {{ otelSaving ? 'Saving...' : 'Save settings' }}
-          </button>
-          <button
-            type="button"
-            class="btn-secondary"
-            :disabled="otelSaving || !overridesActive"
-            @click="resetOtelToEnv"
-          >
-            Reset to env defaults
-          </button>
-          <button
-            type="button"
-            class="btn-secondary"
-            :disabled="otelTesting || !otelEffective?.enabled"
-            @click="testOtel"
-          >
-            {{ otelTesting ? 'Sending...' : 'Send test span' }}
-          </button>
-          <span v-if="otelEffective" class="ml-auto text-xs text-slate-500 dark:text-slate-400 self-center">
-            Effective: {{ otelEffective.protocol }} → {{ otelEffective.endpoint }} · sample {{ otelEffective.sampleRate }}
-          </span>
         </div>
       </div>
+    </section>
 
-      <!-- AI assistant -->
-      <div class="card p-6">
-        <div class="flex items-center gap-3 mb-4">
-          <CpuChipIcon class="w-5 h-5 text-slate-500" />
-          <h2 class="text-lg font-semibold text-slate-900 dark:text-white">AI</h2>
-          <span class="ml-auto text-xs uppercase tracking-wide px-2 py-0.5 rounded-full"
-                :class="aiEffective?.enabled
-                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200'
-                  : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'">
-            {{ aiEffective?.enabled ? 'enabled' : 'disabled' }}
-          </span>
-        </div>
+    <!-- Telemetry (OpenTelemetry) -->
+    <section class="card p-6">
+      <div class="mb-4 flex items-center gap-3">
+        <ChartBarIcon class="h-5 w-5 text-neutral-500" />
+        <h2 class="text-lg font-semibold text-neutral-950 dark:text-neutral-50">
+          Telemetry
+        </h2>
+        <StatusBadge
+          class="ml-auto"
+          :status="otelEffective?.enabled ? 'success' : 'neutral'"
+          :label="otelEffective?.enabled ? 'enabled' : 'disabled'"
+          dot
+        />
+      </div>
 
-        <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">
-          Configure the AI assistant that powers workflow generation,
-          chat, and node suggestions. Settings below <strong>override</strong>
-          the environment defaults — leave a field's checkbox unchecked to
-          keep the value from your shell / <code>.env</code>.
-          Supports OpenAI, Anthropic (Claude), MiniMax (Anthropic-compatible),
-          and Ollama.
-        </p>
+      <p class="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
+        OpenTelemetry traces are exported via OTLP to any OTel-compatible
+        collector (Jaeger, SigNoz, Tempo, Honeycomb, Datadog, etc.).
+        Settings below <strong class="text-neutral-800 dark:text-neutral-200">override</strong> the environment defaults —
+        leave a field's checkbox unchecked to keep using the value from
+        your shell / <code class="font-mono text-xs">.env</code>.
+      </p>
 
-        <!-- Master switch -->
-        <div class="grid grid-cols-12 gap-4 items-start mb-4">
-          <div class="col-span-12">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                :checked="aiEnabled.useEnv"
-                @change="aiEnabled.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-sm text-slate-700 dark:text-slate-300">
-                Use environment default for <strong>enabled</strong>
-                <span class="text-xs text-slate-500 ml-1">(M9M_AI_ENABLED)</span>
-              </span>
-            </label>
-            <label class="flex items-center gap-3 mt-1 pl-6">
-              <input
-                type="checkbox"
-                v-model="aiEnabled.value"
-                :disabled="aiEnabled.useEnv"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-sm text-slate-700 dark:text-slate-300">
-                Enable AI assistant
-              </span>
-            </label>
-          </div>
-        </div>
-
-        <!-- Provider + Model -->
-        <div class="grid grid-cols-12 gap-4 items-start border-t border-slate-100 dark:border-slate-800 pt-4 mb-4">
-          <div class="col-span-12 md:col-span-6">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Provider
-            </label>
-            <label class="flex items-center gap-2 mb-1">
-              <input
-                type="checkbox"
-                :checked="aiProvider.useEnv"
-                @change="aiProvider.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default (M9M_AI_PROVIDER)</span>
-            </label>
-            <select
-              :value="aiProvider.value"
-              :disabled="aiProvider.useEnv"
-              @change="aiProvider.value = ($event.target as HTMLSelectElement).value as AIProviderId"
-              class="input"
+      <!-- Master switch -->
+      <div class="mb-4 grid grid-cols-12 items-start gap-4">
+        <div class="col-span-12">
+          <label class="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="otelEnabled.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="otelEnabled.useEnv = ($event.target as HTMLInputElement).checked"
             >
-              <option
-                v-for="p in aiProviders"
-                :key="p.id"
-                :value="p.id"
-              >
-                {{ p.label }}
-              </option>
-            </select>
-            <p v-if="aiSelectedProviderInfo" class="mt-1 text-xs text-slate-500">
-              {{ aiSelectedProviderInfo.description }}
-            </p>
-          </div>
-
-          <div class="col-span-12 md:col-span-6">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Model
-              <span class="text-xs text-slate-500 ml-2">
-                (provider-aware default below)
-              </span>
-            </label>
-            <label class="flex items-center gap-2 mb-1">
-              <input
-                type="checkbox"
-                :checked="aiModel.useEnv"
-                @change="aiModel.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default (M9M_AI_MODEL)</span>
-            </label>
+            <span class="text-sm text-neutral-700 dark:text-neutral-300">
+              Use environment default for <strong>enabled</strong>
+            </span>
+          </label>
+          <label class="mt-1 flex items-center gap-3 pl-6">
             <input
-              v-model="aiModel.value"
-              :disabled="aiModel.useEnv"
-              type="text"
-              :list="aiProvider.useEnv ? undefined : 'ai-model-options'"
-              :placeholder="aiSelectedProviderInfo?.defaultModel || 'model id'"
-              class="input font-mono text-sm"
-            />
-            <datalist id="ai-model-options">
-              <option
-                v-for="m in aiModelOptions"
-                :key="m"
-                :value="m"
-              />
-            </datalist>
-            <p v-if="aiModelOptions.length" class="mt-1 text-xs text-slate-500">
-              {{ aiModelOptions.length }} known models for {{ aiSelectedProviderInfo?.label || aiProvider.value }}
-            </p>
-          </div>
-        </div>
-
-        <!-- API key + base URL -->
-        <div class="grid grid-cols-12 gap-4 items-start border-t border-slate-100 dark:border-slate-800 pt-4 mb-4">
-          <div class="col-span-12 md:col-span-6">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              API key
-              <span v-if="aiSelectedProviderInfo && !aiSelectedProviderInfo.requiresKey" class="text-xs text-emerald-600 ml-2">
-                (not required for {{ aiSelectedProviderInfo.label }})
-              </span>
-            </label>
-            <label class="flex items-center gap-2 mb-1">
-              <input
-                type="checkbox"
-                :checked="aiApiKey.useEnv"
-                @change="aiApiKey.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default (M9M_AI_API_KEY)</span>
-            </label>
-            <input
-              v-model="aiApiKey.value"
-              :disabled="aiApiKey.useEnv"
-              type="password"
-              autocomplete="off"
-              placeholder="sk-…"
-              class="input font-mono text-sm"
-            />
-          </div>
-
-          <div class="col-span-12 md:col-span-6">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Base URL
-            </label>
-            <label class="flex items-center gap-2 mb-1">
-              <input
-                type="checkbox"
-                :checked="aiBaseUrl.useEnv"
-                @change="aiBaseUrl.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default (M9M_AI_BASE_URL)</span>
-            </label>
-            <input
-              v-model="aiBaseUrl.value"
-              :disabled="aiBaseUrl.useEnv"
-              type="text"
-              :placeholder="aiSelectedProviderInfo?.defaultBaseUrl || 'https://…'"
-              class="input font-mono text-sm"
-            />
-            <p v-if="aiBaseUrl.useEnv && aiEnvSource?.baseUrl" class="mt-1 text-xs text-slate-500">
-              Currently using: <code>{{ aiEnvSource.baseUrl }}</code>
-            </p>
-          </div>
-        </div>
-
-        <!-- Numeric knobs -->
-        <div class="grid grid-cols-12 gap-4 items-start border-t border-slate-100 dark:border-slate-800 pt-4 mb-4">
-          <div class="col-span-12 md:col-span-4">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Max tokens
-            </label>
-            <label class="flex items-center gap-2 mb-1">
-              <input
-                type="checkbox"
-                :checked="aiMaxTokens.useEnv"
-                @change="aiMaxTokens.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default (M9M_AI_MAX_TOKENS)</span>
-            </label>
-            <input
-              v-model.number="aiMaxTokens.value"
-              :disabled="aiMaxTokens.useEnv"
-              type="number"
-              min="1"
-              max="200000"
-              class="input font-mono text-sm"
-            />
-          </div>
-
-          <div class="col-span-12 md:col-span-4">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Temperature
-              <span class="text-xs text-slate-500 ml-2">(0.0–2.0)</span>
-            </label>
-            <label class="flex items-center gap-2 mb-1">
-              <input
-                type="checkbox"
-                :checked="aiTemperature.useEnv"
-                @change="aiTemperature.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default (M9M_AI_TEMPERATURE)</span>
-            </label>
-            <input
-              v-model.number="aiTemperature.value"
-              :disabled="aiTemperature.useEnv"
-              type="number"
-              step="0.05"
-              min="0"
-              max="2"
-              class="input font-mono text-sm"
-            />
-          </div>
-
-          <div class="col-span-12 md:col-span-4">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Timeout (ms)
-            </label>
-            <label class="flex items-center gap-2 mb-1">
-              <input
-                type="checkbox"
-                :checked="aiTimeoutMs.useEnv"
-                @change="aiTimeoutMs.useEnv = ($event.target as HTMLInputElement).checked"
-                class="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-xs text-slate-500">Use env default (M9M_AI_TIMEOUT_MS)</span>
-            </label>
-            <input
-              v-model.number="aiTimeoutMs.value"
-              :disabled="aiTimeoutMs.useEnv"
-              type="number"
-              min="100"
-              max="600000"
-              step="100"
-              class="input font-mono text-sm"
-            />
-          </div>
-        </div>
-
-        <!-- Test chat -->
-        <details class="border-t border-slate-100 dark:border-slate-800 pt-4">
-          <summary class="cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-300">
-            Send test chat (uses current effective config)
-          </summary>
-          <div class="space-y-3 mt-3">
-            <input
-              v-model="aiTestPrompt"
-              type="text"
-              placeholder="Reply with exactly: m9m AI assistant ready."
-              class="input font-mono text-sm"
-            />
-            <div v-if="aiTestReply" class="p-3 rounded-md bg-slate-50 dark:bg-slate-900 text-sm">
-              <span class="text-xs text-slate-500">Reply:</span>
-              <p class="mt-1 whitespace-pre-wrap">{{ aiTestReply }}</p>
-            </div>
-          </div>
-        </details>
-
-        <!-- Status + actions -->
-        <div v-if="aiError" class="mt-4 p-3 rounded-md bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-200 text-sm">
-          {{ aiError }}
-        </div>
-        <div v-if="aiInfo" class="mt-4 p-3 rounded-md bg-emerald-50 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200 text-sm">
-          {{ aiInfo }}
-        </div>
-
-        <div class="flex flex-wrap gap-3 mt-4">
-          <button
-            type="button"
-            class="btn-primary"
-            :disabled="aiSaving || aiLoading"
-            @click="saveAI"
-          >
-            {{ aiSaving ? 'Saving...' : 'Save settings' }}
-          </button>
-          <button
-            type="button"
-            class="btn-secondary"
-            :disabled="aiSaving || !aiOverridesActive"
-            @click="resetAIToEnv"
-          >
-            Reset to env defaults
-          </button>
-          <button
-            type="button"
-            class="btn-secondary"
-            :disabled="aiTesting || !aiEffective?.enabled"
-            @click="testAI"
-          >
-            {{ aiTesting ? 'Sending...' : 'Send test chat' }}
-          </button>
-          <span v-if="aiEffective" class="ml-auto text-xs text-slate-500 dark:text-slate-400 self-center">
-            Effective: {{ aiEffective.provider }} → {{ aiEffective.model || '(default)' }}
-            @ {{ aiEffective.baseUrl || '(provider default)' }}
-          </span>
-        </div>
-      </div>
-
-      <!-- Profile -->
-      <div v-if="authStore.isAuthenticated" class="card p-6">
-        <div class="flex items-center gap-3 mb-4">
-          <UserCircleIcon class="w-5 h-5 text-slate-500" />
-          <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Profile</h2>
-        </div>
-
-        <form @submit.prevent="saveProfile" class="space-y-4">
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                First Name
-              </label>
-              <input
-                v-model="profileForm.firstName"
-                type="text"
-                class="input"
-              />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Last Name
-              </label>
-              <input
-                v-model="profileForm.lastName"
-                type="text"
-                class="input"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Email
-            </label>
-            <input
-              v-model="profileForm.email"
-              type="email"
-              class="input"
-              disabled
-            />
-          </div>
-
-          <button type="submit" class="btn-primary">
-            Save Profile
-          </button>
-        </form>
-      </div>
-
-      <!-- Security -->
-      <div v-if="authStore.isAuthenticated" class="card p-6">
-        <div class="flex items-center gap-3 mb-4">
-          <ShieldCheckIcon class="w-5 h-5 text-slate-500" />
-          <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Security</h2>
-        </div>
-
-        <form @submit.prevent="changePassword" class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Current Password
-            </label>
-            <input
-              v-model="passwordForm.currentPassword"
-              type="password"
-              class="input"
-              required
-            />
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              New Password
-            </label>
-            <input
-              v-model="passwordForm.newPassword"
-              type="password"
-              class="input"
-              required
-            />
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Confirm New Password
-            </label>
-            <input
-              v-model="passwordForm.confirmPassword"
-              type="password"
-              class="input"
-              required
-            />
-          </div>
-
-          <button type="submit" class="btn-primary">
-            Change Password
-          </button>
-        </form>
-      </div>
-
-      <!-- About -->
-      <div class="card p-6">
-        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">About</h2>
-        <div class="space-y-2 text-sm text-slate-600 dark:text-slate-400">
-          <p><span class="font-medium">m9m</span> v1.0.0</p>
-          <p>Agent-Native Workflow Automation Platform</p>
-          <p class="mt-4">
-            <a
-              href="https://github.com/neul-labs/m9m"
-              target="_blank"
-              class="text-primary-600 dark:text-primary-400 hover:underline"
+              type="checkbox"
+              v-model="otelEnabled.value"
+              :disabled="otelEnabled.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
             >
-              GitHub Repository
-            </a>
+            <span class="text-sm text-neutral-700 dark:text-neutral-300">
+              Export traces to the configured collector
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Endpoint + protocol -->
+      <div class="mb-4 grid grid-cols-12 items-start gap-4 border-t border-neutral-100 pt-4 dark:border-neutral-800">
+        <div class="col-span-12 md:col-span-8">
+          <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            OTLP endpoint
+          </label>
+          <label class="mb-1 flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="otelEndpoint.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="otelEndpoint.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default (M9M_OTEL_ENDPOINT)</span>
+          </label>
+          <input
+            v-model="otelEndpoint.value"
+            :disabled="otelEndpoint.useEnv"
+            type="text"
+            :placeholder="otelEnvSource?.endpoint || 'host:4317'"
+            class="input font-mono text-sm"
+          >
+        </div>
+
+        <div class="col-span-12 md:col-span-4">
+          <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            Protocol
+          </label>
+          <label class="mb-1 flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="otelProtocol.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="otelProtocol.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default</span>
+          </label>
+          <select
+            :value="otelProtocol.value"
+            :disabled="otelProtocol.useEnv"
+            class="input"
+            @change="otelProtocol.value = ($event.target as HTMLSelectElement).value as OtelProtocol"
+          >
+            <option
+              v-for="p in protocols"
+              :key="p.value"
+              :value="p.value"
+            >
+              {{ p.label }}
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Headers -->
+      <div class="mb-4 grid grid-cols-12 items-start gap-4">
+        <div class="col-span-12 md:col-span-6">
+          <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            Headers
+          </label>
+          <label class="mb-1 flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="otelHeaders.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="otelHeaders.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default (M9M_OTEL_HEADERS)</span>
+          </label>
+          <input
+            v-model="otelHeaders.value"
+            :disabled="otelHeaders.useEnv"
+            type="text"
+            placeholder="Authorization=Bearer xyz"
+            class="input font-mono text-sm"
+          >
+        </div>
+        <div class="col-span-12 md:col-span-6">
+          <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            Headers file
+          </label>
+          <label class="mb-1 flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="otelHeadersFile.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="otelHeadersFile.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default</span>
+          </label>
+          <input
+            v-model="otelHeadersFile.value"
+            :disabled="otelHeadersFile.useEnv"
+            type="text"
+            placeholder="/etc/m9m/otel-headers.json"
+            class="input font-mono text-sm"
+          >
+        </div>
+      </div>
+
+      <!-- Service identity — the value your backend labels traces with. -->
+      <div class="mb-4 grid grid-cols-12 items-start gap-4 border-t border-neutral-100 pt-4 dark:border-neutral-800">
+        <div class="col-span-12 md:col-span-6">
+          <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            Service name
+            <span class="ml-2 normal-case text-xs text-neutral-500">
+              (becomes <code class="font-mono">service.name</code> in every span)
+            </span>
+          </label>
+          <label class="mb-1 flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="otelServiceName.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="otelServiceName.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default (M9M_OTEL_SERVICE_NAME)</span>
+          </label>
+          <input
+            v-model="otelServiceName.value"
+            :disabled="otelServiceName.useEnv"
+            type="text"
+            placeholder="m9m"
+            class="input font-mono text-sm"
+          >
+        </div>
+
+        <div class="col-span-12 md:col-span-6">
+          <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            Service version
+            <span class="ml-2 normal-case text-xs text-neutral-500">
+              (becomes <code class="font-mono">service.version</code>)
+            </span>
+          </label>
+          <label class="mb-1 flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="otelServiceVersion.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="otelServiceVersion.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default (M9M_OTEL_SERVICE_VERSION)</span>
+          </label>
+          <input
+            v-model="otelServiceVersion.value"
+            :disabled="otelServiceVersion.useEnv"
+            type="text"
+            placeholder="1.0.0"
+            class="input font-mono text-sm"
+          >
+        </div>
+      </div>
+
+      <!-- Sampling + toggles -->
+      <div class="mb-4 grid grid-cols-12 items-start gap-4 border-t border-neutral-100 pt-4 dark:border-neutral-800">
+        <div class="col-span-12 md:col-span-4">
+          <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            Sample rate
+          </label>
+          <label class="mb-1 flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="otelSampleRate.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="otelSampleRate.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default</span>
+          </label>
+          <input
+            v-model.number="otelSampleRate.value"
+            :disabled="otelSampleRate.useEnv"
+            type="number"
+            step="0.05"
+            min="0"
+            max="1"
+            class="input font-mono text-sm"
+          >
+        </div>
+
+        <div class="col-span-12 grid grid-cols-1 gap-2 md:col-span-8">
+          <label class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="otelProductionOnly.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="otelProductionOnly.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default</span>
+          </label>
+          <label class="-mt-5 flex items-center gap-3">
+            <input
+              type="checkbox"
+              v-model="otelProductionOnly.value"
+              :disabled="otelProductionOnly.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+            >
+            <span class="text-sm text-neutral-700 dark:text-neutral-300">
+              Drop dev / test execution modes at sampling
+            </span>
+          </label>
+
+          <label class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="otelIncludeNodeSpans.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="otelIncludeNodeSpans.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default</span>
+          </label>
+          <label class="-mt-5 flex items-center gap-3">
+            <input
+              type="checkbox"
+              v-model="otelIncludeNodeSpans.value"
+              :disabled="otelIncludeNodeSpans.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+            >
+            <span class="text-sm text-neutral-700 dark:text-neutral-300">
+              Emit per-node <code class="font-mono text-xs">node.execute</code> spans
+            </span>
+          </label>
+
+          <label class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="otelInjectOutbound.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="otelInjectOutbound.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default</span>
+          </label>
+          <label class="-mt-5 flex items-center gap-3">
+            <input
+              type="checkbox"
+              v-model="otelInjectOutbound.value"
+              :disabled="otelInjectOutbound.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+            >
+            <span class="text-sm text-neutral-700 dark:text-neutral-300">
+              Inject traceparent into outbound HTTP requests
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <!-- AI agent tracing -->
+      <details class="border-t border-neutral-100 pt-4 dark:border-neutral-800">
+        <summary class="cursor-pointer text-sm font-medium text-neutral-700 dark:text-neutral-300">
+          AI agent tracing (OpenAI / Anthropic / etc.)
+        </summary>
+        <div class="mt-3 space-y-2">
+          <label class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="otelAgentsEnabled.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="otelAgentsEnabled.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default (M9M_AGENTS_TRACING_ENABLED)</span>
+          </label>
+          <label class="flex items-center gap-3">
+            <input
+              type="checkbox"
+              v-model="otelAgentsEnabled.value"
+              :disabled="otelAgentsEnabled.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+            >
+            <span class="text-sm text-neutral-700 dark:text-neutral-300">
+              Emit <code class="font-mono text-xs">&lt;agent&gt;.generate</code> spans for AI calls
+            </span>
+          </label>
+
+          <label class="mt-2 flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="otelRecordInputs.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="otelRecordInputs.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default</span>
+          </label>
+          <label class="flex items-center gap-3">
+            <input
+              type="checkbox"
+              v-model="otelRecordInputs.value"
+              :disabled="otelRecordInputs.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+            >
+            <span class="text-sm text-neutral-700 dark:text-neutral-300">
+              Record prompts (<code class="font-mono text-xs">gen_ai.prompt</code>)
+            </span>
+          </label>
+
+          <label class="mt-2 flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="otelRecordOutputs.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="otelRecordOutputs.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default</span>
+          </label>
+          <label class="flex items-center gap-3">
+            <input
+              type="checkbox"
+              v-model="otelRecordOutputs.value"
+              :disabled="otelRecordOutputs.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+            >
+            <span class="text-sm text-neutral-700 dark:text-neutral-300">
+              Record responses (<code class="font-mono text-xs">gen_ai.response</code>)
+            </span>
+          </label>
+          <p class="mt-1 text-xs text-neutral-500">
+            Privacy gate — leave OFF unless your collector is GDPR-compliant
+            and you have an explicit business reason to record LLM traffic.
+          </p>
+        </div>
+      </details>
+
+      <!-- Status + actions -->
+      <div
+        v-if="otelError"
+        class="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300"
+      >
+        {{ otelError }}
+      </div>
+      <div
+        v-if="otelInfo"
+        class="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/50 dark:text-green-300"
+      >
+        {{ otelInfo }}
+      </div>
+
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        <Button
+          variant="primary"
+          size="sm"
+          :disabled="otelSaving || otelLoading"
+          :loading="otelSaving"
+          @click="saveOtel"
+        >
+          {{ otelSaving ? 'Saving…' : 'Save settings' }}
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          :disabled="otelSaving || !overridesActive"
+          @click="resetOtelToEnv"
+        >
+          Reset to env defaults
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          :disabled="otelTesting || !otelEffective?.enabled"
+          :loading="otelTesting"
+          @click="testOtel"
+        >
+          {{ otelTesting ? 'Sending…' : 'Send test span' }}
+        </Button>
+        <span
+          v-if="otelEffective"
+          class="ml-auto self-center font-mono text-2xs text-neutral-500 dark:text-neutral-400"
+        >
+          Effective: {{ otelEffective.protocol }} → {{ otelEffective.endpoint }} · sample {{ otelEffective.sampleRate }}
+        </span>
+      </div>
+    </section>
+
+    <!-- AI assistant -->
+    <section class="card p-6">
+      <div class="mb-4 flex items-center gap-3">
+        <CpuChipIcon class="h-5 w-5 text-neutral-500" />
+        <h2 class="text-lg font-semibold text-neutral-950 dark:text-neutral-50">
+          AI
+        </h2>
+        <StatusBadge
+          class="ml-auto"
+          :status="aiEffective?.enabled ? 'success' : 'neutral'"
+          :label="aiEffective?.enabled ? 'enabled' : 'disabled'"
+          dot
+        />
+      </div>
+
+      <p class="mb-4 text-sm text-neutral-600 dark:text-neutral-400">
+        Configure the AI assistant that powers workflow generation,
+        chat, and node suggestions. Settings below <strong class="text-neutral-800 dark:text-neutral-200">override</strong>
+        the environment defaults — leave a field's checkbox unchecked to
+        keep the value from your shell / <code class="font-mono text-xs">.env</code>.
+        Supports OpenAI, Anthropic (Claude), MiniMax (Anthropic-compatible),
+        and Ollama.
+      </p>
+
+      <!-- Master switch -->
+      <div class="mb-4 grid grid-cols-12 items-start gap-4">
+        <div class="col-span-12">
+          <label class="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="aiEnabled.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="aiEnabled.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-sm text-neutral-700 dark:text-neutral-300">
+              Use environment default for <strong>enabled</strong>
+              <span class="ml-1 text-xs text-neutral-500">(M9M_AI_ENABLED)</span>
+            </span>
+          </label>
+          <label class="mt-1 flex items-center gap-3 pl-6">
+            <input
+              type="checkbox"
+              v-model="aiEnabled.value"
+              :disabled="aiEnabled.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+            >
+            <span class="text-sm text-neutral-700 dark:text-neutral-300">
+              Enable AI assistant
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Provider + Model -->
+      <div class="mb-4 grid grid-cols-12 items-start gap-4 border-t border-neutral-100 pt-4 dark:border-neutral-800">
+        <div class="col-span-12 md:col-span-6">
+          <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            Provider
+          </label>
+          <label class="mb-1 flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="aiProvider.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="aiProvider.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default (M9M_AI_PROVIDER)</span>
+          </label>
+          <select
+            :value="aiProvider.value"
+            :disabled="aiProvider.useEnv"
+            class="input"
+            @change="aiProvider.value = ($event.target as HTMLSelectElement).value as AIProviderId"
+          >
+            <option
+              v-for="p in aiProviders"
+              :key="p.id"
+              :value="p.id"
+            >
+              {{ p.label }}
+            </option>
+          </select>
+          <p
+            v-if="aiSelectedProviderInfo"
+            class="mt-1 text-xs text-neutral-500"
+          >
+            {{ aiSelectedProviderInfo.description }}
+          </p>
+        </div>
+
+        <div class="col-span-12 md:col-span-6">
+          <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            Model
+            <span class="ml-2 normal-case text-xs text-neutral-500">
+              (provider-aware default below)
+            </span>
+          </label>
+          <label class="mb-1 flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="aiModel.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="aiModel.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default (M9M_AI_MODEL)</span>
+          </label>
+          <input
+            v-model="aiModel.value"
+            :disabled="aiModel.useEnv"
+            type="text"
+            :list="aiProvider.useEnv ? undefined : 'ai-model-options'"
+            :placeholder="aiSelectedProviderInfo?.defaultModel || 'model id'"
+            class="input font-mono text-sm"
+          >
+          <datalist id="ai-model-options">
+            <option
+              v-for="m in aiModelOptions"
+              :key="m"
+              :value="m"
+            />
+          </datalist>
+          <p
+            v-if="aiModelOptions.length"
+            class="mt-1 text-xs text-neutral-500"
+          >
+            {{ aiModelOptions.length }} known models for {{ aiSelectedProviderInfo?.label || aiProvider.value }}
           </p>
         </div>
       </div>
-    </div>
+
+      <!-- API key + base URL -->
+      <div class="mb-4 grid grid-cols-12 items-start gap-4 border-t border-neutral-100 pt-4 dark:border-neutral-800">
+        <div class="col-span-12 md:col-span-6">
+          <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            API key
+            <span
+              v-if="aiSelectedProviderInfo && !aiSelectedProviderInfo.requiresKey"
+              class="ml-2 normal-case text-xs text-green-700 dark:text-green-400"
+            >
+              (not required for {{ aiSelectedProviderInfo.label }})
+            </span>
+          </label>
+          <label class="mb-1 flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="aiApiKey.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="aiApiKey.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default (M9M_AI_API_KEY)</span>
+          </label>
+          <input
+            v-model="aiApiKey.value"
+            :disabled="aiApiKey.useEnv"
+            type="password"
+            autocomplete="off"
+            placeholder="sk-…"
+            class="input font-mono text-sm"
+          >
+        </div>
+
+        <div class="col-span-12 md:col-span-6">
+          <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            Base URL
+          </label>
+          <label class="mb-1 flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="aiBaseUrl.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="aiBaseUrl.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default (M9M_AI_BASE_URL)</span>
+          </label>
+          <input
+            v-model="aiBaseUrl.value"
+            :disabled="aiBaseUrl.useEnv"
+            type="text"
+            :placeholder="aiSelectedProviderInfo?.defaultBaseUrl || 'https://…'"
+            class="input font-mono text-sm"
+          >
+          <p
+            v-if="aiBaseUrl.useEnv && aiEnvSource?.baseUrl"
+            class="mt-1 text-xs text-neutral-500"
+          >
+            Currently using: <code class="font-mono">{{ aiEnvSource.baseUrl }}</code>
+          </p>
+        </div>
+      </div>
+
+      <!-- Numeric knobs -->
+      <div class="mb-4 grid grid-cols-12 items-start gap-4 border-t border-neutral-100 pt-4 dark:border-neutral-800">
+        <div class="col-span-12 md:col-span-4">
+          <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            Max tokens
+          </label>
+          <label class="mb-1 flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="aiMaxTokens.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="aiMaxTokens.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default (M9M_AI_MAX_TOKENS)</span>
+          </label>
+          <input
+            v-model.number="aiMaxTokens.value"
+            :disabled="aiMaxTokens.useEnv"
+            type="number"
+            min="1"
+            max="200000"
+            class="input font-mono text-sm"
+          >
+        </div>
+
+        <div class="col-span-12 md:col-span-4">
+          <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            Temperature
+            <span class="ml-2 normal-case text-xs text-neutral-500">(0.0–2.0)</span>
+          </label>
+          <label class="mb-1 flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="aiTemperature.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="aiTemperature.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default (M9M_AI_TEMPERATURE)</span>
+          </label>
+          <input
+            v-model.number="aiTemperature.value"
+            :disabled="aiTemperature.useEnv"
+            type="number"
+            step="0.05"
+            min="0"
+            max="2"
+            class="input font-mono text-sm"
+          >
+        </div>
+
+        <div class="col-span-12 md:col-span-4">
+          <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            Timeout (ms)
+          </label>
+          <label class="mb-1 flex items-center gap-2">
+            <input
+              type="checkbox"
+              :checked="aiTimeoutMs.useEnv"
+              class="rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+              @change="aiTimeoutMs.useEnv = ($event.target as HTMLInputElement).checked"
+            >
+            <span class="text-xs text-neutral-500">Use env default (M9M_AI_TIMEOUT_MS)</span>
+          </label>
+          <input
+            v-model.number="aiTimeoutMs.value"
+            :disabled="aiTimeoutMs.useEnv"
+            type="number"
+            min="100"
+            max="600000"
+            step="100"
+            class="input font-mono text-sm"
+          >
+        </div>
+      </div>
+
+      <!-- Test chat -->
+      <details class="border-t border-neutral-100 pt-4 dark:border-neutral-800">
+        <summary class="cursor-pointer text-sm font-medium text-neutral-700 dark:text-neutral-300">
+          Send test chat (uses current effective config)
+        </summary>
+        <div class="mt-3 space-y-3">
+          <input
+            v-model="aiTestPrompt"
+            type="text"
+            placeholder="Reply with exactly: m9m AI assistant ready."
+            class="input font-mono text-sm"
+          >
+          <div
+            v-if="aiTestReply"
+            class="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm dark:border-neutral-800 dark:bg-neutral-950"
+          >
+            <span class="text-xs text-neutral-500">Reply:</span>
+            <p class="mt-1 whitespace-pre-wrap">{{ aiTestReply }}</p>
+          </div>
+        </div>
+      </details>
+
+      <!-- Status + actions -->
+      <div
+        v-if="aiError"
+        class="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300"
+      >
+        {{ aiError }}
+      </div>
+      <div
+        v-if="aiInfo"
+        class="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/50 dark:text-green-300"
+      >
+        {{ aiInfo }}
+      </div>
+
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        <Button
+          variant="primary"
+          size="sm"
+          :disabled="aiSaving || aiLoading"
+          :loading="aiSaving"
+          @click="saveAI"
+        >
+          {{ aiSaving ? 'Saving…' : 'Save settings' }}
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          :disabled="aiSaving || !aiOverridesActive"
+          @click="resetAIToEnv"
+        >
+          Reset to env defaults
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          :disabled="aiTesting || !aiEffective?.enabled"
+          :loading="aiTesting"
+          @click="testAI"
+        >
+          {{ aiTesting ? 'Sending…' : 'Send test chat' }}
+        </Button>
+        <span
+          v-if="aiEffective"
+          class="ml-auto self-center font-mono text-2xs text-neutral-500 dark:text-neutral-400"
+        >
+          Effective: {{ aiEffective.provider }} → {{ aiEffective.model || '(default)' }}
+          @ {{ aiEffective.baseUrl || '(provider default)' }}
+        </span>
+      </div>
+    </section>
+
+    <!-- Profile -->
+    <section
+      v-if="authStore.isAuthenticated"
+      class="card p-6"
+    >
+      <div class="mb-4 flex items-center gap-3">
+        <UserCircleIcon class="h-5 w-5 text-neutral-500" />
+        <h2 class="text-lg font-semibold text-neutral-950 dark:text-neutral-50">
+          Profile
+        </h2>
+      </div>
+
+      <form
+        class="space-y-4"
+        @submit.prevent="saveProfile"
+      >
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+              First name
+            </label>
+            <input
+              v-model="profileForm.firstName"
+              type="text"
+              class="input"
+            >
+          </div>
+          <div>
+            <label class="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+              Last name
+            </label>
+            <input
+              v-model="profileForm.lastName"
+              type="text"
+              class="input"
+            >
+          </div>
+        </div>
+
+        <div>
+          <label class="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            Email
+          </label>
+          <input
+            v-model="profileForm.email"
+            type="email"
+            class="input"
+            disabled
+          >
+        </div>
+
+        <Button
+          type="submit"
+          variant="primary"
+          size="sm"
+        >
+          Save profile
+        </Button>
+      </form>
+    </section>
+
+    <!-- Security -->
+    <section
+      v-if="authStore.isAuthenticated"
+      class="card p-6"
+    >
+      <div class="mb-4 flex items-center gap-3">
+        <ShieldCheckIcon class="h-5 w-5 text-neutral-500" />
+        <h2 class="text-lg font-semibold text-neutral-950 dark:text-neutral-50">
+          Security
+        </h2>
+      </div>
+
+      <form
+        class="space-y-4"
+        @submit.prevent="changePassword"
+      >
+        <div>
+          <label class="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            Current password
+          </label>
+          <input
+            v-model="passwordForm.currentPassword"
+            type="password"
+            class="input"
+            required
+          >
+        </div>
+
+        <div>
+          <label class="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            New password
+          </label>
+          <input
+            v-model="passwordForm.newPassword"
+            type="password"
+            class="input"
+            required
+          >
+        </div>
+
+        <div>
+          <label class="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            Confirm new password
+          </label>
+          <input
+            v-model="passwordForm.confirmPassword"
+            type="password"
+            class="input"
+            required
+          >
+        </div>
+
+        <Button
+          type="submit"
+          variant="primary"
+          size="sm"
+        >
+          Change password
+        </Button>
+      </form>
+    </section>
+
+    <!-- About -->
+    <section class="card p-6">
+      <h2 class="mb-4 text-lg font-semibold text-neutral-950 dark:text-neutral-50">
+        About
+      </h2>
+      <div class="space-y-2 text-sm text-neutral-600 dark:text-neutral-400">
+        <p><span class="font-medium text-neutral-950 dark:text-neutral-50">m9m</span> v1.0.0</p>
+        <p>Agent-Native Workflow Automation Platform</p>
+        <p class="mt-4">
+          <a
+            href="https://github.com/neul-labs/m9m"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="rounded-sm text-brand-600 transition-colors hover:text-brand-700 hover:underline focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 dark:text-brand-400 dark:hover:text-brand-300"
+          >
+            GitHub Repository
+          </a>
+        </p>
+      </div>
+    </section>
   </div>
 </template>

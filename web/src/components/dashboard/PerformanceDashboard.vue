@@ -169,21 +169,27 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="p-6 space-y-6">
-    <!-- Header -->
-    <div class="flex items-center justify-between">
+  <div class="space-y-6">
+    <!-- Page header -->
+    <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
-          <RocketLaunchIcon class="w-8 h-8 text-violet-500" />
+        <h1 class="flex items-center gap-3 text-2xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50">
+          <RocketLaunchIcon class="h-6 w-6 text-brand-500" />
           Performance Dashboard
         </h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-1">
+        <p class="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
           Live workflow metrics straight from storage — not estimates.
         </p>
       </div>
-      <div v-if="lastUpdated" class="text-sm text-slate-500 dark:text-slate-400 text-right">
+      <div
+        v-if="lastUpdated"
+        class="text-right text-xs text-neutral-600 dark:text-neutral-400"
+      >
         <div>Last updated: {{ lastUpdated.toLocaleTimeString() }}</div>
-        <div v-if="metrics" class="text-xs text-slate-400">
+        <div
+          v-if="metrics"
+          class="text-2xs text-neutral-500 dark:text-neutral-500"
+        >
           Generated at {{ generatedAtDisplay }}
         </div>
       </div>
@@ -192,40 +198,36 @@ onUnmounted(() => {
     <!-- Error banner (only shown if both endpoints fail) -->
     <div
       v-if="hasError && !metrics"
-      class="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 p-4 text-amber-800 dark:text-amber-200"
+      class="rounded-lg border border-yellow-200 bg-yellow-100 p-4 text-sm text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950/50 dark:text-yellow-300"
     >
       Could not reach <code class="font-mono">/api/v1/performance</code>. Make sure
       the m9m backend is running. The page will keep retrying every 10 seconds.
     </div>
 
     <!-- Real-time metric tiles -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div
-        class="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700"
-      >
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-sm text-slate-500 dark:text-slate-400">Avg Execution Time</span>
-          <BoltIcon class="w-4 h-4 text-slate-400" />
+    <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div class="rounded-lg border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
+        <div class="mb-2 flex items-center justify-between">
+          <span class="text-sm text-neutral-600 dark:text-neutral-400">Avg Execution Time</span>
+          <BoltIcon class="h-4 w-4 text-neutral-400" />
         </div>
-        <div class="text-2xl font-bold text-slate-900 dark:text-white">
+        <div class="text-2xl font-semibold text-neutral-950 dark:text-neutral-50">
           {{ avgExecutionDisplay }}
         </div>
-        <div class="text-xs text-slate-400 mt-1">
+        <div class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
           Avg of {{ sampleSize }}
         </div>
       </div>
 
-      <div
-        class="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700"
-      >
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-sm text-slate-500 dark:text-slate-400">Success Rate</span>
-          <ArrowTrendingUpIcon class="w-4 h-4 text-slate-400" />
+      <div class="rounded-lg border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
+        <div class="mb-2 flex items-center justify-between">
+          <span class="text-sm text-neutral-600 dark:text-neutral-400">Success Rate</span>
+          <ArrowTrendingUpIcon class="h-4 w-4 text-neutral-400" />
         </div>
-        <div class="text-2xl font-bold text-slate-900 dark:text-white">
+        <div class="text-2xl font-semibold text-neutral-950 dark:text-neutral-50">
           {{ successRateDisplay }}
         </div>
-        <div class="text-xs text-slate-400 mt-1">
+        <div class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
           <template v-if="metrics?.successRate">
             {{ metrics.successRate.succeeded }} succeeded of
             {{ metrics.successRate.sampleCount }} sampled
@@ -234,72 +236,68 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div
-        class="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700"
-      >
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-sm text-slate-500 dark:text-slate-400">Total Executions</span>
-          <ChartBarIcon class="w-4 h-4 text-slate-400" />
+      <div class="rounded-lg border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
+        <div class="mb-2 flex items-center justify-between">
+          <span class="text-sm text-neutral-600 dark:text-neutral-400">Total Executions</span>
+          <ChartBarIcon class="h-4 w-4 text-neutral-400" />
         </div>
-        <div class="text-2xl font-bold text-slate-900 dark:text-white">
+        <div class="text-2xl font-semibold text-neutral-950 dark:text-neutral-50">
           {{ totalExecutionsDisplay }}
         </div>
-        <div class="text-xs text-slate-400 mt-1">
+        <div class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
           {{ failedExecutionsDisplay }} failed
         </div>
       </div>
 
-      <div
-        class="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700"
-      >
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-sm text-slate-500 dark:text-slate-400">Active Workflows</span>
-          <CircleStackIcon class="w-4 h-4 text-slate-400" />
+      <div class="rounded-lg border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
+        <div class="mb-2 flex items-center justify-between">
+          <span class="text-sm text-neutral-600 dark:text-neutral-400">Active Workflows</span>
+          <CircleStackIcon class="h-4 w-4 text-neutral-400" />
         </div>
-        <div class="text-2xl font-bold text-slate-900 dark:text-white">
+        <div class="text-2xl font-semibold text-neutral-950 dark:text-neutral-50">
           {{ activeWorkflowsDisplay }}
         </div>
-        <div class="text-xs text-slate-400 mt-1">Currently active=true</div>
+        <div class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Currently active=true</div>
       </div>
     </div>
 
     <!-- Operational details -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div class="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
-        <h3 class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-4">
+    <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+      <div class="rounded-lg border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
+        <h3 class="mb-4 text-sm font-medium text-neutral-700 dark:text-neutral-300">
           System Status
         </h3>
         <div class="space-y-4">
           <div class="flex items-center justify-between">
-            <span class="text-sm text-slate-600 dark:text-slate-400">Backend uptime (this page)</span>
-            <span class="text-lg font-bold text-slate-900 dark:text-white">{{ uptimeDisplay }}</span>
+            <span class="text-sm text-neutral-600 dark:text-neutral-400">Backend uptime (this page)</span>
+            <span class="font-mono text-sm font-semibold text-neutral-950 dark:text-neutral-50">{{ uptimeDisplay }}</span>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-sm text-slate-600 dark:text-slate-400">Queued tasks</span>
-            <span class="text-lg font-bold text-slate-900 dark:text-white">
+            <span class="text-sm text-neutral-600 dark:text-neutral-400">Queued tasks</span>
+            <span class="font-mono text-sm font-semibold text-neutral-950 dark:text-neutral-50">
               {{ queuedTasks !== null ? queuedTasks : '—' }}
             </span>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-sm text-slate-600 dark:text-slate-400">Failed executions</span>
-            <span class="text-lg font-bold text-slate-900 dark:text-white">{{ failedExecutionsDisplay }}</span>
+            <span class="text-sm text-neutral-600 dark:text-neutral-400">Failed executions</span>
+            <span class="font-mono text-sm font-semibold text-neutral-950 dark:text-neutral-50">{{ failedExecutionsDisplay }}</span>
           </div>
         </div>
       </div>
 
-      <div class="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
-        <h3 class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-4">
+      <div class="rounded-lg border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
+        <h3 class="mb-4 text-sm font-medium text-neutral-700 dark:text-neutral-300">
           What you're looking at
         </h3>
-        <ul class="text-sm text-slate-600 dark:text-slate-300 space-y-2">
+        <ul class="space-y-2 text-sm text-neutral-600 dark:text-neutral-300">
           <li>
             <strong>Avg Execution Time</strong> — mean duration of the
             {{ sampleSize }} executions, computed from
-            <code>finished_at − started_at</code>.
+            <code class="font-mono">finished_at − started_at</code>.
           </li>
           <li>
             <strong>Success Rate</strong> — percentage of recent executions with
-            status <code>success</code> or <code>completed</code>.
+            status <code class="font-mono">success</code> or <code class="font-mono">completed</code>.
           </li>
           <li>
             <strong>Total Executions</strong> — every execution ever stored,
@@ -307,12 +305,12 @@ onUnmounted(() => {
           </li>
           <li>
             <strong>Active Workflows</strong> — workflows whose
-            <code>active</code> flag is true.
+            <code class="font-mono">active</code> flag is true.
           </li>
         </ul>
-        <p class="text-xs text-slate-400 mt-4">
+        <p class="mt-4 text-xs text-neutral-500 dark:text-neutral-400">
           Auto-refreshes every 10 seconds. All values come from
-          <code>/api/v1/performance</code>.
+          <code class="font-mono">/api/v1/performance</code>.
         </p>
       </div>
     </div>

@@ -12,6 +12,8 @@ import {
   Cog6ToothIcon,
   ArrowPathRoundedSquareIcon,
 } from '@heroicons/vue/24/outline'
+import Button from '@/components/common/Button.vue'
+import IconButton from '@/components/common/IconButton.vue'
 
 const props = defineProps<{
   workflowId: string
@@ -88,124 +90,154 @@ function getNodeStatus(nodeName: string): 'added' | 'removed' | 'modified' | 'un
 </script>
 
 <template>
-  <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-[oklch(100%_0_89.88/0.8)] p-4 backdrop-blur-[2px] dark:bg-black/60">
+    <div class="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-900">
       <!-- Header -->
-      <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+      <div class="flex items-center justify-between border-b border-neutral-200 px-6 py-4 dark:border-neutral-800">
         <div class="flex items-center gap-3">
-          <div class="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-            <ArrowsRightLeftIcon class="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400">
+            <ArrowsRightLeftIcon class="h-4 w-4" />
           </div>
           <div>
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
+            <h2 class="text-lg font-semibold text-neutral-950 dark:text-neutral-50">
               Compare Versions
             </h2>
-            <p class="text-sm text-slate-500 dark:text-slate-400">
+            <p class="text-xs text-neutral-500 dark:text-neutral-400">
               {{ label(shownFrom) }} vs {{ label(shownTo) }}
             </p>
           </div>
         </div>
-        <button
+        <IconButton
+          label="Close"
           @click="emit('close')"
-          class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
         >
-          <XMarkIcon class="w-5 h-5" />
-        </button>
+          <XMarkIcon class="h-4 w-4" />
+        </IconButton>
       </div>
 
       <!-- Loading -->
-      <div v-if="loading" class="flex-1 flex items-center justify-center p-8">
-        <div class="animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+      <div
+        v-if="loading"
+        class="flex flex-1 items-center justify-center p-8"
+      >
+        <span
+          class="inline-block h-8 w-8 animate-spin rounded-full border-2 border-neutral-300 border-t-brand-500 dark:border-neutral-700"
+          aria-hidden="true"
+        />
       </div>
 
       <!-- Error -->
       <div
         v-else-if="errorMessage"
-        class="flex-1 flex flex-col items-center justify-center p-8 text-center gap-3"
+        class="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center"
       >
-        <p class="text-red-600 dark:text-red-400">{{ errorMessage }}</p>
-        <button @click="emit('close')" class="btn-secondary">Close</button>
+        <p class="text-sm text-red-700 dark:text-red-400">{{ errorMessage }}</p>
+        <Button
+          variant="secondary"
+          size="sm"
+          @click="emit('close')"
+        >
+          Close
+        </Button>
       </div>
 
       <!-- Content -->
-      <div v-else-if="comparison" class="flex-1 overflow-hidden flex flex-col">
+      <div
+        v-else-if="comparison"
+        class="flex flex-1 flex-col overflow-hidden"
+      >
         <!-- Summary -->
-        <div class="px-6 py-4 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
-          <div class="flex items-center justify-between gap-4 flex-wrap">
-            <div class="flex items-center gap-6">
+        <div class="border-b border-neutral-200 bg-neutral-50 px-6 py-4 dark:border-neutral-800 dark:bg-neutral-950">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex flex-wrap items-center gap-6">
               <div class="flex items-center gap-2">
-                <PlusCircleIcon class="w-5 h-5 text-green-500" />
-                <span class="text-sm text-slate-700 dark:text-slate-300">
+                <PlusCircleIcon class="h-4 w-4 text-green-600 dark:text-green-400" />
+                <span class="text-sm text-neutral-700 dark:text-neutral-300">
                   {{ nodesAdded.length }} added
                 </span>
               </div>
               <div class="flex items-center gap-2">
-                <MinusCircleIcon class="w-5 h-5 text-red-500" />
-                <span class="text-sm text-slate-700 dark:text-slate-300">
+                <MinusCircleIcon class="h-4 w-4 text-red-600 dark:text-red-400" />
+                <span class="text-sm text-neutral-700 dark:text-neutral-300">
                   {{ nodesRemoved.length }} removed
                 </span>
               </div>
               <div class="flex items-center gap-2">
-                <PencilSquareIcon class="w-5 h-5 text-amber-500" />
-                <span class="text-sm text-slate-700 dark:text-slate-300">
+                <PencilSquareIcon class="h-4 w-4 text-yellow-700 dark:text-yellow-400" />
+                <span class="text-sm text-neutral-700 dark:text-neutral-300">
                   {{ nodesModified.length }} modified
                 </span>
               </div>
-              <div v-if="connectionsChanged" class="flex items-center gap-2">
-                <ArrowPathRoundedSquareIcon class="w-5 h-5 text-blue-500" />
-                <span class="text-sm text-slate-700 dark:text-slate-300">Connections changed</span>
+              <div
+                v-if="connectionsChanged"
+                class="flex items-center gap-2"
+              >
+                <ArrowPathRoundedSquareIcon class="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <span class="text-sm text-neutral-700 dark:text-neutral-300">Connections changed</span>
               </div>
-              <div v-if="settingsChanged" class="flex items-center gap-2">
-                <Cog6ToothIcon class="w-5 h-5 text-purple-500" />
-                <span class="text-sm text-slate-700 dark:text-slate-300">Settings changed</span>
+              <div
+                v-if="settingsChanged"
+                class="flex items-center gap-2"
+              >
+                <Cog6ToothIcon class="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                <span class="text-sm text-neutral-700 dark:text-neutral-300">Settings changed</span>
               </div>
             </div>
-            <p v-if="summary" class="text-sm text-slate-500 dark:text-slate-400">
+            <p
+              v-if="summary"
+              class="text-sm text-neutral-500 dark:text-neutral-400"
+            >
               {{ summary }}
             </p>
           </div>
         </div>
 
         <!-- Side by Side Comparison -->
-        <div class="flex-1 overflow-hidden grid grid-cols-2">
+        <div class="grid flex-1 grid-cols-2 overflow-hidden">
           <!-- From Version -->
-          <div class="border-r border-slate-200 dark:border-slate-700 flex flex-col">
-            <div class="px-4 py-3 bg-red-50 dark:bg-red-900/20 border-b border-slate-200 dark:border-slate-700">
-              <div class="flex items-center justify-between">
+          <div class="flex flex-col border-r border-neutral-200 dark:border-neutral-800">
+            <div class="border-b border-neutral-200 bg-red-50 px-4 py-3 dark:border-neutral-800 dark:bg-red-950/40">
+              <div class="flex items-center justify-between gap-3">
                 <div>
-                  <h3 class="font-medium text-slate-900 dark:text-white">
+                  <h3 class="font-medium text-neutral-950 dark:text-neutral-50">
                     {{ label(shownFrom) }}
                   </h3>
-                  <p class="text-xs text-slate-500 dark:text-slate-400">
+                  <p class="text-xs text-neutral-500 dark:text-neutral-400">
                     {{ formatDate(shownFrom.createdAt) }} by {{ shownFrom.author }}
                   </p>
                 </div>
                 <button
+                  type="button"
+                  class="rounded-lg bg-red-100 px-3 py-1.5 text-xs text-red-800 transition-colors duration-200 hover:bg-red-200 dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-900/50"
                   @click="emit('restore', shownFrom)"
-                  class="px-3 py-1.5 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/50 rounded-lg transition-colors"
                 >
                   Restore this version
                 </button>
               </div>
             </div>
             <div class="flex-1 overflow-y-auto p-4">
-              <h4 class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase mb-3">
+              <h4 class="mb-3 text-2xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
                 Nodes ({{ fromNodes.length }})
               </h4>
               <div class="space-y-2">
                 <div
                   v-for="nodeName in fromNodes"
                   :key="nodeName"
-                  class="px-3 py-2 rounded-lg text-sm"
+                  class="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-900"
                   :class="{
-                    'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300': getNodeStatus(nodeName) === 'removed',
-                    'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300': getNodeStatus(nodeName) === 'modified',
-                    'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300': getNodeStatus(nodeName) === 'unchanged',
+                    'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300': getNodeStatus(nodeName) === 'removed',
+                    'border-yellow-200 bg-yellow-50 text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950/50 dark:text-yellow-300': getNodeStatus(nodeName) === 'modified',
                   }"
                 >
                   <div class="flex items-center gap-2">
-                    <MinusCircleIcon v-if="getNodeStatus(nodeName) === 'removed'" class="w-4 h-4" />
-                    <PencilSquareIcon v-else-if="getNodeStatus(nodeName) === 'modified'" class="w-4 h-4" />
+                    <MinusCircleIcon
+                      v-if="getNodeStatus(nodeName) === 'removed'"
+                      class="h-4 w-4"
+                    />
+                    <PencilSquareIcon
+                      v-else-if="getNodeStatus(nodeName) === 'modified'"
+                      class="h-4 w-4"
+                    />
                     <span>{{ nodeName }}</span>
                   </div>
                 </div>
@@ -215,42 +247,48 @@ function getNodeStatus(nodeName: string): 'added' | 'removed' | 'modified' | 'un
 
           <!-- To Version -->
           <div class="flex flex-col">
-            <div class="px-4 py-3 bg-green-50 dark:bg-green-900/20 border-b border-slate-200 dark:border-slate-700">
-              <div class="flex items-center justify-between">
+            <div class="border-b border-neutral-200 bg-green-50 px-4 py-3 dark:border-neutral-800 dark:bg-green-950/40">
+              <div class="flex items-center justify-between gap-3">
                 <div>
-                  <h3 class="font-medium text-slate-900 dark:text-white">
+                  <h3 class="font-medium text-neutral-950 dark:text-neutral-50">
                     {{ label(shownTo) }}
                   </h3>
-                  <p class="text-xs text-slate-500 dark:text-slate-400">
+                  <p class="text-xs text-neutral-500 dark:text-neutral-400">
                     {{ formatDate(shownTo.createdAt) }} by {{ shownTo.author }}
                   </p>
                 </div>
                 <button
+                  type="button"
+                  class="rounded-lg bg-green-100 px-3 py-1.5 text-xs text-green-800 transition-colors duration-200 hover:bg-green-200 dark:bg-green-950/50 dark:text-green-300 dark:hover:bg-green-900/50"
                   @click="emit('restore', shownTo)"
-                  class="px-3 py-1.5 text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50 rounded-lg transition-colors"
                 >
                   Restore this version
                 </button>
               </div>
             </div>
             <div class="flex-1 overflow-y-auto p-4">
-              <h4 class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase mb-3">
+              <h4 class="mb-3 text-2xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
                 Nodes ({{ toNodes.length }})
               </h4>
               <div class="space-y-2">
                 <div
                   v-for="nodeName in toNodes"
                   :key="nodeName"
-                  class="px-3 py-2 rounded-lg text-sm"
+                  class="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-900"
                   :class="{
-                    'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300': getNodeStatus(nodeName) === 'added',
-                    'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300': getNodeStatus(nodeName) === 'modified',
-                    'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300': getNodeStatus(nodeName) === 'unchanged',
+                    'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/50 dark:text-green-300': getNodeStatus(nodeName) === 'added',
+                    'border-yellow-200 bg-yellow-50 text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950/50 dark:text-yellow-300': getNodeStatus(nodeName) === 'modified',
                   }"
                 >
                   <div class="flex items-center gap-2">
-                    <PlusCircleIcon v-if="getNodeStatus(nodeName) === 'added'" class="w-4 h-4" />
-                    <PencilSquareIcon v-else-if="getNodeStatus(nodeName) === 'modified'" class="w-4 h-4" />
+                    <PlusCircleIcon
+                      v-if="getNodeStatus(nodeName) === 'added'"
+                      class="h-4 w-4"
+                    />
+                    <PencilSquareIcon
+                      v-else-if="getNodeStatus(nodeName) === 'modified'"
+                      class="h-4 w-4"
+                    />
                     <span>{{ nodeName }}</span>
                   </div>
                 </div>
@@ -261,8 +299,11 @@ function getNodeStatus(nodeName: string): 'added' | 'removed' | 'modified' | 'un
       </div>
 
       <!-- Error State -->
-      <div v-else class="flex-1 flex items-center justify-center p-8 text-slate-500 dark:text-slate-400">
-        Failed to compare versions
+      <div
+        v-else
+        class="flex flex-1 items-center justify-center p-8 text-neutral-500 dark:text-neutral-400"
+      >
+        <p class="text-sm">Failed to compare versions</p>
       </div>
     </div>
   </div>

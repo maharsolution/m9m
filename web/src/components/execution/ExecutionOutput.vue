@@ -94,14 +94,14 @@ function getStatusColor(status: string) {
   switch (status) {
     case 'success':
     case 'completed':
-      return 'text-green-500';
+      return 'text-green-600 dark:text-green-400';
     case 'error':
     case 'failed':
-      return 'text-red-500';
+      return 'text-red-600 dark:text-red-400';
     case 'running':
-      return 'text-blue-500';
+      return 'text-blue-600 dark:text-blue-400';
     default:
-      return 'text-gray-500';
+      return 'text-neutral-500 dark:text-neutral-400';
   }
 }
 
@@ -195,12 +195,12 @@ function formatBinarySize(fileSize?: string): string {
 <template>
   <div class="execution-output">
     <!-- Header -->
-    <div class="border-b border-gray-200 dark:border-gray-700 pb-4 mb-4">
+    <div class="mb-4 border-b border-neutral-200 pb-4 dark:border-neutral-800">
       <div class="flex items-center justify-between">
-        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">
+        <h3 class="text-lg font-semibold text-neutral-950 dark:text-neutral-50">
           Execution Output
         </h3>
-        <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+        <div class="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
           <component
             :is="getStatusIcon(execution.status)"
             class="h-5 w-5"
@@ -209,7 +209,7 @@ function formatBinarySize(fileSize?: string): string {
           <span class="capitalize">{{ execution.status }}</span>
         </div>
       </div>
-      <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+      <p class="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
         Started: {{ new Date(execution.startedAt).toLocaleString() }}
         <template v-if="execution.finishedAt">
           | Duration: {{ formatDuration(new Date(execution.finishedAt).getTime() - new Date(execution.startedAt).getTime()) }}
@@ -220,83 +220,96 @@ function formatBinarySize(fileSize?: string): string {
     <!-- No results -->
     <div
       v-if="nodeResults.length === 0"
-      class="text-center py-8 text-gray-500 dark:text-gray-400"
+      class="px-4 py-8 text-center text-neutral-500 dark:text-neutral-400"
     >
-      <DocumentTextIcon class="h-12 w-12 mx-auto mb-3 opacity-50" />
-      <p>No execution data available</p>
+      <DocumentTextIcon class="mx-auto mb-3 h-12 w-12 opacity-50" />
+      <p class="text-sm">No execution data available</p>
     </div>
 
     <!-- Node results -->
-    <div v-else class="space-y-3">
+    <div
+      v-else
+      class="space-y-3"
+    >
       <div
         v-for="node in nodeResults"
         :key="node.nodeId"
-        class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
+        class="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-800"
       >
         <!-- Node header -->
         <button
-          class="w-full px-4 py-3 flex items-center justify-between bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-750 transition-colors"
+          type="button"
+          class="flex w-full items-center justify-between bg-neutral-50 px-4 py-3 text-left transition-colors duration-200 hover:bg-neutral-100 dark:bg-neutral-950 dark:hover:bg-neutral-900"
           @click="toggleNode(node.nodeId)"
         >
           <div class="flex items-center gap-3">
             <component
               :is="expandedNodes.has(node.nodeId) ? ChevronDownIcon : ChevronRightIcon"
-              class="h-5 w-5 text-gray-400"
+              class="h-5 w-5 text-neutral-400"
             />
             <component
               :is="getStatusIcon(node.status)"
               class="h-5 w-5"
               :class="getStatusColor(node.status)"
             />
-            <span class="font-medium text-gray-900 dark:text-gray-100">
+            <span class="font-medium text-neutral-950 dark:text-neutral-50">
               {{ node.nodeName }}
             </span>
           </div>
-          <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+          <div class="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
             <span>{{ node.data.length }} items</span>
             <span v-if="node.executionTime">{{ formatDuration(node.executionTime) }}</span>
           </div>
         </button>
 
         <!-- Node content (expanded) -->
-        <div v-if="expandedNodes.has(node.nodeId)" class="border-t border-gray-200 dark:border-gray-700">
+        <div
+          v-if="expandedNodes.has(node.nodeId)"
+          class="border-t border-neutral-200 dark:border-neutral-800"
+        >
           <!-- Error message -->
           <div
             v-if="node.error"
-            class="p-4 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800"
+            class="border-b border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/50"
           >
-            <p class="text-sm text-red-600 dark:text-red-400 font-mono">
+            <p class="font-mono text-xs text-red-800 dark:text-red-300">
               {{ node.error }}
             </p>
           </div>
 
           <!-- Tabs -->
-          <div v-if="node.data.length > 0" class="border-b border-gray-200 dark:border-gray-700">
+          <div
+            v-if="node.data.length > 0"
+            class="border-b border-neutral-200 dark:border-neutral-800"
+          >
             <div class="flex gap-1 p-2">
               <button
-                class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
+                type="button"
+                class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-200"
                 :class="getSelectedTab(node.nodeId) === 'json'
-                  ? 'bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'"
+                  ? 'bg-brand-50 text-brand-700 dark:bg-brand-950/50 dark:text-brand-300'
+                  : 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800'"
                 @click="setSelectedTab(node.nodeId, 'json')"
               >
                 JSON
               </button>
               <button
-                class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
+                type="button"
+                class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-200"
                 :class="getSelectedTab(node.nodeId) === 'table'
-                  ? 'bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'"
+                  ? 'bg-brand-50 text-brand-700 dark:bg-brand-950/50 dark:text-brand-300'
+                  : 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800'"
                 @click="setSelectedTab(node.nodeId, 'table')"
               >
                 Table
               </button>
               <button
                 v-if="hasBinaryData(node.data)"
-                class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
+                type="button"
+                class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-200"
                 :class="getSelectedTab(node.nodeId) === 'binary'
-                  ? 'bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'"
+                  ? 'bg-brand-50 text-brand-700 dark:bg-brand-950/50 dark:text-brand-300'
+                  : 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800'"
                 @click="setSelectedTab(node.nodeId, 'binary')"
               >
                 Binary
@@ -304,7 +317,8 @@ function formatBinarySize(fileSize?: string): string {
 
               <!-- Copy button -->
               <button
-                class="ml-auto px-3 py-1.5 text-sm font-medium rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-1"
+                type="button"
+                class="ml-auto flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium text-neutral-600 transition-colors duration-200 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
                 @click="copyToClipboard(node.nodeId, node.data)"
               >
                 <component
@@ -319,9 +333,9 @@ function formatBinarySize(fileSize?: string): string {
           <!-- JSON view -->
           <div
             v-if="getSelectedTab(node.nodeId) === 'json' && node.data.length > 0"
-            class="p-4 max-h-96 overflow-auto"
+            class="max-h-96 overflow-auto p-4"
           >
-            <pre class="text-sm font-mono text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{{ formatJSON(node.data) }}</pre>
+            <pre class="whitespace-pre-wrap font-mono text-xs text-neutral-700 dark:text-neutral-300">{{ formatJSON(node.data) }}</pre>
           </div>
 
           <!-- Table view -->
@@ -329,24 +343,27 @@ function formatBinarySize(fileSize?: string): string {
             v-else-if="getSelectedTab(node.nodeId) === 'table' && node.data.length > 0"
             class="overflow-x-auto"
           >
-            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead class="bg-gray-50 dark:bg-gray-800">
+            <table class="min-w-full divide-y divide-neutral-200 dark:divide-neutral-800">
+              <thead class="bg-neutral-50 dark:bg-neutral-950">
                 <tr>
                   <th
                     v-for="col in getTableColumns(node.data)"
                     :key="col"
-                    class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+                    class="px-4 py-2 text-left text-2xs font-medium uppercase tracking-wide text-neutral-600 dark:text-neutral-400"
                   >
                     {{ col }}
                   </th>
                 </tr>
               </thead>
-              <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                <tr v-for="(item, idx) in node.data" :key="idx">
+              <tbody class="divide-y divide-neutral-200 bg-white dark:divide-neutral-800 dark:bg-neutral-900">
+                <tr
+                  v-for="(item, idx) in node.data"
+                  :key="idx"
+                >
                   <td
                     v-for="col in getTableColumns(node.data)"
                     :key="col"
-                    class="px-4 py-2 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap"
+                    class="whitespace-nowrap px-4 py-2 font-mono text-xs text-neutral-950 dark:text-neutral-100"
                   >
                     {{ formatCellValue(getItemJson(item)?.[col]) }}
                   </td>
@@ -369,12 +386,12 @@ function formatBinarySize(fileSize?: string): string {
                 <div
                   v-for="(binary, key) in item.binary"
                   :key="key"
-                  class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                  class="flex items-center gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950"
                 >
-                  <PhotoIcon class="h-8 w-8 text-gray-400" />
+                  <PhotoIcon class="h-8 w-8 text-neutral-400" />
                   <div>
-                    <p class="font-medium text-gray-900 dark:text-gray-100">{{ key }}</p>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                    <p class="font-medium text-neutral-950 dark:text-neutral-50">{{ key }}</p>
+                    <p class="text-xs text-neutral-500 dark:text-neutral-400">
                       {{ binary.mimeType }} | {{ formatBinarySize(binary.fileSize) }}
                     </p>
                   </div>
@@ -386,9 +403,9 @@ function formatBinarySize(fileSize?: string): string {
           <!-- Empty data -->
           <div
             v-if="node.data.length === 0 && !node.error"
-            class="p-8 text-center text-gray-500 dark:text-gray-400"
+            class="px-4 py-8 text-center text-neutral-500 dark:text-neutral-400"
           >
-            <p>No output data</p>
+            <p class="text-sm">No output data</p>
           </div>
         </div>
       </div>

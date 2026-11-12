@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { HomeIcon } from '@heroicons/vue/24/outline'
+import Button from '@/components/common/Button.vue'
 
 const router = useRouter()
 
@@ -10,19 +11,28 @@ const goHome = () => {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 px-4">
+  <div class="flex min-h-screen items-center justify-center bg-neutral-50 px-4 dark:bg-neutral-950">
     <div class="text-center">
-      <h1 class="text-9xl font-bold text-slate-200 dark:text-slate-700">404</h1>
-      <h2 class="mt-4 text-2xl font-semibold text-slate-900 dark:text-white">
+      <p class="text-2xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50">
+        404
+      </p>
+      <h1 class="mt-3 text-xl font-semibold text-neutral-950 dark:text-neutral-50">
         Page not found
-      </h2>
-      <p class="mt-2 text-slate-500 dark:text-slate-400">
+      </h1>
+      <p class="mx-auto mt-2 max-w-sm text-sm text-neutral-600 dark:text-neutral-400">
         The page you're looking for doesn't exist or has been moved.
       </p>
-      <button @click="goHome" class="mt-6 btn-primary inline-flex items-center gap-2">
-        <HomeIcon class="w-5 h-5" />
+      <Button
+        variant="primary"
+        size="md"
+        class="mt-6"
+        @click="goHome"
+      >
+        <template #icon>
+          <HomeIcon class="h-4 w-4" />
+        </template>
         <span>Go to Dashboard</span>
-      </button>
+      </Button>
     </div>
   </div>
 </template>

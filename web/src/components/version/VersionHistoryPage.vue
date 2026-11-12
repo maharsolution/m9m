@@ -15,6 +15,8 @@ import type { WorkflowVersion } from '@/types/version'
 import VersionHistory from './VersionHistory.vue'
 import VersionCompare from './VersionCompare.vue'
 import VersionRestoreDialog from './VersionRestoreDialog.vue'
+import Button from '@/components/common/Button.vue'
+import IconButton from '@/components/common/IconButton.vue'
 
 const props = defineProps<{
   id: string
@@ -91,89 +93,97 @@ async function confirmRestore(createBackup: boolean, description: string) {
 </script>
 
 <template>
-  <div class="p-6">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-6">
+  <div>
+    <!-- Page header -->
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div class="flex items-center gap-3">
-        <button
-          type="button"
-          class="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
-          title="Back to the editor"
-          aria-label="Back to the editor"
+        <IconButton
+          label="Back to the editor"
           @click="router.push(`/workflows/${id}`)"
         >
-          <ArrowLeftIcon class="w-5 h-5" />
-        </button>
+          <ArrowLeftIcon class="h-4 w-4" />
+        </IconButton>
         <div>
-          <h1 class="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <ClockIcon class="w-6 h-6 text-violet-500" />
+          <h1 class="flex items-center gap-2 text-2xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50">
+            <ClockIcon class="h-6 w-6 text-brand-500" />
             Version history
           </h1>
-          <p class="text-slate-500 dark:text-slate-400">
-            {{ loadingWorkflow ? 'Loading workflow...' : workflow?.name }}
+          <p class="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
+            {{ loadingWorkflow ? 'Loading workflow…' : workflow?.name }}
           </p>
         </div>
       </div>
-      <button
-        type="button"
-        class="btn-secondary"
+      <Button
+        variant="secondary"
+        size="sm"
         @click="router.push(`/workflows/${id}`)"
       >
         Open editor
-      </button>
+      </Button>
     </div>
 
     <!-- Notice -->
     <div
       v-if="notice"
-      :class="notice.type === 'success'
-        ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300'
-        : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300'"
       class="mb-4 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm"
+      :class="notice.type === 'success'
+        ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/50 dark:text-green-300'
+        : 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300'"
     >
       <p class="flex-1">{{ notice.message }}</p>
-      <button type="button" class="opacity-60 hover:opacity-100" @click="notice = null">
-        <XMarkIcon class="w-4 h-4" />
+      <button
+        type="button"
+        class="rounded-sm opacity-60 transition-opacity hover:opacity-100"
+        aria-label="Dismiss"
+        @click="notice = null"
+      >
+        <XMarkIcon class="h-4 w-4" />
       </button>
     </div>
 
     <!-- Version preview -->
     <div
       v-if="preview"
-      class="card p-4 mb-4 flex items-start justify-between gap-4"
+      class="mb-4 flex items-start justify-between gap-4 rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900"
     >
       <div class="min-w-0">
-        <p class="text-sm font-semibold text-slate-900 dark:text-white">
+        <p class="text-sm font-semibold text-neutral-950 dark:text-neutral-50">
           {{ preview.versionTag || `v${preview.versionNum}` }}
         </p>
-        <p class="text-xs text-slate-500 dark:text-slate-400">
+        <p class="text-xs text-neutral-500 dark:text-neutral-400">
           {{ new Date(preview.createdAt).toLocaleString() }} by {{ preview.author }}
         </p>
-        <p v-if="preview.description" class="mt-1 text-sm text-slate-600 dark:text-slate-300">
+        <p
+          v-if="preview.description"
+          class="mt-1 text-sm text-neutral-600 dark:text-neutral-300"
+        >
           {{ preview.description }}
         </p>
         <ul
           v-if="preview.workflow?.nodes?.length"
-          class="mt-2 max-h-40 overflow-y-auto text-xs text-slate-600 dark:text-slate-400 space-y-0.5"
+          class="mt-2 max-h-40 space-y-0.5 overflow-y-auto text-xs text-neutral-600 dark:text-neutral-400"
         >
-          <li v-for="node in preview.workflow.nodes" :key="node.name">
+          <li
+            v-for="node in preview.workflow.nodes"
+            :key="node.name"
+          >
             · {{ node.name }}
           </li>
         </ul>
       </div>
       <button
         type="button"
-        class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+        class="rounded-sm p-1 text-neutral-400 transition-colors hover:text-neutral-700 dark:hover:text-neutral-200"
         title="Close preview"
         aria-label="Close preview"
         @click="preview = null"
       >
-        <XMarkIcon class="w-4 h-4" />
+        <XMarkIcon class="h-4 w-4" />
       </button>
     </div>
 
     <!-- History -->
-    <div class="card overflow-hidden">
+    <div class="overflow-hidden rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
       <VersionHistory
         :workflow-id="id"
         @restore="openRestore"
@@ -203,11 +213,11 @@ async function confirmRestore(createBackup: boolean, description: string) {
     <!-- Restoring overlay -->
     <div
       v-if="restoring"
-      class="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center"
+      class="fixed inset-0 z-[60] flex items-center justify-center bg-black/40"
     >
-      <div class="flex items-center gap-3 rounded-lg bg-white dark:bg-slate-800 px-5 py-4 shadow-xl">
-        <ArrowPathIcon class="w-5 h-5 animate-spin text-violet-500" />
-        <span class="text-sm text-slate-700 dark:text-slate-200">Restoring version...</span>
+      <div class="flex items-center gap-3 rounded-lg bg-white px-5 py-4 shadow-xl dark:bg-neutral-900">
+        <ArrowPathIcon class="h-5 w-5 animate-spin text-brand-500" />
+        <span class="text-sm text-neutral-700 dark:text-neutral-200">Restoring version…</span>
       </div>
     </div>
   </div>

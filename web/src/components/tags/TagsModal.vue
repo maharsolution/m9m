@@ -13,6 +13,8 @@ import { tagErrorMessage } from '@/api/tags'
 import type { Tag } from '@/types/tag'
 import { TAG_PALETTE, DEFAULT_TAG_COLOR, normalizeHexColor } from '@/types/tag'
 import TagChip from './TagChip.vue'
+import Button from '@/components/common/Button.vue'
+import IconButton from '@/components/common/IconButton.vue'
 
 const emit = defineEmits<{
   close: []
@@ -139,70 +141,79 @@ async function handleDelete(tag: Tag) {
 
 <template>
   <div
-    class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-[oklch(100%_0_89.88/0.8)] p-4 backdrop-blur-[2px] dark:bg-black/60"
     @click.self="emit('close')"
   >
-    <div class="card w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+    <div class="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-900">
       <!-- Header -->
-      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+      <div class="flex items-center justify-between border-b border-neutral-200 px-6 py-4 dark:border-neutral-800">
         <div class="flex items-center gap-3">
-          <div class="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
-            <TagIcon class="w-5 h-5 text-primary-600 dark:text-primary-400" />
+          <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400">
+            <TagIcon class="h-4 w-4" />
           </div>
           <div>
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Manage tags</h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400">
+            <h2 class="text-lg font-semibold text-neutral-950 dark:text-neutral-50">
+              Manage tags
+            </h2>
+            <p class="text-xs text-neutral-600 dark:text-neutral-400">
               Tags group workflows so they can be found and filtered quickly.
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
-          title="Close"
-          aria-label="Close"
+        <IconButton
+          label="Close"
           @click="emit('close')"
         >
-          <XMarkIcon class="w-5 h-5" />
-        </button>
+          <XMarkIcon class="h-4 w-4" />
+        </IconButton>
       </div>
 
       <!-- Body -->
-      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+      <div class="flex-1 space-y-6 overflow-y-auto p-6">
         <!-- Notice -->
         <div
           v-if="notice"
-          :class="notice.type === 'success'
-            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300'
-            : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300'"
           class="flex items-start gap-2 rounded-lg border px-4 py-3 text-sm"
+          :class="notice.type === 'success'
+            ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/50 dark:text-green-300'
+            : 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300'"
         >
           <p class="flex-1">{{ notice.message }}</p>
-          <button type="button" class="opacity-60 hover:opacity-100" @click="notice = null">
-            <XMarkIcon class="w-4 h-4" />
+          <button
+            type="button"
+            class="rounded-sm opacity-60 transition-opacity hover:opacity-100"
+            aria-label="Dismiss"
+            @click="notice = null"
+          >
+            <XMarkIcon class="h-4 w-4" />
           </button>
         </div>
 
         <!-- Create -->
-        <div class="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
-          <h3 class="text-sm font-semibold text-slate-900 dark:text-white">New tag</h3>
-          <div class="flex flex-col sm:flex-row gap-3">
+        <div class="space-y-3 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
+          <h3 class="text-sm font-semibold text-neutral-950 dark:text-neutral-50">
+            New tag
+          </h3>
+          <div class="flex flex-col gap-3 sm:flex-row">
             <input
               v-model="newName"
               type="text"
               placeholder="Tag name (e.g. production)"
               class="input flex-1"
               @keyup.enter="handleCreate"
-            />
-            <button
-              type="button"
-              class="btn-primary flex items-center justify-center gap-2"
+            >
+            <Button
+              variant="primary"
+              size="sm"
               :disabled="creating"
+              :loading="creating"
               @click="handleCreate"
             >
-              <PlusIcon class="w-4 h-4" />
-              {{ creating ? 'Creating...' : 'Create' }}
-            </button>
+              <template #icon>
+                <PlusIcon class="h-4 w-4" />
+              </template>
+              <span>{{ creating ? 'Creating…' : 'Create' }}</span>
+            </Button>
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
@@ -210,58 +221,71 @@ async function handleDelete(tag: Tag) {
               v-for="color in TAG_PALETTE"
               :key="color"
               type="button"
-              class="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110"
-              :class="newColor === color ? 'border-slate-900 dark:border-white' : 'border-transparent'"
+              class="h-6 w-6 rounded-full border-2 transition-transform hover:scale-110"
+              :class="newColor === color ? 'border-neutral-900 dark:border-white' : 'border-transparent'"
               :style="{ backgroundColor: color }"
               :aria-label="`Use colour ${color}`"
               :title="color"
               @click="pickColor('new', color)"
             />
-            <label class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <label class="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
               Custom
               <input
                 v-model="newColor"
                 type="color"
-                class="w-8 h-8 rounded border border-slate-300 dark:border-slate-600 bg-transparent cursor-pointer"
+                class="h-8 w-8 cursor-pointer rounded border border-neutral-300 bg-transparent dark:border-neutral-700"
                 aria-label="Custom colour"
-              />
+              >
             </label>
           </div>
         </div>
 
         <!-- List -->
         <div>
-          <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-3">
+          <h3 class="mb-3 text-sm font-semibold text-neutral-950 dark:text-neutral-50">
             Existing tags
-            <span class="text-xs font-normal text-slate-500 dark:text-slate-400">
+            <span class="text-xs font-normal text-neutral-500 dark:text-neutral-400">
               ({{ tags.length }})
             </span>
           </h3>
 
           <!-- Loading -->
-          <div v-if="tagsStore.loading && tags.length === 0" class="py-8 text-center">
-            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
-            <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">Loading tags...</p>
+          <div
+            v-if="tagsStore.loading && tags.length === 0"
+            class="py-8 text-center"
+          >
+            <span
+              class="mx-auto inline-block h-8 w-8 animate-spin rounded-full border-2 border-neutral-300 border-t-brand-500 dark:border-neutral-700"
+              aria-hidden="true"
+            />
+            <p class="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
+              Loading tags…
+            </p>
           </div>
 
           <!-- Empty -->
           <div
             v-else-if="tags.length === 0"
-            class="rounded-lg border border-dashed border-slate-300 dark:border-slate-600 py-10 text-center"
+            class="rounded-lg border border-dashed border-neutral-300 py-10 text-center dark:border-neutral-700"
           >
-            <TagIcon class="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
-            <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">No tags yet</p>
-            <p class="text-xs text-slate-500 dark:text-slate-500">
+            <TagIcon class="mx-auto h-10 w-10 text-neutral-300 dark:text-neutral-700" />
+            <p class="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+              No tags yet
+            </p>
+            <p class="text-xs text-neutral-500 dark:text-neutral-500">
               Create the first one above.
             </p>
           </div>
 
           <!-- Rows -->
-          <ul v-else class="divide-y divide-slate-100 dark:divide-slate-700 rounded-lg border border-slate-200 dark:border-slate-700">
+          <ul
+            v-else
+            class="divide-y divide-neutral-100 rounded-lg border border-neutral-200 dark:divide-neutral-800 dark:border-neutral-800"
+          >
             <li
               v-for="tag in tags"
               :key="tag.id"
-              class="px-4 py-3 flex items-center gap-3"
+              class="flex items-center gap-3 px-4 py-3"
             >
               <!-- Edit mode -->
               <template v-if="editingId === tag.id">
@@ -271,14 +295,14 @@ async function handleDelete(tag: Tag) {
                   class="input flex-1"
                   @keyup.enter="handleSave(tag)"
                   @keyup.esc="cancelEdit"
-                />
+                >
                 <div class="flex flex-wrap items-center gap-1">
                   <button
                     v-for="color in TAG_PALETTE"
                     :key="color"
                     type="button"
-                    class="w-5 h-5 rounded-full border-2 transition-transform hover:scale-110"
-                    :class="editColor === color ? 'border-slate-900 dark:border-white' : 'border-transparent'"
+                    class="h-5 w-5 rounded-full border-2 transition-transform hover:scale-110"
+                    :class="editColor === color ? 'border-neutral-900 dark:border-white' : 'border-transparent'"
                     :style="{ backgroundColor: color }"
                     :aria-label="`Use colour ${color}`"
                     :title="color"
@@ -287,47 +311,39 @@ async function handleDelete(tag: Tag) {
                 </div>
                 <button
                   type="button"
-                  class="p-2 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50"
+                  class="flex h-8 w-8 items-center justify-center rounded-lg bg-green-50 text-green-700 transition-colors hover:bg-green-100 dark:bg-green-950/50 dark:text-green-300"
                   title="Save"
                   aria-label="Save tag"
                   :disabled="saving"
                   @click="handleSave(tag)"
                 >
-                  <CheckIcon class="w-4 h-4" />
+                  <CheckIcon class="h-4 w-4" />
                 </button>
-                <button
-                  type="button"
-                  class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
-                  title="Cancel"
-                  aria-label="Cancel edit"
-                  @click="cancelEdit"
-                >
-                  <XMarkIcon class="w-4 h-4" />
-                </button>
+                <IconButton
+              label="Cancel edit"
+              @click="cancelEdit"
+            >
+              <XMarkIcon class="h-4 w-4" />
+            </IconButton>
               </template>
 
               <!-- View mode -->
               <template v-else>
                 <TagChip :tag="tag" />
                 <span class="flex-1" />
-                <button
-                  type="button"
-                  class="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
-                  title="Rename or recolour"
-                  aria-label="Edit tag"
+                <IconButton
+                  label="Rename or recolour"
                   @click="startEdit(tag)"
                 >
-                  <PencilSquareIcon class="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  class="p-2 rounded-lg text-red-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                  title="Delete tag"
-                  aria-label="Delete tag"
+                  <PencilSquareIcon class="h-4 w-4" />
+                </IconButton>
+                <IconButton
+                  label="Delete tag"
+                  tone="danger"
                   @click="handleDelete(tag)"
                 >
-                  <TrashIcon class="w-4 h-4" />
-                </button>
+                  <TrashIcon class="h-4 w-4" />
+                </IconButton>
               </template>
             </li>
           </ul>
@@ -335,8 +351,14 @@ async function handleDelete(tag: Tag) {
       </div>
 
       <!-- Footer -->
-      <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
-        <button type="button" class="btn-secondary" @click="emit('close')">Close</button>
+      <div class="flex justify-end border-t border-neutral-200 px-6 py-4 dark:border-neutral-800">
+        <Button
+          variant="secondary"
+          size="sm"
+          @click="emit('close')"
+        >
+          Close
+        </Button>
       </div>
     </div>
   </div>

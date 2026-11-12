@@ -3,6 +3,8 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { BoltIcon } from '@heroicons/vue/24/outline'
 import { useAuthStore, useThemeStore } from '@/stores'
+import Button from '@/components/common/Button.vue'
+import Input from '@/components/common/Input.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -52,101 +54,92 @@ const toggleMode = () => {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 px-4">
+  <div class="flex min-h-screen items-center justify-center bg-neutral-50 px-4 py-10 dark:bg-neutral-950">
     <div class="w-full max-w-md">
       <!-- Logo -->
-      <div class="text-center mb-8">
+      <div class="mb-8 text-center">
         <div class="inline-flex items-center gap-3">
-          <div class="w-12 h-12 bg-gradient-to-br from-violet-500 to-indigo-600 rounded-xl flex items-center justify-center">
-            <BoltIcon class="w-7 h-7 text-white" />
+          <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-500">
+            <BoltIcon class="h-6 w-6 text-white" />
           </div>
-          <span class="text-3xl font-bold text-slate-900 dark:text-white">m9m</span>
+          <span class="text-2xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50">m9m</span>
         </div>
-        <p class="mt-2 text-slate-500 dark:text-slate-400">
+        <p class="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
           Agent-Native Workflow Automation
         </p>
       </div>
 
       <!-- Card -->
-      <div class="card p-6">
-        <h2 class="text-xl font-semibold text-slate-900 dark:text-white text-center mb-6">
+      <div class="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+        <h2 class="mb-6 text-center text-xl font-semibold text-neutral-950 dark:text-neutral-50">
           {{ isLogin ? 'Sign in to your account' : 'Create an account' }}
         </h2>
 
         <!-- Error Message -->
         <div
           v-if="error"
-          class="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm"
+          class="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300"
+          role="alert"
         >
           {{ error }}
         </div>
 
-        <form @submit.prevent="submit" class="space-y-4">
+        <form
+          class="space-y-4"
+          @submit.prevent="submit"
+        >
           <!-- Name fields (register only) -->
-          <div v-if="!isLogin" class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                First Name
-              </label>
-              <input
-                v-model="form.firstName"
-                type="text"
-                class="input"
-                placeholder="John"
-              />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Last Name
-              </label>
-              <input
-                v-model="form.lastName"
-                type="text"
-                class="input"
-                placeholder="Doe"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Email
-            </label>
-            <input
-              v-model="form.email"
-              type="email"
-              class="input"
-              placeholder="you@example.com"
-              required
+          <div
+            v-if="!isLogin"
+            class="grid grid-cols-2 gap-4"
+          >
+            <Input
+              v-model="form.firstName"
+              type="text"
+              label="First name"
+              placeholder="John"
+            />
+            <Input
+              v-model="form.lastName"
+              type="text"
+              label="Last name"
+              placeholder="Doe"
             />
           </div>
 
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-              Password
-            </label>
-            <input
-              v-model="form.password"
-              type="password"
-              class="input"
-              placeholder="••••••••"
-              required
-            />
-          </div>
+          <Input
+            v-model="form.email"
+            type="email"
+            label="Email"
+            placeholder="you@example.com"
+            required
+          />
 
-          <button
+          <Input
+            v-model="form.password"
+            type="password"
+            label="Password"
+            placeholder="••••••••"
+            required
+          />
+
+          <Button
             type="submit"
+            variant="primary"
+            size="md"
+            class="w-full"
+            :loading="loading"
             :disabled="loading"
-            class="w-full btn-primary"
           >
             {{ loading ? 'Please wait...' : (isLogin ? 'Sign in' : 'Create account') }}
-          </button>
+          </Button>
         </form>
 
         <div class="mt-6 text-center">
           <button
+            type="button"
+            class="rounded-sm text-sm font-medium text-brand-600 transition-colors hover:text-brand-700 hover:underline focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 dark:text-brand-400 dark:hover:text-brand-300"
             @click="toggleMode"
-            class="text-sm text-primary-600 dark:text-primary-400 hover:underline"
           >
             {{ isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in' }}
           </button>
@@ -156,8 +149,9 @@ const toggleMode = () => {
       <!-- Theme Toggle -->
       <div class="mt-6 text-center">
         <button
+          type="button"
+          class="rounded-sm text-sm text-neutral-500 transition-colors hover:text-neutral-800 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 dark:text-neutral-400 dark:hover:text-neutral-200 dark:focus-visible:outline-neutral-100"
           @click="themeStore.toggleTheme"
-          class="text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
         >
           {{ themeStore.isDark ? 'Switch to light mode' : 'Switch to dark mode' }}
         </button>

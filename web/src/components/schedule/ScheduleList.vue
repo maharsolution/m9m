@@ -8,6 +8,7 @@ import {
   CheckCircleIcon,
   XCircleIcon,
 } from '@heroicons/vue/24/outline'
+import IconButton from '@/components/common/IconButton.vue'
 
 defineProps<{
   schedules: Schedule[]
@@ -42,151 +43,182 @@ function formatNextRun(dateString?: string): string {
 </script>
 
 <template>
-  <div class="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+  <div class="overflow-hidden rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
     <!-- Loading State -->
-    <div v-if="loading" class="p-8 text-center text-slate-500 dark:text-slate-400">
-      <div class="animate-spin inline-block w-8 h-8 border-4 border-violet-500 border-t-transparent rounded-full"></div>
-      <p class="mt-2">Loading schedules...</p>
+    <div
+      v-if="loading"
+      class="px-6 py-10 text-center text-neutral-600 dark:text-neutral-400"
+    >
+      <span
+        class="inline-block h-8 w-8 animate-spin rounded-full border-2 border-neutral-300 border-t-brand-500 dark:border-neutral-700"
+        aria-hidden="true"
+      />
+      <p class="mt-3 text-sm">Loading schedules…</p>
     </div>
 
     <!-- Empty State -->
-    <div v-else-if="!schedules.length" class="p-8 text-center text-slate-500 dark:text-slate-400">
-      <CalendarDaysIcon class="w-12 h-12 mx-auto mb-3 opacity-50" />
-      <p class="font-medium">No schedules found</p>
-      <p class="text-sm mt-1">Create a schedule to automate workflow execution</p>
+    <div
+      v-else-if="!schedules.length"
+      class="px-6 py-10 text-center text-neutral-600 dark:text-neutral-400"
+    >
+      <CalendarDaysIcon class="mx-auto mb-3 h-12 w-12 opacity-50" />
+      <p class="text-sm font-medium">No schedules found</p>
+      <p class="mt-1 text-xs">Create a schedule to automate workflow execution</p>
     </div>
 
     <!-- Schedule List -->
-    <table v-else class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-      <thead class="bg-slate-50 dark:bg-slate-800">
-        <tr>
-          <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-            Status
-          </th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-            Workflow
-          </th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-            Schedule
-          </th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-            Next Run
-          </th>
-          <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-            Runs
-          </th>
-          <th class="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-            Actions
-          </th>
-        </tr>
-      </thead>
-      <tbody class="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-700">
-        <tr
-          v-for="schedule in schedules"
-          :key="schedule.id"
-          class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-        >
-          <!-- Status -->
-          <td class="px-6 py-4 whitespace-nowrap">
-            <button
-              @click="emit('toggle', schedule)"
-              class="flex items-center gap-2"
-              :title="schedule.enabled ? 'Click to disable' : 'Click to enable'"
-            >
-              <span
-                class="flex items-center justify-center w-8 h-8 rounded-full transition-colors"
-                :class="schedule.enabled
-                  ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
-                  : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'"
-              >
-                <CheckCircleIcon v-if="schedule.enabled" class="w-5 h-5" />
-                <XCircleIcon v-else class="w-5 h-5" />
-              </span>
-              <span
-                class="text-sm font-medium"
-                :class="schedule.enabled
-                  ? 'text-green-600 dark:text-green-400'
-                  : 'text-slate-400 dark:text-slate-500'"
-              >
-                {{ schedule.enabled ? 'Active' : 'Inactive' }}
-              </span>
-            </button>
-          </td>
-
-          <!-- Workflow -->
-          <td class="px-6 py-4">
-            <div class="text-sm font-medium text-slate-900 dark:text-white">
-              {{ schedule.workflowName || 'Unknown Workflow' }}
-            </div>
-            <div class="text-xs text-slate-500 dark:text-slate-400 font-mono">
-              {{ schedule.workflowId }}
-            </div>
-          </td>
-
-          <!-- Schedule -->
-          <td class="px-6 py-4">
-            <div class="flex items-center gap-2">
-              <ClockIcon class="w-4 h-4 text-slate-400" />
-              <code class="text-sm bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-700 dark:text-slate-300">
-                {{ schedule.cronExpression }}
-              </code>
-            </div>
-            <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              {{ schedule.timezone }}
-            </div>
-          </td>
-
-          <!-- Next Run -->
-          <td class="px-6 py-4">
-            <div v-if="schedule.enabled && schedule.nextRun" class="text-sm text-slate-900 dark:text-white">
-              {{ formatNextRun(schedule.nextRun) }}
-            </div>
-            <div v-else class="text-sm text-slate-400 dark:text-slate-500">
-              -
-            </div>
-            <div v-if="schedule.nextRun" class="text-xs text-slate-500 dark:text-slate-400">
-              {{ formatDate(schedule.nextRun) }}
-            </div>
-          </td>
-
-          <!-- Runs -->
-          <td class="px-6 py-4">
-            <div class="text-sm text-slate-900 dark:text-white">
-              {{ schedule.runCount }} / {{ schedule.maxRuns === 0 ? 'Unlimited' : schedule.maxRuns }}
-            </div>
-            <div v-if="schedule.lastRun" class="text-xs text-slate-500 dark:text-slate-400">
-              Last: {{ formatDate(schedule.lastRun) }}
-            </div>
-          </td>
-
-          <!-- Actions -->
-          <td class="px-6 py-4 whitespace-nowrap text-right">
-            <div class="flex items-center justify-end gap-2">
+    <div
+      v-else
+      class="overflow-x-auto"
+    >
+      <table class="min-w-full divide-y divide-neutral-100 dark:divide-neutral-800">
+        <thead class="bg-neutral-50 dark:bg-neutral-950">
+          <tr>
+            <th class="px-4 py-2.5 text-left text-2xs font-medium uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
+              Status
+            </th>
+            <th class="px-4 py-2.5 text-left text-2xs font-medium uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
+              Workflow
+            </th>
+            <th class="px-4 py-2.5 text-left text-2xs font-medium uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
+              Schedule
+            </th>
+            <th class="px-4 py-2.5 text-left text-2xs font-medium uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
+              Next Run
+            </th>
+            <th class="px-4 py-2.5 text-left text-2xs font-medium uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
+              Runs
+            </th>
+            <th class="px-4 py-2.5 text-right text-2xs font-medium uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
+              Actions
+            </th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-neutral-100 dark:divide-neutral-800">
+          <tr
+            v-for="schedule in schedules"
+            :key="schedule.id"
+            class="transition-colors duration-200 hover:bg-neutral-50 dark:hover:bg-neutral-800/40"
+          >
+            <!-- Status -->
+            <td class="whitespace-nowrap px-4 py-3">
               <button
-                @click="emit('viewHistory', schedule)"
-                class="p-2 text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                title="View execution history"
+                type="button"
+                class="flex items-center gap-2 rounded-sm focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+                :title="schedule.enabled ? 'Click to disable' : 'Click to enable'"
+                @click="emit('toggle', schedule)"
               >
-                <CalendarDaysIcon class="w-4 h-4" />
+                <span
+                  class="flex h-7 w-7 items-center justify-center rounded-lg transition-colors duration-200"
+                  :class="schedule.enabled
+                    ? 'bg-green-50 text-green-600 dark:bg-green-950/50 dark:text-green-400'
+                    : 'bg-neutral-100 text-neutral-400 dark:bg-neutral-800 dark:text-neutral-500'"
+                >
+                  <CheckCircleIcon
+                    v-if="schedule.enabled"
+                    class="h-4 w-4"
+                  />
+                  <XCircleIcon
+                    v-else
+                    class="h-4 w-4"
+                  />
+                </span>
+                <span
+                  class="text-xs font-medium"
+                  :class="schedule.enabled
+                    ? 'text-green-700 dark:text-green-400'
+                    : 'text-neutral-500 dark:text-neutral-500'"
+                >
+                  {{ schedule.enabled ? 'Active' : 'Inactive' }}
+                </span>
               </button>
-              <button
-                @click="emit('edit', schedule)"
-                class="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                title="Edit schedule"
+            </td>
+
+            <!-- Workflow -->
+            <td class="px-4 py-3">
+              <div class="text-sm font-medium text-neutral-950 dark:text-neutral-50">
+                {{ schedule.workflowName || 'Unknown Workflow' }}
+              </div>
+              <div class="font-mono text-2xs text-neutral-500 dark:text-neutral-400">
+                {{ schedule.workflowId }}
+              </div>
+            </td>
+
+            <!-- Schedule -->
+            <td class="px-4 py-3">
+              <div class="flex items-center gap-2">
+                <ClockIcon class="h-4 w-4 text-neutral-400" />
+                <code class="rounded-md border border-neutral-200 bg-neutral-50 px-2 py-0.5 font-mono text-xs text-neutral-800 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200">
+                  {{ schedule.cronExpression }}
+                </code>
+              </div>
+              <div class="mt-1 text-2xs text-neutral-500 dark:text-neutral-400">
+                {{ schedule.timezone }}
+              </div>
+            </td>
+
+            <!-- Next Run -->
+            <td class="px-4 py-3">
+              <div
+                v-if="schedule.enabled && schedule.nextRun"
+                class="text-sm text-neutral-950 dark:text-neutral-50"
               >
-                <PencilSquareIcon class="w-4 h-4" />
-              </button>
-              <button
-                @click="emit('delete', schedule)"
-                class="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                title="Delete schedule"
+                {{ formatNextRun(schedule.nextRun) }}
+              </div>
+              <div
+                v-else
+                class="text-sm text-neutral-400 dark:text-neutral-500"
               >
-                <TrashIcon class="w-4 h-4" />
-              </button>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+                -
+              </div>
+              <div
+                v-if="schedule.nextRun"
+                class="text-2xs text-neutral-500 dark:text-neutral-400"
+              >
+                {{ formatDate(schedule.nextRun) }}
+              </div>
+            </td>
+
+            <!-- Runs -->
+            <td class="px-4 py-3">
+              <div class="text-sm text-neutral-950 dark:text-neutral-50">
+                {{ schedule.runCount }} / {{ schedule.maxRuns === 0 ? 'Unlimited' : schedule.maxRuns }}
+              </div>
+              <div
+                v-if="schedule.lastRun"
+                class="text-2xs text-neutral-500 dark:text-neutral-400"
+              >
+                Last: {{ formatDate(schedule.lastRun) }}
+              </div>
+            </td>
+
+            <!-- Actions -->
+            <td class="whitespace-nowrap px-4 py-3 text-right">
+              <div class="flex items-center justify-end gap-1">
+                <IconButton
+                  label="View execution history"
+                  @click="emit('viewHistory', schedule)"
+                >
+                  <CalendarDaysIcon class="h-4 w-4" />
+                </IconButton>
+                <IconButton
+                  label="Edit schedule"
+                  @click="emit('edit', schedule)"
+                >
+                  <PencilSquareIcon class="h-4 w-4" />
+                </IconButton>
+                <IconButton
+                  label="Delete schedule"
+                  tone="danger"
+                  @click="emit('delete', schedule)"
+                >
+                  <TrashIcon class="h-4 w-4" />
+                </IconButton>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </template>

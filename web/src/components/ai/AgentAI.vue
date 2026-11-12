@@ -7,7 +7,7 @@
  * the panel degrades gracefully when the AI runtime is not configured
  * (Settings → AI).
  */
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import {
   SparklesIcon,
   PaperAirplaneIcon,
@@ -45,6 +45,44 @@ const isExpanded = ref(true);
 const isLoading = ref(false);
 const chatInput = ref('');
 const generateInput = ref('');
+
+/*
+ * Panel geometry — n8n parity: a right-hand column of 400px that
+ * can be resized between 380px and 425px.
+ */
+const PANEL_MIN_WIDTH = 380;
+const PANEL_MAX_WIDTH = 425;
+const PANEL_DEFAULT_WIDTH = 400;
+
+const panelWidth = ref(PANEL_DEFAULT_WIDTH);
+
+const panelStyle = computed(() => ({
+  width: `${panelWidth.value}px`,
+}));
+
+/**
+ * Drags the panel's left edge. The pointer is tracked on the window
+ * so the drag survives the pointer leaving the grip.
+ */
+function startResize(event: PointerEvent) {
+  event.preventDefault();
+  const startX = event.clientX;
+  const startWidth = panelWidth.value;
+
+  const onMove = (moveEvent: PointerEvent) => {
+    // The grip sits on the left edge, so dragging left widens the panel.
+    const next = startWidth + (startX - moveEvent.clientX);
+    panelWidth.value = Math.min(Math.max(next, PANEL_MIN_WIDTH), PANEL_MAX_WIDTH);
+  };
+
+  const onUp = () => {
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+  };
+
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+}
 
 // Chat messages
 interface ChatMessage {
@@ -224,12 +262,23 @@ function handleKeydown(e: KeyboardEvent) {
 
 <template>
   <div
-    class="w-96 h-full bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col"
+    class="m9m-panel h-full border-l border-default overflow-hidden flex flex-col relative"
     :class="{ 'h-[600px]': isExpanded && !embedded, 'h-14': !isExpanded, 'h-full': isExpanded && embedded }"
+    :style="panelStyle"
   >
+    <!-- Resize grip — the panel edge can be dragged between 380 and 425px. -->
+    <div
+      v-if="embedded && isExpanded"
+      class="ai-panel__grip"
+      role="separator"
+      aria-orientation="vertical"
+      title="Drag to resize the assistant panel"
+      @pointerdown="startResize"
+    />
+
     <!-- Header -->
     <div
-      class="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 text-white cursor-pointer"
+      class="m9m-ai-header flex items-center justify-between px-4 py-3 text-white cursor-pointer shrink-0"
       @click="isExpanded = !isExpanded"
     >
       <div class="flex items-center gap-2">
@@ -241,12 +290,14 @@ function handleKeydown(e: KeyboardEvent) {
         <button
           @click.stop="isExpanded = !isExpanded"
           class="p-1 hover:bg-white/20 rounded"
+          aria-label="Collapse the assistant"
         >
           <component :is="isExpanded ? ChevronDownIcon : ChevronUpIcon" class="w-4 h-4" />
         </button>
         <button
           @click.stop="emit('close')"
           class="p-1 hover:bg-white/20 rounded"
+          aria-label="Close the assistant"
         >
           <XMarkIcon class="w-4 h-4" />
         </button>
@@ -254,9 +305,9 @@ function handleKeydown(e: KeyboardEvent) {
     </div>
 
     <!-- Content -->
-    <div v-if="isExpanded" class="flex flex-col h-[calc(100%-56px)]">
+    <div v-if="isExpanded" class="flex flex-col flex-1 min-h-0">
       <!-- Tabs -->
-      <div class="flex border-b border-slate-200 dark:border-slate-700">
+      <div class="flex border-b border-default shrink-0">
         <button
           v-for="tab in [
             { id: 'chat', label: 'Chat', icon: ChatBubbleLeftRightIcon },
@@ -269,8 +320,8 @@ function handleKeydown(e: KeyboardEvent) {
           class="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors"
           :class="
             activeTab === tab.id
-              ? 'text-violet-600 dark:text-violet-400 border-b-2 border-violet-600 dark:border-violet-400'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+              ? 'm9m-tab-active'
+              : 'text-tertiary hover:text-secondary'
           "
         >
           <component :is="tab.icon" class="w-4 h-4" />
@@ -279,7 +330,7 @@ function handleKeydown(e: KeyboardEvent) {
       </div>
 
       <!-- Tab Content -->
-      <div class="flex-1 overflow-hidden">
+      <div class="flex-1 overflow-hidden min-h-0">
         <!-- Chat Tab -->
         <div v-if="activeTab === 'chat'" class="flex flex-col h-full">
           <!-- Messages -->
@@ -294,8 +345,8 @@ function handleKeydown(e: KeyboardEvent) {
                 class="max-w-[85%] rounded-lg px-3 py-2 text-sm"
                 :class="
                   message.role === 'user'
-                    ? 'bg-violet-600 text-white'
-                    : 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100'
+                    ? 'm9m-bubble m9m-bubble--user text-white'
+                    : 'm9m-bubble m9m-bubble--assistant text-primary'
                 "
               >
                 <p class="whitespace-pre-wrap">{{ message.content }}</p>
@@ -306,7 +357,7 @@ function handleKeydown(e: KeyboardEvent) {
                     v-for="(action, i) in message.actions"
                     :key="i"
                     @click="executeAction(action)"
-                    class="w-full text-left px-2 py-1 rounded bg-violet-500/20 hover:bg-violet-500/30 text-xs"
+                    class="m9m-action-chip w-full text-left px-2 py-1 rounded text-xs"
                   >
                     {{ action.description }}
                   </button>
@@ -316,8 +367,8 @@ function handleKeydown(e: KeyboardEvent) {
 
             <!-- Loading indicator -->
             <div v-if="isLoading" class="flex justify-start">
-              <div class="bg-slate-100 dark:bg-slate-700 rounded-lg px-4 py-2">
-                <div class="flex items-center gap-2 text-sm text-slate-500">
+              <div class="bg-subtle rounded-lg px-4 py-2">
+                <div class="flex items-center gap-2 text-sm text-tertiary">
                   <div class="animate-pulse">Thinking...</div>
                 </div>
               </div>
@@ -325,19 +376,19 @@ function handleKeydown(e: KeyboardEvent) {
           </div>
 
           <!-- Input -->
-          <div class="p-3 border-t border-slate-200 dark:border-slate-700">
+          <div class="p-3 border-t border-default shrink-0">
             <div class="flex items-center gap-2">
               <input
                 v-model="chatInput"
                 @keydown="handleKeydown"
                 type="text"
                 placeholder="Ask me anything about workflows..."
-                class="flex-1 px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                class="input flex-1 h-10 px-3"
               />
               <button
                 @click="sendChatMessage"
                 :disabled="isLoading || !chatInput.trim()"
-                class="p-2 rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="m9m-btn-primary h-10 w-10 inline-flex items-center justify-center rounded-lg text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <PaperAirplaneIcon class="w-4 h-4" />
               </button>
@@ -349,7 +400,7 @@ function handleKeydown(e: KeyboardEvent) {
         <div v-else-if="activeTab === 'generate'" class="flex flex-col h-full p-4">
           <div class="space-y-4">
             <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+              <label class="block text-sm font-medium text-secondary mb-1">
                 Describe your workflow
               </label>
               <textarea
@@ -357,27 +408,27 @@ function handleKeydown(e: KeyboardEvent) {
                 @keydown="handleKeydown"
                 rows="4"
                 placeholder="e.g., When I receive a webhook, send the data to Slack and save it to a database..."
-                class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                class="input resize-none"
               ></textarea>
             </div>
 
             <button
               @click="generateWorkflow"
               :disabled="isLoading || !generateInput.trim()"
-              class="w-full py-2 rounded-lg bg-violet-600 text-white font-medium hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              class="m9m-btn-primary w-full h-10 rounded-lg text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               <SparklesIcon class="w-4 h-4" />
               {{ isLoading ? 'Generating...' : 'Generate Workflow' }}
             </button>
 
             <!-- Generated Result -->
-            <div v-if="generatedWorkflow" class="mt-4 p-3 bg-slate-50 dark:bg-slate-900 rounded-lg">
-              <p class="text-sm text-slate-600 dark:text-slate-400 mb-3">
+            <div v-if="generatedWorkflow" class="mt-4 p-3 bg-subtle rounded-lg">
+              <p class="text-sm text-secondary mb-3">
                 {{ generationExplanation }}
               </p>
               <button
                 @click="applyGeneratedWorkflow"
-                class="w-full py-2 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 flex items-center justify-center gap-2"
+                class="w-full h-10 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 flex items-center justify-center gap-2"
               >
                 Apply Workflow
               </button>
@@ -388,25 +439,25 @@ function handleKeydown(e: KeyboardEvent) {
         <!-- Suggest Tab -->
         <div v-else-if="activeTab === 'suggest'" class="h-full overflow-y-auto p-4">
           <div v-if="isLoading" class="flex items-center justify-center h-32">
-            <div class="text-slate-500">Loading suggestions...</div>
+            <div class="text-tertiary">Loading suggestions...</div>
           </div>
 
           <div v-else-if="nodeSuggestions.length" class="space-y-3">
             <div
               v-for="(suggestion, index) in nodeSuggestions"
               :key="index"
-              class="p-3 bg-slate-50 dark:bg-slate-900 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+              class="p-3 bg-subtle rounded-lg hover:bg-hover cursor-pointer transition-colors"
               @click="addSuggestedNode(suggestion)"
             >
               <div class="flex items-start justify-between">
                 <div>
-                  <h4 class="font-medium text-slate-900 dark:text-slate-100">
+                  <h4 class="font-medium text-primary">
                     {{ suggestion.name }}
                   </h4>
-                  <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                  <p class="text-sm text-tertiary mt-0.5">
                     {{ suggestion.description }}
                   </p>
-                  <p class="text-xs text-violet-600 dark:text-violet-400 mt-1">
+                  <p class="text-xs text-brand-600 dark:text-brand-400 mt-1">
                     {{ suggestion.reason }}
                   </p>
                 </div>
@@ -415,7 +466,7 @@ function handleKeydown(e: KeyboardEvent) {
                   :class="
                     suggestion.confidence > 0.8
                       ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                      : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                      : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-300'
                   "
                 >
                   {{ Math.round(suggestion.confidence * 100) }}%
@@ -424,7 +475,7 @@ function handleKeydown(e: KeyboardEvent) {
             </div>
           </div>
 
-          <div v-else class="text-center py-8 text-slate-500">
+          <div v-else class="text-center py-8 text-tertiary">
             <LightBulbIcon class="w-12 h-12 mx-auto mb-3 opacity-50" />
             <p>No suggestions available</p>
             <p class="text-sm">Build more of your workflow to get suggestions</p>
@@ -433,7 +484,7 @@ function handleKeydown(e: KeyboardEvent) {
 
         <!-- Explain Tab -->
         <div v-else-if="activeTab === 'explain'" class="h-full overflow-y-auto p-4">
-          <div class="text-center py-8 text-slate-500">
+          <div class="text-center py-8 text-tertiary">
             <DocumentTextIcon class="w-12 h-12 mx-auto mb-3 opacity-50" />
             <p>Select a workflow to explain</p>
             <p class="text-sm mt-1">The AI assistant will analyze and explain your workflow</p>
@@ -443,3 +494,99 @@ function handleKeydown(e: KeyboardEvent) {
     </div>
   </div>
 </template>
+
+<style scoped>
+/*
+ * The token layer publishes `--background--surface`, `--background--brand`
+ * and `--background--subtle`; the fallbacks keep the panel correct
+ * until (or if) it lands.
+ */
+.m9m-panel {
+  background: var(--background--surface, #ffffff);
+}
+
+:global(.dark) .m9m-panel {
+  background: var(--background--surface, oklch(26.86% 0 89.88));
+}
+
+/* The assistant bubble sits on the subtle surface. */
+.m9m-bubble--assistant {
+  background: var(--background--subtle, oklch(97.02% 0 89.88));
+}
+
+:global(.dark) .m9m-bubble--assistant {
+  background: var(--background--subtle, oklch(31.71% 0 89.88));
+}
+
+/* The user bubble is filled with the brand colour. */
+.m9m-bubble--user {
+  background: var(--background--brand, oklch(78.07% 0.136 5.02));
+}
+
+/* The active tab carries the brand underline and label colour. */
+.m9m-tab-active {
+  color: var(--background--brand--hover, oklch(68.08% 0.148 5.02));
+  border-bottom: 2px solid var(--background--brand, oklch(78.07% 0.136 5.02));
+}
+
+/* An action chip inside an assistant bubble. */
+.m9m-action-chip {
+  background: var(--background--brand--tint--dark, oklch(31.71% 0.136 5.02 / 0.15));
+  color: var(--background--brand--tint--foreground--dark, oklch(85.55% 0.105 5.02));
+  transition: background-color 200ms cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+
+.m9m-action-chip:hover {
+  background: var(--background--brand--tint--dark-hover, oklch(31.71% 0.136 5.02 / 0.25));
+}
+
+.m9m-btn-primary {
+  background: var(--background--brand, oklch(78.07% 0.136 5.02));
+  transition: background-color 200ms cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+
+.m9m-btn-primary:hover:not(:disabled) {
+  background: var(--background--brand--hover, oklch(68.08% 0.148 5.02));
+}
+
+.m9m-btn-primary:active:not(:disabled) {
+  background: var(--background--brand--active, oklch(59.09% 0.1611 5.09));
+}
+
+/*
+ * The assistant header carries the published assistant gradient. The
+ * token layer ships a light and a dark variant; the fallback is the
+ * n8n assistant gradient.
+ */
+.m9m-ai-header {
+  background: var(
+    --assistant--color--highlight-gradient,
+    linear-gradient(105deg, #5b60e8 0%, #aa7bec 50%, #ec7b8e 100%)
+  );
+}
+
+/*
+ * The resize grip on the panel's left edge. The drag itself is
+ * handled in the component script (pointer events on the window).
+ */
+.ai-panel__grip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 2;
+}
+
+.ai-panel__grip:hover {
+  background: var(--background--brand, oklch(78.07% 0.136 5.02));
+  opacity: 0.15;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m9m-btn-primary {
+    transition-duration: 1ms;
+  }
+}
+</style>

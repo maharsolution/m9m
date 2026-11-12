@@ -12,6 +12,8 @@ import { tagErrorMessage } from '@/api/tags'
 import type { Tag } from '@/types/tag'
 import { TAG_PALETTE, DEFAULT_TAG_COLOR, normalizeHexColor } from '@/types/tag'
 import TagChip from './TagChip.vue'
+import Button from '@/components/common/Button.vue'
+import IconButton from '@/components/common/IconButton.vue'
 
 const props = defineProps<{
   workflowId: string
@@ -120,66 +122,79 @@ async function createAndAttach() {
 
 <template>
   <div
-    class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-[oklch(100%_0_89.88/0.8)] p-4 backdrop-blur-[2px] dark:bg-black/60"
     @click.self="emit('close')"
   >
-    <div class="card w-full max-w-xl max-h-[85vh] flex flex-col overflow-hidden">
+    <div class="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-900">
       <!-- Header -->
-      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+      <div class="flex items-center justify-between border-b border-neutral-200 px-6 py-4 dark:border-neutral-800">
         <div class="flex items-center gap-3">
-          <div class="p-2 bg-primary-100 dark:bg-primary-900/30 rounded-lg">
-            <TagIcon class="w-5 h-5 text-primary-600 dark:text-primary-400" />
+          <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400">
+            <TagIcon class="h-4 w-4" />
           </div>
           <div>
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Workflow tags</h2>
-            <p class="text-xs text-slate-500 dark:text-slate-400">
+            <h2 class="text-lg font-semibold text-neutral-950 dark:text-neutral-50">
+              Workflow tags
+            </h2>
+            <p class="text-xs text-neutral-600 dark:text-neutral-400">
               Attach tags so this workflow can be found and filtered.
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
-          title="Close"
-          aria-label="Close"
+        <IconButton
+          label="Close"
           @click="emit('close')"
         >
-          <XMarkIcon class="w-5 h-5" />
-        </button>
+          <XMarkIcon class="h-4 w-4" />
+        </IconButton>
       </div>
 
       <!-- Body -->
-      <div class="flex-1 overflow-y-auto p-6 space-y-5">
+      <div class="flex-1 space-y-5 overflow-y-auto p-6">
         <!-- Notice -->
         <div
           v-if="notice"
-          :class="notice.type === 'success'
-            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300'
-            : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300'"
           class="flex items-start gap-2 rounded-lg border px-4 py-3 text-sm"
+          :class="notice.type === 'success'
+            ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/50 dark:text-green-300'
+            : 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300'"
         >
-          <ExclamationTriangleIcon v-if="notice.type === 'error'" class="w-5 h-5 shrink-0 mt-0.5" />
+          <ExclamationTriangleIcon
+            v-if="notice.type === 'error'"
+            class="mt-0.5 h-4 w-4 shrink-0"
+          />
           <p class="flex-1">{{ notice.message }}</p>
-          <button type="button" class="opacity-60 hover:opacity-100" @click="notice = null">
-            <XMarkIcon class="w-4 h-4" />
+          <button
+            type="button"
+            class="rounded-sm opacity-60 transition-opacity hover:opacity-100"
+            aria-label="Dismiss"
+            @click="notice = null"
+          >
+            <XMarkIcon class="h-4 w-4" />
           </button>
         </div>
 
         <!-- Current tags -->
         <div>
-          <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-2">
+          <h3 class="mb-2 text-sm font-semibold text-neutral-950 dark:text-neutral-50">
             Attached tags
           </h3>
-          <div v-if="loading" class="text-sm text-slate-500 dark:text-slate-400">
-            Loading tags...
+          <div
+            v-if="loading"
+            class="text-sm text-neutral-500 dark:text-neutral-400"
+          >
+            Loading tags…
           </div>
           <div
             v-else-if="assignedTags.length === 0"
-            class="rounded-lg border border-dashed border-slate-300 dark:border-slate-600 px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400"
+            class="rounded-lg border border-dashed border-neutral-300 px-4 py-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400"
           >
             This workflow has no tags yet.
           </div>
-          <div v-else class="flex flex-wrap gap-2">
+          <div
+            v-else
+            class="flex flex-wrap gap-2"
+          >
             <TagChip
               v-for="tag in assignedTags"
               :key="tag.id"
@@ -193,50 +208,55 @@ async function createAndAttach() {
 
         <!-- All tags -->
         <div>
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-sm font-semibold text-slate-900 dark:text-white">
+          <div class="mb-2 flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-neutral-950 dark:text-neutral-50">
               All tags
             </h3>
-            <button
-              type="button"
-              class="btn-ghost py-1 px-2 text-xs flex items-center gap-1"
+            <Button
+              variant="ghost"
+              size="sm"
               @click="showCreate = !showCreate"
             >
-              <PlusIcon class="w-3.5 h-3.5" />
-              New tag
-            </button>
+              <template #icon>
+                <PlusIcon class="h-3.5 w-3.5" />
+              </template>
+              <span>New tag</span>
+            </Button>
           </div>
 
           <!-- Inline create -->
           <div
             v-if="showCreate"
-            class="rounded-lg border border-slate-200 dark:border-slate-700 p-3 mb-3 space-y-3"
+            class="mb-3 space-y-3 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800"
           >
-            <div class="flex flex-col sm:flex-row gap-2">
+            <div class="flex flex-col gap-2 sm:flex-row">
               <input
                 v-model="newName"
                 type="text"
                 placeholder="Tag name"
                 class="input flex-1"
                 @keyup.enter="createAndAttach"
-              />
-              <button
-                type="button"
-                class="btn-primary flex items-center justify-center gap-2"
+              >
+              <Button
+                variant="primary"
+                size="sm"
                 :disabled="creating"
+                :loading="creating"
                 @click="createAndAttach"
               >
-                <PlusIcon class="w-4 h-4" />
-                Create &amp; attach
-              </button>
+                <template #icon>
+                  <PlusIcon class="h-4 w-4" />
+                </template>
+                <span>Create &amp; attach</span>
+              </Button>
             </div>
             <div class="flex flex-wrap items-center gap-2">
               <button
                 v-for="color in TAG_PALETTE"
                 :key="color"
                 type="button"
-                class="w-5 h-5 rounded-full border-2 transition-transform hover:scale-110"
-                :class="newColor === color ? 'border-slate-900 dark:border-white' : 'border-transparent'"
+                class="h-5 w-5 rounded-full border-2 transition-transform hover:scale-110"
+                :class="newColor === color ? 'border-neutral-900 dark:border-white' : 'border-transparent'"
                 :style="{ backgroundColor: color }"
                 :aria-label="`Use colour ${color}`"
                 :title="color"
@@ -246,14 +266,20 @@ async function createAndAttach() {
           </div>
 
           <!-- Loading -->
-          <div v-if="loading" class="py-6 text-center">
-            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600 mx-auto" />
+          <div
+            v-if="loading"
+            class="py-6 text-center"
+          >
+            <span
+              class="mx-auto inline-block h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-brand-500 dark:border-neutral-700"
+              aria-hidden="true"
+            />
           </div>
 
           <!-- Empty -->
           <div
             v-else-if="allTags.length === 0"
-            class="rounded-lg border border-dashed border-slate-300 dark:border-slate-600 px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400"
+            class="rounded-lg border border-dashed border-neutral-300 px-4 py-6 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400"
           >
             No tags exist yet — create one above.
           </div>
@@ -261,39 +287,54 @@ async function createAndAttach() {
           <!-- Rows -->
           <ul
             v-else
-            class="divide-y divide-slate-100 dark:divide-slate-700 rounded-lg border border-slate-200 dark:border-slate-700"
+            class="divide-y divide-neutral-100 rounded-lg border border-neutral-200 dark:divide-neutral-800 dark:border-neutral-800"
           >
-            <li v-for="tag in allTags" :key="tag.id" class="px-3 py-2 flex items-center gap-3">
+            <li
+              v-for="tag in allTags"
+              :key="tag.id"
+              class="flex items-center gap-3 px-3 py-2"
+            >
               <TagChip :tag="tag" />
               <span class="flex-1" />
-              <button
+              <Button
                 v-if="assignedIds.has(tag.id)"
-                type="button"
-                class="btn-ghost py-1 px-2 text-xs flex items-center gap-1 text-red-600 dark:text-red-400"
+                variant="ghost"
+                size="sm"
+                class="text-red-700 dark:text-red-400"
                 :disabled="busyTagId === tag.id"
                 @click="detach(tag)"
               >
-                <XMarkIcon class="w-3.5 h-3.5" />
-                Detach
-              </button>
-              <button
+                <template #icon>
+                  <XMarkIcon class="h-3.5 w-3.5" />
+                </template>
+                <span>Detach</span>
+              </Button>
+              <Button
                 v-else
-                type="button"
-                class="btn-secondary py-1 px-2 text-xs flex items-center gap-1"
+                variant="secondary"
+                size="sm"
                 :disabled="busyTagId === tag.id"
                 @click="attach(tag)"
               >
-                <CheckIcon class="w-3.5 h-3.5" />
-                Attach
-              </button>
+                <template #icon>
+                  <CheckIcon class="h-3.5 w-3.5" />
+                </template>
+                <span>Attach</span>
+              </Button>
             </li>
           </ul>
         </div>
       </div>
 
       <!-- Footer -->
-      <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
-        <button type="button" class="btn-secondary" @click="emit('close')">Done</button>
+      <div class="flex justify-end border-t border-neutral-200 px-6 py-4 dark:border-neutral-800">
+        <Button
+          variant="secondary"
+          size="sm"
+          @click="emit('close')"
+        >
+          Done
+        </Button>
       </div>
     </div>
   </div>

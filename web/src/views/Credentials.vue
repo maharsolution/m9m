@@ -15,6 +15,9 @@ import {
 } from '@heroicons/vue/24/outline'
 import { Dialog, DialogPanel, DialogTitle, TransitionRoot, TransitionChild } from '@headlessui/vue'
 import { useCredentialsStore } from '@/stores'
+import Button from '@/components/common/Button.vue'
+import IconButton from '@/components/common/IconButton.vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
 import type {
   Credential,
   CredentialSchema,
@@ -41,6 +44,10 @@ const testResult = ref<CredentialTestResult | null>(null)
 const testing = ref(false)
 const loadingCredential = ref(false)
 const lastSchemaType = ref('')
+
+// Shared control styling (token layer: neutral ramp, 8px radius).
+const CONTROL_CLASS =
+  'h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-950 transition-colors duration-200 placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10 disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:focus:border-neutral-100 dark:focus:ring-neutral-100/10'
 
 // ---------------------------------------------------------------------------
 // Draft persistence
@@ -425,8 +432,8 @@ const applyFieldAliases = (
       }
     }
   }
-  // The alias keys are dropped once their value has been folded into the
-  // canonical field: the form then shows exactly ONE username and ONE
+  // The alias keys are dropped once their value has been folded into
+  // the canonical field: the form then shows exactly ONE username and ONE
   // password, and a stale copy can no longer shadow the edited value.
   for (const alias of typeAliasKeys(type)) {
     delete out[alias]
@@ -625,111 +632,140 @@ const allCredentialTypes = computed(() => {
 </script>
 
 <template>
-  <div class="p-6">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-6">
+  <div>
+    <!-- Page header -->
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">
+        <h1 class="text-2xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50">
           Credentials
         </h1>
-        <p class="text-slate-500 dark:text-slate-400">
+        <p class="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
           Manage your authentication credentials securely
         </p>
       </div>
-      <button
+      <Button
+        variant="primary"
+        size="sm"
         @click="openCreateModal()"
-        class="btn-primary flex items-center gap-2"
       >
-        <PlusIcon class="w-5 h-5" />
-        <span>Add Credential</span>
-      </button>
+        <template #icon>
+          <PlusIcon class="h-4 w-4" />
+        </template>
+        <span>Add credential</span>
+      </Button>
     </div>
 
     <!-- Loading state -->
-    <div v-if="credentialsStore.loading && credentialsStore.credentials.length === 0" class="text-center py-16">
-      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto" />
+    <div
+      v-if="credentialsStore.loading && credentialsStore.credentials.length === 0"
+      class="flex flex-col items-center justify-center rounded-lg border border-neutral-200 bg-white py-16 dark:border-neutral-800 dark:bg-neutral-900"
+    >
+      <span
+        class="inline-block h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-brand-500 dark:border-neutral-700"
+        aria-hidden="true"
+      />
     </div>
 
     <!-- Empty state -->
     <div
       v-else-if="credentialsStore.credentials.length === 0"
-      class="text-center py-16"
+      class="flex flex-col items-center rounded-lg border border-neutral-200 bg-white px-4 py-16 text-center dark:border-neutral-800 dark:bg-neutral-900"
     >
-      <KeyIcon class="w-16 h-16 mx-auto text-slate-300 dark:text-slate-600" />
-      <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">
+      <KeyIcon class="h-12 w-12 text-neutral-300 dark:text-neutral-700" />
+      <h3 class="mt-4 text-lg font-semibold text-neutral-950 dark:text-neutral-50">
         No credentials yet
       </h3>
-      <p class="mt-2 text-slate-500 dark:text-slate-400">
+      <p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
         Add credentials to use in your workflows
       </p>
-      <button @click="openCreateModal()" class="mt-6 btn-primary">
-        Add Credential
-      </button>
+      <Button
+        variant="primary"
+        size="sm"
+        class="mt-6"
+        @click="openCreateModal()"
+      >
+        Add credential
+      </Button>
     </div>
 
     <!-- Grouped credentials -->
-    <div v-else class="space-y-3">
+    <div
+      v-else
+      class="space-y-3"
+    >
       <div
         v-for="group in groupedCredentials"
         :key="group.type"
-        class="card overflow-hidden"
+        class="overflow-hidden rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
       >
         <!-- Group header -->
         <button
+          type="button"
+          class="flex w-full items-center justify-between px-4 py-3 text-left transition-colors duration-200 hover:bg-neutral-50 dark:hover:bg-neutral-800/40"
           @click="toggleGroup(group.type)"
-          class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors"
         >
-          <div class="flex items-center gap-2">
+          <span class="flex items-center gap-2">
             <ChevronDownIcon
               v-if="expandedGroups.has(group.type)"
-              class="w-4 h-4 text-slate-400"
+              class="h-4 w-4 text-neutral-400"
             />
-            <ChevronRightIcon v-else class="w-4 h-4 text-slate-400" />
+            <ChevronRightIcon
+              v-else
+              class="h-4 w-4 text-neutral-400"
+            />
             <component
               :is="typeIcon(group.type)"
-              class="w-5 h-5 text-primary-600 dark:text-primary-400"
+              class="h-4 w-4 text-brand-600 dark:text-brand-400"
             />
-            <span class="font-semibold text-slate-900 dark:text-white">
+            <span class="text-sm font-semibold text-neutral-950 dark:text-neutral-50">
               {{ typeLabel(group.type) }}
             </span>
-            <span
-              class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-            >
+            <span class="inline-flex h-5 items-center rounded-lg border border-neutral-200 bg-neutral-100 px-2 text-2xs font-medium text-neutral-600 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
               {{ group.items.length }}
             </span>
-          </div>
+          </span>
         </button>
 
-        <!-- Group rows -->
-        <div v-if="expandedGroups.has(group.type)" class="border-t border-slate-200 dark:border-slate-700">
+        <!-- Group rows. The secret values are never part of a row —
+             only the name, the type and the configured state. -->
+        <div
+          v-if="expandedGroups.has(group.type)"
+          class="border-t border-neutral-200 dark:border-neutral-800"
+        >
           <div
             v-for="cred in group.items"
             :key="cred.id"
-            class="flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors"
+            class="flex items-center justify-between gap-3 px-4 py-3 transition-colors duration-200 hover:bg-neutral-50 dark:hover:bg-neutral-800/30"
           >
-            <div class="flex-1 min-w-0">
-              <h4 class="font-medium text-slate-900 dark:text-white truncate">
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-neutral-950 dark:text-neutral-50">
                 {{ cred.name }}
-              </h4>
-              <p class="text-xs text-slate-500 dark:text-slate-400">
-                Updated {{ formatDate(cred.updatedAt) }}
+              </p>
+              <p class="text-xs text-neutral-500 dark:text-neutral-400">
+                {{ typeLabel(cred.type) }} · Updated {{ formatDate(cred.updatedAt) }}
               </p>
             </div>
-            <div class="flex items-center gap-1">
-              <button
-                @click="openEditModal(cred)"
-                title="Edit credential"
-                class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
-              >
-                <PencilIcon class="w-4 h-4" />
-              </button>
-              <button
-                @click="deleteCredential(cred)"
-                title="Delete credential"
-                class="p-1.5 rounded-lg text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-              >
-                <TrashIcon class="w-4 h-4" />
-              </button>
+            <div class="flex items-center gap-2">
+              <StatusBadge
+                status="success"
+                label="Configured"
+                dot
+              />
+              <div class="flex items-center gap-1">
+                <IconButton
+                  label="Edit credential"
+                  @click="openEditModal(cred)"
+                >
+                  <PencilIcon class="h-4 w-4" />
+                </IconButton>
+                <IconButton
+                  label="Delete credential"
+                  tone="danger"
+                  @click="deleteCredential(cred)"
+                >
+                  <TrashIcon class="h-4 w-4" />
+                </IconButton>
+              </div>
             </div>
           </div>
         </div>
@@ -740,19 +776,19 @@ const allCredentialTypes = computed(() => {
     <TransitionRoot :show="showModal" as="template">
       <Dialog @close="closeModal" class="relative z-50">
         <TransitionChild
-          enter="ease-out duration-300"
+          enter="ease-out duration-200"
           enter-from="opacity-0"
           enter-to="opacity-100"
           leave="ease-in duration-200"
           leave-from="opacity-100"
           leave-to="opacity-0"
         >
-          <div class="fixed inset-0 bg-black/30 dark:bg-black/50" />
+          <div class="fixed inset-0 bg-[oklch(100%_0_89.88/0.8)] backdrop-blur-[2px] dark:bg-black/60" />
         </TransitionChild>
 
         <div class="fixed inset-0 flex items-center justify-center p-4">
           <TransitionChild
-            enter="ease-out duration-300"
+            enter="ease-out duration-200"
             enter-from="opacity-0 scale-95"
             enter-to="opacity-100 scale-100"
             leave="ease-in duration-200"
@@ -761,36 +797,51 @@ const allCredentialTypes = computed(() => {
           >
             <DialogPanel
               :ref="setPanelRef"
+              class="max-h-[90vh] w-full max-w-xl overflow-y-auto overscroll-contain rounded-xl border border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-900"
               @scroll="onPanelScroll"
-              class="w-full max-w-xl max-h-[90vh] overflow-y-auto overscroll-contain bg-white dark:bg-slate-800 rounded-xl shadow-xl"
             >
               <div class="p-6">
-                <DialogTitle class="text-lg font-semibold text-slate-900 dark:text-white">
-                  {{ editingCredential ? 'Edit Credential' : 'New Credential' }}
+                <DialogTitle class="text-xl font-semibold text-neutral-950 dark:text-neutral-50">
+                  {{ editingCredential ? 'Edit credential' : 'New credential' }}
                 </DialogTitle>
 
-                <form @submit.prevent="saveCredential" class="mt-4 space-y-4">
+                <form
+                  class="mt-4 space-y-4"
+                  @submit.prevent="saveCredential"
+                >
                   <!-- Credential name (internal label) -->
                   <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    <label
+                      for="credential-name"
+                      class="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300"
+                    >
                       Credential name
                     </label>
                     <input
+                      id="credential-name"
                       v-model="form.name"
                       type="text"
-                      class="input"
+                      :class="CONTROL_CLASS"
                       placeholder="My Postgres prod"
                       required
-                    />
+                    >
                   </div>
 
                   <!-- Type chooser -->
                   <div v-if="!editingCredential">
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    <label
+                      for="credential-type"
+                      class="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300"
+                    >
                       Type
                     </label>
-                    <select v-model="form.type" class="input" required>
-                      <option value="" disabled>Select a credential type...</option>
+                    <select
+                      id="credential-type"
+                      v-model="form.type"
+                      :class="CONTROL_CLASS"
+                      required
+                    >
+                      <option value="" disabled>Select a credential type…</option>
                       <option
                         v-for="t in allCredentialTypes"
                         :key="t"
@@ -801,29 +852,34 @@ const allCredentialTypes = computed(() => {
                     </select>
                   </div>
                   <div v-else>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    <span class="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
                       Type
-                    </label>
-                    <div class="input bg-slate-50 dark:bg-slate-700/40 cursor-not-allowed">
+                    </span>
+                    <div
+                      class="flex h-10 cursor-not-allowed items-center rounded-lg border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-700 dark:border-neutral-800 dark:bg-neutral-800/40 dark:text-neutral-300"
+                    >
                       {{ typeLabel(form.type) }}
-                      <span class="text-xs text-slate-400 ml-2">({{ form.type }})</span>
+                      <span class="ml-2 text-xs text-neutral-400">({{ form.type }})</span>
                     </div>
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
                       Credential type cannot be changed after creation. Create a new credential to switch types.
                     </p>
                   </div>
 
                   <!-- Schema-driven fields -->
-                  <div v-if="currentSchema && form.type" class="space-y-4 border-t border-slate-200 dark:border-slate-700 pt-4">
+                  <div
+                    v-if="currentSchema && form.type"
+                    class="space-y-4 border-t border-neutral-200 pt-4 dark:border-neutral-800"
+                  >
                     <p
                       v-if="loadingCredential"
-                      class="text-xs text-slate-500 dark:text-slate-400"
+                      class="text-xs text-neutral-500 dark:text-neutral-400"
                     >
                       Loading stored values…
                     </p>
                     <p
                       v-else-if="editingCredential"
-                      class="text-xs text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-900/20 px-3 py-2 rounded-lg"
+                      class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300"
                     >
                       Stored values are loaded below — edit any field directly and
                       save. Leave a password field untouched to keep it as-is.
@@ -833,9 +889,14 @@ const allCredentialTypes = computed(() => {
                       v-for="prop in currentSchema.properties"
                       :key="prop.name"
                     >
-                      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      <label
+                        class="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300"
+                      >
                         {{ prop.displayName }}
-                        <span v-if="currentSchema.required.includes(prop.name)" class="text-red-500">*</span>
+                        <span
+                          v-if="currentSchema.required.includes(prop.name)"
+                          class="text-red-600 dark:text-red-400"
+                        >*</span>
                       </label>
 
                       <!-- String input -->
@@ -843,32 +904,38 @@ const allCredentialTypes = computed(() => {
                         v-if="prop.type === 'string'"
                         type="text"
                         :value="fieldValue(prop)"
-                        @input="updateData(prop.name, ($event.target as HTMLInputElement).value)"
+                        :class="CONTROL_CLASS"
                         :placeholder="prop.placeholder ?? ''"
-                        class="input"
-                      />
+                        @input="updateData(prop.name, ($event.target as HTMLInputElement).value)"
+                      >
 
                       <!-- Password input (with reveal toggle) -->
-                      <div v-else-if="prop.type === 'password'" class="relative">
+                      <div
+                        v-else-if="prop.type === 'password'"
+                        class="relative"
+                      >
                         <input
                           :type="isRevealed(prop.name) ? 'text' : 'password'"
                           autocomplete="off"
                           :value="fieldValue(prop)"
-                          @input="updateData(prop.name, ($event.target as HTMLInputElement).value)"
+                          :class="[CONTROL_CLASS, 'pr-10']"
                           :placeholder="prop.placeholder ?? ''"
-                          class="input pr-10"
-                        />
+                          @input="updateData(prop.name, ($event.target as HTMLInputElement).value)"
+                        >
                         <button
                           type="button"
-                          @click="toggleReveal(prop.name)"
+                          class="absolute inset-y-0 right-0 flex items-center px-3 text-neutral-400 transition-colors hover:text-neutral-700 dark:hover:text-neutral-200"
                           :title="isRevealed(prop.name) ? 'Hide value' : 'Reveal value'"
-                          class="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                          @click="toggleReveal(prop.name)"
                         >
                           <EyeSlashIcon
                             v-if="isRevealed(prop.name)"
-                            class="w-4 h-4"
+                            class="h-4 w-4"
                           />
-                          <EyeIcon v-else class="w-4 h-4" />
+                          <EyeIcon
+                            v-else
+                            class="h-4 w-4"
+                          />
                         </button>
                       </div>
 
@@ -877,9 +944,9 @@ const allCredentialTypes = computed(() => {
                         v-else-if="prop.type === 'number'"
                         type="number"
                         :value="fieldValue(prop)"
+                        :class="CONTROL_CLASS"
                         @input="updateNumberField(prop.name, ($event.target as HTMLInputElement).value)"
-                        class="input"
-                      />
+                      >
 
                       <!-- Boolean toggle -->
                       <label
@@ -889,10 +956,10 @@ const allCredentialTypes = computed(() => {
                         <input
                           type="checkbox"
                           :checked="!!fieldValue(prop)"
+                          class="h-4 w-4 rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
                           @change="updateData(prop.name, ($event.target as HTMLInputElement).checked)"
-                          class="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-primary-600 focus:ring-primary-500"
-                        />
-                        <span class="text-sm text-slate-600 dark:text-slate-300">
+                        >
+                        <span class="text-sm text-neutral-600 dark:text-neutral-300">
                           {{ prop.description || prop.displayName }}
                         </span>
                       </label>
@@ -901,8 +968,8 @@ const allCredentialTypes = computed(() => {
                       <select
                         v-else-if="prop.type === 'options' && prop.options"
                         :value="fieldValue(prop)"
+                        :class="CONTROL_CLASS"
                         @change="updateData(prop.name, ($event.target as HTMLSelectElement).value)"
-                        class="input"
                       >
                         <option
                           v-for="opt in optionValues(prop)"
@@ -917,12 +984,15 @@ const allCredentialTypes = computed(() => {
                       <textarea
                         v-else-if="prop.type === 'json'"
                         :value="JSON.stringify(fieldValue(prop) ?? {}, null, 2)"
-                        @input="updateJsonField(prop.name, ($event.target as HTMLTextAreaElement).value)"
+                        :class="[CONTROL_CLASS, 'font-mono']"
                         rows="4"
-                        class="input font-mono text-sm"
+                        @input="updateJsonField(prop.name, ($event.target as HTMLTextAreaElement).value)"
                       />
 
-                      <p v-if="prop.description" class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      <p
+                        v-if="prop.description"
+                        class="mt-1 text-xs text-neutral-500 dark:text-neutral-400"
+                      >
                         {{ prop.description }}
                       </p>
                     </div>
@@ -932,43 +1002,52 @@ const allCredentialTypes = computed(() => {
                          visible and editable. -->
                     <div
                       v-if="extraDataFields.length > 0"
-                      class="pt-3 border-t border-slate-100 dark:border-slate-700/60 space-y-4"
+                      class="space-y-4 border-t border-neutral-100 pt-3 dark:border-neutral-800"
                     >
-                      <p class="text-xs text-slate-500 dark:text-slate-400">
+                      <p class="text-xs text-neutral-500 dark:text-neutral-400">
                         Additional stored fields
                       </p>
-                      <div v-for="key in extraDataFields" :key="key">
-                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      <div
+                        v-for="key in extraDataFields"
+                        :key="key"
+                      >
+                        <label class="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
                           {{ key }}
                         </label>
-                        <div v-if="isSecretField(key)" class="relative">
+                        <div
+                          v-if="isSecretField(key)"
+                          class="relative"
+                        >
                           <input
                             :type="isRevealed(key) ? 'text' : 'password'"
                             autocomplete="off"
                             :value="String(form.data[key] ?? '')"
+                            :class="[CONTROL_CLASS, 'pr-10']"
                             @input="updateData(key, ($event.target as HTMLInputElement).value)"
-                            class="input pr-10"
-                          />
+                          >
                           <button
                             type="button"
-                            @click="toggleReveal(key)"
+                            class="absolute inset-y-0 right-0 flex items-center px-3 text-neutral-400 transition-colors hover:text-neutral-700 dark:hover:text-neutral-200"
                             :title="isRevealed(key) ? 'Hide value' : 'Reveal value'"
-                            class="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                            @click="toggleReveal(key)"
                           >
                             <EyeSlashIcon
                               v-if="isRevealed(key)"
-                              class="w-4 h-4"
+                              class="h-4 w-4"
                             />
-                            <EyeIcon v-else class="w-4 h-4" />
+                            <EyeIcon
+                              v-else
+                              class="h-4 w-4"
+                            />
                           </button>
                         </div>
                         <input
                           v-else
                           type="text"
                           :value="String(form.data[key] ?? '')"
+                          :class="CONTROL_CLASS"
                           @input="updateData(key, ($event.target as HTMLInputElement).value)"
-                          class="input"
-                        />
+                        >
                       </div>
                     </div>
                   </div>
@@ -977,59 +1056,75 @@ const allCredentialTypes = computed(() => {
                        list the stored fields so they stay editable. -->
                   <div
                     v-else-if="!schemaLoading && form.type && Object.keys(form.data).length > 0"
-                    class="space-y-4 border-t border-slate-200 dark:border-slate-700 pt-4"
+                    class="space-y-4 border-t border-neutral-200 pt-4 dark:border-neutral-800"
                   >
-                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                    <p class="text-xs text-neutral-500 dark:text-neutral-400">
                       This credential type has no form schema — the stored fields
                       are listed below and can be edited directly.
                     </p>
-                    <div v-for="(value, key) in form.data" :key="String(key)">
-                      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    <div
+                      v-for="(value, key) in form.data"
+                      :key="String(key)"
+                    >
+                      <label class="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
                         {{ key }}
                       </label>
-                      <div v-if="isSecretField(String(key))" class="relative">
+                      <div
+                        v-if="isSecretField(String(key))"
+                        class="relative"
+                      >
                         <input
                           :type="isRevealed(String(key)) ? 'text' : 'password'"
                           autocomplete="off"
                           :value="value"
+                          :class="[CONTROL_CLASS, 'pr-10']"
                           @input="updateData(String(key), ($event.target as HTMLInputElement).value)"
-                          class="input pr-10"
-                        />
+                        >
                         <button
                           type="button"
-                          @click="toggleReveal(String(key))"
+                          class="absolute inset-y-0 right-0 flex items-center px-3 text-neutral-400 transition-colors hover:text-neutral-700 dark:hover:text-neutral-200"
                           :title="isRevealed(String(key)) ? 'Hide value' : 'Reveal value'"
-                          class="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                          @click="toggleReveal(String(key))"
                         >
                           <EyeSlashIcon
                             v-if="isRevealed(String(key))"
-                            class="w-4 h-4"
+                            class="h-4 w-4"
                           />
-                          <EyeIcon v-else class="w-4 h-4" />
+                          <EyeIcon
+                            v-else
+                            class="h-4 w-4"
+                          />
                         </button>
                       </div>
                       <input
                         v-else
                         type="text"
                         :value="value"
+                        :class="CONTROL_CLASS"
                         @input="updateData(String(key), ($event.target as HTMLInputElement).value)"
-                        class="input"
-                      />
+                      >
                     </div>
                   </div>
 
                   <!-- Inline test result -->
-                  <div v-if="testResult" class="border-t border-slate-200 dark:border-slate-700 pt-4">
+                  <div
+                    v-if="testResult"
+                    class="border-t border-neutral-200 pt-4 dark:border-neutral-800"
+                  >
                     <div
-                      :class="[
-                        'flex items-start gap-2 px-3 py-2 rounded-lg text-sm',
-                        testResult.status === 'OK'
-                          ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
-                          : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
-                      ]"
+                      class="flex items-start gap-2 rounded-lg border px-3 py-2 text-sm"
+                      :class="testResult.status === 'OK'
+                        ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/50 dark:text-green-300'
+                        : 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300'"
                     >
-                      <CheckCircleIcon v-if="testResult.status === 'OK'" class="w-5 h-5 flex-shrink-0 mt-0.5" />
-                      <XCircleIcon v-else class="w-5 h-5 flex-shrink-0 mt-0.5" />
+                      <CheckCircleIcon
+                        v-if="testResult.status === 'OK'"
+                        class="mt-0.5 h-4 w-4 flex-shrink-0"
+                      />
+                      <XCircleIcon
+                        v-else
+                        class="mt-0.5 h-4 w-4 flex-shrink-0"
+                      />
                       <div>
                         <div class="font-semibold">{{ testResult.status }}</div>
                         <div>{{ testResult.message }}</div>
@@ -1040,34 +1135,37 @@ const allCredentialTypes = computed(() => {
                   <!-- Missing required warning -->
                   <p
                     v-if="requiredFieldsMissing.length > 0"
-                    class="text-xs text-amber-700 dark:text-amber-300"
+                    class="text-xs text-yellow-800 dark:text-yellow-300"
                   >
                     Missing required fields: {{ requiredFieldsMissing.join(', ') }}
                   </p>
 
                   <!-- Action row -->
-                  <div class="flex justify-between items-center pt-4 border-t border-slate-200 dark:border-slate-700">
-                    <button
-                      type="button"
-                      @click="runTest"
+                  <div class="flex items-center justify-between border-t border-neutral-200 pt-4 dark:border-neutral-800">
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       :disabled="testing || !form.type"
-                      class="btn-secondary flex items-center gap-2"
+                      @click="runTest"
                     >
-                      <span v-if="!testing">Test connection</span>
-                      <span v-else>Testing…</span>
-                    </button>
+                      {{ testing ? 'Testing…' : 'Test connection' }}
+                    </Button>
 
                     <div class="flex gap-2">
-                      <button
-                        type="button"
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         @click="closeModal"
-                        class="btn-secondary"
                       >
                         Cancel
-                      </button>
-                      <button type="submit" class="btn-primary">
+                      </Button>
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        size="sm"
+                      >
                         {{ editingCredential ? 'Save' : 'Create' }}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </form>

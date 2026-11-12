@@ -67,7 +67,6 @@ interface KVRow {
   name: string
   value: unknown
 }
-
 const collectionRows = computed<KVRow[]>(() => {
   const v = props.value
   if (Array.isArray(v)) {
@@ -91,9 +90,12 @@ const collectionRows = computed<KVRow[]>(() => {
 
 <template>
   <div class="property-editor mb-3">
-    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+    <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
       {{ property.displayName }}
-      <span v-if="property.required" class="text-red-500">*</span>
+      <span
+        v-if="property.required"
+        class="text-red-600 dark:text-red-400"
+      >*</span>
     </label>
 
     <textarea
@@ -101,32 +103,39 @@ const collectionRows = computed<KVRow[]>(() => {
       :value="textValue"
       :rows="rows"
       readonly
-      class="w-full px-2.5 py-1.5 text-xs font-mono border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200"
+      class="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 font-mono text-xs text-neutral-800 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-200"
     />
 
     <select
       v-else-if="property.type === 'options'"
       :value="typeof value === 'string' ? value : (typeof property.default === 'string' ? property.default : '')"
       disabled
-      class="w-full px-2.5 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200"
+      class="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 text-xs text-neutral-800 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-200"
     >
-      <option v-for="opt in property.options ?? []" :key="String(opt.value)" :value="opt.value">
+      <option
+        v-for="opt in property.options ?? []"
+        :key="String(opt.value)"
+        :value="opt.value"
+      >
         {{ opt.name }}
       </option>
     </select>
 
-    <div v-else-if="property.type === 'multiOptions'" class="space-y-1">
+    <div
+      v-else-if="property.type === 'multiOptions'"
+      class="space-y-1"
+    >
       <label
         v-for="opt in property.options ?? []"
         :key="String(opt.value)"
-        class="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300"
+        class="flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300"
       >
         <input
           type="checkbox"
           :checked="Array.isArray(value) && (value as unknown[]).includes(opt.value)"
           disabled
-          class="rounded border-slate-300"
-        />
+          class="rounded border-neutral-300 dark:border-neutral-600"
+        >
         {{ opt.name }}
       </label>
     </div>
@@ -136,11 +145,19 @@ const collectionRows = computed<KVRow[]>(() => {
       type="number"
       :value="numberValue"
       readonly
-      class="w-full px-2.5 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200"
-    />
+      class="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 text-xs text-neutral-800 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-200"
+    >
 
-    <label v-else-if="property.type === 'boolean'" class="inline-flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
-      <input type="checkbox" :checked="boolValue" disabled class="rounded border-slate-300" />
+    <label
+      v-else-if="property.type === 'boolean'"
+      class="inline-flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300"
+    >
+      <input
+        type="checkbox"
+        :checked="boolValue"
+        disabled
+        class="rounded border-neutral-300 dark:border-neutral-600"
+      >
       {{ boolValue ? 'true' : 'false' }}
     </label>
 
@@ -149,7 +166,7 @@ const collectionRows = computed<KVRow[]>(() => {
       :value="displayString(value ?? inferDefaultString(property))"
       rows="5"
       readonly
-      class="w-full px-2.5 py-1.5 text-xs font-mono border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200"
+      class="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 font-mono text-xs text-neutral-800 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-200"
     />
 
     <input
@@ -157,10 +174,13 @@ const collectionRows = computed<KVRow[]>(() => {
       type="datetime-local"
       :value="textValue"
       readonly
-      class="w-full px-2.5 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200"
-    />
+      class="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 text-xs text-neutral-800 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-200"
+    >
 
-    <div v-else-if="property.type === 'collection'" class="space-y-1.5">
+    <div
+      v-else-if="property.type === 'collection'"
+      class="space-y-1.5"
+    >
       <div
         v-for="(row, idx) in collectionRows"
         :key="idx"
@@ -170,18 +190,21 @@ const collectionRows = computed<KVRow[]>(() => {
           :value="row.name"
           readonly
           placeholder="Name"
-          class="flex-1 px-2 py-1 border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-900 font-mono"
-        />
+          class="flex-1 rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1 font-mono dark:border-neutral-700 dark:bg-neutral-950"
+        >
         <input
           :value="displayString(row.value)"
           readonly
           placeholder="Value"
-          class="flex-1 px-2 py-1 border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-900 font-mono"
-        />
+          class="flex-1 rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1 font-mono dark:border-neutral-700 dark:bg-neutral-950"
+        >
       </div>
     </div>
 
-    <div v-else-if="property.type === 'fixedCollection'" class="text-xs italic text-slate-500 dark:text-slate-400">
+    <div
+      v-else-if="property.type === 'fixedCollection'"
+      class="text-xs italic text-neutral-500 dark:text-neutral-400"
+    >
       Fixed collection (see JSON view).
     </div>
 
@@ -190,10 +213,13 @@ const collectionRows = computed<KVRow[]>(() => {
       type="text"
       :value="displayString(value ?? inferDefaultString(property))"
       readonly
-      class="w-full px-2.5 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200"
-    />
+      class="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 py-1.5 text-xs text-neutral-800 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-200"
+    >
 
-    <p v-if="property.description" class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+    <p
+      v-if="property.description"
+      class="mt-1 text-2xs text-neutral-500 dark:text-neutral-400"
+    >
       {{ property.description }}
     </p>
   </div>

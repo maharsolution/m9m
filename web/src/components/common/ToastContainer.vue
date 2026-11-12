@@ -1,7 +1,10 @@
 <script setup lang="ts">
 /**
  * Toast Container Component
- * Renders all active toast notifications
+ * Renders all active toast notifications.
+ *
+ * Props / store usage unchanged — only the visual treatment was moved to
+ * the m9m token layer.
  */
 import { computed } from 'vue';
 import { useNotificationStore } from '@/stores/notifications';
@@ -46,7 +49,7 @@ function handleDismiss(id: string) {
   <Teleport to="body">
     <div
       :class="[
-        'fixed z-50 flex flex-col gap-3 pointer-events-none',
+        'pointer-events-none fixed z-50 flex flex-col gap-3',
         positionClasses,
       ]"
     >
@@ -72,7 +75,7 @@ function handleDismiss(id: string) {
 
 <style scoped>
 .toast-enter-active {
-  transition: all 0.3s ease-out;
+  transition: all 0.2s ease-out;
 }
 
 .toast-leave-active {
@@ -90,6 +93,6 @@ function handleDismiss(id: string) {
 }
 
 .toast-move {
-  transition: transform 0.3s ease;
+  transition: transform 0.2s ease-out;
 }
 </style>

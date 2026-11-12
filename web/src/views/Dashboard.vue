@@ -9,6 +9,9 @@ import {
   KeyIcon,
 } from '@heroicons/vue/24/outline'
 import { useWorkflowStore, useExecutionStore, useCredentialsStore } from '@/stores'
+import Button from '@/components/common/Button.vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
+import type { StatusTone } from '@/components/common/StatusBadge.vue'
 
 const router = useRouter()
 const workflowStore = useWorkflowStore()
@@ -46,28 +49,28 @@ const stats = computed(() => [
     value: workflowStore.activeWorkflows.length,
     subtitle: `${workflowStore.total} total`,
     icon: BoltIcon,
-    color: 'bg-blue-500',
+    tone: 'bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-300',
   },
   {
     name: 'Executions Today',
     value: todayExecutions.value,
     subtitle: `${executionStore.executions.length} total`,
     icon: PlayIcon,
-    color: 'bg-green-500',
+    tone: 'bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300',
   },
   {
     name: 'Failure Rate',
     value: failureRate.value,
     subtitle: `${executionStore.executionsByStatus.completed.length} succeeded`,
     icon: CheckCircleIcon,
-    color: 'bg-emerald-500',
+    tone: 'bg-green-50 text-green-600 dark:bg-green-950/50 dark:text-green-300',
   },
   {
     name: 'Credentials',
     value: credentialsStore.count,
     subtitle: `${credentialsStore.credentialTypes.length} types in use`,
     icon: KeyIcon,
-    color: 'bg-amber-500',
+    tone: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-300',
   },
 ])
 
@@ -84,38 +87,58 @@ const formatDuration = (start: string, end?: string) => {
   return `${Math.floor(duration / 60000)}m ${Math.floor((duration % 60000) / 1000)}s`
 }
 
-const getStatusColor = (status: string) => {
+/** Status family tone of an execution. */
+const getStatusTone = (status: string): StatusTone => {
   switch (status) {
-    case 'completed': return 'badge-success'
-    case 'failed': return 'badge-error'
-    case 'running': return 'badge-info'
-    case 'cancelled': return 'badge-warning'
-    default: return 'badge-info'
+    case 'completed': return 'success'
+    case 'failed': return 'danger'
+    case 'running': return 'info'
+    case 'cancelled': return 'warning'
+    default: return 'info'
   }
 }
 </script>
 
 <template>
-  <div class="p-6 space-y-6">
+  <div class="space-y-6">
+    <!-- Page header -->
+    <div>
+      <h1 class="text-2xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50">
+        Dashboard
+      </h1>
+      <p class="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
+        An overview of your workflows, executions and credentials
+      </p>
+    </div>
+
     <!-- Stats Grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <div
         v-for="stat in stats"
         :key="stat.name"
-        class="card p-6"
+        class="rounded-lg border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900"
       >
         <div class="flex items-center gap-4">
-          <div :class="[stat.color, 'p-3 rounded-lg']">
-            <component :is="stat.icon" class="w-6 h-6 text-white" />
+          <div
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
+            :class="stat.tone"
+          >
+            <component
+              :is="stat.icon"
+              class="h-5 w-5"
+            />
           </div>
           <div class="min-w-0">
-            <p class="text-2xl font-bold text-slate-900 dark:text-white">
+            <p class="text-2xl font-semibold leading-tight text-neutral-950 dark:text-neutral-50">
               {{ stat.value }}
             </p>
-            <p class="text-sm font-medium text-slate-700 dark:text-slate-300">
+            <p class="text-sm font-medium text-neutral-800 dark:text-neutral-200">
               {{ stat.name }}
             </p>
-            <p v-if="stat.subtitle" class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            <p
+              v-if="stat.subtitle"
+              class="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400"
+            >
               {{ stat.subtitle }}
             </p>
           </div>
@@ -123,116 +146,140 @@ const getStatusColor = (status: string) => {
       </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <!-- Recent Workflows -->
-      <div class="card">
-        <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-          <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Recent Workflows</h2>
-          <RouterLink to="/workflows" class="text-sm text-primary-600 dark:text-primary-400 hover:underline">
+      <section class="overflow-hidden rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+        <header class="flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+          <h2 class="text-lg font-semibold text-neutral-950 dark:text-neutral-50">
+            Recent Workflows
+          </h2>
+          <RouterLink
+            to="/workflows"
+            class="rounded-sm text-sm font-medium text-brand-600 transition-colors hover:text-brand-700 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 dark:text-brand-400 dark:hover:text-brand-300"
+          >
             View all
           </RouterLink>
-        </div>
-        <div class="divide-y divide-slate-200 dark:divide-slate-700">
+        </header>
+        <div class="divide-y divide-neutral-100 dark:divide-neutral-800">
           <div
             v-for="workflow in workflowStore.workflows.slice(0, 5)"
             :key="workflow.id"
+            class="cursor-pointer px-4 py-3 transition-colors duration-200 hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
             @click="router.push(`/workflows/${workflow.id}`)"
-            class="p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
           >
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div :class="[
-                  workflow.active ? 'bg-green-100 dark:bg-green-900/30' : 'bg-slate-100 dark:bg-slate-700',
-                  'p-2 rounded-lg'
-                ]">
-                  <BoltIcon :class="[
-                    workflow.active ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400',
-                    'w-5 h-5'
-                  ]" />
-                </div>
-                <div>
-                  <p class="font-medium text-slate-900 dark:text-white">{{ workflow.name }}</p>
-                  <p class="text-sm text-slate-500 dark:text-slate-400">
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex min-w-0 items-center gap-3">
+                <span
+                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                  :class="workflow.active
+                    ? 'bg-green-50 text-green-600 dark:bg-green-950/50 dark:text-green-400'
+                    : 'bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400'"
+                >
+                  <BoltIcon class="h-4 w-4" />
+                </span>
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-semibold text-neutral-950 dark:text-neutral-50">
+                    {{ workflow.name }}
+                  </p>
+                  <p class="text-xs text-neutral-500 dark:text-neutral-400">
                     {{ workflow.nodes.length }} nodes
                   </p>
                 </div>
               </div>
-              <span :class="workflow.active ? 'badge-success' : 'badge-info'">
-                {{ workflow.active ? 'Active' : 'Inactive' }}
-              </span>
+              <StatusBadge
+                :status="workflow.active ? 'success' : 'neutral'"
+                :label="workflow.active ? 'Active' : 'Inactive'"
+                dot
+              />
             </div>
           </div>
-          <div v-if="workflowStore.workflows.length === 0" class="p-8 text-center">
-            <BoltIcon class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600" />
-            <p class="mt-2 text-slate-500 dark:text-slate-400">No workflows yet</p>
-            <button
+          <div
+            v-if="workflowStore.workflows.length === 0"
+            class="px-6 py-10 text-center"
+          >
+            <BoltIcon class="mx-auto h-10 w-10 text-neutral-300 dark:text-neutral-700" />
+            <p class="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+              No workflows yet
+            </p>
+            <Button
+              variant="secondary"
+              size="sm"
+              class="mt-4"
               @click="router.push('/workflows/new')"
-              class="mt-4 btn-primary"
             >
               Create your first workflow
-            </button>
+            </Button>
           </div>
         </div>
-      </div>
+      </section>
 
       <!-- Recent Executions -->
-      <div class="card">
-        <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-          <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Recent Executions</h2>
-          <RouterLink to="/executions" class="text-sm text-primary-600 dark:text-primary-400 hover:underline">
+      <section class="overflow-hidden rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+        <header class="flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+          <h2 class="text-lg font-semibold text-neutral-950 dark:text-neutral-50">
+            Recent Executions
+          </h2>
+          <RouterLink
+            to="/executions"
+            class="rounded-sm text-sm font-medium text-brand-600 transition-colors hover:text-brand-700 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 dark:text-brand-400 dark:hover:text-brand-300"
+          >
             View all
           </RouterLink>
-        </div>
-        <div class="divide-y divide-slate-200 dark:divide-slate-700">
+        </header>
+        <div class="divide-y divide-neutral-100 dark:divide-neutral-800">
           <div
             v-for="execution in executionStore.recentExecutions"
             :key="execution.id"
+            class="cursor-pointer px-4 py-3 transition-colors duration-200 hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
             @click="router.push(`/executions/${execution.id}`)"
-            class="p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
           >
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div :class="[
-                  execution.status === 'completed' ? 'bg-green-100 dark:bg-green-900/30' :
-                  execution.status === 'failed' ? 'bg-red-100 dark:bg-red-900/30' :
-                  'bg-blue-100 dark:bg-blue-900/30',
-                  'p-2 rounded-lg'
-                ]">
-                  <ClockIcon :class="[
-                    execution.status === 'completed' ? 'text-green-600 dark:text-green-400' :
-                    execution.status === 'failed' ? 'text-red-600 dark:text-red-400' :
-                    'text-blue-600 dark:text-blue-400',
-                    'w-5 h-5'
-                  ]" />
-                </div>
-                <div>
-                  <p class="font-medium text-slate-900 dark:text-white text-sm">
-                    {{ execution.id.slice(0, 8) }}...
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex min-w-0 items-center gap-3">
+                <span
+                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                  :class="execution.status === 'completed'
+                    ? 'bg-green-50 text-green-600 dark:bg-green-950/50 dark:text-green-400'
+                    : execution.status === 'failed'
+                      ? 'bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-400'
+                      : 'bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400'"
+                >
+                  <ClockIcon class="h-4 w-4" />
+                </span>
+                <div class="min-w-0">
+                  <p class="truncate font-mono text-sm font-medium text-neutral-950 dark:text-neutral-50">
+                    {{ execution.id.slice(0, 8) }}…
                   </p>
-                  <p class="text-xs text-slate-500 dark:text-slate-400">
+                  <p class="text-xs text-neutral-500 dark:text-neutral-400">
                     {{ formatDate(execution.startedAt) }}
                   </p>
                 </div>
               </div>
               <div class="text-right">
-                <span :class="getStatusColor(execution.status)">
-                  {{ execution.status }}
-                </span>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                <StatusBadge
+                  :status="getStatusTone(execution.status)"
+                  :label="execution.status"
+                  dot
+                />
+                <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
                   {{ formatDuration(execution.startedAt, execution.finishedAt) }}
                 </p>
               </div>
             </div>
           </div>
-          <div v-if="executionStore.executions.length === 0" class="p-8 text-center">
-            <ClockIcon class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600" />
-            <p class="mt-2 text-slate-500 dark:text-slate-400">No executions yet</p>
-            <p class="text-sm text-slate-400 dark:text-slate-500">
+          <div
+            v-if="executionStore.executions.length === 0"
+            class="px-6 py-10 text-center"
+          >
+            <ClockIcon class="mx-auto h-10 w-10 text-neutral-300 dark:text-neutral-700" />
+            <p class="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+              No executions yet
+            </p>
+            <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-500">
               Run a workflow to see executions here
             </p>
           </div>
         </div>
-      </div>
+      </section>
     </div>
   </div>
 </template>

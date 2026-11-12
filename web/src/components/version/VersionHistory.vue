@@ -16,6 +16,8 @@ import {
   XMarkIcon,
 } from '@heroicons/vue/24/outline'
 import { CheckCircleIcon } from '@heroicons/vue/24/solid'
+import Button from '@/components/common/Button.vue'
+import IconButton from '@/components/common/IconButton.vue'
 
 const props = defineProps<{
   workflowId: string
@@ -139,143 +141,182 @@ function handleCompare() {
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-white dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700">
+  <div class="flex h-full flex-col border-l border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
     <!-- Header -->
-    <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+    <div class="border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <ClockIcon class="w-5 h-5 text-violet-500" />
-          <h3 class="font-semibold text-slate-900 dark:text-white">Version History</h3>
+          <ClockIcon class="h-4 w-4 text-brand-500" />
+          <h3 class="font-semibold text-neutral-950 dark:text-neutral-50">
+            Version History
+          </h3>
         </div>
-        <button
+        <IconButton
+          label="Create new version"
           @click="showCreateForm = !showCreateForm"
-          class="p-1.5 text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
-          title="Create new version"
         >
-          <PlusIcon class="w-5 h-5" />
-        </button>
+          <PlusIcon class="h-4 w-4" />
+        </IconButton>
       </div>
 
       <!-- Create Form -->
-      <div v-if="showCreateForm" class="mt-3 p-3 bg-slate-50 dark:bg-slate-900 rounded-lg">
+      <div
+        v-if="showCreateForm"
+        class="mt-3 space-y-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950"
+      >
         <input
           v-model="newVersionTag"
           type="text"
           placeholder="Version tag (e.g., v1.0.0)"
-          class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 mb-2"
-        />
+          class="input"
+        >
         <textarea
           v-model="newVersionDescription"
           placeholder="Description (optional)"
           rows="2"
-          class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500 mb-2"
+          class="input"
         />
         <div class="flex justify-end gap-2">
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             @click="showCreateForm = false"
-            class="px-3 py-1.5 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
           >
             Cancel
-          </button>
-          <button
-            @click="handleCreateVersion"
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
             :disabled="versionStore.loading"
-            class="px-3 py-1.5 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded disabled:opacity-50"
+            :loading="versionStore.loading"
+            @click="handleCreateVersion"
           >
             Create
-          </button>
+          </Button>
         </div>
       </div>
 
       <!-- Compare Button -->
-      <div v-if="selectedVersions.length === 2" class="mt-3">
-        <button
+      <div
+        v-if="selectedVersions.length === 2"
+        class="mt-3"
+      >
+        <Button
+          variant="secondary"
+          size="sm"
+          class="w-full"
           @click="handleCompare"
-          class="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
         >
-          <DocumentDuplicateIcon class="w-4 h-4" />
-          Compare Selected Versions
-        </button>
+          <template #icon>
+            <DocumentDuplicateIcon class="h-4 w-4" />
+          </template>
+          <span>Compare selected versions</span>
+        </Button>
       </div>
     </div>
 
     <!-- Error -->
     <div
       v-if="errorMessage || versionStore.error"
-      class="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-3 py-2 text-xs text-red-700 dark:text-red-300"
+      class="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300"
     >
       <span class="flex-1">{{ errorMessage || versionStore.error }}</span>
       <button
         type="button"
-        class="opacity-60 hover:opacity-100"
+        class="rounded-sm opacity-60 transition-opacity hover:opacity-100"
         aria-label="Dismiss error"
         @click="errorMessage = null; versionStore.clearError()"
       >
-        <XMarkIcon class="w-3.5 h-3.5" />
+        <XMarkIcon class="h-3.5 w-3.5" />
       </button>
     </div>
 
     <!-- Version List -->
     <div class="flex-1 overflow-y-auto">
       <!-- Loading -->
-      <div v-if="versionStore.loading" class="p-4 text-center text-slate-500">
-        <div class="animate-spin inline-block w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full"></div>
+      <div
+        v-if="versionStore.loading"
+        class="p-4 text-center text-neutral-500"
+      >
+        <span
+          class="inline-block h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-brand-500 dark:border-neutral-700"
+          aria-hidden="true"
+        />
       </div>
 
       <!-- Empty State -->
-      <div v-else-if="versionStore.versions.length === 0" class="p-6 text-center text-slate-500 dark:text-slate-400">
-        <ClockIcon class="w-10 h-10 mx-auto mb-2 opacity-50" />
+      <div
+        v-else-if="versionStore.versions.length === 0"
+        class="p-6 text-center text-neutral-500 dark:text-neutral-400"
+      >
+        <ClockIcon class="mx-auto mb-2 h-10 w-10 opacity-50" />
         <p class="text-sm">No versions yet</p>
-        <p class="text-xs mt-1">Create a version to track changes</p>
+        <p class="mt-1 text-xs">Create a version to track changes</p>
       </div>
 
       <!-- Versions -->
-      <div v-else class="divide-y divide-slate-100 dark:divide-slate-700">
+      <div
+        v-else
+        class="divide-y divide-neutral-100 dark:divide-neutral-800"
+      >
         <div
           v-for="version in versionStore.sortedVersions"
           :key="version.id"
           class="group"
         >
           <div
-            class="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer"
+            class="cursor-pointer px-4 py-3 transition-colors duration-200 hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
             @click="toggleExpand(version.id)"
           >
             <div class="flex items-start gap-3">
               <!-- Checkbox for comparison -->
               <button
-                @click.stop="toggleSelect(version.id)"
-                class="mt-0.5 w-4 h-4 rounded border transition-colors"
+                type="button"
+                class="mt-0.5 flex h-4 w-4 items-center justify-center rounded border transition-colors duration-200"
                 :class="selectedVersions.includes(version.id)
-                  ? 'bg-violet-600 border-violet-600 text-white'
-                  : 'border-slate-300 dark:border-slate-600 hover:border-violet-400'"
+                  ? 'border-brand-500 bg-brand-500 text-white'
+                  : 'border-neutral-300 hover:border-brand-400 dark:border-neutral-600'"
+                :aria-label="`Select version ${version.versionTag || version.versionNum} for comparison`"
+                @click.stop="toggleSelect(version.id)"
               >
-                <svg v-if="selectedVersions.includes(version.id)" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                <svg
+                  v-if="selectedVersions.includes(version.id)"
+                  class="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="3"
+                    d="M5 13l4 4L19 7"
+                  />
                 </svg>
               </button>
 
-              <div class="flex-1 min-w-0">
+              <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2">
-                  <span class="font-medium text-sm text-slate-900 dark:text-white">
+                  <span class="text-sm font-medium text-neutral-950 dark:text-neutral-50">
                     {{ version.versionTag || `v${version.versionNum}` }}
                   </span>
-                  <span class="text-[10px] font-medium text-slate-400 dark:text-slate-500">
+                  <span class="font-mono text-3xs text-neutral-400 dark:text-neutral-500">
                     #{{ version.versionNum }}
                   </span>
                   <CheckCircleIcon
                     v-if="version.isCurrent"
-                    class="w-4 h-4 text-green-500"
+                    class="h-4 w-4 text-green-600 dark:text-green-400"
                     title="Current version"
                   />
                 </div>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                <p class="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
                   {{ formatRelativeDate(version.createdAt) }}
                 </p>
               </div>
 
               <component
                 :is="expandedVersionId === version.id ? ChevronUpIcon : ChevronDownIcon"
-                class="w-4 h-4 text-slate-400"
+                class="h-4 w-4 text-neutral-400"
               />
             </div>
           </div>
@@ -283,43 +324,58 @@ function handleCompare() {
           <!-- Expanded Details -->
           <div
             v-if="expandedVersionId === version.id"
-            class="px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700"
+            class="border-t border-neutral-100 bg-neutral-50 px-4 py-3 dark:border-neutral-800 dark:bg-neutral-950"
           >
             <!-- Author -->
-            <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-2">
-              <UserIcon class="w-3.5 h-3.5" />
+            <div class="mb-2 flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+              <UserIcon class="h-3.5 w-3.5" />
               <span>{{ version.author }}</span>
-              <span class="text-slate-300 dark:text-slate-600">|</span>
+              <span class="text-neutral-300 dark:text-neutral-600">|</span>
               <span>{{ formatDate(version.createdAt) }}</span>
             </div>
 
             <!-- Description -->
-            <p v-if="version.description" class="text-sm text-slate-700 dark:text-slate-300 mb-2">
+            <p
+              v-if="version.description"
+              class="mb-2 text-sm text-neutral-700 dark:text-neutral-300"
+            >
               {{ version.description }}
             </p>
 
             <!-- Changes -->
-            <div v-if="version.changes?.length" class="mb-3">
-              <h4 class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Changes:</h4>
-              <ul class="text-xs text-slate-600 dark:text-slate-400 space-y-0.5">
-                <li v-for="(change, i) in version.changes.slice(0, 5)" :key="i" class="flex items-start gap-1">
-                  <span class="text-slate-400">-</span>
+            <div
+              v-if="version.changes?.length"
+              class="mb-3"
+            >
+              <h4 class="mb-1 text-2xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                Changes:
+              </h4>
+              <ul class="space-y-0.5 text-xs text-neutral-600 dark:text-neutral-400">
+                <li
+                  v-for="(change, i) in version.changes.slice(0, 5)"
+                  :key="i"
+                  class="flex items-start gap-1"
+                >
+                  <span class="text-neutral-400">-</span>
                   {{ change }}
                 </li>
-                <li v-if="version.changes.length > 5" class="text-slate-400 italic">
+                <li class="italic text-neutral-400">
                   +{{ version.changes.length - 5 }} more changes
                 </li>
               </ul>
             </div>
 
             <!-- Tags -->
-            <div v-if="version.tags?.length" class="flex flex-wrap gap-1 mb-3">
+            <div
+              v-if="version.tags?.length"
+              class="mb-3 flex flex-wrap gap-1"
+            >
               <span
                 v-for="tag in version.tags"
                 :key="tag"
-                class="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded"
+                class="inline-flex h-5 items-center gap-1 rounded-lg border border-neutral-200 bg-neutral-100 px-2 text-2xs text-neutral-600 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
               >
-                <TagIcon class="w-3 h-3" />
+                <TagIcon class="h-3 w-3" />
                 {{ tag }}
               </span>
             </div>
@@ -328,25 +384,28 @@ function handleCompare() {
             <div class="flex items-center gap-2">
               <button
                 v-if="!version.isCurrent"
+                type="button"
+                class="flex items-center gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1.5 text-xs text-brand-700 transition-colors duration-200 hover:bg-brand-100 dark:bg-brand-950/50 dark:text-brand-300 dark:hover:bg-brand-900/50"
                 @click.stop="handleRestore(version)"
-                class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-900/50 rounded transition-colors"
               >
-                <ArrowPathIcon class="w-3.5 h-3.5" />
+                <ArrowPathIcon class="h-3.5 w-3.5" />
                 Restore
               </button>
               <button
+                type="button"
+                class="flex items-center gap-1.5 rounded-lg bg-neutral-100 px-2.5 py-1.5 text-xs text-neutral-700 transition-colors duration-200 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
                 @click.stop="emit('viewVersion', version)"
-                class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 rounded transition-colors"
               >
-                <DocumentDuplicateIcon class="w-3.5 h-3.5" />
+                <DocumentDuplicateIcon class="h-3.5 w-3.5" />
                 View
               </button>
               <button
                 v-if="!version.isCurrent"
+                type="button"
+                class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-red-700 transition-colors duration-200 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/50"
                 @click.stop="handleDelete(version)"
-                class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
               >
-                <TrashIcon class="w-3.5 h-3.5" />
+                <TrashIcon class="h-3.5 w-3.5" />
                 Delete
               </button>
             </div>
@@ -356,7 +415,7 @@ function handleCompare() {
     </div>
 
     <!-- Footer -->
-    <div class="px-4 py-2 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">
+    <div class="border-t border-neutral-200 px-4 py-2 text-xs text-neutral-500 dark:border-neutral-800 dark:text-neutral-400">
       {{ versionStore.total }} version{{ versionStore.total !== 1 ? 's' : '' }}
     </div>
   </div>

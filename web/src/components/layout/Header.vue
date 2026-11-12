@@ -1,6 +1,13 @@
 <script setup lang="ts">
+/**
+ * Header — n8n parity top bar.
+ *
+ * 65px tall, 1px bottom border, surface background. Carries the page
+ * title (Headline role), the global search, the live connection chip,
+ * the theme toggle, the notification bell and the user menu.
+ */
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   SunIcon,
   MoonIcon,
@@ -15,6 +22,7 @@ import { useThemeStore, useAuthStore, useExecutionStore } from '@/stores'
 import { wsConnection } from '@/api/websocket'
 
 const route = useRoute()
+const router = useRouter()
 const themeStore = useThemeStore()
 const authStore = useAuthStore()
 const executionStore = useExecutionStore()
@@ -24,6 +32,19 @@ const pageTitle = computed(() => {
 })
 
 const hasNotifications = computed(() => executionStore.hasRunningExecutions)
+
+// Global search. Enter hands the query to the workflow list through
+// the `q` route parameter; the list owns the actual filtering.
+const searchQuery = ref('')
+
+function submitSearch() {
+  const query = searchQuery.value.trim()
+  if (query) {
+    router.push({ path: '/workflows', query: { q: query } })
+  } else {
+    router.push('/workflows')
+  }
+}
 
 // WebSocket connection state
 const wsConnected = ref(false)
@@ -66,87 +87,99 @@ const connectionStatus = computed(() => {
 })
 
 const connectionStatusColor = computed(() => {
-  if (wsConnected.value) return 'text-green-500'
-  if (wsReconnecting.value) return 'text-amber-500'
-  return 'text-red-500'
+  if (wsConnected.value) return 'text-green-600 dark:text-green-400'
+  if (wsReconnecting.value) return 'text-yellow-700 dark:text-yellow-400'
+  return 'text-red-600 dark:text-red-400'
 })
 </script>
 
 <template>
-  <header class="h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-6">
+  <header
+    class="flex h-[65px] shrink-0 items-center justify-between gap-4 border-b border-neutral-200 bg-white px-6 dark:border-neutral-800 dark:bg-neutral-900"
+  >
     <!-- Left: Page Title -->
-    <div class="flex items-center gap-4">
-      <h1 class="text-xl font-semibold text-slate-900 dark:text-white">
+    <div class="flex min-w-0 items-center gap-4">
+      <h1
+        class="truncate text-xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50"
+      >
         {{ pageTitle }}
       </h1>
     </div>
 
-    <!-- Center: Search (optional) -->
-    <div class="flex-1 max-w-md mx-8">
-      <div class="relative">
-        <MagnifyingGlassIcon class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+    <!-- Center: Search -->
+    <div class="hidden min-w-0 flex-1 justify-center md:flex">
+      <div class="relative w-full max-w-md">
+        <MagnifyingGlassIcon
+          class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
+        />
         <input
+          v-model="searchQuery"
           type="text"
           placeholder="Search workflows..."
-          class="w-full pl-10 pr-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          class="h-10 w-full rounded-lg border border-neutral-200 bg-neutral-50 pl-9 pr-3 text-sm text-neutral-950 transition-colors duration-200 placeholder:text-neutral-400 focus:border-neutral-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-neutral-900/10 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:placeholder:text-neutral-500 dark:focus:border-neutral-100 dark:focus:bg-neutral-900 dark:focus:ring-neutral-100/10"
+          @keyup.enter="submitSearch"
         />
       </div>
     </div>
 
     <!-- Right: Actions -->
-    <div class="flex items-center gap-2">
+    <div class="flex shrink-0 items-center gap-1.5">
       <!-- WebSocket Connection Status -->
       <div
-        class="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium"
-        :class="wsConnected ? 'bg-green-50 dark:bg-green-900/20' : 'bg-amber-50 dark:bg-amber-900/20'"
+        class="flex items-center gap-1.5 rounded-lg border border-neutral-200 px-2 py-1.5 dark:border-neutral-800"
+        :class="wsConnected
+          ? 'bg-green-50 dark:bg-green-950/40'
+          : 'bg-yellow-100 dark:bg-yellow-950/40'"
         :title="connectionStatus"
       >
-        <span
-          class="relative flex h-2 w-2"
-        >
+        <span class="relative flex h-2 w-2">
           <span
             v-if="wsReconnecting"
-            class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
+            class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
             :class="connectionStatusColor.replace('text-', 'bg-')"
           />
           <span
-            class="relative inline-flex rounded-full h-2 w-2"
+            class="relative inline-flex h-2 w-2 rounded-full"
             :class="connectionStatusColor.replace('text-', 'bg-')"
           />
         </span>
         <component
           :is="wsConnected ? SignalIcon : SignalSlashIcon"
-          class="w-4 h-4"
+          class="h-4 w-4"
           :class="connectionStatusColor"
         />
       </div>
 
       <!-- Theme Toggle -->
       <button
+        type="button"
         @click="themeStore.toggleTheme"
-        class="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+        class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition-colors duration-200 hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100 dark:focus-visible:outline-neutral-100"
         :title="themeStore.isDark ? 'Switch to light mode' : 'Switch to dark mode'"
       >
-        <SunIcon v-if="themeStore.isDark" class="w-5 h-5" />
-        <MoonIcon v-else class="w-5 h-5" />
+        <SunIcon v-if="themeStore.isDark" class="h-5 w-5" />
+        <MoonIcon v-else class="h-5 w-5" />
       </button>
 
       <!-- Notifications -->
       <button
-        class="relative p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+        type="button"
+        class="relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition-colors duration-200 hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100 dark:focus-visible:outline-neutral-100"
         title="Notifications"
       >
-        <BellIcon class="w-5 h-5" />
+        <BellIcon class="h-5 w-5" />
         <span
           v-if="hasNotifications"
-          class="absolute top-1.5 right-1.5 w-2 h-2 bg-primary-500 rounded-full"
+          class="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand-500"
         />
       </button>
 
       <!-- User Menu -->
       <Menu as="div" class="relative">
-        <MenuButton class="flex items-center gap-2 p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-          <UserCircleIcon class="w-6 h-6" />
+        <MenuButton
+          class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 transition-colors duration-200 hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100 dark:focus-visible:outline-neutral-100"
+        >
+          <UserCircleIcon class="h-6 w-6" />
         </MenuButton>
 
         <transition
@@ -157,12 +190,12 @@ const connectionStatusColor = computed(() => {
           leave-from-class="transform scale-100 opacity-100"
           leave-to-class="transform scale-95 opacity-0"
         >
-          <MenuItems class="absolute right-0 mt-2 w-48 origin-top-right bg-white dark:bg-slate-800 rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 dark:ring-slate-700 focus:outline-none py-1 z-50">
+          <MenuItems class="absolute right-0 z-50 mt-2 w-48 origin-top-right rounded-lg border border-neutral-200 bg-white py-1 shadow-sm focus:outline-none dark:border-neutral-800 dark:bg-neutral-900">
             <MenuItem v-slot="{ active }">
               <RouterLink
                 to="/settings"
-                class="block px-4 py-2 text-sm text-slate-700 dark:text-slate-200"
-                :class="{ 'bg-slate-100 dark:bg-slate-700': active }"
+                class="block px-4 py-2 text-sm text-neutral-700 dark:text-neutral-200"
+                :class="{ 'bg-neutral-100 dark:bg-neutral-800': active }"
               >
                 Settings
               </RouterLink>
@@ -170,8 +203,8 @@ const connectionStatusColor = computed(() => {
             <MenuItem v-if="authStore.isAuthenticated" v-slot="{ active }">
               <button
                 @click="authStore.logout"
-                class="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-200"
-                :class="{ 'bg-slate-100 dark:bg-slate-700': active }"
+                class="block w-full px-4 py-2 text-left text-sm text-neutral-700 dark:text-neutral-200"
+                :class="{ 'bg-neutral-100 dark:bg-neutral-800': active }"
               >
                 Sign out
               </button>
@@ -179,8 +212,8 @@ const connectionStatusColor = computed(() => {
             <MenuItem v-else v-slot="{ active }">
               <RouterLink
                 to="/login"
-                class="block px-4 py-2 text-sm text-slate-700 dark:text-slate-200"
-                :class="{ 'bg-slate-100 dark:bg-slate-700': active }"
+                class="block px-4 py-2 text-sm text-neutral-700 dark:text-neutral-200"
+                :class="{ 'bg-neutral-100 dark:bg-neutral-800': active }"
               >
                 Sign in
               </RouterLink>

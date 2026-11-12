@@ -4,6 +4,8 @@ import type { Schedule, ScheduleCreateRequest, ScheduleUpdateRequest } from '@/t
 import { TIMEZONES } from '@/types/schedule'
 import CronExpressionBuilder from './CronExpressionBuilder.vue'
 import { XMarkIcon, ClockIcon } from '@heroicons/vue/24/outline'
+import Button from '@/components/common/Button.vue'
+import IconButton from '@/components/common/IconButton.vue'
 
 interface Workflow {
   id: string
@@ -38,6 +40,9 @@ const isValid = computed(() => {
   return true
 })
 
+const CONTROL_CLASS =
+  'h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-950 transition-colors duration-200 placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10 disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:focus:border-neutral-100 dark:focus:ring-neutral-100/10'
+
 function handleSubmit() {
   if (!isValid.value) return
 
@@ -65,40 +70,47 @@ function handleSubmit() {
 </script>
 
 <template>
-  <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-[oklch(100%_0_89.88/0.8)] p-4 backdrop-blur-[2px] dark:bg-black/60">
+    <div class="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-900">
       <!-- Header -->
-      <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+      <div class="flex items-center justify-between border-b border-neutral-200 px-6 py-4 dark:border-neutral-800">
         <div class="flex items-center gap-3">
-          <div class="p-2 bg-violet-100 dark:bg-violet-900/30 rounded-lg">
-            <ClockIcon class="w-5 h-5 text-violet-600 dark:text-violet-400" />
+          <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400">
+            <ClockIcon class="h-4 w-4" />
           </div>
-          <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
+          <h2 class="text-lg font-semibold text-neutral-950 dark:text-neutral-50">
             {{ formTitle }}
           </h2>
         </div>
-        <button
+        <IconButton
+          label="Close"
           @click="emit('cancel')"
-          class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
         >
-          <XMarkIcon class="w-5 h-5" />
-        </button>
+          <XMarkIcon class="h-4 w-4" />
+        </IconButton>
       </div>
 
       <!-- Form -->
-      <form @submit.prevent="handleSubmit" class="flex-1 overflow-y-auto p-6 space-y-6">
+      <form
+        class="flex-1 space-y-6 overflow-y-auto p-6"
+        @submit.prevent="handleSubmit"
+      >
         <!-- Workflow Selection (only for create) -->
         <div v-if="!isEditing">
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          <label class="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
             Workflow
           </label>
           <select
             v-model="workflowId"
-            class="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+            :class="CONTROL_CLASS"
             required
           >
             <option value="" disabled>Select a workflow</option>
-            <option v-for="workflow in workflows" :key="workflow.id" :value="workflow.id">
+            <option
+              v-for="workflow in workflows"
+              :key="workflow.id"
+              :value="workflow.id"
+            >
               {{ workflow.name }}
             </option>
           </select>
@@ -106,7 +118,7 @@ function handleSubmit() {
 
         <!-- Cron Expression Builder -->
         <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          <label class="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
             Schedule
           </label>
           <CronExpressionBuilder v-model="cronExpression" />
@@ -114,14 +126,18 @@ function handleSubmit() {
 
         <!-- Timezone -->
         <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          <label class="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
             Timezone
           </label>
           <select
             v-model="timezone"
-            class="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+            :class="CONTROL_CLASS"
           >
-            <option v-for="tz in TIMEZONES" :key="tz" :value="tz">
+            <option
+              v-for="tz in TIMEZONES"
+              :key="tz"
+              :value="tz"
+            >
               {{ tz }}
             </option>
           </select>
@@ -129,56 +145,57 @@ function handleSubmit() {
 
         <!-- Max Runs -->
         <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            Maximum Runs
+          <label class="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            Maximum runs
           </label>
           <input
             v-model.number="maxRuns"
             type="number"
             min="0"
-            class="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+            :class="CONTROL_CLASS"
             placeholder="0 for unlimited"
-          />
-          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          >
+          <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
             Set to 0 for unlimited runs
           </p>
         </div>
 
         <!-- Max Duration -->
         <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            Maximum Duration (seconds)
+          <label class="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+            Maximum duration (seconds)
           </label>
           <input
             v-model.number="maxDuration"
             type="number"
             min="0"
-            class="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+            :class="CONTROL_CLASS"
             placeholder="0 for no limit"
-          />
-          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          >
+          <p class="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
             Maximum execution duration before timeout. Set to 0 for no limit.
           </p>
         </div>
 
         <!-- Enabled Toggle -->
-        <div class="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-lg">
+        <div class="flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
           <div>
-            <h4 class="text-sm font-medium text-slate-900 dark:text-white">
+            <h4 class="text-sm font-medium text-neutral-950 dark:text-neutral-50">
               Enable Schedule
             </h4>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            <p class="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
               When enabled, the workflow will run according to the schedule
             </p>
           </div>
           <button
             type="button"
+            :aria-pressed="enabled"
+            class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+            :class="enabled ? 'bg-brand-500' : 'bg-neutral-200 dark:bg-neutral-700'"
             @click="enabled = !enabled"
-            class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2"
-            :class="enabled ? 'bg-violet-600' : 'bg-slate-200 dark:bg-slate-700'"
           >
             <span
-              class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+              class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200"
               :class="enabled ? 'translate-x-5' : 'translate-x-0'"
             />
           </button>
@@ -186,21 +203,22 @@ function handleSubmit() {
       </form>
 
       <!-- Footer -->
-      <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3">
-        <button
-          type="button"
+      <div class="flex justify-end gap-3 border-t border-neutral-200 px-6 py-4 dark:border-neutral-800">
+        <Button
+          variant="secondary"
+          size="sm"
           @click="emit('cancel')"
-          class="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
         >
           Cancel
-        </button>
-        <button
-          @click="handleSubmit"
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
           :disabled="!isValid"
-          class="px-4 py-2 text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+          @click="handleSubmit"
         >
-          {{ isEditing ? 'Save Changes' : 'Create Schedule' }}
-        </button>
+          {{ isEditing ? 'Save changes' : 'Create schedule' }}
+        </Button>
       </div>
     </div>
   </div>

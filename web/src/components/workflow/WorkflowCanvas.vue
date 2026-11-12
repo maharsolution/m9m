@@ -12,6 +12,7 @@ import '@vue-flow/minimap/dist/style.css'
 
 import BaseNode from '@/components/nodes/BaseNode.vue'
 import { useWorkflowEditorStore, useWorkflowStore, useNodesStore } from '@/stores'
+import { useThemeStore } from '@/stores/theme'
 import { buildFlowEdges, buildFlowNodes, parseEdgeId } from '@/lib/workflowGraph'
 import {
   STICKY_NOTE_DEFAULT_HEIGHT,
@@ -30,6 +31,35 @@ type FlowNode = Node & { selected?: boolean }
 const workflowStore = useWorkflowStore()
 const workflowEditorStore = useWorkflowEditorStore()
 const nodesStore = useNodesStore()
+const themeStore = useThemeStore()
+
+/**
+ * Canvas chrome colours.
+ *
+ * The canvas reads from the semantic token layer when it is published
+ * (`--canvas--color--background`, `--canvas--dot--color`) and falls
+ * back to the n8n values otherwise. The theme is part of the key so
+ * the fallback flips with the light / dark switch.
+ */
+const canvasBackground = computed(() => {
+  const fallback = themeStore.isDark ? 'oklch(20.46% 0 89.88)' : 'hsl(0, 0%, 96%)'
+  return `var(--canvas--color--background, ${fallback})`
+})
+
+const canvasDotColor = computed(() => {
+  // Re-read on every theme change so a published token layer wins.
+  void themeStore.isDark
+  if (typeof window === 'undefined') {
+    return 'oklch(68.3% 0 89.88)'
+  }
+  const published = getComputedStyle(document.documentElement)
+    .getPropertyValue('--canvas--dot--color')
+    .trim()
+  if (published) {
+    return published
+  }
+  return themeStore.isDark ? 'oklch(38.67% 0 89.88)' : 'oklch(68.3% 0 89.88)'
+})
 
 const {
   onNodesChange,
@@ -134,6 +164,29 @@ function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   const tag = target.tagName.toLowerCase()
   return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable
+}
+
+/**
+ * The selection ring is drawn inside the node, and the node is scaled
+ * by the canvas zoom. Without a compensation factor the 6px ring turns
+ * into a 12px ring at 200% zoom and a 1.2px hairline at 20% - n8n
+ * keeps the ring at a constant 6px on screen. The factor is the
+ * inverse of the zoom, published as a CSS variable on the canvas
+ * root; `--canvas-zoom-compensation-factor` is consumed by the node
+ * styles (`0 0 0 calc(6px * var(--canvas-zoom-compensation-factor, 1))`).
+ */
+const canvasRoot = ref<HTMLElement | null>(null)
+
+const publishZoomCompensation = (zoom: number) => {
+  if (!canvasRoot.value || !Number.isFinite(zoom) || zoom <= 0) return
+  canvasRoot.value.style.setProperty(
+    '--canvas-zoom-compensation-factor',
+    String(1 / zoom),
+  )
+}
+
+const onViewportChange = (viewport: { zoom: number }) => {
+  publishZoomCompensation(viewport.zoom)
 }
 
 onMounted(() => {
@@ -343,10 +396,44 @@ defineExpose({ zoomIn: zoomInCanvas, zoomOut: zoomOutCanvas, resetZoom: resetZoo
 
 <template>
   <div
+    ref="canvasRoot"
     class="w-full h-full"
     @drop="onDrop"
     @dragover="onDragOver"
   >
+    <!--
+      Arrow marker for the connections. SVG markers are resolved
+      document-wide by id, so one hidden <defs> serves every edge.
+    -->
+    <svg class="m9m-marker-defs" aria-hidden="true" focusable="false">
+      <defs>
+        <marker
+          id="m9m-arrow"
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="10"
+          markerHeight="10"
+          markerUnits="userSpaceOnUse"
+          orient="auto"
+        >
+          <path d="M 0 0 L 10 5 L 0 10 z" style="fill: var(--background--brand, oklch(78.07% 0.136 5.02))" />
+        </marker>
+        <marker
+          id="m9m-arrow-selected"
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="10"
+          markerHeight="10"
+          markerUnits="userSpaceOnUse"
+          orient="auto"
+        >
+          <path d="M 0 0 L 10 5 L 0 10 z" style="fill: var(--background--brand--active, oklch(59.09% 0.1611 5.09))" />
+        </marker>
+      </defs>
+    </svg>
+
     <!--
       Canvas behaviour:
         * `selection-mode="partial"` + `multi-selection-key-code` make
@@ -365,36 +452,41 @@ defineExpose({ zoomIn: zoomInCanvas, zoomOut: zoomOutCanvas, resetZoom: resetZoo
       :min-zoom="0.2"
       :max-zoom="2"
       :snap-to-grid="true"
-      :snap-grid="[20, 20]"
+      :snap-grid="[16, 16]"
       :connection-radius="120"
       :elevate-edges-on-select="true"
-      :connection-line-style="{ stroke: '#6366f1', strokeWidth: 3 }"
-      :default-edge-options="{ style: { stroke: '#94a3b8', strokeWidth: 2 } }"
+      :connection-line-style="{ stroke: 'var(--background--brand, oklch(78.07% 0.136 5.02))', strokeWidth: 3 }"
+      :default-edge-options="{ style: { stroke: 'var(--background--brand, oklch(78.07% 0.136 5.02))', strokeWidth: 2 } }"
       :fit-view-on-init-options="{ padding: 0.2, minZoom: 0.6, maxZoom: 1, includeHiddenNodes: false }"
       fit-view-on-init
-      class="bg-[#f5f5f7] dark:bg-slate-900"
+      :style="{ backgroundColor: canvasBackground }"
+      class="vue-flow--m9m"
       :selection-mode="SelectionMode.Partial"
       multi-selection-key-code="['Shift', 'Control', 'Meta']"
       :delete-key-code="null"
       :disable-keyboard-a11y="true"
+      @viewport-change="onViewportChange"
     >
       <Background
-        :pattern-color="'#cbd5e1'"
-        :gap="20"
+        :color="canvasDotColor"
+        :gap="16"
+        :size="1"
       />
       <Controls
-        class="!bg-white dark:!bg-slate-800 !border-slate-200 dark:!border-slate-700 !shadow-lg"
+        class="m9m-controls"
       />
       <MiniMap
         :node-color="getMinimapNodeColor"
-        class="!bg-white dark:!bg-slate-800 !border-slate-200 dark:!border-slate-700 !shadow-lg"
+        :height="120"
+        :node-border-radius="4"
+        class="m9m-minimap"
       />
     </VueFlow>
 
     <!-- Selection badge -->
     <div
       v-if="workflowEditorStore.selectedNodeCount > 1"
-      class="absolute top-3 left-3 z-10 pointer-events-none px-2.5 py-1 rounded-full text-xs font-medium bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300 shadow-sm"
+      class="absolute top-3 left-3 z-10 pointer-events-none px-2.5 py-1 rounded-full text-xs font-medium bg-surface text-secondary border border-default shadow-sm"
     >
       {{ workflowEditorStore.selectedNodeCount }} nodes selected
     </div>
@@ -405,16 +497,16 @@ defineExpose({ zoomIn: zoomInCanvas, zoomOut: zoomOutCanvas, resetZoom: resetZoo
       class="absolute inset-0 flex items-center justify-center pointer-events-none"
     >
       <div class="text-center">
-        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-          <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-subtle flex items-center justify-center">
+          <svg class="w-8 h-8 text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
           </svg>
         </div>
-        <h3 class="text-lg font-medium text-slate-700 dark:text-slate-300">
+        <h3 class="text-lg font-semibold tracking-tight text-primary">
           Drag nodes here to build your workflow
         </h3>
-        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          Select nodes from the palette on the left
+        <p class="mt-2 text-sm text-tertiary">
+          Open the node creator to pick a node
         </p>
       </div>
     </div>
@@ -422,41 +514,127 @@ defineExpose({ zoomIn: zoomInCanvas, zoomOut: zoomOutCanvas, resetZoom: resetZoo
 </template>
 
 <style>
-/* Vue Flow custom styles */
+/*
+ * Vue Flow chrome — n8n parity.
+ *
+ * The canvas is tonal: a dotted background, hairline borders, and
+ * shadows only on the pieces that float above the canvas (the
+ * controls pill and the minimap).
+ */
+
+/* The hidden <defs> block that carries the arrow markers. */
+.m9m-marker-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+/*
+ * Node selection is a ring painted on the card itself (see
+ * BaseNode.vue). Nothing is added here — one cue per state.
+ */
 .vue-flow__node {
-  @apply transition-shadow duration-150;
+  transition: none;
 }
 
-.vue-flow__node.selected {
-  @apply ring-2 ring-primary-500 ring-offset-2 dark:ring-offset-slate-900;
-}
-
+/*
+ * Connections use the primary (brand) family, with an arrow marker
+ * at the target end. The stroke is set with `!important` because
+ * Vue Flow writes the edge colour as an inline style.
+ */
 .vue-flow__edge-path {
-  @apply stroke-slate-400 dark:stroke-slate-500;
+  stroke: var(--background--brand, oklch(78.07% 0.136 5.02)) !important;
   stroke-width: 2;
+  marker-end: url(#m9m-arrow);
 }
 
 .vue-flow__edge.selected .vue-flow__edge-path {
-  @apply stroke-primary-500;
+  stroke: var(--background--brand--active, oklch(59.09% 0.1611 5.09)) !important;
   stroke-width: 3;
+  marker-end: url(#m9m-arrow-selected);
 }
 
+/*
+ * Controls — n8n's horizontal pill: surface fill, 1px border,
+ * hairline shadow, 16px icons.
+ */
+.vue-flow__controls {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 9999px;
+  border: 1px solid var(--border-color, oklch(0% 0 0 / 0.1));
+  background: var(--background--surface, #ffffff);
+  box-shadow: var(--shadow--xs, 0 1px 2px -1px oklch(0% 0 0 / 0.1));
+  overflow: hidden;
+}
+
+.vue-flow__controls-button {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--text-color, oklch(38.67% 0 89.88));
+  transition: background-color 200ms cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+
+.vue-flow__controls-button svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.vue-flow__controls-button:hover {
+  background: var(--background--hover, oklch(0% 0 0 / 0.05));
+}
+
+.vue-flow__controls-button + .vue-flow__controls-button {
+  border-left: none;
+}
+
+/*
+ * Minimap — 120px tall, 8px radius, 1px border, subtle fill.
+ */
+.vue-flow__minimap {
+  height: 120px !important;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, oklch(0% 0 0 / 0.1));
+  background: var(--background--subtle, oklch(97.02% 0 89.88));
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.vue-flow__minimap-mask {
+  fill: oklch(20.46% 0 89.88 / 0.08);
+}
+
+/*
+ * Handles — the visible indicator is styled by BaseNode.vue; these
+ * are the fallbacks for any handle that isn't a BaseNode.
+ */
 .vue-flow__handle {
-  /* The component-level .connection-handle rule in BaseNode.vue sets
-     the actual visual size + the hit-area child element. This global
-     rule is kept as a fallback for any handle that isn't a BaseNode. */
-  @apply transition-all duration-150;
+  transition: none;
 }
 
-.vue-flow__handle:hover {
-  @apply !bg-primary-500 scale-125;
+@media (max-width: 767px) {
+  .vue-flow__minimap {
+    display: none;
+  }
 }
 
-.vue-flow__handle-connecting {
-  @apply !bg-primary-500;
-}
-
-.vue-flow__handle-valid {
-  @apply !bg-green-500;
+@media (prefers-reduced-motion: reduce) {
+  .vue-flow__controls-button {
+    transition-duration: 1ms;
+  }
 }
 </style>

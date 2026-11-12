@@ -11,6 +11,9 @@ import {
 } from '@heroicons/vue/24/outline'
 import { useExecutionStore, useWorkflowStore } from '@/stores'
 import type { ExecutionStatus } from '@/types'
+import IconButton from '@/components/common/IconButton.vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
+import type { StatusTone } from '@/components/common/StatusBadge.vue'
 
 const router = useRouter()
 const executionStore = useExecutionStore()
@@ -66,11 +69,22 @@ const getStatusIcon = (status: string) => {
 
 const getStatusColor = (status: string) => {
   switch (status) {
-    case 'completed': return 'text-green-500'
-    case 'failed': return 'text-red-500'
-    case 'running': return 'text-blue-500 animate-spin'
-    case 'cancelled': return 'text-amber-500'
-    default: return 'text-slate-500'
+    case 'completed': return 'text-green-600 dark:text-green-400'
+    case 'failed': return 'text-red-600 dark:text-red-400'
+    case 'running': return 'text-blue-600 dark:text-blue-400 animate-spin'
+    case 'cancelled': return 'text-yellow-700 dark:text-yellow-400'
+    default: return 'text-neutral-500 dark:text-neutral-400'
+  }
+}
+
+/** Status family tone of an execution. */
+const getStatusTone = (status: string): StatusTone => {
+  switch (status) {
+    case 'completed': return 'success'
+    case 'failed': return 'danger'
+    case 'running': return 'info'
+    case 'cancelled': return 'warning'
+    default: return 'neutral'
   }
 }
 
@@ -103,25 +117,25 @@ const deleteExecution = async (id: string) => {
 </script>
 
 <template>
-  <div class="p-6">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-6">
-      <div>
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Execution History</h1>
-        <p class="text-slate-500 dark:text-slate-400">
-          View and manage workflow executions
-        </p>
-      </div>
+  <div>
+    <!-- Page header -->
+    <div class="mb-6">
+      <h1 class="text-2xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50">
+        Execution History
+      </h1>
+      <p class="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
+        View and manage workflow executions
+      </p>
     </div>
 
     <!-- Filters -->
-    <div class="flex items-center gap-4 mb-6">
+    <div class="mb-6 flex flex-wrap items-center gap-3">
       <!-- Status Filter -->
       <div class="flex items-center gap-2">
-        <FunnelIcon class="w-5 h-5 text-slate-400" />
+        <FunnelIcon class="h-4 w-4 text-neutral-400" />
         <select
           v-model="statusFilter"
-          class="input py-1.5"
+          class="h-9 rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-950 transition-colors duration-200 focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:focus:border-neutral-100 dark:focus:ring-neutral-100/10"
         >
           <option value="all">All Statuses</option>
           <option value="completed">Completed</option>
@@ -134,7 +148,7 @@ const deleteExecution = async (id: string) => {
       <!-- Workflow Filter -->
       <select
         v-model="workflowFilter"
-        class="input py-1.5"
+        class="h-9 rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-950 transition-colors duration-200 focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:focus:border-neutral-100 dark:focus:ring-neutral-100/10"
       >
         <option value="">All Workflows</option>
         <option
@@ -148,109 +162,124 @@ const deleteExecution = async (id: string) => {
     </div>
 
     <!-- Executions Table -->
-    <div class="card overflow-hidden">
-      <table class="w-full">
-        <thead class="bg-slate-50 dark:bg-slate-700/50">
-          <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Status
-            </th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Workflow
-            </th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Started
-            </th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Duration
-            </th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Mode
-            </th>
-            <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Actions
-            </th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
-          <tr
-            v-for="execution in filteredExecutions"
-            :key="execution.id"
-            @click="viewExecution(execution.id)"
-            class="hover:bg-slate-50 dark:hover:bg-slate-700/30 cursor-pointer transition-colors"
-          >
-            <td class="px-4 py-4">
-              <div class="flex items-center gap-2">
-                <component
-                  :is="getStatusIcon(execution.status)"
-                  :class="['w-5 h-5', getStatusColor(execution.status)]"
-                />
-                <span class="text-sm font-medium text-slate-900 dark:text-white capitalize">
-                  {{ execution.status }}
+    <div class="overflow-hidden rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead class="bg-neutral-50 dark:bg-neutral-950">
+            <tr>
+              <th class="px-4 py-2.5 text-left text-2xs font-medium uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
+                Status
+              </th>
+              <th class="px-4 py-2.5 text-left text-2xs font-medium uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
+                Workflow
+              </th>
+              <th class="px-4 py-2.5 text-left text-2xs font-medium uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
+                Started
+              </th>
+              <th class="px-4 py-2.5 text-left text-2xs font-medium uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
+                Duration
+              </th>
+              <th class="px-4 py-2.5 text-left text-2xs font-medium uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
+                Mode
+              </th>
+              <th class="px-4 py-2.5 text-right text-2xs font-medium uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-neutral-100 dark:divide-neutral-800">
+            <tr
+              v-for="execution in filteredExecutions"
+              :key="execution.id"
+              class="cursor-pointer transition-colors duration-200 hover:bg-neutral-50 dark:hover:bg-neutral-800/40"
+              @click="viewExecution(execution.id)"
+            >
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-2">
+                  <component
+                    :is="getStatusIcon(execution.status)"
+                    class="h-4 w-4"
+                    :class="getStatusColor(execution.status)"
+                  />
+                  <StatusBadge
+                    :status="getStatusTone(execution.status)"
+                    :label="execution.status"
+                  />
+                </div>
+              </td>
+              <td class="px-4 py-3">
+                <span class="text-sm font-medium text-neutral-950 dark:text-neutral-50">
+                  {{ getWorkflowName(execution.workflowId) }}
                 </span>
-              </div>
-            </td>
-            <td class="px-4 py-4">
-              <span class="text-sm text-slate-900 dark:text-white">
-                {{ getWorkflowName(execution.workflowId) }}
-              </span>
-            </td>
-            <td class="px-4 py-4">
-              <span class="text-sm text-slate-600 dark:text-slate-300">
-                {{ formatDate(execution.startedAt) }}
-              </span>
-            </td>
-            <td class="px-4 py-4">
-              <span class="text-sm text-slate-600 dark:text-slate-300">
-                {{ formatDuration(execution.startedAt, execution.finishedAt) }}
-              </span>
-            </td>
-            <td class="px-4 py-4">
-              <span class="badge-info capitalize">
-                {{ execution.mode }}
-              </span>
-            </td>
-            <td class="px-4 py-4 text-right">
-              <div class="flex items-center justify-end gap-2" @click.stop>
-                <button
-                  v-if="execution.status === 'failed'"
-                  @click="retryExecution(execution.id)"
-                  class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
-                  title="Retry"
+              </td>
+              <td class="px-4 py-3">
+                <span class="whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400">
+                  {{ formatDate(execution.startedAt) }}
+                </span>
+              </td>
+              <td class="px-4 py-3">
+                <span class="whitespace-nowrap text-xs text-neutral-600 dark:text-neutral-400">
+                  {{ formatDuration(execution.startedAt, execution.finishedAt) }}
+                </span>
+              </td>
+              <td class="px-4 py-3">
+                <StatusBadge
+                  status="info"
+                  :label="execution.mode"
+                />
+              </td>
+              <td class="px-4 py-3 text-right">
+                <div
+                  class="flex items-center justify-end gap-1"
+                  @click.stop
                 >
-                  <ArrowPathIcon class="w-4 h-4" />
-                </button>
-                <button
-                  @click="deleteExecution(execution.id)"
-                  class="p-1.5 rounded-lg text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                  title="Delete"
-                >
-                  <TrashIcon class="w-4 h-4" />
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+                  <IconButton
+                    v-if="execution.status === 'failed'"
+                    label="Retry"
+                    @click="retryExecution(execution.id)"
+                  >
+                    <ArrowPathIcon class="h-4 w-4" />
+                  </IconButton>
+                  <IconButton
+                    label="Delete"
+                    tone="danger"
+                    @click="deleteExecution(execution.id)"
+                  >
+                    <TrashIcon class="h-4 w-4" />
+                  </IconButton>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <!-- Empty State -->
       <div
         v-if="filteredExecutions.length === 0 && !executionStore.loading"
-        class="text-center py-12"
+        class="px-4 py-12 text-center"
       >
-        <ClockIcon class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600" />
-        <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">
+        <ClockIcon class="mx-auto h-12 w-12 text-neutral-300 dark:text-neutral-700" />
+        <h3 class="mt-4 text-lg font-semibold text-neutral-950 dark:text-neutral-50">
           No executions found
         </h3>
-        <p class="mt-2 text-slate-500 dark:text-slate-400">
+        <p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
           Run a workflow to see executions here
         </p>
       </div>
 
       <!-- Loading State -->
-      <div v-if="executionStore.loading" class="text-center py-12">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto" />
-        <p class="mt-4 text-slate-500 dark:text-slate-400">Loading executions...</p>
+      <div
+        v-if="executionStore.loading"
+        class="px-4 py-12 text-center"
+      >
+        <span
+          class="mx-auto inline-block h-8 w-8 animate-spin rounded-full border-2 border-neutral-300 border-t-brand-500 dark:border-neutral-700"
+          aria-hidden="true"
+        />
+        <p class="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
+          Loading executions…
+        </p>
       </div>
     </div>
   </div>

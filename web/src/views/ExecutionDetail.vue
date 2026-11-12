@@ -877,7 +877,7 @@ function downloadData() {
           <ArrowLeftIcon class="w-5 h-5" />
         </button>
         <div class="flex-1 min-w-0">
-          <h1 class="text-xl font-bold text-slate-900 dark:text-white truncate">
+          <h1 class="text-xl font-semibold text-neutral-900 dark:text-white truncate">
             {{ workflow?.name || 'Execution' }}
           </h1>
           <p class="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">

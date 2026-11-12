@@ -40,27 +40,28 @@ const swatchStyle = computed(() => {
   return { backgroundColor: hex.value }
 })
 
+// n8n tag treatment: 20px chip, 8px radius, 12px label.
 const sizeClass = computed(() =>
-  props.size === 'md' ? 'px-2.5 py-1 text-sm' : 'px-2 py-0.5 text-xs'
+  props.size === 'md' ? 'h-6 px-2 text-xs' : 'h-5 px-2 text-2xs'
 )
 </script>
 
 <template>
   <span
-    class="inline-flex items-center gap-1.5 rounded-full border font-medium transition-colors"
+    class="inline-flex items-center gap-1.5 rounded-lg border font-medium transition-colors duration-200"
     :class="[
       sizeClass,
       hex
-        ? 'text-slate-700 dark:text-slate-200'
-        : 'bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300',
+        ? 'text-neutral-800 dark:text-neutral-100'
+        : 'border-neutral-200 bg-neutral-100 text-neutral-600 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300',
       clickable ? 'cursor-pointer hover:brightness-95 dark:hover:brightness-110' : '',
     ]"
     :style="hex ? chipStyle : undefined"
     :title="tag.name"
   >
     <span
-      class="w-2 h-2 rounded-full shrink-0"
-      :class="hex ? '' : 'bg-slate-400'"
+      class="h-1.5 w-1.5 shrink-0 rounded-full"
+      :class="hex ? '' : 'bg-neutral-400'"
       :style="swatchStyle"
     />
     <span class="truncate max-w-[12rem]">{{ tag.name }}</span>
@@ -68,12 +69,12 @@ const sizeClass = computed(() =>
     <button
       v-if="removable"
       type="button"
-      class="ml-0.5 rounded-full p-0.5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+      class="ml-0.5 rounded-sm p-0.5 transition-colors hover:bg-black/10 dark:hover:bg-white/10"
       :aria-label="`Remove tag ${tag.name}`"
       :title="`Remove tag ${tag.name}`"
       @click.stop="emit('remove', tag)"
     >
-      <XMarkIcon class="w-3 h-3" />
+      <XMarkIcon class="h-3 w-3" />
     </button>
   </span>
 </template>

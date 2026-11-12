@@ -228,19 +228,60 @@ export interface StickyNoteParameters {
 /**
  * The seven sticky-note colours, in n8n's palette order. The
  * 1-based index is what n8n persists in `parameters.color`.
+ *
+ * The values are n8n's own note palette expressed in oklch (see
+ * DESIGN.md §2.5) so the notes sit on the same tonal family as the
+ * rest of the surface. `hex` is the note background; `border` is the
+ * hairline that separates the note from the canvas.
  */
 export const STICKY_NOTE_COLORS: ReadonlyArray<{
   index: number
   name: string
   hex: string
+  border: string
 }> = [
-  { index: 1, name: 'Yellow', hex: '#fef9c3' },
-  { index: 2, name: 'Gold', hex: '#fef3c7' },
-  { index: 3, name: 'Red', hex: '#fee2e2' },
-  { index: 4, name: 'Green', hex: '#dcfce7' },
-  { index: 5, name: 'Blue', hex: '#dbeafe' },
-  { index: 6, name: 'Purple', hex: '#ede9fe' },
-  { index: 7, name: 'Grey', hex: '#f1f5f9' },
+  {
+    index: 1,
+    name: 'Yellow',
+    hex: 'oklch(97.27% 0.0706 103.29)',
+    border: 'oklch(94.53% 0.1293 101.4)',
+  },
+  {
+    index: 2,
+    name: 'Gold',
+    hex: 'oklch(92.41% 0.0463 78.84)',
+    border: 'oklch(84.14% 0.0975 76.95)',
+  },
+  {
+    index: 3,
+    name: 'Red',
+    hex: 'oklch(93.65% 0.032 17.74)',
+    border: 'oklch(84.85% 0.0827 18.93)',
+  },
+  {
+    index: 4,
+    name: 'Green',
+    hex: 'oklch(96.24% 0.0434 156.74)',
+    border: 'oklch(87.04% 0.149 154.62)',
+  },
+  {
+    index: 5,
+    name: 'Blue',
+    hex: 'oklch(93.19% 0.0316 255.59)',
+    border: 'oklch(88.2% 0.0588 253.97)',
+  },
+  {
+    index: 6,
+    name: 'Purple',
+    hex: 'oklch(89.46% 0.0562 293.06)',
+    border: 'oklch(81.01% 0.1055 293.7)',
+  },
+  {
+    index: 7,
+    name: 'Grey',
+    hex: 'oklch(97.02% 0 89.88)',
+    border: 'oklch(92.19% 0 89.88)',
+  },
 ]
 
 /**
@@ -254,6 +295,16 @@ export function stickyNoteColor(value: unknown): string {
   const index = typeof value === 'number' ? value : STICKY_NOTE_DEFAULT_COLOR
   const match = STICKY_NOTE_COLORS.find((c) => c.index === index)
   return match?.hex ?? STICKY_NOTE_COLORS[0].hex
+}
+
+/**
+ * Resolves the hairline border of a sticky note. Custom colours keep
+ * the neutral border; palette entries use their own n8n border tone.
+ */
+export function stickyNoteBorder(value: unknown): string {
+  const index = typeof value === 'number' ? value : STICKY_NOTE_DEFAULT_COLOR
+  const match = STICKY_NOTE_COLORS.find((c) => c.index === index)
+  return match?.border ?? STICKY_NOTE_COLORS[0].border
 }
 
 /**

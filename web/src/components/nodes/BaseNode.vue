@@ -1,3 +1,213 @@
+<script lang="ts">
+/**
+ * Node icon lookup.
+ *
+ * n8n gives every node type its own glyph. m9m's backend ships the
+ * Font-Awesome style identifier (`icon: "fa:globe"`), but the web app
+ * bundles no icon font, so the identifier is mapped onto the
+ * Heroicons set here. The glyph is monochrome: colour on a node card
+ * belongs to the *state* (border), never to the decoration.
+ *
+ * The map is exported so the node creator shows the very same glyph
+ * for a node type as the canvas card does.
+ */
+import type { Component } from 'vue'
+import {
+  AcademicCapIcon,
+  ArrowPathIcon,
+  ArrowsPointingInIcon,
+  ArrowsRightLeftIcon,
+  BanknotesIcon,
+  BoltIcon,
+  BriefcaseIcon,
+  ChartBarIcon,
+  ChatBubbleLeftEllipsisIcon,
+  ChatBubbleLeftRightIcon,
+  CircleStackIcon,
+  ClockIcon,
+  CloudArrowDownIcon,
+  CloudIcon,
+  CodeBracketIcon,
+  CommandLineIcon,
+  CpuChipIcon,
+  CreditCardIcon,
+  CubeIcon,
+  CurrencyDollarIcon,
+  DocumentTextIcon,
+  EnvelopeIcon,
+  FingerPrintIcon,
+  FunnelIcon,
+  GlobeAltIcon,
+  LinkIcon,
+  ListBulletIcon,
+  MegaphoneIcon,
+  PaperAirplaneIcon,
+  PencilSquareIcon,
+  PhoneIcon,
+  PlayIcon,
+  PuzzlePieceIcon,
+  RectangleStackIcon,
+  ServerStackIcon,
+  ShareIcon,
+  ShoppingBagIcon,
+  SignalIcon,
+  SparklesIcon,
+  TableCellsIcon,
+  TicketIcon,
+  TruckIcon,
+  WrenchScrewdriverIcon,
+} from '@heroicons/vue/24/outline'
+
+/** Glyph per node type (key: the type name without its package prefix). */
+const NODE_ICON_BY_TYPE: Record<string, Component> = {
+  // triggers
+  webhook: LinkIcon,
+  webhooktrigger: LinkIcon,
+  cron: ClockIcon,
+  schedule: ClockIcon,
+  schedules: ClockIcon,
+  scheduletrigger: ClockIcon,
+  formtrigger: DocumentTextIcon,
+  manualtrigger: PlayIcon,
+  start: PlayIcon,
+  intervtrigger: ClockIcon,
+  // core / flow
+  set: PencilSquareIcon,
+  editfields: PencilSquareIcon,
+  if: ArrowsRightLeftIcon,
+  switch: ArrowsRightLeftIcon,
+  merge: ArrowsPointingInIcon,
+  filter: FunnelIcon,
+  splitinbatches: ArrowsRightLeftIcon,
+  noop: CommandLineIcon,
+  wait: ClockIcon,
+  looper: ArrowPathIcon,
+  stopanderror: BoltIcon,
+  executeworkflow: CubeIcon,
+  executecommand: CommandLineIcon,
+  // code
+  code: CodeBracketIcon,
+  function: CommandLineIcon,
+  functionitem: CommandLineIcon,
+  html: CodeBracketIcon,
+  xml: CodeBracketIcon,
+  // http / cloud
+  httprequest: GlobeAltIcon,
+  httpbin: GlobeAltIcon,
+  graphql: GlobeAltIcon,
+  ftp: CloudArrowDownIcon,
+  ssh: ServerStackIcon,
+  awslambda: CloudIcon,
+  awss3: CloudArrowDownIcon,
+  googledrive: CloudIcon,
+  dropbox: CloudArrowDownIcon,
+  // databases
+  postgres: CircleStackIcon,
+  mysql: CircleStackIcon,
+  mongodb: CircleStackIcon,
+  redis: CircleStackIcon,
+  sqlite: CircleStackIcon,
+  elasticsearch: ServerStackIcon,
+  qdrant: CircleStackIcon,
+  pinecone: CircleStackIcon,
+  supabase: CircleStackIcon,
+  googlebigquery: CircleStackIcon,
+  // communication
+  slack: ChatBubbleLeftEllipsisIcon,
+  discord: ChatBubbleLeftEllipsisIcon,
+  telegram: PaperAirplaneIcon,
+  email: EnvelopeIcon,
+  sendemail: EnvelopeIcon,
+  gmail: EnvelopeIcon,
+  microsoftoutlook: EnvelopeIcon,
+  twilio: PhoneIcon,
+  mailcheck: EnvelopeIcon,
+  discourse: ChatBubbleLeftRightIcon,
+  mattermost: ChatBubbleLeftRightIcon,
+  rocketchat: ChatBubbleLeftRightIcon,
+  zulip: ChatBubbleLeftRightIcon,
+  // productivity
+  googlesheets: TableCellsIcon,
+  airtable: TableCellsIcon,
+  excel: TableCellsIcon,
+  baserow: TableCellsIcon,
+  notion: DocumentTextIcon,
+  trello: RectangleStackIcon,
+  jira: TicketIcon,
+  hubspot: ChartBarIcon,
+  pipedrive: CurrencyDollarIcon,
+  stripe: CreditCardIcon,
+  shopify: ShoppingBagIcon,
+  woocommerce: ShoppingBagIcon,
+  odoo: CubeIcon,
+  sap: BriefcaseIcon,
+  erp: BriefcaseIcon,
+  banner: MegaphoneIcon,
+  customerio: MegaphoneIcon,
+  // ai
+  openai: SparklesIcon,
+  anthropic: SparklesIcon,
+  googlegemini: SparklesIcon,
+  deepseek: SparklesIcon,
+  perplexity: SparklesIcon,
+  groq: SparklesIcon,
+  lmstudio: CpuChipIcon,
+  ollama: CpuChipIcon,
+  huggingfacemodel: CpuChipIcon,
+  langchain: PuzzlePieceIcon,
+  n8n: PuzzlePieceIcon,
+  // misc
+  stickynote: PencilSquareIcon,
+  rss: SignalIcon,
+  keenstack: SignalIcon,
+  kafka: CloudArrowDownIcon,
+  amqp: CloudArrowDownIcon,
+  rabbitmq: CloudArrowDownIcon,
+  sqs: CloudArrowDownIcon,
+  coinbase: BanknotesIcon,
+  binance: BanknotesIcon,
+  bybit: BanknotesIcon,
+  logistic: TruckIcon,
+  scholarly: AcademicCapIcon,
+  gitlab: CodeBracketIcon,
+  github: CodeBracketIcon,
+  crypto: FingerPrintIcon,
+  compression: ServerStackIcon,
+  summarizer: DocumentTextIcon,
+  textclassifier: DocumentTextIcon,
+  listbullet: ListBulletIcon,
+}
+
+/** Glyph per node category — the fallback for unknown node types. */
+const NODE_ICON_BY_CATEGORY: Record<string, Component> = {
+  trigger: BoltIcon,
+  action: PlayIcon,
+  transform: ArrowsRightLeftIcon,
+  flow: ShareIcon,
+  core: CubeIcon,
+  data: CircleStackIcon,
+  communication: ChatBubbleLeftRightIcon,
+  utility: WrenchScrewdriverIcon,
+}
+
+/**
+ * Resolves the icon of a node type. The lookup uses the bare type
+ * name (the part after the package prefix), lower-cased, so
+ * `n8n-nodes-base.httpRequest` and `httpRequest` resolve the same.
+ */
+export function nodeIconFor(nodeType: string, category?: string): Component {
+  const bare = String(nodeType ?? '')
+    .split('.')
+    .pop()!
+    .toLowerCase()
+  return (
+    NODE_ICON_BY_TYPE[bare] ??
+    NODE_ICON_BY_CATEGORY[category ?? ''] ??
+    NODE_ICON_BY_CATEGORY['action']
+  )
+}
+</script>
+
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
@@ -10,9 +220,18 @@ import {
   STICKY_NOTE_DEFAULT_HEIGHT,
   STICKY_NOTE_DEFAULT_WIDTH,
   STICKY_NOTE_TYPE,
+  stickyNoteBorder,
   stickyNoteColor,
 } from '@/types'
 import type { NodeCategory } from '@/types'
+
+/**
+ * The execution state of a node, painted as the card border (n8n
+ * parity). Nothing in the editor store feeds this yet — the editor
+ * has no per-node status — but the contract is in place so a future
+ * live-execution overlay only has to set `data.status`.
+ */
+type NodeStatus = 'success' | 'error' | 'warning' | 'running' | 'waiting'
 
 interface Props {
   id: string
@@ -22,8 +241,10 @@ interface Props {
     category: NodeCategory
     parameters?: Record<string, unknown>
     credentials?: Record<string, { id: string; name: string }>
-    // 'compact' (default) is the editor-friendly 200/260px wide
-    // card. 'comfortable' widens the card and grows the icon /
+    /** Optional execution state, painted as the card border. */
+    status?: NodeStatus
+    // 'compact' (default) is the editor-friendly node card.
+    // 'comfortable' widens the card and grows the icon /
     // label for screens where the user reads the canvas (e.g.
     // the execution detail view), making each node easier to
     // click. The Canvas (editor / execution) sets this when it
@@ -38,41 +259,18 @@ const props = defineProps<Props>()
 const editorStore = useWorkflowEditorStore()
 
 const isSticky = computed(() => props.data.nodeType === STICKY_NOTE_TYPE)
+const isComfortable = computed(() => props.data.density === 'comfortable')
 
-const categoryStyles = computed(() => {
-  switch (props.data.category) {
-    case 'trigger':
-      return {
-        border: 'border-l-green-500',
-        icon: 'bg-green-500',
-        iconText: '⚡',
-      }
-    case 'action':
-      return {
-        border: 'border-l-indigo-500',
-        icon: 'bg-indigo-500',
-        iconText: '▶',
-      }
-    case 'transform':
-      return {
-        border: 'border-l-amber-500',
-        icon: 'bg-amber-500',
-        iconText: '🔄',
-      }
-    case 'flow':
-      return {
-        border: 'border-l-purple-500',
-        icon: 'bg-purple-500',
-        iconText: '🔀',
-      }
-    default:
-      return {
-        border: 'border-l-slate-500',
-        icon: 'bg-slate-500',
-        iconText: '📦',
-      }
-  }
-})
+/**
+ * The card never paints the category as a stripe — n8n nodes have no
+ * stripe. The category only decides the fallback glyph.
+ */
+const iconComponent = computed(() => nodeIconFor(props.data.nodeType, props.data.category))
+
+/** The trigger variant gets the n8n "D" radius (36px on the left). */
+const isTrigger = computed(() => props.data.category === 'trigger')
+
+const nodeStatus = computed(() => props.data.status ?? null)
 
 const nodeTypeName = computed(() => {
   const type = props.data.nodeType
@@ -107,6 +305,10 @@ const stickyContent = computed(() => {
 
 const stickyBackground = computed(() =>
   stickyNoteColor(props.data.parameters?.color)
+)
+
+const stickyBorder = computed(() =>
+  stickyNoteBorder(props.data.parameters?.color)
 )
 
 const stickyWidth = computed(() => {
@@ -173,6 +375,7 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
     :class="selected ? 'selected' : ''"
     :style="{
       backgroundColor: stickyBackground,
+      borderColor: stickyBorder,
       width: `${stickyWidth}px`,
       height: `${stickyHeight}px`,
     }"
@@ -181,7 +384,7 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
       :is-visible="selected"
       :min-width="120"
       :min-height="80"
-      color="#6366f1"
+      color="#ec7b8e"
       @resize="onStickyResize"
     />
 
@@ -207,7 +410,7 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
         type="button"
         class="sticky-note__swatch"
         :class="props.data.parameters?.color === color.index ? 'selected' : ''"
-        :style="{ backgroundColor: color.hex }"
+        :style="{ backgroundColor: color.hex, borderColor: color.border }"
         :title="color.name"
         @click.stop="setStickyColor(color.index)"
       />
@@ -237,21 +440,16 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
     </div>
   </div>
 
-  <!-- Regular node -->
+  <!-- Regular node. 96 × 96 footprint, 16px radius, 1.5px hairline
+       border, no resting shadow — n8n's canvas node. -->
   <div
     v-else
+    class="workflow-node"
     :class="[
-      // Width and minimum height vary with density. The compact
-      // (default) size keeps the editor canvas dense; comfortable
-      // widens the card and bumps the min-height so the execution
-      // canvas reads more like an inspector and is easier to click
-      // (user feedback Sep 2026 — execution nodes were too small).
-      data.density === 'comfortable'
-        ? 'workflow-node workflow-node--comfortable min-w-[280px] max-w-[340px] min-h-[110px]'
-        : 'workflow-node min-w-[200px] max-w-[260px] min-h-[80px]',
-      categoryStyles.border,
-      'border-l-4',
-      selected ? 'selected' : ''
+      isComfortable ? 'workflow-node--comfortable' : 'workflow-node--compact',
+      isTrigger ? 'workflow-node--trigger' : '',
+      nodeStatus ? `workflow-node--${nodeStatus}` : '',
+      selected ? 'selected' : '',
     ]"
   >
     <!-- Input Handle. The :id binding (not the static `id`
@@ -271,11 +469,10 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
       :is-connectable="true"
       class="connection-handle connection-handle--input"
     >
-      <!-- Larger transparent hit-area — sits above the visible dot in
-           stacking order but does NOT capture pointer events (pointer-
-           events: none in CSS below). This lets users grab the handle
-           with ~40px of slop on either side without breaking drag. -->
-      <span class="handle-hit-area" aria-hidden="true" />
+      <!-- The visible 16px indicator. The <Handle> itself is a 40px
+           box, so the drop target stays generous without the dot
+           dominating the card. -->
+      <span class="handle-dot" aria-hidden="true" />
     </Handle>
 
     <!-- Delete affordance (top-right, hover-reveal) -->
@@ -288,64 +485,44 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
       <XMarkIcon class="w-3.5 h-3.5" />
     </button>
 
-    <!-- Node Content. Padding, icon size, and font size all
-         scale with density so the "comfortable" card doesn't end
-         up with cramped content. We keep the editor's compact
-         defaults by NOT touching the inner classes when density
-         is compact. -->
-    <div :class="data.density === 'comfortable' ? 'p-4' : 'p-3'">
-      <div class="flex items-center gap-2">
-        <div
-          :class="[
-            categoryStyles.icon,
-            data.density === 'comfortable'
-              ? 'w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0'
-              : 'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
-          ]"
-        >
-          <span :class="data.density === 'comfortable' ? 'text-white text-base' : 'text-white text-sm'">{{ categoryStyles.iconText }}</span>
-        </div>
-        <div class="min-w-0 flex-1">
-          <h4 :class="data.density === 'comfortable' ? 'text-base font-semibold text-slate-900 dark:text-white truncate' : 'text-sm font-semibold text-slate-900 dark:text-white truncate'">
-            {{ data.label }}
-          </h4>
-          <p :class="data.density === 'comfortable' ? 'text-sm text-slate-500 dark:text-slate-400 truncate' : 'text-xs text-slate-500 dark:text-slate-400 truncate'">
-            {{ nodeTypeName }}
-          </p>
-        </div>
-      </div>
+    <!-- Node Content. The icon sits to the LEFT of a single-line
+         title; both scale with the density so the comfortable card
+         (execution view) stays readable. -->
+    <div class="node-body">
+      <span class="node-icon" aria-hidden="true">
+        <component :is="iconComponent" class="node-icon__glyph" />
+      </span>
 
-      <!-- Credential badge -->
-      <div
-        v-if="credentialCount > 0"
-        :class="[
-          'mt-2 pt-2 border-t border-slate-200 dark:border-slate-600 flex items-center gap-1',
-          data.density === 'comfortable'
-            ? 'text-sm text-slate-600 dark:text-slate-300'
-            : 'text-xs text-slate-600 dark:text-slate-300',
-        ]"
-      >
-        <KeyIcon :class="data.density === 'comfortable' ? 'w-3.5 h-3.5' : 'w-3 h-3'" />
-        <span>{{ credentialCount }} credential{{ credentialCount > 1 ? 's' : '' }}</span>
+      <div class="node-text">
+        <h4 class="node-title" :title="data.label">
+          {{ data.label }}
+        </h4>
+        <p v-if="isComfortable" class="node-subtitle">
+          {{ nodeTypeName }}
+        </p>
       </div>
+    </div>
 
-      <!-- Parameters preview -->
+    <!-- Credential badge. n8n marks a node with a key glyph when it
+         has credentials bound. -->
+    <span v-if="credentialCount > 0" class="node-credential" :title="`${credentialCount} credential${credentialCount > 1 ? 's' : ''}`">
+      <KeyIcon class="w-3 h-3" />
+      <span class="sr-only">{{ credentialCount }} credentials</span>
+    </span>
+
+    <!-- Parameters preview (comfortable density only — the compact
+         canvas card stays a clean 96px tile). -->
+    <div
+      v-if="isComfortable && data.parameters && Object.keys(data.parameters).length > 0"
+      class="node-parameters"
+    >
       <div
-        v-if="data.parameters && Object.keys(data.parameters).length > 0"
-        class="mt-2 pt-2 border-t border-slate-200 dark:border-slate-600"
+        v-for="(value, key) in data.parameters"
+        :key="key"
+        class="node-parameter"
       >
-        <div
-          v-for="(value, key) in data.parameters"
-          :key="key"
-          :class="[
-            data.density === 'comfortable'
-              ? 'text-sm text-slate-500 dark:text-slate-400 truncate'
-              : 'text-xs text-slate-500 dark:text-slate-400 truncate',
-          ]"
-        >
-          <span class="font-medium">{{ key }}:</span>
-          {{ typeof value === 'object' ? '...' : value }}
-        </div>
+        <span class="node-parameter__key">{{ key }}:</span>
+        {{ typeof value === 'object' ? '...' : value }}
       </div>
     </div>
 
@@ -359,28 +536,253 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
       :is-connectable="true"
       class="connection-handle connection-handle--output"
     >
-      <span class="handle-hit-area" aria-hidden="true" />
+      <span class="handle-dot" aria-hidden="true" />
     </Handle>
   </div>
 </template>
 
 <style scoped>
+/*
+ * Canvas node — n8n parity.
+ *
+ *  * 96 × 96 footprint (the title may widen the card so a node name
+ *    stays legible), 16px radius, 1.5px hairline border.
+ *  * No resting shadow: an in-layout surface gets a border, never a
+ *    shadow. Shadows are reserved for overlays.
+ *  * No category stripe and no coloured icon badge — the icon is
+ *    monochrome, the colour belongs to the state.
+ */
 .workflow-node {
-  @apply bg-white dark:bg-slate-800 rounded-lg;
-  @apply border-2 border-slate-200 dark:border-slate-600;
-  @apply shadow-md;
-  @apply transition-all duration-150;
-  /* Make sure handle hit areas are not clipped by rounded corners. */
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  min-width: 96px;
+  min-height: 96px;
+  max-width: 184px;
+  border-radius: 16px;
+  border: 1.5px solid var(--border-color, oklch(0% 0 0 / 0.1));
+  background: var(--node--color--background, #ffffff);
+  color: var(--text-color, oklch(20.46% 0 89.88));
+  /* Handle hit areas must not be clipped by the rounded corners. */
   overflow: visible;
+  /*
+   * No resting shadow — an in-layout surface gets a border, never a
+   * shadow. The declaration also neutralises the legacy
+   * `.workflow-node` component class (shadow-md / hover:shadow-lg)
+   * that still lives in main.css.
+   */
+  box-shadow: none;
+  transition:
+    border-color 200ms cubic-bezier(0.215, 0.61, 0.355, 1),
+    background-color 200ms cubic-bezier(0.215, 0.61, 0.355, 1);
 }
 
+/* Hover never raises the card — the border carries the state. */
 .workflow-node:hover {
-  @apply border-primary-400 dark:border-primary-500;
-  @apply shadow-lg;
+  box-shadow: none;
 }
 
+:global(.dark) .workflow-node {
+  border-color: var(--border-color, oklch(100% 0 89.88 / 0.15));
+  background: var(--node--color--background, hsl(0, 0%, 17%));
+  color: var(--text-color, oklch(97.02% 0 89.88));
+}
+
+/* n8n's trigger variant: the left corners are rounded deeper. */
+.workflow-node--trigger {
+  border-radius: 36px 16px 16px 36px;
+}
+
+.workflow-node--comfortable {
+  min-width: 280px;
+  max-width: 340px;
+  min-height: 110px;
+  padding: 12px;
+  flex-wrap: wrap;
+}
+
+.node-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.node-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.node-icon__glyph {
+  width: 32px;
+  height: 32px;
+  color: var(--text-color, oklch(20.46% 0 89.88));
+  opacity: 0.85;
+}
+
+:global(.dark) .node-icon__glyph {
+  color: var(--text-color, oklch(97.02% 0 89.88));
+}
+
+.workflow-node--comfortable .node-icon {
+  width: 40px;
+  height: 40px;
+}
+
+.workflow-node--comfortable .node-icon__glyph {
+  width: 40px;
+  height: 40px;
+}
+
+.node-text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.node-title {
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.007em;
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workflow-node--comfortable .node-title {
+  font-size: 14px;
+}
+
+.node-subtitle {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.25;
+  color: var(--text-color--subtle, oklch(55.55% 0 89.88));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.node-credential {
+  position: absolute;
+  left: 8px;
+  bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  color: var(--text-color--subtle, oklch(55.55% 0 89.88));
+}
+
+.node-parameters {
+  flex: 1 0 100%;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color--subtle, oklch(0% 0 0 / 0.05));
+  font-size: 12px;
+  color: var(--text-color--subtle, oklch(55.55% 0 89.88));
+}
+
+.node-parameter {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.node-parameter__key {
+  font-weight: 500;
+}
+
+/*
+ * Selection is a ring, not a border change — one cue per state.
+ * The ring scales with the canvas zoom so it stays 6 screen pixels.
+ */
 .workflow-node.selected {
-  @apply border-primary-500 dark:border-primary-400;
+  box-shadow:
+    0 0 0 calc(6px * var(--canvas-zoom-compensation-factor, 1)) hsla(220, 47%, 30%, 0.1);
+}
+
+/*
+ * Status is encoded in the border: 2px, one hue per state.
+ */
+.workflow-node--success {
+  border-width: 2px;
+  border-color: var(--color--success, oklch(63.78% 0.155 155.83));
+}
+
+.workflow-node--error {
+  border-width: 2px;
+  border-color: var(--color--danger, oklch(63.78% 0.2373 25.44));
+}
+
+.workflow-node--warning {
+  border-width: 2px;
+  border-color: var(--color--warning, oklch(79.21% 0.162 76.95));
+}
+
+.workflow-node--running,
+.workflow-node--waiting {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--node--color--background, #ffffff), var(--node--color--background, #ffffff))
+      padding-box,
+    conic-gradient(
+      from var(--node--gradient-angle, 0deg),
+      rgba(255, 109, 90, 1),
+      rgba(255, 109, 90, 1) 20%,
+      rgba(255, 109, 90, 0.2) 35%,
+      rgba(255, 109, 90, 0.2) 65%,
+      rgba(255, 109, 90, 1) 90%,
+      rgba(255, 109, 90, 1)
+    ) border-box;
+}
+
+:global(.dark) .workflow-node--running,
+:global(.dark) .workflow-node--waiting {
+  background:
+    linear-gradient(hsl(0, 0%, 17%), hsl(0, 0%, 17%)) padding-box,
+    conic-gradient(
+      from var(--node--gradient-angle, 0deg),
+      rgba(255, 109, 90, 1),
+      rgba(255, 109, 90, 1) 20%,
+      rgba(255, 109, 90, 0.2) 35%,
+      rgba(255, 109, 90, 0.2) 65%,
+      rgba(255, 109, 90, 1) 90%,
+      rgba(255, 109, 90, 1)
+    ) border-box;
+}
+
+@property --node--gradient-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes border-rotate {
+  from {
+    --node--gradient-angle: 0deg;
+  }
+  to {
+    --node--gradient-angle: 360deg;
+  }
+}
+
+.workflow-node--running {
+  animation: border-rotate 1.5s linear infinite;
+}
+
+.workflow-node--waiting {
+  animation: border-rotate 4.5s linear infinite;
 }
 
 /*
@@ -395,8 +797,7 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
   min-width: 120px;
   min-height: 80px;
   border-radius: 8px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+  border: 1px solid var(--border-color, oklch(0% 0 0 / 0.12));
   padding: 12px;
   overflow: hidden;
   position: relative;
@@ -404,8 +805,8 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
 }
 
 .sticky-note.selected {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.35);
+  box-shadow:
+    0 0 0 calc(6px * var(--canvas-zoom-compensation-factor, 1)) hsla(220, 47%, 30%, 0.1);
 }
 
 .sticky-note__content {
@@ -416,7 +817,7 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
   word-break: break-word;
   font-size: 13px;
   line-height: 1.45;
-  color: #1e293b;
+  color: var(--text-color, oklch(20.46% 0 89.88));
   cursor: text;
 }
 
@@ -429,7 +830,7 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
   background: transparent;
   font-size: 13px;
   line-height: 1.45;
-  color: #1e293b;
+  color: var(--text-color, oklch(20.46% 0 89.88));
   font-family: inherit;
 }
 
@@ -441,8 +842,9 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
   gap: 4px;
   padding: 4px;
   border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
+  background: var(--background--surface, #ffffff);
+  border: 1px solid var(--border-color, oklch(0% 0 0 / 0.1));
+  box-shadow: var(--shadow--sm, 0 4px 6px -1px oklch(0% 0 0 / 0.1));
   z-index: 10;
 }
 
@@ -450,13 +852,13 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
   width: 16px;
   height: 16px;
   border-radius: 9999px;
-  border: 1px solid rgba(15, 23, 42, 0.2);
+  border: 1px solid;
   cursor: pointer;
   padding: 0;
 }
 
 .sticky-note__swatch.selected {
-  box-shadow: 0 0 0 2px #6366f1;
+  box-shadow: 0 0 0 2px var(--background--brand, oklch(78.07% 0.136 5.02));
 }
 
 /* Delete button — top-right corner, hidden by default, revealed on hover. */
@@ -467,7 +869,7 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
   width: 20px;
   height: 20px;
   border-radius: 9999px;
-  background: #ef4444;
+  background: var(--color--danger, oklch(63.78% 0.2373 25.44));
   color: white;
   display: flex;
   align-items: center;
@@ -476,9 +878,9 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
   transform: scale(0.85);
   transition: opacity 120ms ease, transform 120ms ease;
   z-index: 5;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow--xs, 0 1px 2px -1px oklch(0% 0 0 / 0.1));
   cursor: pointer;
-  border: 2px solid white;
+  border: 2px solid var(--background--surface, #ffffff);
 }
 
 .workflow-node:hover .node-delete-btn,
@@ -490,74 +892,87 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
 }
 
 .node-delete-btn:hover {
-  background: #dc2626;
+  background: oklch(55.55% 0.2373 25.44);
   transform: scale(1.1);
 }
 
 /*
- * Connection handles sit on the left/right edges of the node. The default
- * 12x12 visual is enlarged to a 14x14 dot with a 28x28 transparent hit
- * area (via ::before) so users can grab the handle without pixel-perfect
- * aim. The hit area does not shift the visual dot.
+ * Connection handles.
+ *
+ * The <Handle> element is a 40px box centred on the node edge, so the
+ * drop target stays generous, while the visible indicator is a 16px
+ * dot — n8n's size. The dot is painted through `.handle-dot` so the
+ * hover / valid / invalid states can recolour the indicator without
+ * resizing the hit area.
  */
 .connection-handle {
-  /* Logical (CSS) size — what users see at 100% zoom. The visible dot
-   * is intentionally larger than n8n's default so it stays grabbable
-   * even when fit-view-on-init scales the canvas down (0.6x = 17 px). */
-  @apply !w-7 !h-7 rounded-full;
-  @apply !bg-slate-400 dark:!bg-slate-500;
-  @apply !border-2 !border-white dark:!border-slate-800;
-  @apply transition-all duration-150;
+  width: 40px !important;
+  height: 40px !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
   z-index: 2;
   position: absolute;
+  transition: none;
 }
 
-/* Larger hit-area rendered as a child of <Handle>. By default it is
- * invisible; on hover or while another handle is being dragged it shows
- * a faint halo so users see where to drop. pointer-events: none keeps
- * drag initiation working. The 72px box gives ~36px of slop on every
- * side which, even at 0.6x zoom, is still ~22 px — far above the
- * usual ~5 px click target of an unscaled handle. */
-.handle-hit-area {
+.handle-dot {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 72px;
-  height: 72px;
   transform: translate(-50%, -50%);
+  width: 16px;
+  height: 16px;
   border-radius: 9999px;
-  background: transparent;
-  pointer-events: none;
-  transition: background-color 150ms ease;
-  z-index: 1;
+  background: var(--handle--color, oklch(68.3% 0 89.88));
+  border: 2px solid var(--node--color--background, #ffffff);
+  transition:
+    background-color 200ms cubic-bezier(0.215, 0.61, 0.355, 1),
+    transform 200ms cubic-bezier(0.215, 0.61, 0.355, 1);
 }
 
-.connection-handle:hover .handle-hit-area {
-  background: rgba(99, 102, 241, 0.15);
-}
-
-.vue-flow__handle-connecting .connection-handle .handle-hit-area,
-.connection-handle.vue-flow__handle-hot .handle-hit-area {
-  background: rgba(99, 102, 241, 0.25);
+:global(.dark) .handle-dot {
+  border-color: var(--node--color--background, hsl(0, 0%, 17%));
+  background: var(--handle--color, oklch(55.55% 0 89.88));
 }
 
 .connection-handle--input {
-  /* Offset = half of 28px handle so the dot sits flush on the node edge. */
-  left: -14px !important;
+  /* Offset = half of the 40px handle so the dot sits on the node edge. */
+  left: -20px !important;
 }
 
 .connection-handle--output {
-  right: -14px !important;
+  right: -20px !important;
 }
 
-.connection-handle:hover {
-  @apply !bg-primary-500 scale-125;
-  z-index: 3;
+.connection-handle:hover .handle-dot {
+  background: var(--background--brand, oklch(78.07% 0.136 5.02));
+  transform: translate(-50%, -50%) scale(1.15);
 }
 
-.vue-flow__handle-connecting .connection-handle,
-.connection-handle.vue-flow__handle-hot {
-  @apply !bg-primary-500;
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25);
+:global(.vue-flow__handle-connecting) .handle-dot,
+:global(.vue-flow__handle-hot) .handle-dot {
+  background: var(--background--brand, oklch(78.07% 0.136 5.02));
+}
+
+:global(.vue-flow__handle-valid) .handle-dot {
+  background: var(--color--success, oklch(63.78% 0.155 155.83));
+}
+
+:global(.vue-flow__handle-invalid) .handle-dot {
+  background: var(--color--danger, oklch(63.78% 0.2373 25.44));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workflow-node,
+  .handle-dot,
+  .node-delete-btn {
+    transition-duration: 1ms;
+  }
+
+  .workflow-node--running,
+  .workflow-node--waiting {
+    animation: none;
+  }
 }
 </style>

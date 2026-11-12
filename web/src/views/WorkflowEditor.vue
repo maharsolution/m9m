@@ -19,7 +19,9 @@ const workflowStore = useWorkflowStore()
 const workflowEditorStore = useWorkflowEditorStore()
 const tagsStore = useTagsStore()
 
-const showNodePalette = ref(true)
+// The node creator is an overlay that is opened on demand (toolbar
+// button or the Ctrl+F shortcut) — n8n parity.
+const showNodePalette = ref(false)
 const showNodePanel = ref(false)
 const showAI = ref(false)
 const showTagPicker = ref(false)
@@ -282,6 +284,11 @@ useWorkflowShortcuts({
   onNudge: (dx, dy) => {
     workflowEditorStore.nudgeSelected(dx, dy)
   },
+  // Ctrl+F opens the node creator — the same shortcut n8n uses to
+  // jump into the node search.
+  onSearch: () => {
+    showNodePalette.value = true
+  },
 })
 
 // Export the workflow as an n8n-compatible JSON file. The server
@@ -311,7 +318,15 @@ const exportWorkflowFile = async () => {
 </script>
 
 <template>
-  <div class="h-full flex flex-col bg-canvas-light dark:bg-canvas-dark">
+  <!--
+    Editor shell — n8n parity:
+      * the header on top,
+      * the canvas filling the remaining space,
+      * the node creator as a right-anchored overlay,
+      * the AI assistant docked as a right-hand column,
+      * the node details view as a modal above everything.
+  -->
+  <div class="h-full flex flex-col relative bg-subtle">
     <WorkflowEditorToolbar
       :workflow-name="workflow?.name"
       :workflow-active="workflow?.active"
@@ -349,25 +364,15 @@ const exportWorkflowFile = async () => {
       :class="exportNotice.type === 'success'
         ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300'
         : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300'"
-      class="absolute top-4 right-4 z-20 flex items-center gap-3 rounded-lg border px-4 py-2 text-sm shadow-sm"
+      class="absolute top-4 right-4 z-40 flex items-center gap-3 rounded-lg border px-4 py-2 text-sm shadow-sm"
     >
       <span>{{ exportNotice.message }}</span>
       <button @click="exportNotice = null" class="opacity-60 hover:opacity-100">✕</button>
     </div>
 
-    <div class="flex-1 flex overflow-hidden">
-      <transition
-        enter-active-class="transition-all duration-200 ease-out"
-        enter-from-class="-translate-x-full opacity-0"
-        enter-to-class="translate-x-0 opacity-100"
-        leave-active-class="transition-all duration-150 ease-in"
-        leave-from-class="translate-x-0 opacity-100"
-        leave-to-class="-translate-x-full opacity-0"
-      >
-        <NodePalette v-if="showNodePalette" class="w-72" />
-      </transition>
-
-      <div class="flex-1 relative">
+    <!-- Canvas + the docked AI column -->
+    <div class="flex-1 flex overflow-hidden min-h-0">
+      <div class="flex-1 relative min-w-0">
         <WorkflowCanvas ref="canvasRef" />
       </div>
 
@@ -379,26 +384,14 @@ const exportWorkflowFile = async () => {
         leave-from-class="translate-x-0 opacity-100"
         leave-to-class="translate-x-full opacity-0"
       >
-        <NodePanel v-if="showNodePanel && selectedNode" class="w-80" />
-      </transition>
-
-      <transition
-        enter-active-class="transition-all duration-200 ease-out"
-        enter-from-class="translate-x-full opacity-0"
-        enter-to-class="translate-x-0 opacity-100"
-        leave-active-class="transition-all duration-150 ease-in"
-        leave-from-class="translate-x-0 opacity-100"
-        leave-to-class="translate-x-full opacity-0"
-      >
-        <!-- AgentAI is a fixed-position floating panel (its own root
-             element has `fixed bottom-4 right-4`). Wrapping it in the
-             slide-in transition above still animates opacity + the
-             parent's transform, which gives a clean entry from the
-             right edge. The external `class="w-96"` is the requested
-             panel width. -->
+        <!--
+          AgentAI is the right-hand assistant column. It sizes itself
+          (400px by default, resizable between 380 and 425px), so the
+          wrapper only reserves the space.
+        -->
         <div
           v-if="showAI"
-          class="w-96 flex-shrink-0 h-full"
+          class="flex-shrink-0 h-full"
         >
           <AgentAI
             :embedded="true"
@@ -407,6 +400,30 @@ const exportWorkflowFile = async () => {
         </div>
       </transition>
     </div>
+
+    <!--
+      The node creator is an overlay on top of the canvas — right
+      anchored, 385px wide, with a scrim over the canvas.
+    -->
+    <transition
+      enter-active-class="transition-opacity duration-200 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition-opacity duration-150 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <NodePalette
+        v-if="showNodePalette"
+        @close="showNodePalette = false"
+      />
+    </transition>
+
+    <!--
+      The node details view is a modal above everything. It renders
+      itself as a fixed overlay.
+    -->
+    <NodePanel v-if="showNodePanel && selectedNode" />
 
     <!-- Tag management for the open workflow -->
     <TagPicker

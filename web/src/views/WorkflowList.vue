@@ -24,6 +24,9 @@ import type { Workflow } from '@/types'
 import type { Tag } from '@/types/tag'
 import TagChip from '@/components/tags/TagChip.vue'
 import TagsModal from '@/components/tags/TagsModal.vue'
+import Button from '@/components/common/Button.vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
+import DataTable, { type DataTableColumn } from '@/components/common/DataTable.vue'
 import {
   apiErrorDetails,
   apiErrorMessage,
@@ -56,6 +59,22 @@ const isExporting = ref(false)
 const isImporting = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const notice = ref<{ type: 'success' | 'error'; message: string; details: string[] } | null>(null)
+
+const statusFilters = [
+  { value: 'all', label: 'All' },
+  { value: 'active', label: 'Active' },
+  { value: 'inactive', label: 'Inactive' },
+] as const
+
+/** Columns of the n8n-style workflow table. */
+const workflowColumns: DataTableColumn[] = [
+  { key: 'select', label: '', width: '40px' },
+  { key: 'name', label: 'Name' },
+  { key: 'status', label: 'Status', width: '112px' },
+  { key: 'tags', label: 'Tags' },
+  { key: 'updated', label: 'Updated', width: '144px' },
+  { key: 'actions', label: 'Actions', width: '48px', align: 'right' },
+]
 
 /**
  * Load the workflow list with the currently selected tag filter.
@@ -145,6 +164,22 @@ const toggleSelection = (id: string) => {
     next.delete(id)
   } else {
     next.add(id)
+  }
+  selectedIds.value = next
+}
+
+/** Every visible row is selected — drives the header checkbox. */
+const allSelected = computed(
+  () => filteredWorkflows.value.length > 0 && filteredWorkflows.value.every((w) => selectedIds.value.has(w.id))
+)
+
+/** Select or clear every visible row. */
+const toggleSelectAll = () => {
+  const next = new Set(selectedIds.value)
+  if (allSelected.value) {
+    for (const workflow of filteredWorkflows.value) next.delete(workflow.id)
+  } else {
+    for (const workflow of filteredWorkflows.value) next.add(workflow.id)
   }
   selectedIds.value = next
 }
@@ -316,45 +351,64 @@ const formatDate = (dateStr: string) => {
 </script>
 
 <template>
-  <div class="p-6">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-6">
+  <div>
+    <!-- Page header -->
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Workflows</h1>
-        <p class="text-slate-500 dark:text-slate-400">
+        <h1 class="text-2xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50">
+          Workflows
+        </h1>
+        <p class="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
           Manage and run your automation workflows
         </p>
       </div>
-      <div class="flex items-center gap-2">
-        <button
-          @click="triggerImport"
+      <div class="flex flex-wrap items-center gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
           :disabled="isImporting"
-          class="btn-secondary flex items-center gap-2"
+          :loading="isImporting"
+          @click="triggerImport"
         >
-          <ArrowUpTrayIcon class="w-5 h-5" />
+          <template #icon>
+            <ArrowUpTrayIcon class="h-4 w-4" />
+          </template>
           <span>{{ isImporting ? 'Importing...' : 'Import' }}</span>
-        </button>
-        <button
-          @click="exportSelectedWorkflows"
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
           :disabled="selectedCount === 0 || isExporting"
-          class="btn-secondary flex items-center gap-2"
+          :loading="isExporting"
           :title="selectedCount === 0 ? 'Select at least one workflow to export' : 'Export the selected workflows'"
+          @click="exportSelectedWorkflows"
         >
-          <ArrowDownTrayIcon class="w-5 h-5" />
+          <template #icon>
+            <ArrowDownTrayIcon class="h-4 w-4" />
+          </template>
           <span>Export selected<template v-if="selectedCount > 0"> ({{ selectedCount }})</template></span>
-        </button>
-        <button
-          @click="showTagsModal = true"
-          class="btn-secondary flex items-center gap-2"
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
           title="Create, rename and delete tags"
+          @click="showTagsModal = true"
         >
-          <TagIcon class="w-5 h-5" />
+          <template #icon>
+            <TagIcon class="h-4 w-4" />
+          </template>
           <span>Manage tags</span>
-        </button>
-        <button @click="createWorkflow" class="btn-primary flex items-center gap-2">
-          <PlusIcon class="w-5 h-5" />
-          <span>New Workflow</span>
-        </button>
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
+          @click="createWorkflow"
+        >
+          <template #icon>
+            <PlusIcon class="h-4 w-4" />
+          </template>
+          <span>New workflow</span>
+        </Button>
       </div>
     </div>
 
@@ -365,60 +419,72 @@ const formatDate = (dateStr: string) => {
       accept=".json,application/json"
       class="hidden"
       @change="handleImportFile"
-    />
+    >
 
     <!-- Import / export feedback -->
     <div
       v-if="notice"
-      :class="notice.type === 'success'
-        ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-300'
-        : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300'"
       class="mb-4 flex items-start gap-2 rounded-lg border px-4 py-3 text-sm"
+      :class="notice.type === 'success'
+        ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/50 dark:text-green-300'
+        : 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300'"
     >
-      <CheckCircleIcon v-if="notice.type === 'success'" class="w-5 h-5 shrink-0 mt-0.5" />
-      <ExclamationTriangleIcon v-else class="w-5 h-5 shrink-0 mt-0.5" />
-      <div class="flex-1 min-w-0">
+      <CheckCircleIcon
+        v-if="notice.type === 'success'"
+        class="mt-0.5 h-4 w-4 shrink-0"
+      />
+      <ExclamationTriangleIcon
+        v-else
+        class="mt-0.5 h-4 w-4 shrink-0"
+      />
+      <div class="min-w-0 flex-1">
         <p>{{ notice.message }}</p>
-        <ul v-if="notice.details.length > 0" class="mt-1 list-disc list-inside space-y-0.5">
-          <li v-for="(detail, index) in notice.details" :key="index" class="break-words">
+        <ul
+          v-if="notice.details.length > 0"
+          class="mt-1 list-inside list-disc space-y-0.5"
+        >
+          <li
+            v-for="(detail, index) in notice.details"
+            :key="index"
+            class="break-words"
+          >
             {{ detail }}
           </li>
         </ul>
       </div>
-      <button @click="notice = null" class="shrink-0 opacity-60 hover:opacity-100">
-        <XMarkIcon class="w-4 h-4" />
+      <button
+        type="button"
+        class="shrink-0 rounded-sm opacity-60 transition-opacity hover:opacity-100 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+        aria-label="Dismiss message"
+        @click="notice = null"
+      >
+        <XMarkIcon class="h-4 w-4" />
       </button>
     </div>
 
-    <!-- Filters -->
-    <div class="flex items-center gap-4 mb-3">
-      <!-- Search -->
-      <div class="relative flex-1 max-w-md">
-        <MagnifyingGlassIcon class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+    <!-- Toolbar: search + status filter -->
+    <div class="mb-4 flex flex-wrap items-center gap-3">
+      <div class="relative w-full max-w-sm">
+        <MagnifyingGlassIcon class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Search workflows..."
-          class="input pl-10"
-        />
+          placeholder="Search workflows…"
+          class="h-9 w-full rounded-lg border border-neutral-300 bg-white pl-9 pr-3 text-sm text-neutral-950 transition-colors duration-200 placeholder:text-neutral-400 focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:focus:border-neutral-100 dark:focus:ring-neutral-100/10"
+        >
       </div>
 
       <!-- Status Filter -->
-      <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+      <div class="inline-flex items-center gap-1 rounded-lg border border-neutral-200 bg-neutral-100 p-1 dark:border-neutral-800 dark:bg-neutral-950">
         <button
-          v-for="filter in [
-            { value: 'all', label: 'All' },
-            { value: 'active', label: 'Active' },
-            { value: 'inactive', label: 'Inactive' },
-          ]"
+          v-for="filter in statusFilters"
           :key="filter.value"
-          @click="activeFilter = filter.value as typeof activeFilter"
-          :class="[
-            'px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
-            activeFilter === filter.value
-              ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-          ]"
+          type="button"
+          @click="activeFilter = filter.value"
+          class="rounded-md px-3 py-1 text-xs font-medium transition-colors duration-200"
+          :class="activeFilter === filter.value
+            ? 'bg-white text-neutral-950 shadow-xs dark:bg-neutral-800 dark:text-neutral-50'
+            : 'text-neutral-600 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-neutral-100'"
         >
           {{ filter.label }}
         </button>
@@ -427,19 +493,21 @@ const formatDate = (dateStr: string) => {
 
     <!-- Tag Filter. The selection is sent to the list endpoint through the
          `tags` query parameter, so the matching happens on the server. -->
-    <div v-if="availableTags.length > 0" class="flex items-center gap-2 flex-wrap mb-6">
-      <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+    <div
+      v-if="availableTags.length > 0"
+      class="mb-4 flex flex-wrap items-center gap-2"
+    >
+      <span class="text-2xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
         Tags
       </span>
       <button
         type="button"
         @click="selectedTagId = null"
-        :class="[
-          'px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
-          selectedTagId === null
-            ? 'bg-primary-100 dark:bg-primary-900/30 border-primary-300 dark:border-primary-700 text-primary-700 dark:text-primary-300'
-            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
-        ]"
+        :aria-pressed="selectedTagId === null"
+        class="inline-flex h-5 items-center rounded-lg border px-2 text-2xs font-medium transition-colors duration-200"
+        :class="selectedTagId === null
+          ? 'border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-900 dark:bg-brand-950/50 dark:text-brand-300'
+          : 'border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800'"
       >
         All
       </button>
@@ -449,65 +517,138 @@ const formatDate = (dateStr: string) => {
         type="button"
         :title="`Show only workflows tagged ${tag.name}`"
         :aria-pressed="selectedTagId === tag.id"
-        class="rounded-full transition-transform hover:scale-105"
+        class="rounded-lg transition-transform hover:scale-105"
         @click="selectedTagId = selectedTagId === tag.id ? null : tag.id"
       >
         <TagChip
           :tag="tag"
-          :class="selectedTagId === tag.id ? 'ring-2 ring-primary-500' : ''"
+          :class="selectedTagId === tag.id ? 'ring-2 ring-brand-500 ring-offset-1 dark:ring-offset-neutral-950' : ''"
         />
       </button>
     </div>
-    <div v-else class="mb-6" />
 
-    <!-- Workflow Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      <div
-        v-for="workflow in filteredWorkflows"
-        :key="workflow.id"
-        @click="openWorkflow(workflow)"
-        class="card-hover p-4"
-      >
-        <div class="flex items-start justify-between">
-          <div class="flex items-center gap-3">
-            <input
-              type="checkbox"
-              :checked="isSelected(workflow.id)"
-              @click.stop
-              @change="toggleSelection(workflow.id)"
-              class="mt-1 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 dark:bg-slate-800 dark:border-slate-600"
-              :aria-label="`Select ${workflow.name}`"
+    <!-- Loading State -->
+    <div
+      v-if="workflowStore.loading"
+      class="flex flex-col items-center justify-center rounded-lg border border-neutral-200 bg-white py-16 dark:border-neutral-800 dark:bg-neutral-900"
+    >
+      <span
+        class="inline-block h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-brand-500 dark:border-neutral-700"
+        aria-hidden="true"
+      />
+      <p class="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
+        Loading workflows…
+      </p>
+    </div>
+
+    <!-- Workflow table (n8n parity) -->
+    <DataTable
+      v-else
+      :columns="workflowColumns"
+      :rows="filteredWorkflows"
+      row-key="id"
+      clickable
+      @row-click="openWorkflow"
+    >
+      <!-- Select-all checkbox -->
+      <template #header-select>
+        <input
+          type="checkbox"
+          :checked="allSelected"
+          class="h-4 w-4 rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+          aria-label="Select all workflows"
+          @click.stop
+          @change="toggleSelectAll"
+        >
+      </template>
+
+      <!-- Row selection -->
+      <template #select="{ row }">
+        <input
+          type="checkbox"
+          :checked="isSelected(row.id)"
+          class="h-4 w-4 rounded border-neutral-300 text-brand-600 focus:ring-brand-500 dark:border-neutral-600 dark:bg-neutral-800"
+          :aria-label="`Select ${row.name}`"
+          @click.stop
+          @change="toggleSelection(row.id)"
+        >
+      </template>
+
+      <!-- Name -->
+      <template #name="{ row }">
+        <div class="flex items-center gap-3">
+          <span
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+            :class="row.active
+              ? 'bg-green-50 dark:bg-green-950/50'
+              : 'bg-neutral-100 dark:bg-neutral-800'"
+          >
+            <BoltIcon
+              class="h-4 w-4"
+              :class="row.active
+                ? 'text-green-600 dark:text-green-400'
+                : 'text-neutral-500 dark:text-neutral-400'"
             />
-            <div :class="[
-              workflow.active
-                ? 'bg-green-100 dark:bg-green-900/30'
-                : 'bg-slate-100 dark:bg-slate-700',
-              'p-3 rounded-lg'
-            ]">
-              <BoltIcon :class="[
-                workflow.active
-                  ? 'text-green-600 dark:text-green-400'
-                  : 'text-slate-500 dark:text-slate-400',
-                'w-6 h-6'
-              ]" />
-            </div>
-            <div>
-              <h3 class="font-semibold text-slate-900 dark:text-white">
-                {{ workflow.name }}
-              </h3>
-              <p class="text-sm text-slate-500 dark:text-slate-400">
-                {{ workflow.nodes.length }} nodes
-              </p>
-            </div>
+          </span>
+          <div class="min-w-0">
+            <p class="truncate text-sm font-semibold text-neutral-950 dark:text-neutral-50">
+              {{ row.name }}
+            </p>
+            <p class="truncate text-xs text-neutral-500 dark:text-neutral-400">
+              {{ row.description || `${row.nodes.length} nodes` }}
+            </p>
           </div>
+        </div>
+      </template>
 
-          <!-- Actions Menu -->
-          <Menu as="div" class="relative">
+      <!-- Status -->
+      <template #status="{ row }">
+        <StatusBadge
+          :status="row.active ? 'success' : 'neutral'"
+          :label="row.active ? 'Active' : 'Inactive'"
+          dot
+        />
+      </template>
+
+      <!-- Tags -->
+      <template #tags="{ row }">
+        <div
+          v-if="(workflowChips[row.id] ?? []).length > 0"
+          class="flex flex-wrap gap-1"
+        >
+          <TagChip
+            v-for="tag in workflowChips[row.id]"
+            :key="tag.id"
+            :tag="tag"
+          />
+        </div>
+        <span
+          v-else
+          class="text-xs text-neutral-400"
+        >—</span>
+      </template>
+
+      <!-- Updated -->
+      <template #updated="{ row }">
+        <span class="whitespace-nowrap text-xs text-neutral-500 dark:text-neutral-400">
+          {{ formatDate(row.updatedAt) }}
+        </span>
+      </template>
+
+      <!-- Actions -->
+      <template #actions="{ row }">
+        <div
+          class="flex justify-end"
+          @click.stop
+        >
+          <Menu
+            as="div"
+            class="relative inline-block text-left"
+          >
             <MenuButton
-              @click.stop
-              class="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 transition-colors duration-200 hover:bg-neutral-100 hover:text-neutral-700 focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 dark:focus-visible:outline-neutral-100"
             >
-              <EllipsisVerticalIcon class="w-5 h-5" />
+              <EllipsisVerticalIcon class="h-4 w-4" />
             </MenuButton>
 
             <transition
@@ -518,56 +659,64 @@ const formatDate = (dateStr: string) => {
               leave-from-class="transform scale-100 opacity-100"
               leave-to-class="transform scale-95 opacity-0"
             >
-              <MenuItems class="absolute right-0 mt-1 w-48 origin-top-right bg-white dark:bg-slate-800 rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 dark:ring-slate-700 focus:outline-none py-1 z-10">
+              <MenuItems class="absolute right-0 z-20 mt-1 w-48 origin-top-right rounded-lg border border-neutral-200 bg-white py-1 shadow-md focus:outline-none dark:border-neutral-700 dark:bg-neutral-900">
                 <MenuItem v-slot="{ active }">
                   <button
-                    @click.stop="executeWorkflow(workflow, $event)"
-                    class="flex items-center gap-2 w-full px-4 py-2 text-sm text-slate-700 dark:text-slate-200"
-                    :class="{ 'bg-slate-100 dark:bg-slate-700': active }"
+                    type="button"
+                    class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-neutral-700 dark:text-neutral-200"
+                    :class="active ? 'bg-neutral-100 dark:bg-neutral-800' : ''"
+                    @click.stop="executeWorkflow(row, $event)"
                   >
-                    <PlayIcon class="w-4 h-4" />
+                    <PlayIcon class="h-4 w-4" />
                     Execute
                   </button>
                 </MenuItem>
                 <MenuItem v-slot="{ active }">
                   <button
-                    @click.stop="toggleActive(workflow, $event)"
-                    class="flex items-center gap-2 w-full px-4 py-2 text-sm text-slate-700 dark:text-slate-200"
-                    :class="{ 'bg-slate-100 dark:bg-slate-700': active }"
+                    type="button"
+                    class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-neutral-700 dark:text-neutral-200"
+                    :class="active ? 'bg-neutral-100 dark:bg-neutral-800' : ''"
+                    @click.stop="toggleActive(row, $event)"
                   >
-                    <component :is="workflow.active ? StopIcon : PlayIcon" class="w-4 h-4" />
-                    {{ workflow.active ? 'Deactivate' : 'Activate' }}
+                    <component
+                      :is="row.active ? StopIcon : PlayIcon"
+                      class="h-4 w-4"
+                    />
+                    {{ row.active ? 'Deactivate' : 'Activate' }}
                   </button>
                 </MenuItem>
                 <MenuItem v-slot="{ active }">
                   <button
-                    @click.stop="duplicateWorkflow(workflow)"
-                    class="flex items-center gap-2 w-full px-4 py-2 text-sm text-slate-700 dark:text-slate-200"
-                    :class="{ 'bg-slate-100 dark:bg-slate-700': active }"
+                    type="button"
+                    class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-neutral-700 dark:text-neutral-200"
+                    :class="active ? 'bg-neutral-100 dark:bg-neutral-800' : ''"
+                    @click.stop="duplicateWorkflow(row)"
                   >
-                    <DocumentDuplicateIcon class="w-4 h-4" />
+                    <DocumentDuplicateIcon class="h-4 w-4" />
                     Duplicate
                   </button>
                 </MenuItem>
                 <MenuItem v-slot="{ active }">
                   <button
-                    @click.stop="exportSingleWorkflow(workflow, $event)"
+                    type="button"
+                    class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-neutral-700 disabled:opacity-50 dark:text-neutral-200"
+                    :class="active ? 'bg-neutral-100 dark:bg-neutral-800' : ''"
                     :disabled="isExporting"
-                    class="flex items-center gap-2 w-full px-4 py-2 text-sm text-slate-700 dark:text-slate-200 disabled:opacity-50"
-                    :class="{ 'bg-slate-100 dark:bg-slate-700': active }"
+                    @click.stop="exportSingleWorkflow(row, $event)"
                   >
-                    <ArrowDownTrayIcon class="w-4 h-4" />
+                    <ArrowDownTrayIcon class="h-4 w-4" />
                     Export
                   </button>
                 </MenuItem>
-                <div class="border-t border-slate-200 dark:border-slate-700 my-1" />
+                <div class="my-1 border-t border-neutral-200 dark:border-neutral-800" />
                 <MenuItem v-slot="{ active }">
                   <button
-                    @click.stop="deleteWorkflow(workflow)"
-                    class="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 dark:text-red-400"
-                    :class="{ 'bg-red-50 dark:bg-red-900/20': active }"
+                    type="button"
+                    class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 dark:text-red-400"
+                    :class="active ? 'bg-red-50 dark:bg-red-950/40' : ''"
+                    @click.stop="deleteWorkflow(row)"
                   >
-                    <TrashIcon class="w-4 h-4" />
+                    <TrashIcon class="h-4 w-4" />
                     Delete
                   </button>
                 </MenuItem>
@@ -575,71 +724,48 @@ const formatDate = (dateStr: string) => {
             </transition>
           </Menu>
         </div>
+      </template>
 
-        <p v-if="workflow.description" class="mt-3 text-sm text-slate-600 dark:text-slate-300 line-clamp-2">
-          {{ workflow.description }}
-        </p>
-
-        <!-- Tags of this workflow -->
-        <div
-          v-if="(workflowChips[workflow.id] ?? []).length > 0"
-          class="mt-3 flex flex-wrap gap-1.5"
-        >
-          <TagChip
-            v-for="tag in workflowChips[workflow.id]"
-            :key="tag.id"
-            :tag="tag"
-          />
+      <!-- Empty state -->
+      <template #empty>
+        <div class="flex flex-col items-center px-4 py-16 text-center">
+          <BoltIcon class="h-12 w-12 text-neutral-300 dark:text-neutral-700" />
+          <h3 class="mt-4 text-lg font-semibold text-neutral-950 dark:text-neutral-100">
+            {{ searchQuery || selectedTagId ? 'No workflows found' : 'No workflows yet' }}
+          </h3>
+          <p class="mt-1 max-w-sm text-sm text-neutral-600 dark:text-neutral-400">
+            {{ searchQuery
+              ? 'Try a different search term'
+              : selectedTagId
+                ? 'No workflow carries the selected tag'
+                : 'Get started by creating your first workflow' }}
+          </p>
+          <Button
+            v-if="!searchQuery && !selectedTagId"
+            variant="primary"
+            size="sm"
+            class="mt-6"
+            @click="createWorkflow"
+          >
+            Create workflow
+          </Button>
+          <Button
+            v-else-if="selectedTagId"
+            variant="secondary"
+            size="sm"
+            class="mt-6"
+            @click="selectedTagId = null"
+          >
+            Clear the tag filter
+          </Button>
         </div>
-
-        <div class="mt-4 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-          <span>Updated {{ formatDate(workflow.updatedAt) }}</span>
-          <span :class="workflow.active ? 'badge-success' : 'badge-info'">
-            {{ workflow.active ? 'Active' : 'Inactive' }}
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Empty State -->
-    <div
-      v-if="filteredWorkflows.length === 0 && !workflowStore.loading"
-      class="text-center py-16"
-    >
-      <BoltIcon class="w-16 h-16 mx-auto text-slate-300 dark:text-slate-600" />
-      <h3 class="mt-4 text-lg font-medium text-slate-900 dark:text-white">
-        {{ searchQuery || selectedTagId ? 'No workflows found' : 'No workflows yet' }}
-      </h3>
-      <p class="mt-2 text-slate-500 dark:text-slate-400">
-        {{ searchQuery
-          ? 'Try a different search term'
-          : selectedTagId
-            ? 'No workflow carries the selected tag'
-            : 'Get started by creating your first workflow' }}
-      </p>
-      <button
-        v-if="!searchQuery && !selectedTagId"
-        @click="createWorkflow"
-        class="mt-6 btn-primary"
-      >
-        Create Workflow
-      </button>
-      <button
-        v-else-if="selectedTagId"
-        @click="selectedTagId = null"
-        class="mt-6 btn-secondary"
-      >
-        Clear the tag filter
-      </button>
-    </div>
-
-    <!-- Loading State -->
-    <div v-if="workflowStore.loading" class="text-center py-16">
-      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto" />
-      <p class="mt-4 text-slate-500 dark:text-slate-400">Loading workflows...</p>
-    </div>
+      </template>
+    </DataTable>
 
     <!-- Global tag management -->
-    <TagsModal v-if="showTagsModal" @close="showTagsModal = false" />
+    <TagsModal
+      v-if="showTagsModal"
+      @close="showTagsModal = false"
+    />
   </div>
 </template>

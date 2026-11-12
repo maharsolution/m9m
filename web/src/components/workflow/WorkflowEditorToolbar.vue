@@ -14,6 +14,7 @@ import {
   Squares2X2Icon,
   TagIcon,
   ClockIcon,
+  ChevronLeftIcon,
 } from '@heroicons/vue/24/outline'
 import type { Tag } from '@/types/tag'
 import TagChip from '@/components/tags/TagChip.vue'
@@ -125,15 +126,23 @@ function cancelEditingName() {
 </script>
 
 <template>
-  <div class="h-14 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-4">
-    <div class="flex items-center gap-3">
+  <!--
+    Editor header — n8n parity: a 65px bar with a hairline bottom
+    border, a surface background, ghost icon buttons and exactly ONE
+    primary action (Save, in brand).
+  -->
+  <div
+    class="m9m-bar h-[65px] shrink-0 flex items-center gap-3 px-3 border-b border-default"
+  >
+    <!-- Left: back, name, dirty state, tags -->
+    <div class="flex items-center gap-3 min-w-0">
       <button
         @click="emit('back')"
-        class="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
+        class="h-8 w-8 inline-flex items-center justify-center rounded-md text-neutral-500 dark:text-neutral-400 hover:bg-hover"
+        title="Back to workflows"
+        aria-label="Back to workflows"
       >
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-        </svg>
+        <ChevronLeftIcon class="w-5 h-5" />
       </button>
 
       <div v-if="editingName" class="flex items-center gap-2">
@@ -141,20 +150,33 @@ function cancelEditingName() {
           v-model="workflowNameInput"
           @keyup.enter="saveWorkflowName"
           @keyup.escape="cancelEditingName"
-          class="input py-1 px-2 text-lg font-semibold w-64"
-          autofocus
+          class="input h-8 w-64 px-2 text-sm font-semibold"
+          aria-label="Workflow name"
         />
-        <button @click="saveWorkflowName" class="btn-primary py-1 px-3">Save</button>
-        <button @click="cancelEditingName" class="btn-ghost py-1 px-3">Cancel</button>
+        <button
+          @click="saveWorkflowName"
+          class="h-8 px-3 text-sm font-medium rounded-md bg-brand-500 text-white hover:bg-brand-600"
+        >
+          Save
+        </button>
+        <button
+          @click="cancelEditingName"
+          class="h-8 px-3 text-sm font-medium rounded-md text-secondary hover:bg-hover"
+        >
+          Cancel
+        </button>
       </div>
-      <div v-else class="flex items-center gap-2 cursor-pointer group" @click="startEditingName">
-        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
+      <div v-else class="flex items-center gap-2 cursor-pointer group min-w-0" @click="startEditingName">
+        <h2 class="text-xl font-semibold tracking-tight text-primary truncate">
           {{ displayName }}
         </h2>
-        <PencilIcon class="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+        <PencilIcon class="w-4 h-4 text-tertiary opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
       </div>
 
-      <span v-if="props.isDirty" class="text-xs text-amber-600 dark:text-amber-400">
+      <span
+        v-if="props.isDirty"
+        class="text-xs text-tertiary shrink-0"
+      >
         Unsaved changes
       </span>
 
@@ -162,7 +184,7 @@ function cancelEditingName() {
       <button
         v-if="!props.isNewWorkflow && props.workflowTags.length > 0"
         type="button"
-        class="flex items-center gap-1.5 pl-2 border-l border-slate-200 dark:border-slate-700"
+        class="flex items-center gap-1.5 pl-3 border-l border-default shrink-0"
         title="Manage workflow tags"
         @click="emit('showTags')"
       >
@@ -173,33 +195,36 @@ function cancelEditingName() {
         />
         <span
           v-if="hiddenTagCount > 0"
-          class="text-xs text-slate-500 dark:text-slate-400"
+          class="text-xs text-tertiary"
         >
           +{{ hiddenTagCount }}
         </span>
       </button>
     </div>
 
-    <div class="flex items-center gap-2">
+    <!-- Middle: panel toggles -->
+    <div class="flex items-center gap-1 ml-auto">
       <button
         @click="emit('togglePalette')"
         :class="[
-          'px-3 py-1.5 text-sm font-medium rounded-lg transition-colors',
+          'h-8 px-3 text-sm font-medium rounded-md transition-colors',
           localShowNodePalette
-            ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
-            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+            ? 'm9m-toggle-active'
+            : 'text-secondary hover:bg-hover'
         ]"
+        title="Open the node panel"
       >
         Nodes
       </button>
       <button
         @click="emit('toggleAi')"
         :class="[
-          'px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5',
+          'h-8 px-3 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5',
           localShowAgentAi
-            ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400'
-            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+            ? 'm9m-toggle-active'
+            : 'text-secondary hover:bg-hover'
         ]"
+        title="Open the AI assistant"
       >
         <SparklesIcon class="w-4 h-4" />
         AI
@@ -210,7 +235,7 @@ function cancelEditingName() {
       <button
         v-if="!props.isNewWorkflow"
         @click="emit('showTags')"
-        class="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
+        class="h-8 px-3 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5 text-secondary hover:bg-hover"
         title="Attach tags to this workflow"
       >
         <TagIcon class="w-4 h-4" />
@@ -221,7 +246,7 @@ function cancelEditingName() {
       <button
         v-if="!props.isNewWorkflow"
         @click="emit('showVersions')"
-        class="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
+        class="h-8 px-3 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5 text-secondary hover:bg-hover"
         title="Show the version history of this workflow"
       >
         <ClockIcon class="w-4 h-4" />
@@ -234,7 +259,7 @@ function cancelEditingName() {
       <button
         @click="emit('undo')"
         :disabled="!props.canUndo"
-        class="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
+        class="h-8 w-8 inline-flex items-center justify-center rounded-md text-neutral-500 dark:text-neutral-400 hover:bg-hover disabled:opacity-40 disabled:hover:bg-transparent"
         title="Undo (Ctrl+Z)"
         aria-label="Undo"
       >
@@ -243,7 +268,7 @@ function cancelEditingName() {
       <button
         @click="emit('redo')"
         :disabled="!props.canRedo"
-        class="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent"
+        class="h-8 w-8 inline-flex items-center justify-center rounded-md text-neutral-500 dark:text-neutral-400 hover:bg-hover disabled:opacity-40 disabled:hover:bg-transparent"
         title="Redo (Ctrl+Shift+Z)"
         aria-label="Redo"
       >
@@ -251,7 +276,7 @@ function cancelEditingName() {
       </button>
       <button
         @click="emit('autoLayout')"
-        class="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
+        class="h-8 w-8 inline-flex items-center justify-center rounded-md text-neutral-500 dark:text-neutral-400 hover:bg-hover"
         title="Tidy up — arrange the nodes automatically"
         aria-label="Tidy up"
       >
@@ -259,7 +284,7 @@ function cancelEditingName() {
       </button>
       <button
         @click="emit('addStickyNote')"
-        class="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
+        class="h-8 w-8 inline-flex items-center justify-center rounded-md text-neutral-500 dark:text-neutral-400 hover:bg-hover"
         title="Add a sticky note"
         aria-label="Add sticky note"
       >
@@ -270,15 +295,16 @@ function cancelEditingName() {
       </button>
     </div>
 
+    <!-- Right: workflow state + the single primary action. -->
     <div class="flex items-center gap-2">
       <button
         v-if="!props.isNewWorkflow"
         @click="emit('toggleActive')"
         :class="[
-          'flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors',
+          'h-8 px-3 text-sm font-medium rounded-md transition-colors flex items-center gap-2',
           props.workflowActive
-            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+            ? 'bg-green-50 text-green-800 dark:bg-green-500/15 dark:text-green-300'
+            : 'text-secondary hover:bg-hover'
         ]"
       >
         <component :is="props.workflowActive ? StopIcon : PlayIcon" class="w-4 h-4" />
@@ -296,10 +322,10 @@ function cancelEditingName() {
         v-if="!props.isNewWorkflow"
         @click="emit('toggleDebug')"
         :class="[
-          'flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors',
+          'h-8 px-3 text-sm font-medium rounded-md transition-colors flex items-center gap-2',
           props.workflowDebug
-            ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
-            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/15 dark:text-yellow-300'
+            : 'text-secondary hover:bg-hover'
         ]"
         :title="props.workflowDebug
           ? 'Debug ON — execution detail shows full per-node input/output'
@@ -312,7 +338,7 @@ function cancelEditingName() {
       <button
         @click="emit('execute')"
         :disabled="props.isExecuting || props.isNewWorkflow"
-        class="btn-secondary flex items-center gap-2"
+        class="h-8 px-3 text-sm font-medium rounded-md flex items-center gap-2 border border-strong bg-surface text-primary hover:bg-hover disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <ArrowPathIcon v-if="props.isExecuting" class="w-4 h-4 animate-spin" />
         <PlayIcon v-else class="w-4 h-4" />
@@ -326,17 +352,18 @@ function cancelEditingName() {
         v-if="!props.isNewWorkflow"
         @click="emit('export')"
         :disabled="props.isExporting"
-        class="btn-secondary flex items-center gap-2 disabled:opacity-60"
+        class="h-8 px-3 text-sm font-medium rounded-md flex items-center gap-2 border border-strong bg-surface text-primary hover:bg-hover disabled:opacity-50"
         title="Download this workflow as an n8n-compatible JSON file"
       >
         <ArrowDownTrayIcon class="w-4 h-4" />
         <span>{{ props.isExporting ? 'Exporting...' : 'Export' }}</span>
       </button>
 
+      <!-- The one primary action of the editor. -->
       <button
         @click="emit('save')"
         :disabled="props.isLoading"
-        class="btn-primary flex items-center gap-2"
+        class="m9m-btn-primary h-8 px-3 text-sm font-medium rounded-md flex items-center gap-2 text-white disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <CloudArrowUpIcon class="w-4 h-4" />
         <span>{{ props.isLoading ? 'Saving...' : 'Save' }}</span>
@@ -344,3 +371,53 @@ function cancelEditingName() {
     </div>
   </div>
 </template>
+
+<style scoped>
+/*
+ * The token layer publishes `--background--surface` and
+ * `--background--brand`; the fallbacks keep the bar and the primary
+ * button correct until (or if) it lands.
+ */
+.m9m-bar {
+  background: var(--background--surface, #ffffff);
+}
+
+:global(.dark) .m9m-bar {
+  background: var(--background--surface, oklch(26.86% 0 89.88));
+}
+
+.m9m-btn-primary {
+  background: var(--background--brand, oklch(78.07% 0.136 5.02));
+  transition: background-color 200ms cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+
+.m9m-btn-primary:hover:not(:disabled) {
+  background: var(--background--brand--hover, oklch(68.08% 0.148 5.02));
+}
+
+.m9m-btn-primary:active:not(:disabled) {
+  background: var(--background--brand--active, oklch(59.09% 0.1611 5.09));
+}
+
+/*
+ * The active state of the Nodes / AI toggles. The brand ramp is
+ * published by the foundation agent as `brand-50` / `brand-700`;
+ * the CSS-variable fallback keeps the highlight visible before it
+ * lands.
+ */
+.m9m-toggle-active {
+  background: var(--background--brand--tint, oklch(97.02% 0 89.88));
+  color: var(--background--brand--tint--foreground, oklch(38.67% 0 89.88));
+}
+
+:global(.dark) .m9m-toggle-active {
+  background: var(--background--brand--tint--dark, oklch(31.71% 0.136 5.02 / 0.15));
+  color: var(--background--brand--tint--foreground--dark, oklch(85.55% 0.105 5.02));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m9m-btn-primary {
+    transition-duration: 1ms;
+  }
+}
+</style>

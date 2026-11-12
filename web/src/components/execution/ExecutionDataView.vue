@@ -91,18 +91,24 @@ function renderCell(value: unknown): string {
 
 <template>
   <div class="execution-data-view">
-    <div v-if="safeData.length === 0" class="px-4 py-3 text-xs italic text-slate-500 dark:text-slate-400">
+    <div
+      v-if="safeData.length === 0"
+      class="px-4 py-3 text-xs italic text-neutral-500 dark:text-neutral-400"
+    >
       {{ emptyLabel }}
     </div>
 
-    <div v-else-if="mode === 'schema'" class="overflow-x-auto">
+    <div
+      v-else-if="mode === 'schema'"
+      class="overflow-x-auto"
+    >
       <table class="min-w-full text-xs">
         <thead>
-          <tr class="bg-slate-100 dark:bg-slate-900">
-            <th class="text-left px-3 py-2 font-semibold text-slate-700 dark:text-slate-300 w-1/2">
+          <tr class="bg-neutral-50 dark:bg-neutral-950">
+            <th class="w-1/2 px-3 py-2 text-left font-medium text-neutral-700 dark:text-neutral-300">
               Name
             </th>
-            <th class="text-left px-3 py-2 font-semibold text-slate-700 dark:text-slate-300">
+            <th class="px-3 py-2 text-left font-medium text-neutral-700 dark:text-neutral-300">
               Type
             </th>
           </tr>
@@ -111,23 +117,26 @@ function renderCell(value: unknown): string {
           <tr
             v-for="entry in schemaEntries"
             :key="entry.name"
-            class="border-b border-slate-100 dark:border-slate-700"
+            class="border-b border-neutral-100 dark:border-neutral-800"
           >
-            <td class="px-3 py-1.5 font-mono text-slate-700 dark:text-slate-300">{{ entry.name }}</td>
-            <td class="px-3 py-1.5 text-slate-500 dark:text-slate-400">{{ entry.type }}</td>
+            <td class="px-3 py-1.5 font-mono text-neutral-700 dark:text-neutral-300">{{ entry.name }}</td>
+            <td class="px-3 py-1.5 text-neutral-500 dark:text-neutral-400">{{ entry.type }}</td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <div v-else-if="mode === 'table'" class="overflow-x-auto">
+    <div
+      v-else-if="mode === 'table'"
+      class="overflow-x-auto"
+    >
       <table class="min-w-full text-xs">
         <thead>
-          <tr class="bg-slate-100 dark:bg-slate-900">
+          <tr class="bg-neutral-50 dark:bg-neutral-950">
             <th
               v-for="col in tableColumns"
               :key="col"
-              class="text-left px-3 py-2 font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap"
+              class="whitespace-nowrap px-3 py-2 text-left font-medium text-neutral-700 dark:text-neutral-300"
             >
               {{ col }}
             </th>
@@ -137,25 +146,28 @@ function renderCell(value: unknown): string {
           <tr
             v-for="(row, idx) in tableRows"
             :key="idx"
-            class="border-b border-slate-100 dark:border-slate-700"
+            class="border-b border-neutral-100 dark:border-neutral-800"
           >
             <td
               v-for="col in tableColumns"
               :key="col"
-              class="px-3 py-1.5 font-mono text-slate-600 dark:text-slate-300 whitespace-nowrap"
+              class="whitespace-nowrap px-3 py-1.5 font-mono text-neutral-600 dark:text-neutral-300"
             >
               {{ renderCell(row[col]) }}
             </td>
           </tr>
         </tbody>
       </table>
-      <div v-if="safeData.length > maxRows" class="px-3 py-2 text-[10px] italic text-slate-500 dark:text-slate-400">
+      <div
+        v-if="safeData.length > maxRows"
+        class="px-3 py-2 text-3xs italic text-neutral-500 dark:text-neutral-400"
+      >
         Showing {{ maxRows }} of {{ safeData.length }} items.
       </div>
     </div>
 
     <div v-else>
-      <pre class="text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap font-mono bg-slate-50 dark:bg-slate-900 p-3 rounded-lg overflow-auto max-h-[420px]">{{ jsonText }}</pre>
+      <pre class="max-h-[420px] overflow-auto rounded-lg border border-neutral-200 bg-neutral-50 p-3 font-mono text-xs whitespace-pre-wrap text-neutral-700 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-300">{{ jsonText }}</pre>
     </div>
   </div>
 </template>

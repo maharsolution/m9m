@@ -163,65 +163,81 @@ const dayOfWeekOptions = [
   { label: 'Weekdays', value: '1-5' },
   { label: 'Weekends', value: '0,6' },
 ]
+
+const CONTROL_CLASS =
+  'h-9 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-950 transition-colors duration-200 focus:border-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900/10 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:focus:border-neutral-100 dark:focus:ring-neutral-100/10'
 </script>
 
 <template>
   <div class="space-y-4">
     <!-- Mode Toggle -->
-    <div class="flex rounded-lg bg-slate-100 dark:bg-slate-800 p-1">
+    <div class="flex rounded-lg border border-neutral-200 bg-neutral-100 p-1 dark:border-neutral-800 dark:bg-neutral-950">
       <button
-        @click="mode = 'preset'"
-        class="flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors"
+        type="button"
+        class="flex flex-1 items-center justify-center rounded-md px-4 py-1.5 text-sm font-medium transition-colors duration-200"
         :class="mode === 'preset'
-          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow'
-          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'"
+          ? 'bg-white text-neutral-950 shadow-xs dark:bg-neutral-800 dark:text-neutral-50'
+          : 'text-neutral-600 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-neutral-100'"
+        @click="mode = 'preset'"
       >
-        <ClockIcon class="w-4 h-4 inline mr-2" />
+        <ClockIcon class="mr-2 h-4 w-4" />
         Presets
       </button>
       <button
-        @click="mode = 'custom'"
-        class="flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors"
+        type="button"
+        class="flex flex-1 items-center justify-center rounded-md px-4 py-1.5 text-sm font-medium transition-colors duration-200"
         :class="mode === 'custom'
-          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow'
-          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'"
+          ? 'bg-white text-neutral-950 shadow-xs dark:bg-neutral-800 dark:text-neutral-50'
+          : 'text-neutral-600 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-neutral-100'"
+        @click="mode = 'custom'"
       >
-        <CalendarIcon class="w-4 h-4 inline mr-2" />
+        <CalendarIcon class="mr-2 h-4 w-4" />
         Custom
       </button>
     </div>
 
     <!-- Preset Selection -->
-    <div v-if="mode === 'preset'" class="space-y-2">
+    <div
+      v-if="mode === 'preset'"
+      class="space-y-2"
+    >
       <div class="grid grid-cols-2 gap-2">
         <button
           v-for="preset in CRON_PRESETS"
           :key="preset.value"
-          @click="selectedPreset = preset.value"
-          class="px-4 py-3 text-left rounded-lg border transition-all"
+          type="button"
+          class="rounded-lg border px-4 py-3 text-left transition-colors duration-200"
           :class="selectedPreset === preset.value
-            ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300'
-            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300'"
+            ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-950/50 dark:text-brand-300'
+            : 'border-neutral-200 text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:border-neutral-600 dark:hover:bg-neutral-800'"
+          @click="selectedPreset = preset.value"
         >
           <div class="text-sm font-medium">{{ preset.label }}</div>
-          <code class="text-xs text-slate-500 dark:text-slate-400">{{ preset.value }}</code>
+          <code class="font-mono text-2xs text-neutral-500 dark:text-neutral-400">{{ preset.value }}</code>
         </button>
       </div>
     </div>
 
     <!-- Custom Builder -->
-    <div v-else class="space-y-4">
+    <div
+      v-else
+      class="space-y-4"
+    >
       <div class="grid grid-cols-5 gap-3">
         <!-- Minute -->
         <div>
-          <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+          <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
             Minute
           </label>
           <select
             v-model="minute"
-            class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+            :class="CONTROL_CLASS"
           >
-            <option v-for="opt in minuteOptions" :key="opt.value" :value="opt.value">
+            <option
+              v-for="opt in minuteOptions"
+              :key="opt.value"
+              :value="opt.value"
+            >
               {{ opt.label }}
             </option>
           </select>
@@ -229,14 +245,18 @@ const dayOfWeekOptions = [
 
         <!-- Hour -->
         <div>
-          <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+          <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
             Hour
           </label>
           <select
             v-model="hour"
-            class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+            :class="CONTROL_CLASS"
           >
-            <option v-for="opt in hourOptions" :key="opt.value" :value="opt.value">
+            <option
+              v-for="opt in hourOptions"
+              :key="opt.value"
+              :value="opt.value"
+            >
               {{ opt.label }}
             </option>
           </select>
@@ -244,14 +264,18 @@ const dayOfWeekOptions = [
 
         <!-- Day of Month -->
         <div>
-          <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+          <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
             Day
           </label>
           <select
             v-model="dayOfMonth"
-            class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+            :class="CONTROL_CLASS"
           >
-            <option v-for="opt in dayOfMonthOptions" :key="opt.value" :value="opt.value">
+            <option
+              v-for="opt in dayOfMonthOptions"
+              :key="opt.value"
+              :value="opt.value"
+            >
               {{ opt.label }}
             </option>
           </select>
@@ -259,14 +283,18 @@ const dayOfWeekOptions = [
 
         <!-- Month -->
         <div>
-          <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+          <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
             Month
           </label>
           <select
             v-model="month"
-            class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+            :class="CONTROL_CLASS"
           >
-            <option v-for="opt in monthOptions" :key="opt.value" :value="opt.value">
+            <option
+              v-for="opt in monthOptions"
+              :key="opt.value"
+              :value="opt.value"
+            >
               {{ opt.label }}
             </option>
           </select>
@@ -274,14 +302,18 @@ const dayOfWeekOptions = [
 
         <!-- Day of Week -->
         <div>
-          <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+          <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
             Weekday
           </label>
           <select
             v-model="dayOfWeek"
-            class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+            :class="CONTROL_CLASS"
           >
-            <option v-for="opt in dayOfWeekOptions" :key="opt.value" :value="opt.value">
+            <option
+              v-for="opt in dayOfWeekOptions"
+              :key="opt.value"
+              :value="opt.value"
+            >
               {{ opt.label }}
             </option>
           </select>
@@ -290,27 +322,27 @@ const dayOfWeekOptions = [
 
       <!-- Raw Expression Input -->
       <div>
-        <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+        <label class="mb-1 block text-2xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
           Cron Expression
         </label>
         <input
           :value="customExpression"
+          type="text"
+          :class="[CONTROL_CLASS, 'font-mono']"
+          placeholder="* * * * *"
           @input="(e) => {
             const val = (e.target as HTMLInputElement).value
             parseExpression(val)
             emit('update:modelValue', val)
           }"
-          type="text"
-          class="w-full px-3 py-2 font-mono text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
-          placeholder="* * * * *"
-        />
+        >
       </div>
     </div>
 
     <!-- Description -->
-    <div class="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-      <InformationCircleIcon class="w-5 h-5 text-violet-500" />
-      <span class="text-sm text-slate-700 dark:text-slate-300">
+    <div class="flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
+      <InformationCircleIcon class="h-4 w-4 text-brand-500" />
+      <span class="text-sm text-neutral-700 dark:text-neutral-300">
         {{ cronDescription }}
       </span>
     </div>
