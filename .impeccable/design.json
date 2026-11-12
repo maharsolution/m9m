@@ -1,0 +1,382 @@
+{
+  "schemaVersion": 2,
+  "name": "m9m Design System — The Control Room",
+  "version": "1.0.0",
+  "updated": "2026-11-12",
+  "source": "DESIGN.md",
+  "narrative": {
+    "creativeNorthStar": "The Control Room",
+    "overviewVoice": "Same skeleton, sharper instrument",
+    "brandCharacter": "Signal Pink",
+    "neutralCharacter": "Graphite Neutral",
+    "craftFocus": "Sharper type hierarchy — n8n's layout skeleton is the contract; typography, token discipline, and tonal depth are where m9m goes further",
+    "audience": "Platform and operations engineers who already know n8n",
+    "personality": [
+      "instrument-grade",
+      "calm under load",
+      "dense but never cramped",
+      "quiet chrome, loud state"
+    ],
+    "density": "compact",
+    "voice": "Technical, plain-spoken, never chatty. Short sentences. No exclamation marks. No emoji in product copy.",
+    "referenceAuthority": "n8n/packages/frontend/@n8n/design-system/src/css — values adopted verbatim; gaps filled under DESIGN.md rules",
+    "parityContract": [
+      "nav rail 42px collapsed / 200px expanded",
+      "header 65px",
+      "canvas grid 16px",
+      "node 96x96, radius 16px, border 1.5px, no rest shadow",
+      "node creator 385px right overlay with 0.7 scrim",
+      "NDV full-screen modal, 3 resizable columns, settings min 260px",
+      "AI panel 400px default (380-425px)",
+      "no execution log strip inside the editor"
+    ]
+  },
+  "colorMeta": {
+    "brand": {
+      "name": "Signal Pink",
+      "role": "Actionable intent only — primary buttons, active nav, focus",
+      "ramp": {
+        "50": "oklch(97.53% 0.0128 5.65)",
+        "100": "oklch(95.06% 0.0256 5.65)",
+        "200": "oklch(90.05% 0.0541 5.33)",
+        "400": "oklch(82.05% 0.1071 4.98)",
+        "500": "oklch(78.07% 0.136 5.02)",
+        "700": "oklch(59.09% 0.1611 5.09)",
+        "800": "oklch(40.08% 0.1209 4.81)",
+        "950": "oklch(18% 0.075 4.8)"
+      }
+    },
+    "accent": {
+      "name": "Ember Orange",
+      "role": "Inline emphasis — links, slider fills, checked controls",
+      "ramp": {
+        "50": "oklch(97.96% 0.0158 73.68)",
+        "100": "oklch(95.4% 0.0382 76.2)",
+        "200": "oklch(89.99% 0.0763 70.44)",
+        "400": "oklch(74.58% 0.1802 56.73)",
+        "500": "oklch(69.96% 0.202 44.44)",
+        "700": "oklch(55.42% 0.1922 35.48)",
+        "800": "oklch(46.96% 0.1566 37.15)",
+        "950": "oklch(26.62% 0.0785 35.91)"
+      }
+    },
+    "neutral": {
+      "name": "Graphite Neutral",
+      "role": "Surfaces, borders, text — cool near-achromatic ramp, hue 89.88",
+      "ramp": {
+        "50": "oklch(98.51% 0 89.88)",
+        "100": "oklch(97.02% 0 89.88)",
+        "200": "oklch(92.19% 0 89.88)",
+        "400": "oklch(79.21% 0 89.88)",
+        "500": "oklch(68.3% 0 89.88)",
+        "700": "oklch(38.67% 0 89.88)",
+        "800": "oklch(31.71% 0 89.88)",
+        "950": "oklch(20.46% 0 89.88)"
+      },
+      "borders": {
+        "subtle": "oklch(0% 0 0 / 0.05)",
+        "base": "oklch(0% 0 0 / 0.1)",
+        "strong": "oklch(0% 0 0 / 0.2)",
+        "stronger": "oklch(0% 0 0 / 0.3)",
+        "darkSubtle": "oklch(100% 0 89.88 / 0.05)",
+        "darkBase": "oklch(100% 0 89.88 / 0.15)",
+        "darkStrong": "oklch(100% 0 89.88 / 0.3)"
+      }
+    },
+    "success": {
+      "name": "Moss Green",
+      "role": "Completed, healthy, valid",
+      "ramp": {
+        "50": "oklch(98.19% 0.0181 155.83)",
+        "100": "oklch(96.24% 0.0434 156.74)",
+        "200": "oklch(92.58% 0.0845 155.86)",
+        "400": "oklch(79.14% 0.2091 151.66)",
+        "500": "oklch(72.89% 0.2119 147.82)",
+        "700": "oklch(52.96% 0.1495 148.99)",
+        "800": "oklch(44.68% 0.1187 151.4)",
+        "950": "oklch(26.54% 0.0651 152.77)"
+      }
+    },
+    "warning": {
+      "name": "Amber Signal",
+      "role": "Needs attention, waiting, degraded",
+      "ramp": {
+        "50": "oklch(98.73% 0.0262 102.21)",
+        "100": "oklch(97.27% 0.0706 103.29)",
+        "200": "oklch(94.53% 0.1293 101.4)",
+        "400": "oklch(85.35% 0.1744 88.77)",
+        "500": "oklch(79.77% 0.1641 82.71)",
+        "700": "oklch(55.48% 0.1271 62.52)",
+        "800": "oklch(47.76% 0.1115 60.43)",
+        "950": "oklch(28.71% 0.0662 54.59)"
+      }
+    },
+    "danger": {
+      "name": "Coral Red",
+      "role": "Failed, invalid, destructive",
+      "ramp": {
+        "50": "oklch(97.05% 0.0129 17.38)",
+        "100": "oklch(93.65% 0.032 17.74)",
+        "200": "oklch(88.34% 0.0616 18.39)",
+        "400": "oklch(70.22% 0.1892 22.23)",
+        "500": "oklch(63.78% 0.2373 25.44)",
+        "700": "oklch(50.95% 0.2086 28.51)",
+        "800": "oklch(44.46% 0.1774 26.79)",
+        "950": "oklch(25.75% 0.0918 25.84)"
+      }
+    },
+    "info": {
+      "name": "Azure Signal",
+      "role": "Informational, neutral notice",
+      "ramp": {
+        "50": "oklch(97.05% 0.0142 254.6)",
+        "100": "oklch(93.19% 0.0316 255.59)",
+        "200": "oklch(88.2% 0.0588 253.97)",
+        "400": "oklch(70.4% 0.1583 253.63)",
+        "500": "oklch(61.87% 0.2067 259.23)",
+        "700": "oklch(48.78% 0.2432 264.4)",
+        "800": "oklch(42.42% 0.1982 265.5)",
+        "950": "oklch(28.1% 0.0924 268.13)"
+      }
+    },
+    "secondary": {
+      "name": "Plum Iris",
+      "role": "Secondary brand expression, agent surfaces",
+      "ramp": {
+        "50": "oklch(96.91% 0.0161 293.76)",
+        "100": "oklch(94.33% 0.0284 294.59)",
+        "200": "oklch(89.46% 0.0562 293.06)",
+        "400": "oklch(69.89% 0.176 294.12)",
+        "500": "oklch(60.06% 0.2425 293.89)",
+        "700": "oklch(49.07% 0.2699 292.56)",
+        "800": "oklch(43.16% 0.232 292.71)",
+        "950": "oklch(28.4% 0.1414 291.29)"
+      }
+    },
+    "assistant": {
+      "name": "Assistant Spectrum",
+      "role": "AI assistant surface only",
+      "gradient": "linear-gradient(105deg, #5b60e8 0%, #aa7bec 50%, #ec7b8e 100%)",
+      "light": ["#5b60e8", "#aa7bec", "#ec7b8e"],
+      "dark": ["#8c90f2", "#a977f0", "#f0778b"]
+    },
+    "canvas": {
+      "name": "Paper Grey",
+      "role": "Canvas field and dots",
+      "light": { "background": "hsl(0, 0%, 96%)", "dot": "oklch(68.3% 0 89.88)" },
+      "dark": { "background": "oklch(20.46% 0 89.88)", "dot": "oklch(38.67% 0 89.88)" }
+    }
+  },
+  "typographyMeta": {
+    "sans": {
+      "family": "Geist, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      "weights": "100 900 (variable)",
+      "features": "'ss01' 1",
+      "loading": "self-hosted variable woff2, preloaded"
+    },
+    "mono": {
+      "family": "'Geist Mono', ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace",
+      "weights": "100 900 (variable)",
+      "loading": "self-hosted variable woff2"
+    },
+    "scale": {
+      "4xs": { "size": "0.5rem", "lineHeight": 1 },
+      "3xs": { "size": "0.625rem", "lineHeight": 1.25 },
+      "2xs": { "size": "0.75rem", "lineHeight": 1.25 },
+      "xs": { "size": "0.8125rem", "lineHeight": 1.5 },
+      "sm": { "size": "0.875rem", "lineHeight": 1.5 },
+      "md": { "size": "1rem", "lineHeight": 1.3 },
+      "lg": { "size": "1.125rem", "lineHeight": 1.35 },
+      "xl": { "size": "1.25rem", "lineHeight": 1.35 },
+      "2xl": { "size": "1.75rem", "lineHeight": 1.5 }
+    },
+    "weights": { "regular": 450, "medium": 500, "bold": 600 },
+    "tracking": {
+      "tightest": "-0.025em",
+      "tighter": "-0.015em",
+      "tight": "-0.007em",
+      "normal": "0",
+      "wide": "0.025em",
+      "wider": "0.05em",
+      "widest": "0.1em"
+    },
+    "roles": {
+      "display": { "size": "2xl", "weight": 600, "tracking": "tighter", "lineHeight": 1.5, "use": "Page title" },
+      "headline": { "size": "xl", "weight": 600, "tracking": "tight", "lineHeight": 1.35, "use": "Editor header, page section" },
+      "title": { "size": "lg", "weight": 600, "tracking": "tight", "lineHeight": 1.35, "use": "Node title, panel title" },
+      "subtitle": { "size": "md", "weight": 500, "tracking": "normal", "lineHeight": 1.3, "use": "Dialog title, field group heading" },
+      "body": { "size": "sm", "weight": 450, "tracking": "normal", "lineHeight": 1.5, "use": "Default UI text, buttons, list rows" },
+      "bodySmall": { "size": "xs", "weight": 450, "tracking": "normal", "lineHeight": 1.5, "use": "Descriptions, helper text, table cells" },
+      "label": { "size": "2xs", "weight": 500, "tracking": "wide", "lineHeight": 1.25, "use": "Field labels, tab labels, badges" },
+      "overline": { "size": "3xs", "weight": 500, "tracking": "wider", "lineHeight": 1.25, "use": "Uppercase metric labels, kickers" },
+      "code": { "size": "xs", "family": "mono", "weight": 400, "tracking": "tight", "lineHeight": 1.5, "use": "JSON, expressions, IDs" }
+    }
+  },
+  "spacingMeta": {
+    "scale": {
+      "5xs": "0.125rem",
+      "4xs": "0.25rem",
+      "3xs": "0.375rem",
+      "2xs": "0.5rem",
+      "xs": "0.75rem",
+      "sm": "1rem",
+      "md": "1.25rem",
+      "lg": "1.5rem",
+      "xl": "2rem",
+      "2xl": "3rem",
+      "3xl": "4rem",
+      "4xl": "8rem",
+      "5xl": "16rem"
+    },
+    "height": {
+      "5xs": "0.5rem",
+      "4xs": "0.75rem",
+      "3xs": "1rem",
+      "2xs": "1.25rem",
+      "xs": "1.5rem",
+      "sm": "1.75rem",
+      "md": "2rem",
+      "lg": "2.25rem",
+      "xl": "2.5rem",
+      "2xl": "3rem",
+      "3xl": "3.5rem",
+      "4xl": "4rem",
+      "5xl": "6rem"
+    },
+    "radius": {
+      "4xs": "0.125rem",
+      "3xs": "0.25rem",
+      "2xs": "0.375rem",
+      "xs": "0.5rem",
+      "sm": "0.75rem",
+      "md": "0.875rem",
+      "lg": "1rem",
+      "xl": "1.125rem",
+      "2xl": "1.25rem",
+      "full": "9999px"
+    }
+  },
+  "shadows": [
+    { "name": "2xs", "value": "0 1px oklch(0% 0 0 / 0.1)", "use": "Hairline lift, chips" },
+    { "name": "xs", "value": "0 1px 2px -1px oklch(0% 0 0 / 0.1)", "use": "Toolbar pill, canvas controls" },
+    { "name": "sm", "value": "0 4px 6px -1px oklch(0% 0 0 / 0.1), 0 2px 4px -2px oklch(0% 0 0 / 0.1)", "use": "Dropdown, popover, tooltip" },
+    { "name": "md", "value": "0 10px 15px -3px oklch(0% 0 0 / 0.1), 0 4px 6px -4px oklch(0% 0 0 / 0.1)", "use": "Dialog, toast" },
+    { "name": "xl", "value": "0 20px 25px -5px oklch(0% 0 0 / 0.1), 0 8px 10px -6px oklch(0% 0 0 / 0.1)", "use": "Full-screen modal" },
+    { "name": "outline", "value": "0 0 0 1px oklch(0% 0 0 / 0.1)", "use": "Resting focus ring" }
+  ],
+  "motion": {
+    "durations": { "snappy": "200ms", "base": "400ms", "slow": "1000ms", "slowest": "1500ms" },
+    "easings": {
+      "ease-out": "cubic-bezier(0.215, 0.61, 0.355, 1)",
+      "ease-in": "cubic-bezier(0.55, 0.055, 0.675, 0.19)",
+      "ease-in-out": "cubic-bezier(0.645, 0.045, 0.355, 1)",
+      "spring": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+      "ease-out-quart": "cubic-bezier(0.165, 0.84, 0.44, 1)",
+      "ease-out-expo": "cubic-bezier(0.19, 1, 0.22, 1)"
+    },
+    "rules": [
+      "100-200ms for pointer-triggered changes, 400ms max for panel transitions",
+      "opacity and transform only — never width, height, top, left",
+      "no entrance animation on load, no decorative looping motion",
+      "prefers-reduced-motion: reduce collapses durations to 1ms"
+    ]
+  },
+  "breakpoints": [
+    { "name": "2xs", "value": "600px" },
+    { "name": "xs", "value": "768px" },
+    { "name": "sm", "value": "992px" },
+    { "name": "md", "value": "1200px" },
+    { "name": "lg", "value": "1920px" }
+  ],
+  "layoutMeta": {
+    "navRailCollapsed": "42px",
+    "navRailExpanded": "200px",
+    "headerHeight": "65px",
+    "bannerHeight": "48px",
+    "contentMaxWidth": "1280px",
+    "canvasGrid": "16px",
+    "nodeSize": "96x96",
+    "configurableNodeSize": "256x96",
+    "configurationNodeSize": "80x80",
+    "triggerNodeCornerRadius": "36px",
+    "nodeIconCanvas": "40px",
+    "nodeIconList": "24px",
+    "nodeCreatorWidth": "385px",
+    "nodeCreatorScrim": "oklch(100% 0 89.88 / 0.8) at 0.7 opacity",
+    "ndvSettingsMinWidth": "260px",
+    "ndvResizeGrid": "8px",
+    "ndvHeaderHeight": "42px",
+    "aiPanelDefault": "400px",
+    "aiPanelRange": "380-425px"
+  },
+  "components": [
+    {
+      "name": "Button / Primary",
+      "className": ".btn--primary",
+      "css": ".btn--primary {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 0.5rem;\n  height: 2.5rem;\n  padding: 0 1rem;\n  border: none;\n  border-radius: 0.5rem;\n  background: oklch(78.07% 0.136 5.02);\n  color: oklch(100% 0 89.88);\n  font-family: Geist, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;\n  font-size: 0.875rem;\n  font-weight: 500;\n  line-height: 1.5;\n  transition: background 200ms cubic-bezier(0.215, 0.61, 0.355, 1);\n}\n.btn--primary:hover { background: oklch(68.08% 0.148 5.02); }\n.btn--primary:active { background: oklch(59.09% 0.1611 5.09); }\n.btn--primary:focus-visible { outline: 2px solid oklch(0% 0 0 / 0.2); outline-offset: 2px; }\n.btn--primary:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Button / Secondary",
+      "className": ".btn--secondary",
+      "css": ".btn--secondary {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 0.5rem;\n  height: 2.5rem;\n  padding: 0 1rem;\n  border: 1px solid oklch(0% 0 0 / 0.2);\n  border-radius: 0.5rem;\n  background: oklch(100% 0 89.88);\n  color: oklch(20.46% 0 89.88);\n  font-size: 0.875rem;\n  font-weight: 500;\n  transition: background 200ms cubic-bezier(0.215, 0.61, 0.355, 1);\n}\n.btn--secondary:hover { background: oklch(97.53% 0.0128 5.65); }\n.btn--secondary:active { background: oklch(95.06% 0.0256 5.65); }\n.btn--secondary:focus-visible { outline: 2px solid oklch(0% 0 0 / 0.2); outline-offset: 2px; }"
+    },
+    {
+      "name": "Button / Ghost Icon",
+      "className": ".btn--ghost",
+      "css": ".btn--ghost {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 2rem;\n  height: 2rem;\n  border: none;\n  border-radius: 0.5rem;\n  background: transparent;\n  color: oklch(68.3% 0 89.88);\n  transition: background 200ms cubic-bezier(0.215, 0.61, 0.355, 1);\n}\n.btn--ghost:hover { background: oklch(0% 0 0 / 0.05); color: oklch(31.71% 0 89.88); }\n.btn--ghost:focus-visible { outline: 2px solid oklch(0% 0 0 / 0.2); outline-offset: 2px; }"
+    },
+    {
+      "name": "Input / Text field",
+      "className": ".field",
+      "css": ".field {\n  width: 100%;\n  height: 2.5rem;\n  padding: 0 0.75rem;\n  border: 1px solid oklch(0% 0 0 / 0.2);\n  border-radius: 0.5rem;\n  background: oklch(100% 0 89.88);\n  color: oklch(20.46% 0 89.88);\n  font-size: 0.875rem;\n  line-height: 1.5;\n  transition: border-color 200ms cubic-bezier(0.215, 0.61, 0.355, 1);\n}\n.field::placeholder { color: oklch(68.3% 0 89.88); }\n.field:focus-visible { outline: 2px solid oklch(0% 0 0 / 0.2); outline-offset: 1px; border-color: oklch(0% 0 0); }\n.field--error { border-color: oklch(44.46% 0.1774 26.79); }"
+    },
+    {
+      "name": "Tag chip",
+      "className": ".tag",
+      "css": ".tag {\n  display: inline-flex;\n  align-items: center;\n  gap: 0.25rem;\n  height: 1.25rem;\n  padding: 0 0.25rem;\n  border: 1px solid oklch(0% 0 0 / 0.05);\n  border-radius: 0.5rem;\n  background: hsl(0, 0%, 96%);\n  color: oklch(20.46% 0 89.88);\n  font-size: 0.75rem;\n  font-weight: 500;\n  letter-spacing: 0.025em;\n  transition: background 200ms cubic-bezier(0.215, 0.61, 0.355, 1);\n}\n.tag:hover { background: oklch(95.51% 0 89.88); }\n.tag__dot { width: 0.5rem; height: 0.5rem; border-radius: 9999px; background: oklch(69.96% 0.202 44.44); }"
+    },
+    {
+      "name": "Canvas node card",
+      "className": ".canvas-node",
+      "css": ".canvas-node {\n  width: 6rem;\n  min-height: 6rem;\n  display: flex;\n  align-items: center;\n  gap: 0.5rem;\n  padding: 0.75rem;\n  border: 1.5px solid oklch(0% 0 0 / 0.1);\n  border-radius: 1rem;\n  background: oklch(100% 0 89.88);\n  background-clip: padding-box;\n  box-shadow: none;\n  font-size: 0.8125rem;\n  font-weight: 500;\n  line-height: 1.5;\n  transition: border-color 200ms cubic-bezier(0.215, 0.61, 0.355, 1);\n}\n.canvas-node--trigger { border-radius: 2.25rem 1rem 1rem 2.25rem; }\n.canvas-node--selected { box-shadow: 0 0 0 calc(6px * var(--canvas-zoom-compensation-factor, 1)) hsla(220, 47%, 30%, 0.1); }\n.canvas-node--success { border-width: 2px; border-color: oklch(52.96% 0.1495 148.99); }\n.canvas-node--error { border-width: 2px; border-color: oklch(50.95% 0.2086 28.51); }\n.canvas-node__icon { width: 2.5rem; height: 2.5rem; flex: none; }"
+    },
+    {
+      "name": "Node creator row",
+      "className": ".node-creator__row",
+      "css": ".node-creator__row {\n  display: flex;\n  align-items: center;\n  gap: 0.75rem;\n  width: 100%;\n  padding: 0.5rem 0.75rem;\n  border: none;\n  border-radius: 0.5rem;\n  background: transparent;\n  text-align: left;\n  color: oklch(20.46% 0 89.88);\n  transition: background 200ms cubic-bezier(0.215, 0.61, 0.355, 1);\n}\n.node-creator__row:hover { background: oklch(0% 0 0 / 0.05); }\n.node-creator__row:focus-visible { outline: 2px solid oklch(0% 0 0 / 0.2); outline-offset: -2px; }\n.node-creator__icon { width: 1.25rem; height: 1.25rem; flex: none; }\n.node-creator__name { font-size: 0.875rem; font-weight: 500; line-height: 1.5; }\n.node-creator__desc { font-size: 0.8125rem; line-height: 1.5; color: oklch(55.55% 0 89.88); }"
+    },
+    {
+      "name": "Canvas toolbar pill",
+      "className": ".canvas-controls",
+      "css": ".canvas-controls {\n  display: flex;\n  align-items: center;\n  gap: 0.125rem;\n  padding: 0.125rem;\n  border: 1px solid oklch(0% 0 0 / 0.1);\n  border-radius: 9999px;\n  background: oklch(100% 0 89.88);\n  box-shadow: 0 1px 2px -1px oklch(0% 0 0 / 0.1);\n}\n.canvas-controls button {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 2rem;\n  height: 2rem;\n  border: none;\n  border-radius: 9999px;\n  background: transparent;\n  color: oklch(31.71% 0 89.88);\n  transition: background 200ms cubic-bezier(0.215, 0.61, 0.355, 1);\n}\n.canvas-controls button:hover { background: oklch(0% 0 0 / 0.05); }\n.canvas-controls button:focus-visible { outline: 2px solid oklch(0% 0 0 / 0.2); outline-offset: 2px; }"
+    },
+    {
+      "name": "Status badge",
+      "className": ".status-badge",
+      "css": ".status-badge {\n  display: inline-flex;\n  align-items: center;\n  gap: 0.375rem;\n  height: 1.5rem;\n  padding: 0 0.5rem;\n  border-radius: 9999px;\n  font-size: 0.75rem;\n  font-weight: 500;\n  letter-spacing: 0.025em;\n}\n.status-badge--success { background: oklch(98.19% 0.0181 155.83); border: 1px solid oklch(92.58% 0.0845 155.86); color: oklch(44.68% 0.1187 151.4); }\n.status-badge--warning { background: oklch(97.27% 0.0706 103.29); border: 1px solid oklch(94.53% 0.1293 101.4); color: oklch(47.76% 0.1115 60.43); }\n.status-badge--danger { background: oklch(97.05% 0.0129 17.38); border: 1px solid oklch(88.34% 0.0616 18.39); color: oklch(44.46% 0.1774 26.79); }\n.status-badge--info { background: oklch(97.05% 0.0142 254.6); border: 1px solid oklch(88.2% 0.0588 253.97); color: oklch(42.42% 0.1982 265.5); }"
+    },
+    {
+      "name": "AI assistant header",
+      "className": ".assistant-header",
+      "css": ".assistant-header {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  padding: 0.75rem 1rem;\n  background: linear-gradient(105deg, #5b60e8 0%, #aa7bec 50%, #ec7b8e 100%);\n  color: oklch(100% 0 89.88);\n  font-size: 0.875rem;\n  font-weight: 600;\n  letter-spacing: -0.007em;\n}"
+    }
+  ],
+  "constraints": {
+    "forbidden": [
+      "any brand color other than Signal Pink on primary surfaces",
+      "font-weight 700",
+      "node category stripes",
+      "emoji node icons",
+      "shadow + border + ring on the same element",
+      "animating width, height, top, or left",
+      "arbitrary Tailwind spacing values outside the 13-step scale",
+      "dead CSS variables or unused color scales"
+    ],
+    "required": [
+      "one primary action per view",
+      "focus-visible ring on every interactive element",
+      "dark theme via the same semantic tokens",
+      "typography role before size"
+    ]
+  }
+}
