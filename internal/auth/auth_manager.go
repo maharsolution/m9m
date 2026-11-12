@@ -9,6 +9,16 @@ import (
 	"time"
 )
 
+// ErrSessionUnavailable is returned when a login session could not be
+// persisted in the user store.
+//
+// A token whose session row is missing is rejected by every later
+// request ("session expired or revoked"), so a login must never hand
+// out a token whose session could not be stored. The underlying storage
+// error is logged in full; the returned error stays generic so no
+// database detail leaks into an HTTP response.
+var ErrSessionUnavailable = errors.New("session store unavailable")
+
 // AuthManager handles authentication and user management
 type AuthManager struct {
 	userStorage    UserStorage
@@ -76,7 +86,12 @@ func (m *AuthManager) Login(credentials *UserCredentials) (string, *User, error)
 	}
 
 	if err := m.userStorage.SaveSession(session); err != nil {
-		log.Printf("Warning: failed to save session: %v", err)
+		// The session MUST be in the store: the token is only accepted
+		// while its session row exists. A token without a session is
+		// rejected by every later request, so the login fails instead
+		// of handing out a dead token.
+		log.Printf("Login failed for %s: failed to persist session: %v", user.Email, err)
+		return "", nil, ErrSessionUnavailable
 	}
 
 	log.Printf("User logged in: %s (%s)", user.Email, user.ID)

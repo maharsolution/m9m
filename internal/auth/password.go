@@ -14,6 +14,15 @@ const (
 
 	// BcryptCost is the cost factor for bcrypt hashing
 	BcryptCost = 12
+
+	// MaxEmailLength is the maximum length of an email address.
+	//
+	// The email becomes part of the raw-storage key
+	// "user_email:<email>". The MySQL backend stores raw keys in
+	// `raw_data`.`key`, which is VARCHAR(255), so the key must never
+	// exceed 255 characters. "user_email:" is 11 characters, which
+	// leaves 244; the limit is kept at 240 to leave a safety margin.
+	MaxEmailLength = 240
 )
 
 // PasswordHasher handles password hashing and verification
@@ -101,6 +110,13 @@ func ValidatePassword(password string) error {
 func ValidateEmail(email string) error {
 	if len(email) == 0 {
 		return errors.New("email cannot be empty")
+	}
+
+	// The email is part of the raw-storage key "user_email:<email>".
+	// The MySQL raw store limits that key to 255 characters, so an
+	// over-long email must never reach the store.
+	if len(email) > MaxEmailLength {
+		return fmt.Errorf("email must not exceed %d characters", MaxEmailLength)
 	}
 
 	// Basic email validation

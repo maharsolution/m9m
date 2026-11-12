@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -83,6 +84,14 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	token, user, err := h.authManager.Login(&credentials)
 	if err != nil {
+		// A session that could not be persisted is a server-side
+		// failure, not a wrong credential: the credentials were fine,
+		// the store was not. The message stays generic - the storage
+		// detail is logged by the auth manager.
+		if errors.Is(err, ErrSessionUnavailable) {
+			http.Error(w, "Session store unavailable", http.StatusInternalServerError)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}

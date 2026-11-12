@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -654,6 +656,23 @@ func (s *PersistentUserStorage) DeleteUser(id string) error {
 // Session, APIKey, Invite, and PasswordReset operations follow similar pattern
 // Implementing simplified versions for brevity
 
+// sessionStorageKey returns the raw-storage key of a session.
+//
+// The key MUST NOT contain the raw token: the MySQL backend stores raw
+// keys in `raw_data`.`key`, which is VARCHAR(255), while a JWT is
+// ~313 characters long. The INSERT of the raw key fails with "Data too
+// long for column 'key'", the session never reaches the store and
+// every later request is rejected as "session expired or revoked".
+//
+// The SHA-256 digest of the token is used instead: 64 hex characters,
+// so the key is "session:" + 64 = 72 characters - safely below the
+// limit. The digest is one-way, so the raw token is not recoverable
+// from the key.
+func sessionStorageKey(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return fmt.Sprintf("session:%s", hex.EncodeToString(sum[:]))
+}
+
 func (s *PersistentUserStorage) SaveSession(session *Session) error {
 	if session.Token == "" {
 		return errors.New("session token cannot be empty")
@@ -670,12 +689,12 @@ func (s *PersistentUserStorage) SaveSession(session *Session) error {
 		return err
 	}
 
-	key := fmt.Sprintf("session:%s", session.Token)
+	key := sessionStorageKey(session.Token)
 	return s.workflowStorage.SaveRaw(key, data)
 }
 
 func (s *PersistentUserStorage) GetSession(token string) (*Session, error) {
-	key := fmt.Sprintf("session:%s", token)
+	key := sessionStorageKey(token)
 	data, err := s.workflowStorage.GetRaw(key)
 	if err != nil {
 		return nil, fmt.Errorf("session not found")
@@ -694,12 +713,14 @@ func (s *PersistentUserStorage) GetSession(token string) (*Session, error) {
 }
 
 func (s *PersistentUserStorage) DeleteSession(token string) error {
-	key := fmt.Sprintf("session:%s", token)
+	key := sessionStorageKey(token)
 	return s.workflowStorage.DeleteRaw(key)
 }
 
 func (s *PersistentUserStorage) DeleteUserSessions(userID string) error {
-	// List all sessions and delete matching ones
+	// List all sessions and delete matching ones. The prefix stays
+	// "session:" - only the part behind it changed (the digest), so the
+	// prefix scan still finds every session row.
 	keys, err := s.workflowStorage.ListKeys("session:")
 	if err != nil {
 		return err
