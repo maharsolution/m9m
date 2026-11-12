@@ -130,15 +130,20 @@ class EnvironmentAndAuth(unittest.TestCase):
             env.api_headers("other")
 
     def test_load_env_reports_presence_only(self):
-        with tempfile.TemporaryDirectory() as directory:
-            env_file = Path(directory) / ".env"
-            env_file.write_text("N8N_API_KEY=super-secret\nM9M_API_KEY=\n# comment\n",
-                                encoding="utf-8")
-            present = env.load_env(env_file)
-            self.assertNotIn("super-secret", json.dumps(present))
-            self.assertTrue(present["N8N_API_KEY"])
-            self.assertFalse(present["M9M_API_KEY"])
-            os.environ.pop("N8N_API_KEY", None)
+        # The ambient environment is isolated: the parity runner imports
+        # the REAL repo .env at module load, so M9M_API_KEY / N8N_API_KEY
+        # may already be set in os.environ. Without the isolation this
+        # test would report the AMBIENT key instead of the one of the
+        # temporary file.
+        with patch.dict(os.environ, {}, clear=True):
+            with tempfile.TemporaryDirectory() as directory:
+                env_file = Path(directory) / ".env"
+                env_file.write_text("N8N_API_KEY=super-secret\nM9M_API_KEY=\n# comment\n",
+                                    encoding="utf-8")
+                present = env.load_env(env_file)
+                self.assertNotIn("super-secret", json.dumps(present))
+                self.assertTrue(present["N8N_API_KEY"])
+                self.assertFalse(present["M9M_API_KEY"])
 
 
 class BodySignatures(unittest.TestCase):
@@ -434,10 +439,45 @@ class LiveContractFixtures(unittest.TestCase):
             if "/api/v1/workflows" in url and "n8n" in url:
                 status = 200 if headers.get("X-N8N-API-KEY") else 401
                 return status, {"data": []}, "{}"
+            if url.startswith("http://m9m") and "/api/v1" in url:
+                # The m9m API is closed by default: 401 without a key.
+                status = 200 if headers.get("X-API-Key") else 401
+                return status, {"data": []}, "{}"
             return 200, {"data": []}, "{}"
 
         case = {"paths": ["/healthz", "/api/v1/node-types", "/api/v1/workflows"],
                 "protected_paths": ["/api/v1/workflows"]}
+        with patch.object(extended, "_http", side_effect=fake_http):
+            verdict, reason = extended._contract_auth_probe(
+                case, "http://n8n", "http://m9m", 1)
+        self.assertEqual(verdict, "PASS")
+        self.assertIn("rejects anonymous", reason)
+
+    def test_auth_probe_fails_when_m9m_serves_api_without_a_key(self):
+        def fake_http(url, method="GET", payload=None, headers=None, timeout=30):
+            headers = headers or {}
+            if "/api/v1/workflows" in url and "n8n" in url:
+                status = 200 if headers.get("X-N8N-API-KEY") else 401
+                return status, {"data": []}, "{}"
+            return 200, {"data": []}, "{}"
+
+        case = {"paths": ["/healthz", "/api/v1/node-types", "/api/v1/workflows"],
+                "protected_paths": ["/api/v1/workflows"]}
+        with patch.object(extended, "_http", side_effect=fake_http):
+            with self.assertRaises(ValueError):
+                extended._contract_auth_probe(case, "http://n8n", "http://m9m", 1)
+
+    def test_auth_probe_accepts_the_legacy_m9m_open_expectation(self):
+        def fake_http(url, method="GET", payload=None, headers=None, timeout=30):
+            headers = headers or {}
+            if "/api/v1/workflows" in url and "n8n" in url:
+                status = 200 if headers.get("X-N8N-API-KEY") else 401
+                return status, {"data": []}, "{}"
+            return 200, {"data": []}, "{}"
+
+        case = {"paths": ["/healthz", "/api/v1/node-types", "/api/v1/workflows"],
+                "protected_paths": ["/api/v1/workflows"],
+                "expect": "m9m-open"}
         with patch.object(extended, "_http", side_effect=fake_http):
             verdict, reason = extended._contract_auth_probe(
                 case, "http://n8n", "http://m9m", 1)

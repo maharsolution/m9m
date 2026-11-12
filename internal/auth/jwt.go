@@ -2,7 +2,9 @@ package auth
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -122,6 +124,16 @@ func (m *JWTManager) RefreshToken(tokenString string) (string, error) {
 	}
 
 	return signedToken, nil
+}
+
+// HashAPIKey returns the digest an API key is stored under.
+//
+// API keys are 256 bit random strings, so a fast digest is the right
+// primitive: there is nothing to brute-force. The digest is compared in
+// constant time when a key is validated.
+func HashAPIKey(key string) string {
+	sum := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(sum[:])
 }
 
 // GenerateRandomToken generates a random token for invites or password resets

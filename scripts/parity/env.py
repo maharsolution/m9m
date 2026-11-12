@@ -79,8 +79,9 @@ def api_headers(host: str) -> dict[str, str]:
 
     The n8n API key is NEVER sent to m9m and the m9m API key is never
     sent to n8n. m9m only receives an API key when ``M9M_API_KEY`` is
-    actually configured; the shared deployment does not require one (see
-    ``scripts/parity/authprobe.py`` for the live evidence).
+    actually configured; the shared deployment requires one, because the
+    m9m API answers 401 for every ``/api/v1`` path without a credential
+    (see ``scripts/parity/authprobe.py`` for the live evidence).
     """
     if host == "n8n":
         key = os.environ.get("N8N_API_KEY")

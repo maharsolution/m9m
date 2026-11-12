@@ -1,308 +1,252 @@
 ---
 title: "API Authentication"
-description: "m9m supports multiple authentication methods for API access."
-keywords: "m9m API, REST API, workflow API, n8n API compatibility"
+description: "m9m closes its API by default: JWT sessions, API keys and the public allowlist."
+keywords: "m9m API, REST API, workflow API, n8n API compatibility, auth, API key, JWT"
 ---
 
 # API Authentication
 
-m9m supports multiple authentication methods for API access.
+The m9m API is **closed by default**. Every route under `/api/v1` needs a
+credential - a bearer token or an API key - except the small, explicit
+public allowlist at the bottom of this page.
 
-## Authentication Methods
+The one and only auth system of m9m is `internal/auth`: it owns the users,
+the roles, the API keys, the sessions and the JWT format. The users, keys
+and sessions live in the **same storage backend as the workflows** (MySQL in
+production, memory in tests), so they survive a restart of the instance.
 
-| Method | Use Case |
-|--------|----------|
-| JWT Token | User sessions, web UI |
-| API Key | Programmatic access, integrations |
-| Basic Auth | Simple authentication (if enabled) |
+## Environment contract
 
-## JWT Authentication
+The authentication configuration is read from the environment at startup
+(`DefaultAPIServerConfig` in `internal/api/server.go`). `config/config.yaml`
+mirrors the same contract in its `security:` block - it is documentation,
+not a second source of truth.
 
-JWT (JSON Web Token) authentication is the primary method for user sessions.
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `M9M_AUTH_ENABLED` | `true` | `false` turns the auth middleware off and leaves the API open. |
+| `M9M_JWT_SECRET` | - | Signs the session tokens. **Minimum 32 characters.** Required when auth is on and no `M9M_API_KEY` is set. Without it the instance generates an ephemeral secret at boot, so session tokens die with the process. |
+| `M9M_API_KEY` | - | Optional automation key. Presented in the `X-API-Key` header. |
+| `M9M_ADMIN_EMAIL` | - | Owner account of a fresh instance. |
+| `M9M_ADMIN_PASSWORD` | - | Password of that owner account. |
+| `M9M_ALLOW_FIRST_REGISTER` | `true` when no owner is configured | Opens the first-boot registration window. |
 
-### Obtaining a Token
+The server **refuses to start** when auth is enabled and neither
+`M9M_JWT_SECRET` nor `M9M_API_KEY` is set - an instance never serves an
+open API by accident.
+
+```bash
+# Generate the secrets (do NOT print them into a log or a ticket)
+openssl rand -hex 32          # M9M_JWT_SECRET
+openssl rand -hex 32          # M9M_API_KEY
+```
+
+## Authentication methods
+
+| Method | Header | Use case |
+|--------|--------|----------|
+| JWT session token | `Authorization: Bearer <token>` | Web UI, interactive clients |
+| API key | `X-API-Key: <key>` | Automation, parity harness, sync bridge |
+
+### A key in the query string is rejected
+
+`?apiKey=...` / `?api_key=...` never authenticates. Query strings end up
+in access logs, proxy caches and browser history, so the middleware logs a
+security warning and answers `401`.
+
+### JWT session
 
 ```bash
 POST /api/v1/auth/login
 Content-Type: application/json
 
 {
-  "username": "admin",
-  "password": "your-password"
+  "email": "owner@example.com",
+  "password": "..."
 }
 ```
-
-Response:
 
 ```json
 {
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "expiresAt": "2024-01-27T10:00:00Z",
-  "user": {
-    "id": "user-123",
-    "username": "admin"
-  }
+  "user": { "id": "user_1", "email": "owner@example.com", "role": "admin" }
 }
 ```
 
-### Using the Token
-
-Include the token in the `Authorization` header:
+The token travels in the `Authorization` header:
 
 ```bash
 curl http://localhost:8080/api/v1/workflows \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 ```
 
-### Token Refresh
+Sessions are stored, so `POST /api/v1/auth/logout` revokes the token
+immediately and a restart does not invalidate it.
+
+### API key
 
 ```bash
-POST /api/v1/auth/refresh
-Authorization: Bearer <current-token>
-```
-
-Response:
-
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "expiresAt": "2024-01-28T10:00:00Z"
-}
-```
-
-### Configuration
-
-Configure JWT in `config.yaml`:
-
-```yaml
-security:
-  jwt:
-    enabled: true
-    secret: "your-secret-key-min-32-characters"
-    expiration: "24h"
-```
-
-## API Key Authentication
-
-API keys are ideal for programmatic access and integrations.
-
-### Creating an API Key
-
-```bash
-POST /api/v1/api-keys
+POST /api/v1/auth/api-keys
 Authorization: Bearer <jwt-token>
 Content-Type: application/json
 
 {
   "name": "CI/CD Integration",
-  "expiresAt": "2025-01-01T00:00:00Z"
+  "permissions": ["workflow:read", "workflow:execute"]
 }
 ```
-
-Response:
 
 ```json
 {
-  "id": "key-123",
-  "name": "CI/CD Integration",
-  "key": "m9m_sk_abc123def456...",
-  "createdAt": "2024-01-26T10:00:00Z",
-  "expiresAt": "2025-01-01T00:00:00Z"
+  "apiKey": {
+    "id": "apik_...",
+    "name": "CI/CD Integration",
+    "prefix": "AbCdEfGh",
+    "permissions": ["workflow:read", "workflow:execute"],
+    "active": true
+  },
+  "key": "<the plaintext key - shown exactly once>"
 }
 ```
 
-!!! warning "Save the Key"
-    The API key is only shown once. Store it securely.
+!!! warning "Save the key"
+    The plaintext key is returned once and never again. The store keeps
+    only the SHA-256 digest plus the first 8 characters (the prefix) as
+    the lookup index, so a lost key cannot be recovered - it has to be
+    revoked and replaced.
 
-### Using API Keys
-
-Include the key in the `X-API-Key` header:
-
-```bash
-curl http://localhost:8080/api/v1/workflows \
-  -H "X-API-Key: m9m_sk_abc123def456..."
-```
-
-### Managing API Keys
-
-**List keys:**
+Revoke a key:
 
 ```bash
-GET /api/v1/api-keys
+DELETE /api/v1/auth/api-keys/<id>
 ```
 
-**Revoke a key:**
+A revoked key answers `401` on its next use.
 
-```bash
-DELETE /api/v1/api-keys/key-123
-```
+## Roles and permissions
 
-### Configuration
+| Role | Scopes |
+|------|--------|
+| `admin` (owner) | everything, including user management and the credential export/import |
+| `member` | read/write workflows, execute them, read + write credential envelopes |
+| `viewer` | read-only workflows and executions |
 
-Enable API keys in `config.yaml`:
+Two fine-grained grants exist. They are **never** granted by a role -
+they have to be attached to an individual API key on purpose:
 
-```yaml
-security:
-  api_keys:
-    enabled: true
-```
+| Grant | Effect |
+|-------|--------|
+| `credentials:read-data` | the key may read the secret `data` blob of a credential |
+| `credentials:export` | the key may call the credential export/import bundle |
 
-## Basic Authentication
+## Credential secrets
 
-Basic auth provides simple username/password authentication.
+`GET /api/v1/credentials/{id}` returns the secret `data` payload **only**
+for
 
-### Usage
+* a session of an editor role (`admin` or `member`), or
+* an API key with the explicit `credentials:read-data` grant.
 
-```bash
-curl http://localhost:8080/api/v1/workflows \
-  -u "admin:password"
+Every other caller (an automation key without that grant, a viewer
+session) gets the safe envelope - the same shape the list endpoint
+returns, without the secrets. Every read of the secret payload is written
+to the audit log (metadata only: user, IP, credential names, timestamp -
+never values).
 
-# Or with explicit header
-curl http://localhost:8080/api/v1/workflows \
-  -H "Authorization: Basic YWRtaW46cGFzc3dvcmQ="
-```
+`GET /api/v1/credentials/export` and `POST /api/v1/credentials/import`
+are admin-only and also write a structured audit entry. The export keeps
+the n8n wire format: the credential payload stays encrypted.
 
-### Configuration
+## Auth routes
 
-Enable basic auth in `config.yaml`:
+| Route | Auth |
+|-------|------|
+| `POST /api/v1/auth/login` | public |
+| `POST /api/v1/auth/register` | public **only** while the instance has no user |
+| `POST /api/v1/auth/invites/accept` | public |
+| `POST /api/v1/auth/logout` | session |
+| `GET /api/v1/auth/me`, `PATCH /api/v1/auth/me` | session |
+| `GET /api/v1/auth/users`, `POST /api/v1/auth/users` | session (admin) |
+| `GET/PATCH/DELETE /api/v1/auth/users/{id}` | session (admin) |
+| `POST /api/v1/auth/invites` | session |
+| `GET/POST /api/v1/auth/api-keys` | session |
+| `DELETE /api/v1/auth/api-keys/{id}` | session |
 
-```yaml
-security:
-  basic_auth:
-    enabled: true
-    username: "admin"
-    password: "your-secure-password"
-```
+### Bootstrap owner and the first-registration window
 
-!!! note "Production Usage"
-    Basic auth is recommended only for development or when behind a reverse proxy with TLS.
+With `M9M_ADMIN_EMAIL` + `M9M_ADMIN_PASSWORD` the instance creates its
+owner account on the first boot and closes the public registration window.
+The call is idempotent: a restart never resets the password.
 
-## Authentication Errors
+Without those variables the window stays open until the **first**
+registration succeeds - that first account becomes the owner, and the
+window closes. Afterwards a new account can only be created by an admin
+through an invitation token.
 
-### 401 Unauthorized
+## Public endpoints (the allowlist)
+
+These are the only paths that reach a handler without a credential:
+
+| Endpoint | Why |
+|----------|-----|
+| `GET /health`, `GET /healthz` | liveness probes |
+| `GET /ready` | readiness probe |
+| `POST /api/v1/auth/login` | login |
+| `POST /api/v1/auth/register` | first-boot registration (only while zero users) |
+| `POST /api/v1/auth/invites/accept` | invitation acceptance |
+| `POST /api/v1/auth/password/reset`, `.../reset/confirm` | password reset |
+| `POST /webhook/*` | webhook triggers - they carry their own authentication |
+| `/api/v1/webhooks/*` | webhook management for the webhook nodes |
+
+Everything else under `/api/v1` answers `401` without a credential.
+
+## Error format
 
 ```json
 {
-  "error": "Unauthorized",
-  "code": "AUTH_REQUIRED",
-  "message": "Authentication required"
+  "error": true,
+  "message": "Unauthorized: valid authentication required",
+  "code": 401
 }
 ```
 
-**Causes:**
+| Status | Meaning |
+|--------|---------|
+| `401` | no credential, wrong key, expired or revoked session, key in the query string |
+| `403` | authenticated, but the role or the grant is insufficient (e.g. credential export without admin) |
 
-- Missing authentication header
-- Invalid or expired token
-- Invalid API key
-
-### 403 Forbidden
-
-```json
-{
-  "error": "Forbidden",
-  "code": "ACCESS_DENIED",
-  "message": "Insufficient permissions"
-}
-```
-
-**Causes:**
-
-- Valid auth but insufficient permissions
-- Resource access not allowed
-
-## Public Endpoints
-
-Some endpoints don't require authentication:
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /health` | Health check |
-| `GET /ready` | Readiness check |
-| `POST /api/v1/auth/login` | Login |
-| `POST /webhook/*` | Webhook endpoints (use webhook auth) |
-
-## Security Best Practices
-
-### Token Storage
-
-- **Browser**: Store in httpOnly cookies or secure storage
-- **Server**: Store in environment variables or secret managers
-- **Never**: Store in code, logs, or version control
-
-### Token Rotation
-
-- Use short-lived JWT tokens (hours, not days)
-- Implement token refresh for long sessions
-- Rotate API keys periodically
-
-### HTTPS
-
-Always use HTTPS in production:
-
-```yaml
-server:
-  tls:
-    enabled: true
-    cert_file: "/path/to/cert.pem"
-    key_file: "/path/to/key.pem"
-```
-
-### Rate Limiting
-
-Configure rate limiting:
-
-```yaml
-performance:
-  rate_limit:
-    enabled: true
-    requests_per_minute: 60
-    burst: 10
-```
-
-## CORS Configuration
-
-Configure CORS for web applications:
-
-```yaml
-security:
-  cors:
-    enabled: true
-    allowed_origins:
-      - "https://app.example.com"
-      - "http://localhost:3000"
-    allowed_methods:
-      - "GET"
-      - "POST"
-      - "PUT"
-      - "DELETE"
-    allowed_headers:
-      - "Content-Type"
-      - "Authorization"
-    allow_credentials: true
-```
-
-## Example: Full Authentication Flow
+## Example: full flow
 
 ```bash
-# 1. Login to get JWT token
+# 1. Login
 TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "password"}' \
+  -d '{"email":"owner@example.com","password":"..."}' \
   | jq -r '.token')
 
-# 2. Create an API key for automation
-API_KEY=$(curl -s -X POST http://localhost:8080/api/v1/api-keys \
+# 2. Create an automation key
+API_KEY=$(curl -s -X POST http://localhost:8080/api/v1/auth/api-keys \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name": "automation"}' \
+  -d '{"name":"automation","permissions":["workflow:read","workflow:execute"]}' \
   | jq -r '.key')
 
-# 3. Use API key for subsequent requests
-curl http://localhost:8080/api/v1/workflows \
-  -H "X-API-Key: $API_KEY"
+# 3. Use it
+curl http://localhost:8080/api/v1/workflows -H "X-API-Key: $API_KEY"
 ```
+
+## Operational notes
+
+- Rotate the JWT secret and the API keys on a schedule - see
+  `docs/security/rotation-checklist.md`.
+- Never put a key into a URL, a log line or a spreadsheet.
+- Use TLS in front of the API: the bearer token and the API key are
+  bearer credentials.
+- Keep `M9M_AUTH_ENABLED=true` in production. `false` reopens the API and
+  is the rollback switch of last resort.
 
 ## See Also
 
-- [Security Configuration](../configuration/security.md) - Full security settings
-- [Deployment](../deployment/production.md) - Production security
+- `config/config.yaml` - the `security:` block mirrors this contract
+- `docs/security/rotation-checklist.md` - rotation of exposed secrets
+- [Security Configuration](../configuration/security.md) - full security settings

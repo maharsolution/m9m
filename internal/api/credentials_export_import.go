@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorilla/mux"
 
+	"github.com/neul-labs/m9m/internal/auth"
 	"github.com/neul-labs/m9m/internal/credentials"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/storage"
@@ -62,6 +63,10 @@ func (s *APIServer) RegisterCredentialExportRoutes(api *mux.Router) {
 // leave the instance: an m9m instance (or n8n) that is configured with
 // the same N8N_ENCRYPTION_KEY can decrypt the file.
 func (s *APIServer) ExportCredentials(w http.ResponseWriter, r *http.Request) {
+	if !s.requireCredentialSecretAccess(w, r, AuditActionCredentialExport) {
+		return
+	}
+
 	ids, err := s.parseExportIDs(r)
 	if err != nil {
 		s.sendError(w, http.StatusBadRequest, "Invalid export request", err)
@@ -109,6 +114,7 @@ func (s *APIServer) ExportCredentials(w http.ResponseWriter, r *http.Request) {
 	}
 
 	exported := make([]credentials.ExportCredential, 0, len(credentialsList))
+	names := make([]string, 0, len(credentialsList))
 	for _, credential := range credentialsList {
 		blob, encErr := credentials.EncryptCredentialData(cipher, credential.Data)
 		if encErr != nil {
@@ -121,12 +127,65 @@ func (s *APIServer) ExportCredentials(w http.ResponseWriter, r *http.Request) {
 			Type: credential.Type,
 			Data: blob,
 		})
+		names = append(names, credential.Name)
 	}
+
+	// The export carries the encrypted secrets - audit it. Only the
+	// credential NAMES are recorded, never a value.
+	s.audit(r, AuditEvent{
+		Action: AuditActionCredentialExport,
+		Result: "allowed",
+		Names:  names,
+		Count:  len(names),
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", `attachment; filename="credentials-export.json"`)
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(exported)
+}
+
+// requireCredentialSecretAccess authorises a secret-bearing credential
+// operation (export / import).
+//
+// Those endpoints hand out (or accept) the encrypted secret payload of
+// every credential, so they need an admin session - or an API key that
+// carries the explicit "credentials:export" grant. Everybody else gets
+// a 403 and a "denied" audit line.
+//
+// A request WITHOUT an auth context is an in-process call (the engine,
+// a unit test) - those keep the historic behaviour.
+func (s *APIServer) requireCredentialSecretAccess(w http.ResponseWriter, r *http.Request, action string) bool {
+	authCtx := AuthFromContext(r.Context())
+	if authCtx == nil {
+		return true
+	}
+
+	// An API key needs an explicit grant of its own: the role of the
+	// user who owns the key does NOT leak through the key, otherwise
+	// every automation key of an admin could export every secret.
+	if authCtx.IsAPIKey() {
+		if authCtx.hasExplicitPermission(auth.PermissionCredentialExport) || authCtx.hasExplicitPermission("admin") {
+			return true
+		}
+	} else if authCtx.HasPermission("admin") {
+		// A session of an admin / owner may export.
+		return true
+	}
+
+	s.audit(r, AuditEvent{
+		Action: action,
+		Result: "denied",
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusForbidden)
+	_, _ = w.Write([]byte(`{
+		"error": true,
+		"message": "Admin access required: credential export/import exposes secret material",
+		"code": 403
+	}`))
+	return false
 }
 
 // ---------------------------------------------------------------------------
@@ -208,6 +267,10 @@ func credentialNameTypeKey(credType, name string) string {
 // The response lists the created credentials (id / name / type) so a
 // workflow import can re-link the node credential references.
 func (s *APIServer) ImportCredentials(w http.ResponseWriter, r *http.Request) {
+	if !s.requireCredentialSecretAccess(w, r, AuditActionCredentialImport) {
+		return
+	}
+
 	payload, err := s.readCredentialImportPayload(w, r)
 	if err != nil {
 		s.sendError(w, http.StatusBadRequest, "Failed to read the import payload", err)
@@ -225,6 +288,18 @@ func (s *APIServer) ImportCredentials(w http.ResponseWriter, r *http.Request) {
 	}
 
 	summary, _ := s.importCredentialEntries(entries, requestPlain)
+
+	// The import writes secret material - audit the credential names.
+	importedNames := make([]string, 0, len(summary.Credentials))
+	for _, imported := range summary.Credentials {
+		importedNames = append(importedNames, imported.Name)
+	}
+	s.audit(r, AuditEvent{
+		Action: AuditActionCredentialImport,
+		Result: "allowed",
+		Names:  importedNames,
+		Count:  len(importedNames),
+	})
 
 	if summary.Imported == 0 {
 		message := "No credential was imported"

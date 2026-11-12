@@ -44,6 +44,17 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 N8N_BASE = os.environ.get("N8N_BASE_URL", "http://187.77.113.218:5678")
 N8N_KEY = os.environ.get("N8N_API_KEY", "")
 M9M_BASE = os.environ.get("M9M_BASE_URL", "http://187.77.113.218:8080")
+# The m9m API is closed by default: every /api/v1 path needs a bearer
+# token or an X-API-Key header. The webhook paths stay public.
+M9M_KEY = os.environ.get("M9M_API_KEY", "")
+
+
+def m9m_headers(extra: dict | None = None) -> dict:
+    """Headers for an m9m API call (the value is never printed)."""
+    headers = dict(extra or {})
+    if M9M_KEY:
+        headers["X-API-Key"] = M9M_KEY
+    return headers
 
 # ---------------------------------------------------------------------------
 # Static case definitions (mirror Google Sheet rows 5..10 of each sheet)
@@ -409,13 +420,13 @@ def cmd_sync(_args) -> int:
                 node["typeVersion"] = int(tv)
         # POST first, fall back to PUT for duplicates
         s, b = http_json("POST", f"{M9M_BASE}/api/v1/workflows",
-                         {"Content-Type": "application/json"}, wf)
+                         m9m_headers({"Content-Type": "application/json"}), wf)
         if 200 <= s < 300:
             pushed += 1
             continue
         if wf_id:
             s, b = http_json("PUT", f"{M9M_BASE}/api/v1/workflows/{wf_id}",
-                             {"Content-Type": "application/json"}, wf)
+                             m9m_headers({"Content-Type": "application/json"}), wf)
             if 200 <= s < 300:
                 pushed += 1
                 continue
@@ -423,7 +434,7 @@ def cmd_sync(_args) -> int:
         print(f"[sync]   ! {wf.get('name')} ({wf_id}): status={s} body={b}", file=sys.stderr)
         if wf_id:
             s, b = http_json("PUT", f"{M9M_BASE}/api/v1/workflows/{wf_id}",
-                             {"Content-Type": "application/json"}, wf)
+                             m9m_headers({"Content-Type": "application/json"}), wf)
             if 200 <= s < 300:
                 pushed += 1
     (OUT_DIR / "sync-cycle.json").write_text(json.dumps({

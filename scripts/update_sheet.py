@@ -6,19 +6,41 @@ Usage:
     python scripts/update_sheet.py write 'Validasi N8N - M9M!G7:G7' '[["DONE"]]'
     python scripts/update_sheet.py append 'Validasi N8N - M9M!A:H' '[["7","..."]]'
 
-The API key is intentionally hard-coded so this script is self-contained
-when run inside the workspace — see .claude/skills/google-sheets-updater/SKILL.md
-for the auth model and failure-mode notes.
+The API key comes from the ``M9M_SHEETS_API_KEY`` environment variable.
+The hard-coded literal is kept only as a deprecated fallback for
+    machines that have not migrated yet; it prints a warning and must
+    never be printed itself - see
+.claude/skills/google-sheets-updater/SKILL.md for the auth model and
+failure-mode notes.
 """
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 import urllib.parse
 import urllib.request
 
-API_KEY = "AIzaSyC-SHoCO1DoZp3tOuyYa_W7AVVfr2tKf6k"
+# Deprecated fallback only - prefer M9M_SHEETS_API_KEY.
+_LEGACY_API_KEY = "AIzaSyC-SHoCO1DoZp3tOuyYa_W7AVVfr2tKf6k"
+
+
+def _resolve_api_key() -> str:
+    """Return the Sheets API key without ever printing it."""
+    key = (os.environ.get("M9M_SHEETS_API_KEY") or "").strip()
+    if key:
+        return key
+
+    print(
+        "WARNING: M9M_SHEETS_API_KEY is not set - falling back to the deprecated "
+        "built-in Sheets key. Set M9M_SHEETS_API_KEY and retire the literal.",
+        file=sys.stderr,
+    )
+    return _LEGACY_API_KEY
+
+
+API_KEY = _resolve_api_key()
 SPREADSHEET_ID = "1PAz38gDk2Fa_6SlBtC3fWss3YfL_KgroEAwCpiY7aDQ"
 BASE = f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}"
 

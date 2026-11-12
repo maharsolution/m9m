@@ -65,6 +65,10 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 N8N_BASE_URL = os.environ.get("N8N_BASE_URL", "http://n8n-designer-frontend:5678")
 N8N_API_KEY = os.environ.get("N8N_API_KEY", "")
 M9M_BASE_URL = os.environ.get("M9M_BASE_URL", "http://m9m-backend:8080")
+# The m9m API is closed by default: every /api/v1 path needs a bearer
+# token or an X-API-Key header. The bridge authenticates with the
+# automation key from M9M_API_KEY (never with the n8n key).
+M9M_API_KEY = os.environ.get("M9M_API_KEY", "")
 POLL_INTERVAL_SECONDS = int(os.environ.get("POLL_INTERVAL_SECONDS", "30"))
 ONLY_ACTIVE = os.environ.get("SYNC_ONLY_ACTIVE", "true").lower() == "true"
 SYNC_PORT = int(os.environ.get("SYNC_PORT", "8001"))
@@ -118,6 +122,19 @@ def http_json(method, url, headers=None, body=None):
             return e.code, json.loads(raw)
         except json.JSONDecodeError:
             return e.code, raw
+
+
+def m9m_headers(extra=None):
+    """Headers for an m9m API call.
+
+    The m9m API rejects anonymous /api/v1 calls with 401, so the
+    automation key travels in the X-API-Key header. The value is never
+    printed.
+    """
+    headers = dict(extra or {})
+    if M9M_API_KEY:
+        headers["X-API-Key"] = M9M_API_KEY
+    return headers
 
 
 def fetch_n8n_workflows():
@@ -867,7 +884,7 @@ def fetch_m9m_node_types(base_url=None):
         status, body = http_json(
             "GET",
             f"{base}/api/v1/node-types",
-            headers={"Accept": "application/json"},
+            headers=m9m_headers({"Accept": "application/json"}),
         )
     except Exception as e:
         print(f"[sync] node-type lookup failed: {e}")
@@ -889,7 +906,7 @@ def fetch_m9m_node_types(base_url=None):
 def push_to_m9m(workflow, source="manual"):
     """Push a single workflow. Returns ("created"|"updated"|"failed", status, body)."""
     wf_id = workflow.get("id")
-    headers = {"Content-Type": "application/json"}
+    headers = m9m_headers({"Content-Type": "application/json"})
 
     status, body = http_json("POST", f"{M9M_BASE_URL}/api/v1/workflows", headers, workflow)
     if 200 <= status < 300:
@@ -942,7 +959,7 @@ def push_batch_to_m9m(payloads, active_state=ACTIVE_STATE_FALSE, source="import"
         # n8n's `--activeState=fromJson`; m9m honours the JSON `active`
         # flag only when the request asks for it explicitly.
         url += "?activeState=fromJson"
-    headers = {"Content-Type": "application/json"}
+    headers = m9m_headers({"Content-Type": "application/json"})
 
     status, body = http_json("POST", url, headers, payloads)
 
@@ -1184,7 +1201,7 @@ def push_credential_to_m9m(cred_envelope, source="manual"):
     Returns ("created"|"updated"|"failed"|"skipped", status, body).
     """
     cred_id = cred_envelope.get("id")
-    headers = {"Content-Type": "application/json"}
+    headers = m9m_headers({"Content-Type": "application/json"})
 
     encrypted_data = cred_envelope.get("data", "")
     if not encrypted_data:
@@ -1348,7 +1365,7 @@ def push_data_table_to_m9m(table_id, table_name, rows, source="manual"):
     if not rows:
         return "skipped", 0, None
 
-    headers = {"Content-Type": "application/json"}
+    headers = m9m_headers({"Content-Type": "application/json"})
     body = {"rows": rows}
     url = f"{M9M_BASE_URL}/api/v1/data-tables/{table_id}/rows"
     status, resp_body = http_json("POST", url, headers, body)

@@ -15,7 +15,8 @@ Do not conflate n8n's public API with its editor REST API. Endpoint availability
 
 - `GET /credentials`: `{data: [...], nextCursor: null}`. List items omit secret `data`. `limit` defaults to 100, capped at 250; current handler truncates rather than implementing cursor pagination. Do not assume a complete inventory from one limited page.
 - `POST /credentials`: accepts `name`, `type`, `data`, optional `id`/`isGlobal`; returns a data-stripped envelope. An ID-stable envelope alone does not supply usable authentication secrets.
-- `GET /credentials/{id}`: envelope **with stored `data`**, for editor prefill. This intentionally differs from the n8n public API's secret-stripped contract.
+- `GET /credentials/{id}`: envelope **with stored `data`**, for editor prefill - but ONLY for an authenticated editor session (JWT of an `admin`/`member` role) or an API key with the explicit `credentials:read-data` grant. Every other caller gets the list-style safe envelope without `data`. This intentionally differs from the n8n public API's secret-stripped contract.
+- `GET /credentials/export` and `POST /credentials/import`: admin-only (owner session, or a key with the explicit `credentials:export` grant). Both write a structured audit entry (user, IP, credential names, timestamp - never values). The export keeps the n8n wire format: the credential payload stays encrypted.
 - `PUT /credentials/{id}` and `PATCH /credentials/{id}`: update stored credential; changing type requires `data`. Current implementation merges credential data for partial updates.
 - `DELETE /credentials/{id}`: successful deletion returns **204**, not an assumed n8n 200.
 - `POST /credentials/{id}/test`: validates the stored credential.
@@ -31,6 +32,27 @@ Envelope fields include `id`, `name`, `type`, `isManaged`, `isGlobal`, `isResolv
 ## Secret handling
 
 **m9m detail reads can expose credential secrets. Restrict API access to authorized operators, use encrypted transport, never copy detail payloads into parity reports, logs or Google Sheets.** Public credential envelopes from n8n cannot reconstruct secrets. Provision secrets through an authorized secret-management path; never infer successful authentication from name/ID matching.
+
+The API itself enforces this: the secret `data` blob of a credential is only served to an editor session or to a key with the explicit `credentials:read-data` grant, and the credential export/import bundle is admin-only. Both paths write a structured audit entry that carries metadata only (user, IP, credential names, timestamp) and never a value. The parity evidence files under `tmp/parity-results/` are redacted in place for the same reason: a credential `data` object that is captured in a raw response body must not keep a live password, an SSH private key or a connection string.
+
+## API authentication of the credential routes
+
+Every route under `/api/v1` - the credential routes included - requires a credential:
+
+| Caller | `GET /api/v1/credentials` | `GET /api/v1/credentials/{id}` | `/credentials/export`, `/credentials/import` |
+|--------|--------------------------|-------------------------------|-----------------------------------------------|
+| no credential | 401 | 401 | 401 |
+| wrong API key | 401 | 401 | 401 |
+| valid API key (no grant) | 200 (envelope) | 200 (**no `data`**) | 403 |
+| valid API key + `credentials:read-data` | 200 (envelope) | 200 (with `data`) | 403 unless `credentials:export` |
+| JWT `viewer` | 200 (envelope) | 200 (**no `data`**) | 403 |
+| JWT `member` (editor) | 200 (envelope) | 200 (with `data`) | 403 |
+| JWT `admin` (owner) | 200 (envelope) | 200 (with `data`) | 200 |
+
+The key is presented in the `X-API-Key` header only; a key in the query
+string is rejected. The env contract is documented in
+`documentation/docs/api/authentication.md` and in the `security:` block of
+`config/config.yaml`.
 
 ## Workflow mapping and sync requirements
 

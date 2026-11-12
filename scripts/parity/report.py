@@ -36,8 +36,36 @@ sys.path.insert(0, str(HERE))
 from signatures import curl_body_signature  # noqa: E402  (local module, path set above)
 
 SHEET_ID = "1PAz38gDk2Fa_6SlBtC3fWss3YfL_KgroEAwCpiY7aDQ"
-SHEET_API_KEY = os.environ.get(
-    "PARITY_SHEET_API_KEY", "AIzaSyC-SHoCO1DoZp3tOuyYa_W7AVVfr2tKf6k")
+
+# The Sheets read key comes from M9M_SHEETS_API_KEY. The literal below is
+# a DEPRECATED fallback - it keeps the script runnable on a machine that
+# has not migrated yet, but it prints a warning. Never print the value.
+_LEGACY_SHEET_API_KEY = "AIzaSyC-SHoCO1DoZp3tOuyYa_W7AVVfr2tKf6k"
+
+
+def _resolve_sheet_api_key() -> str:
+    """Return the Sheets API key without ever printing it."""
+    key = (os.environ.get("M9M_SHEETS_API_KEY") or "").strip()
+    if key:
+        return key
+
+    legacy = (os.environ.get("PARITY_SHEET_API_KEY") or "").strip()
+    if legacy:
+        print(
+            "WARNING: PARITY_SHEET_API_KEY is deprecated - use M9M_SHEETS_API_KEY instead",
+            file=sys.stderr,
+        )
+        return legacy
+
+    print(
+        "WARNING: M9M_SHEETS_API_KEY is not set - falling back to the deprecated "
+        "built-in Sheets key. Set M9M_SHEETS_API_KEY and retire the literal.",
+        file=sys.stderr,
+    )
+    return _LEGACY_SHEET_API_KEY
+
+
+SHEET_API_KEY = _resolve_sheet_api_key()
 POSITIVE_TAB = "Webhook Controlling"
 NEGATIVE_TAB = "Webhook Controlling Negative Test"
 

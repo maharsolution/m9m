@@ -10,11 +10,12 @@
     },
     {
       "id": "c106",
-      "name": "C1 m9m API answers without a key while n8n rejects anonymous API calls",
+      "name": "C1 m9m API requires a key while n8n rejects anonymous API calls",
       "check": "auth_probe",
-      "expect": "m9m-open",
+      "expect": "m9m-requires-key",
       "paths": ["/healthz", "/api/v1/node-types", "/api/v1/workflows"],
-      "notes": "Read-only GET probes. The result decides the header routing: the n8n key goes to n8n only, m9m gets no key unless M9M_API_KEY is configured."
+      "protected_paths": ["/api/v1/node-types", "/api/v1/workflows"],
+      "notes": "Read-only GET probes. m9m is closed by default: every /api/v1 path answers 401 without a credential, /healthz stays public, and the configured X-API-Key is accepted. The n8n key goes to n8n only; the m9m key goes to m9m only."
     }
   ]
 }

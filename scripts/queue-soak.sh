@@ -74,7 +74,7 @@ def fire():
             data=b'{}',
             headers={
                 'Content-Type': 'application/json',
-                'X-N8N-API-KEY': api_key,
+                'X-API-Key': api_key,
             },
             method='POST',
         )

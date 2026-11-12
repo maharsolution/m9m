@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/neul-labs/m9m/internal/auth"
 	"github.com/neul-labs/m9m/internal/storage"
 )
 
@@ -90,8 +91,19 @@ func (s *APIServer) ListCredentials(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetCredential returns the envelope for a single credential, WITH its
-// `data` payload attached so the UI can pre-fill the edit form.
+// GetCredential returns the envelope for a single credential.
+//
+// The secret payload (`data`) is only attached when the caller may read
+// it:
+//
+//   - a session of an editor role (member or admin) - the credential
+//     editor pre-fills its form with the real values
+//   - an API key with the explicit "credentials:read-data" permission
+//
+// Every other caller (an automation key without that grant, a viewer
+// session) gets the safe envelope - the very same shape the list
+// endpoint returns. Every read of the secret payload is written to the
+// audit log (metadata only).
 func (s *APIServer) GetCredential(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	credential, err := s.storage.GetCredential(id)
@@ -99,7 +111,52 @@ func (s *APIServer) GetCredential(w http.ResponseWriter, r *http.Request) {
 		s.sendError(w, http.StatusNotFound, "Credential not found", err)
 		return
 	}
-	s.sendJSON(w, http.StatusOK, toCredentialResponseWithData(credential))
+
+	if canReadCredentialData(AuthFromContext(r.Context())) {
+		s.audit(r, AuditEvent{
+			Action: AuditActionCredentialReadData,
+			Result: "allowed",
+			Names:  []string{credential.Name},
+			Count:  1,
+		})
+		s.sendJSON(w, http.StatusOK, toCredentialResponseWithData(credential))
+		return
+	}
+
+	s.audit(r, AuditEvent{
+		Action: AuditActionCredentialReadData,
+		Result: "denied",
+		Names:  []string{credential.Name},
+		Count:  1,
+	})
+	s.sendJSON(w, http.StatusOK, toCredentialResponse(credential))
+}
+
+// canReadCredentialData reports whether the caller may see the secret
+// payload of a credential.
+//
+// A request WITHOUT an auth context is an in-process call (the engine's
+// credential manager, a unit test) - those keep the historic behaviour.
+// Every request that arrives over HTTP has an auth context, because
+// the authentication middleware rejects anonymous requests before a
+// handler runs.
+func canReadCredentialData(authCtx *AuthContext) bool {
+	if authCtx == nil {
+		return true
+	}
+
+	// An API key needs the explicit grant - the role of its owner does
+	// not leak through the key.
+	if authCtx.IsAPIKey() {
+		return authCtx.hasExplicitPermission(auth.PermissionCredentialReadData)
+	}
+
+	// A session of an editor role may read the credential it edits.
+	if authCtx.IsJWT() && auth.UserRole(authCtx.Role).IsEditor() {
+		return true
+	}
+
+	return authCtx.hasExplicitPermission(auth.PermissionCredentialReadData)
 }
 
 // credentialCreateRequest is the inbound POST/PATCH body. Mirrors n8n's
@@ -161,7 +218,24 @@ func (s *APIServer) CreateCredential(w http.ResponseWriter, r *http.Request) {
 		s.credMgr.UpsertCredential(cred)
 	}
 
-	s.sendJSON(w, http.StatusCreated, toCredentialResponseWithData(cred))
+	s.sendCredentialEnvelope(w, r, http.StatusCreated, cred)
+}
+
+// sendCredentialEnvelope writes a credential response whose `data`
+// payload is only attached to a caller that may read secrets.
+//
+// It is the same rule as the single-credential GET: an editor session
+// or a key with the explicit "credentials:read-data" permission gets
+// the payload, everybody else gets the safe envelope. The create /
+// update answers echo the payload back, so they must obey the same
+// rule - otherwise a caller without the grant could read the secrets
+// of a credential it just updated.
+func (s *APIServer) sendCredentialEnvelope(w http.ResponseWriter, r *http.Request, status int, credential *storage.Credential) {
+	if canReadCredentialData(AuthFromContext(r.Context())) {
+		s.sendJSON(w, status, toCredentialResponseWithData(credential))
+		return
+	}
+	s.sendJSON(w, status, toCredentialResponse(credential))
 }
 
 // UpdateCredential performs a partial update via PATCH (n8n) and a full
@@ -218,7 +292,7 @@ func (s *APIServer) UpdateCredential(w http.ResponseWriter, r *http.Request) {
 		s.credMgr.UpsertCredential(&merged)
 	}
 
-	s.sendJSON(w, http.StatusOK, toCredentialResponseWithData(&merged))
+	s.sendCredentialEnvelope(w, r, http.StatusOK, &merged)
 }
 
 // mergeCredentialData overlays the fields present in `patch` onto a

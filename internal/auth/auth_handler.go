@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -9,11 +8,6 @@ import (
 
 	"github.com/gorilla/mux"
 )
-
-// contextKey is a custom type for context keys to avoid collisions.
-type contextKey string
-
-const userContextKey contextKey = "user"
 
 // AuthHandler handles authentication HTTP requests
 type AuthHandler struct {
@@ -27,34 +21,56 @@ func NewAuthHandler(authManager *AuthManager) *AuthHandler {
 	}
 }
 
-// RegisterRoutes registers authentication routes
-func (h *AuthHandler) RegisterRoutes(router *mux.Router) {
-	api := router.PathPrefix("/api/v1").Subrouter()
-
+// RegisterRoutes registers the authentication routes.
+//
+// It is called with the /api/v1 subrouter of the main router, so the
+// paths below end up as:
+//
+//	POST   /api/v1/auth/login
+//	POST   /api/v1/auth/register
+//	POST   /api/v1/auth/logout
+//	GET    /api/v1/auth/me
+//	PATCH  /api/v1/auth/me
+//	GET    /api/v1/auth/users
+//	POST   /api/v1/auth/users
+//	GET    /api/v1/auth/users/{id}
+//	PATCH  /api/v1/auth/users/{id}
+//	DELETE /api/v1/auth/users/{id}
+//	POST   /api/v1/auth/invites
+//	POST   /api/v1/auth/invites/accept
+//	GET    /api/v1/auth/api-keys
+//	POST   /api/v1/auth/api-keys
+//	DELETE /api/v1/auth/api-keys/{id}
+//
+// The login and register endpoints are the only public ones - the API
+// middleware lets them through (see the public allowlist in
+// internal/api/middleware.go); every other route below authenticates
+// the caller itself.
+func (h *AuthHandler) RegisterRoutes(api *mux.Router) {
 	// Public endpoints (no auth required)
-	api.HandleFunc("/login", h.Login).Methods("POST", "OPTIONS")
-	api.HandleFunc("/register", h.Register).Methods("POST", "OPTIONS")
-	api.HandleFunc("/invites/accept", h.AcceptInvite).Methods("POST", "OPTIONS")
+	api.HandleFunc("/auth/login", h.Login).Methods("POST", "OPTIONS")
+	api.HandleFunc("/auth/register", h.Register).Methods("POST", "OPTIONS")
+	api.HandleFunc("/auth/invites/accept", h.AcceptInvite).Methods("POST", "OPTIONS")
 
 	// Authenticated endpoints (require JWT)
-	api.HandleFunc("/logout", h.AuthMiddleware(h.Logout)).Methods("POST", "OPTIONS")
-	api.HandleFunc("/me", h.AuthMiddleware(h.GetCurrentUser)).Methods("GET", "OPTIONS")
-	api.HandleFunc("/me", h.AuthMiddleware(h.UpdateCurrentUser)).Methods("PATCH", "OPTIONS")
+	api.HandleFunc("/auth/logout", h.AuthMiddleware(h.Logout)).Methods("POST", "OPTIONS")
+	api.HandleFunc("/auth/me", h.AuthMiddleware(h.GetCurrentUser)).Methods("GET", "OPTIONS")
+	api.HandleFunc("/auth/me", h.AuthMiddleware(h.UpdateCurrentUser)).Methods("PATCH", "OPTIONS")
 
 	// User management (admin only)
-	api.HandleFunc("/users", h.AuthMiddleware(h.ListUsers)).Methods("GET", "OPTIONS")
-	api.HandleFunc("/users", h.AuthMiddleware(h.CreateUser)).Methods("POST", "OPTIONS")
-	api.HandleFunc("/users/{id}", h.AuthMiddleware(h.GetUser)).Methods("GET", "OPTIONS")
-	api.HandleFunc("/users/{id}", h.AuthMiddleware(h.UpdateUser)).Methods("PATCH", "OPTIONS")
-	api.HandleFunc("/users/{id}", h.AuthMiddleware(h.DeleteUser)).Methods("DELETE", "OPTIONS")
+	api.HandleFunc("/auth/users", h.AuthMiddleware(h.ListUsers)).Methods("GET", "OPTIONS")
+	api.HandleFunc("/auth/users", h.AuthMiddleware(h.CreateUser)).Methods("POST", "OPTIONS")
+	api.HandleFunc("/auth/users/{id}", h.AuthMiddleware(h.GetUser)).Methods("GET", "OPTIONS")
+	api.HandleFunc("/auth/users/{id}", h.AuthMiddleware(h.UpdateUser)).Methods("PATCH", "OPTIONS")
+	api.HandleFunc("/auth/users/{id}", h.AuthMiddleware(h.DeleteUser)).Methods("DELETE", "OPTIONS")
 
 	// Invitations (admin/member)
-	api.HandleFunc("/invites", h.AuthMiddleware(h.InviteUser)).Methods("POST", "OPTIONS")
+	api.HandleFunc("/auth/invites", h.AuthMiddleware(h.InviteUser)).Methods("POST", "OPTIONS")
 
 	// API keys
-	api.HandleFunc("/api-keys", h.AuthMiddleware(h.ListAPIKeys)).Methods("GET", "OPTIONS")
-	api.HandleFunc("/api-keys", h.AuthMiddleware(h.CreateAPIKey)).Methods("POST", "OPTIONS")
-	api.HandleFunc("/api-keys/{id}", h.AuthMiddleware(h.DeleteAPIKey)).Methods("DELETE", "OPTIONS")
+	api.HandleFunc("/auth/api-keys", h.AuthMiddleware(h.ListAPIKeys)).Methods("GET", "OPTIONS")
+	api.HandleFunc("/auth/api-keys", h.AuthMiddleware(h.CreateAPIKey)).Methods("POST", "OPTIONS")
+	api.HandleFunc("/auth/api-keys/{id}", h.AuthMiddleware(h.DeleteAPIKey)).Methods("DELETE", "OPTIONS")
 }
 
 // Login handles user login
@@ -78,12 +94,30 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Register handles user registration
+// Register handles user registration.
+//
+// Public registration is only open while the instance has NO users at
+// all (the first account becomes the owner). Once an owner exists the
+// endpoint answers 403 - further accounts are created by an admin
+// through an invitation token.
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var registration UserRegistration
 	if err := json.NewDecoder(r.Body).Decode(&registration); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
+	}
+
+	// An invitation token is the only way in once an owner exists.
+	if strings.TrimSpace(registration.InviteToken) == "" {
+		allowed, err := h.authManager.PublicRegistrationOpen()
+		if err != nil {
+			http.Error(w, "Failed to read the user store", http.StatusInternalServerError)
+			return
+		}
+		if !allowed {
+			http.Error(w, "Registration is closed - this instance already has an owner", http.StatusForbidden)
+			return
+		}
 	}
 
 	user, err := h.authManager.Register(&registration)
@@ -115,7 +149,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 
 // GetCurrentUser returns the current authenticated user
 func (h *AuthHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
-	user := r.Context().Value(userContextKey).(*User)
+	user := currentUser(r)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(user)
@@ -123,7 +157,7 @@ func (h *AuthHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 
 // UpdateCurrentUser updates the current user's information
 func (h *AuthHandler) UpdateCurrentUser(w http.ResponseWriter, r *http.Request) {
-	user := r.Context().Value(userContextKey).(*User)
+	user := currentUser(r)
 
 	var update UserUpdate
 	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
@@ -149,7 +183,7 @@ func (h *AuthHandler) UpdateCurrentUser(w http.ResponseWriter, r *http.Request) 
 
 // ListUsers lists all users (admin only)
 func (h *AuthHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
-	user := r.Context().Value(userContextKey).(*User)
+	user := currentUser(r)
 
 	if user.Role != string(RoleAdmin) {
 		http.Error(w, "Insufficient permissions", http.StatusForbidden)
@@ -177,7 +211,7 @@ func (h *AuthHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 // CreateUser creates a new user (admin only)
 func (h *AuthHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
-	user := r.Context().Value(userContextKey).(*User)
+	user := currentUser(r)
 
 	if user.Role != string(RoleAdmin) {
 		http.Error(w, "Insufficient permissions", http.StatusForbidden)
@@ -203,9 +237,9 @@ func (h *AuthHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 // GetUser gets a user by ID (admin only)
 func (h *AuthHandler) GetUser(w http.ResponseWriter, r *http.Request) {
-	currentUser := r.Context().Value("user").(*User)
+	actor := currentUser(r)
 
-	if currentUser.Role != string(RoleAdmin) {
+	if actor.Role != string(RoleAdmin) {
 		http.Error(w, "Insufficient permissions", http.StatusForbidden)
 		return
 	}
@@ -225,7 +259,7 @@ func (h *AuthHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 
 // UpdateUser updates a user (admin only)
 func (h *AuthHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
-	currentUser := r.Context().Value("user").(*User)
+	actor := currentUser(r)
 
 	vars := mux.Vars(r)
 	userID := vars["id"]
@@ -236,7 +270,7 @@ func (h *AuthHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.authManager.UpdateUser(userID, &update, currentUser.ID); err != nil {
+	if err := h.authManager.UpdateUser(userID, &update, actor.ID); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -254,12 +288,12 @@ func (h *AuthHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 // DeleteUser deletes a user (admin only)
 func (h *AuthHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
-	currentUser := r.Context().Value("user").(*User)
+	actor := currentUser(r)
 
 	vars := mux.Vars(r)
 	userID := vars["id"]
 
-	if err := h.authManager.DeleteUser(userID, currentUser.ID); err != nil {
+	if err := h.authManager.DeleteUser(userID, actor.ID); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -269,7 +303,7 @@ func (h *AuthHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 
 // InviteUser creates an invitation (admin/member)
 func (h *AuthHandler) InviteUser(w http.ResponseWriter, r *http.Request) {
-	currentUser := r.Context().Value("user").(*User)
+	actor := currentUser(r)
 
 	var req struct {
 		Email string `json:"email"`
@@ -281,7 +315,7 @@ func (h *AuthHandler) InviteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	invite, err := h.authManager.InviteUser(req.Email, req.Role, currentUser.ID)
+	invite, err := h.authManager.InviteUser(req.Email, req.Role, actor.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -315,13 +349,21 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(user)
 }
 
-// CreateAPIKey creates a new API key
+// CreateAPIKey creates a new API key.
+//
+// The plaintext key is returned exactly once, in this response. The
+// store only ever keeps its SHA-256 digest.
+//
+// The optional `permissions` field narrows the key down to explicit
+// scopes (e.g. "credentials:read-data"). Without it the key inherits
+// the permissions of the owner's role.
 func (h *AuthHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
-	user := r.Context().Value(userContextKey).(*User)
+	user := currentUser(r)
 
 	var req struct {
-		Name      string     `json:"name"`
-		ExpiresAt *time.Time `json:"expiresAt,omitempty"`
+		Name        string     `json:"name"`
+		Permissions []string   `json:"permissions,omitempty"`
+		ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -329,23 +371,31 @@ func (h *AuthHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiKey, plainKey, err := h.authManager.CreateAPIKey(user.ID, req.Name, req.ExpiresAt)
+	apiKey, plainKey, err := h.authManager.CreateAPIKeyWithPermissions(user.ID, req.Name, req.Permissions, req.ExpiresAt)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// The stored digest never leaves the instance - the record is
+	// copied and stripped before it is answered.
+	safe := *apiKey
+	safe.Key = ""
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"apiKey": apiKey,
+		"apiKey": safe,
 		"key":    plainKey, // Only shown once!
 	})
 }
 
-// ListAPIKeys lists user's API keys
+// ListAPIKeys lists the user's API keys.
+//
+// The stored digest is never part of the answer - only the id, the
+// name, the prefix, the permissions and the lifecycle timestamps.
 func (h *AuthHandler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
-	user := r.Context().Value(userContextKey).(*User)
+	user := currentUser(r)
 
 	keys, err := h.authManager.userStorage.ListUserAPIKeys(user.ID)
 	if err != nil {
@@ -353,10 +403,20 @@ func (h *AuthHandler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	safe := make([]*APIKey, 0, len(keys))
+	for _, key := range keys {
+		if key == nil {
+			continue
+		}
+		copy := *key
+		copy.Key = "" // never expose the digest
+		safe = append(safe, &copy)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"data":  keys,
-		"count": len(keys),
+		"data":  safe,
+		"count": len(safe),
 	})
 }
 
@@ -373,9 +433,19 @@ func (h *AuthHandler) DeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// AuthMiddleware is a middleware that validates JWT tokens
+// AuthMiddleware authenticates the caller of an auth route.
+//
+// The API middleware (internal/api) already validated the caller and
+// stored the authenticated user in the request context; that user wins.
+// Without it (the auth routes mounted on their own) the bearer token
+// is validated here.
 func (h *AuthHandler) AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if user, ok := UserFromContext(r.Context()); ok {
+			next(w, r.WithContext(ContextWithUser(r.Context(), user)))
+			return
+		}
+
 		token := extractToken(r)
 		if token == "" {
 			http.Error(w, "No authorization token provided", http.StatusUnauthorized)
@@ -389,15 +459,28 @@ func (h *AuthHandler) AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Add user to context
-		ctx := r.Context()
-		ctx = context.WithValue(ctx, userContextKey, user)
+		ctx := ContextWithUser(r.Context(), user)
 		r = r.WithContext(ctx)
 
 		next(w, r)
 	}
 }
 
-// extractToken extracts JWT token from Authorization header or query parameter
+// currentUser returns the authenticated user of the request. The
+// handlers below only run behind AuthMiddleware, so the user is always
+// present.
+func currentUser(r *http.Request) *User {
+	if user, ok := UserFromContext(r.Context()); ok {
+		return user
+	}
+	return &User{}
+}
+
+// extractToken extracts the JWT token from the Authorization header.
+//
+// The query-parameter fallback of the previous implementation was
+// removed on purpose: query strings end up in access logs, proxy
+// caches and browser history, so a token must never travel that way.
 func extractToken(r *http.Request) string {
 	// Try Authorization header first
 	authHeader := r.Header.Get("Authorization")
@@ -409,6 +492,5 @@ func extractToken(r *http.Request) string {
 		}
 	}
 
-	// Try query parameter as fallback
-	return r.URL.Query().Get("token")
+	return ""
 }

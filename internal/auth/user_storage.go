@@ -439,6 +439,59 @@ type PersistentUserStorage struct {
 	mu              sync.RWMutex
 }
 
+// persistedUser is the ON-DISK shape of a user.
+//
+// It exists because the User struct marks Password as `json:"-"`: a
+// password hash must never leave the process in an API answer. The
+// persistent store needs the hash, though - without it every login
+// against a storage-backed instance would fail. The conversion happens
+// in SaveUser / GetUser / ListUsers, so the wire format of the API
+// stays untouched.
+type persistedUser struct {
+	ID        string       `json:"id"`
+	Email     string       `json:"email"`
+	Password  string       `json:"passwordHash,omitempty"`
+	FirstName string       `json:"firstName,omitempty"`
+	LastName  string       `json:"lastName,omitempty"`
+	Role      string       `json:"role"`
+	Active    bool         `json:"active"`
+	Settings  UserSettings `json:"settings,omitempty"`
+	CreatedAt time.Time    `json:"createdAt"`
+	UpdatedAt time.Time    `json:"updatedAt"`
+}
+
+// toPersisted converts a user into its on-disk shape.
+func toPersisted(user *User) persistedUser {
+	return persistedUser{
+		ID:        user.ID,
+		Email:     user.Email,
+		Password:  user.Password,
+		FirstName: user.FirstName,
+		LastName:  user.LastName,
+		Role:      user.Role,
+		Active:    user.Active,
+		Settings:  user.Settings,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+	}
+}
+
+// fromPersisted converts the on-disk shape back into a user.
+func fromPersisted(record persistedUser) *User {
+	return &User{
+		ID:        record.ID,
+		Email:     record.Email,
+		Password:  record.Password,
+		FirstName: record.FirstName,
+		LastName:  record.LastName,
+		Role:      record.Role,
+		Active:    record.Active,
+		Settings:  record.Settings,
+		CreatedAt: record.CreatedAt,
+		UpdatedAt: record.UpdatedAt,
+	}
+}
+
 // NewPersistentUserStorage creates a persistent user storage
 func NewPersistentUserStorage(workflowStorage storage.WorkflowStorage) *PersistentUserStorage {
 	return &PersistentUserStorage{
@@ -462,7 +515,7 @@ func (s *PersistentUserStorage) SaveUser(user *User) error {
 	}
 	user.UpdatedAt = now
 
-	data, err := json.Marshal(user)
+	data, err := json.Marshal(toPersisted(user))
 	if err != nil {
 		return fmt.Errorf("failed to marshal user: %w", err)
 	}
@@ -491,12 +544,12 @@ func (s *PersistentUserStorage) GetUser(id string) (*User, error) {
 		return nil, fmt.Errorf("user not found: %s", id)
 	}
 
-	var user User
-	if err := json.Unmarshal(data, &user); err != nil {
+	var record persistedUser
+	if err := json.Unmarshal(data, &record); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal user: %w", err)
 	}
 
-	return &user, nil
+	return fromPersisted(record), nil
 }
 
 func (s *PersistentUserStorage) GetUserByEmail(email string) (*User, error) {
@@ -528,12 +581,12 @@ func (s *PersistentUserStorage) ListUsers() ([]*User, error) {
 			continue
 		}
 
-		var user User
-		if err := json.Unmarshal(data, &user); err != nil {
+		var record persistedUser
+		if err := json.Unmarshal(data, &record); err != nil {
 			continue
 		}
 
-		users = append(users, &user)
+		users = append(users, fromPersisted(record))
 	}
 
 	return users, nil
@@ -602,6 +655,16 @@ func (s *PersistentUserStorage) DeleteUser(id string) error {
 // Implementing simplified versions for brevity
 
 func (s *PersistentUserStorage) SaveSession(session *Session) error {
+	if session.Token == "" {
+		return errors.New("session token cannot be empty")
+	}
+
+	now := time.Now()
+	if session.CreatedAt.IsZero() {
+		session.CreatedAt = now
+	}
+	session.LastUsed = now
+
 	data, err := json.Marshal(session)
 	if err != nil {
 		return err
@@ -661,50 +724,178 @@ func (s *PersistentUserStorage) DeleteUserSessions(userID string) error {
 	return nil
 }
 
-// Stub implementations for other methods (similar pattern)
+// ---------------------------------------------------------------------------
+// API keys
+//
+// An API key is stored three times:
+//
+//	apikey:<id>              the record itself
+//	apikey_hash:<digest>     digest -> id (the lookup index for a login)
+//	apikey_prefix:<prefix>   prefix -> id (the lookup index for a listing)
+//
+// The plaintext key is never stored: only its SHA-256 digest is.
+// ---------------------------------------------------------------------------
+
 func (s *PersistentUserStorage) SaveAPIKey(apiKey *APIKey) error {
-	data, _ := json.Marshal(apiKey)
-	return s.workflowStorage.SaveRaw(fmt.Sprintf("apikey:%s", apiKey.Key), data)
+	if apiKey.ID == "" {
+		return errors.New("API key ID cannot be empty")
+	}
+
+	now := time.Now()
+	if apiKey.CreatedAt.IsZero() {
+		apiKey.CreatedAt = now
+	}
+	apiKey.UpdatedAt = now
+
+	data, err := json.Marshal(apiKey)
+	if err != nil {
+		return fmt.Errorf("failed to marshal API key: %w", err)
+	}
+
+	if err := s.workflowStorage.SaveRaw(fmt.Sprintf("apikey:%s", apiKey.ID), data); err != nil {
+		return fmt.Errorf("failed to save API key: %w", err)
+	}
+
+	if apiKey.Key != "" {
+		if err := s.workflowStorage.SaveRaw(fmt.Sprintf("apikey_hash:%s", apiKey.Key), []byte(apiKey.ID)); err != nil {
+			return fmt.Errorf("failed to save the API key hash index: %w", err)
+		}
+	}
+	if apiKey.Prefix != "" {
+		if err := s.workflowStorage.SaveRaw(fmt.Sprintf("apikey_prefix:%s", apiKey.Prefix), []byte(apiKey.ID)); err != nil {
+			return fmt.Errorf("failed to save the API key prefix index: %w", err)
+		}
+	}
+
+	return nil
 }
 
-func (s *PersistentUserStorage) GetAPIKey(key string) (*APIKey, error) {
-	data, err := s.workflowStorage.GetRaw(fmt.Sprintf("apikey:%s", key))
+// GetAPIKey returns the API key whose stored digest matches `digest`.
+//
+// The argument is the SHA-256 digest of the presented key - the
+// plaintext key is never stored and never used as a lookup key.
+func (s *PersistentUserStorage) GetAPIKey(digest string) (*APIKey, error) {
+	id, err := s.workflowStorage.GetRaw(fmt.Sprintf("apikey_hash:%s", digest))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("API key not found")
 	}
+
+	data, err := s.workflowStorage.GetRaw(fmt.Sprintf("apikey:%s", string(id)))
+	if err != nil {
+		return nil, fmt.Errorf("API key not found")
+	}
+
 	var apiKey APIKey
 	if err := json.Unmarshal(data, &apiKey); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal API key: %w", err)
 	}
+
 	return &apiKey, nil
 }
 
+// GetAPIKeyByPrefix returns the API key whose prefix matches.
 func (s *PersistentUserStorage) GetAPIKeyByPrefix(prefix string) (*APIKey, error) {
-	return nil, errors.New("not implemented - use GetAPIKey with full key")
+	id, err := s.workflowStorage.GetRaw(fmt.Sprintf("apikey_prefix:%s", prefix))
+	if err != nil {
+		return nil, fmt.Errorf("API key not found with prefix: %s", prefix)
+	}
+
+	data, err := s.workflowStorage.GetRaw(fmt.Sprintf("apikey:%s", string(id)))
+	if err != nil {
+		return nil, fmt.Errorf("API key not found with prefix: %s", prefix)
+	}
+
+	var apiKey APIKey
+	if err := json.Unmarshal(data, &apiKey); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal API key: %w", err)
+	}
+
+	return &apiKey, nil
 }
 
+// ListUserAPIKeys returns every API key that belongs to the user.
 func (s *PersistentUserStorage) ListUserAPIKeys(userID string) ([]*APIKey, error) {
-	return []*APIKey{}, nil // Simplified
+	keys, err := s.workflowStorage.ListKeys("apikey:")
+	if err != nil {
+		return nil, err
+	}
+
+	apiKeys := make([]*APIKey, 0, len(keys))
+	for _, key := range keys {
+		data, err := s.workflowStorage.GetRaw(key)
+		if err != nil {
+			continue
+		}
+
+		var apiKey APIKey
+		if err := json.Unmarshal(data, &apiKey); err != nil {
+			continue
+		}
+		if apiKey.UserID != userID {
+			continue
+		}
+
+		apiKeys = append(apiKeys, &apiKey)
+	}
+
+	return apiKeys, nil
 }
 
+// DeleteAPIKey revokes an API key by id and removes its indexes.
 func (s *PersistentUserStorage) DeleteAPIKey(id string) error {
+	data, err := s.workflowStorage.GetRaw(fmt.Sprintf("apikey:%s", id))
+	if err != nil {
+		return fmt.Errorf("API key not found: %s", id)
+	}
+
+	var apiKey APIKey
+	if err := json.Unmarshal(data, &apiKey); err != nil {
+		return fmt.Errorf("failed to unmarshal API key: %w", err)
+	}
+
+	if apiKey.Key != "" {
+		_ = s.workflowStorage.DeleteRaw(fmt.Sprintf("apikey_hash:%s", apiKey.Key))
+	}
+	if apiKey.Prefix != "" {
+		_ = s.workflowStorage.DeleteRaw(fmt.Sprintf("apikey_prefix:%s", apiKey.Prefix))
+	}
+
 	return s.workflowStorage.DeleteRaw(fmt.Sprintf("apikey:%s", id))
 }
 
 func (s *PersistentUserStorage) SaveInviteToken(invite *InviteToken) error {
-	data, _ := json.Marshal(invite)
+	if invite.Token == "" {
+		return errors.New("invite token cannot be empty")
+	}
+
+	if invite.CreatedAt.IsZero() {
+		invite.CreatedAt = time.Now()
+	}
+
+	data, err := json.Marshal(invite)
+	if err != nil {
+		return err
+	}
 	return s.workflowStorage.SaveRaw(fmt.Sprintf("invite:%s", invite.Token), data)
 }
 
 func (s *PersistentUserStorage) GetInviteToken(token string) (*InviteToken, error) {
 	data, err := s.workflowStorage.GetRaw(fmt.Sprintf("invite:%s", token))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invite token not found")
 	}
 	var invite InviteToken
 	if err := json.Unmarshal(data, &invite); err != nil {
 		return nil, err
 	}
+
+	if time.Now().After(invite.ExpiresAt) {
+		return nil, fmt.Errorf("invite token expired")
+	}
+	if invite.UsedAt != nil {
+		return nil, fmt.Errorf("invite token already used")
+	}
+
 	return &invite, nil
 }
 

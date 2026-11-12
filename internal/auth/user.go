@@ -6,23 +6,23 @@ import (
 
 // User represents a system user
 type User struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	Password  string    `json:"-"` // Never expose password in JSON
-	FirstName string    `json:"firstName,omitempty"`
-	LastName  string    `json:"lastName,omitempty"`
-	Role      string    `json:"role"` // admin, member, viewer
-	Active    bool      `json:"active"`
+	ID        string       `json:"id"`
+	Email     string       `json:"email"`
+	Password  string       `json:"-"` // Never expose password in JSON
+	FirstName string       `json:"firstName,omitempty"`
+	LastName  string       `json:"lastName,omitempty"`
+	Role      string       `json:"role"` // admin, member, viewer
+	Active    bool         `json:"active"`
 	Settings  UserSettings `json:"settings,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	CreatedAt time.Time    `json:"createdAt"`
+	UpdatedAt time.Time    `json:"updatedAt"`
 }
 
 // UserSettings represents user preferences
 type UserSettings struct {
-	Theme       string `json:"theme,omitempty"`       // light, dark
-	Language    string `json:"language,omitempty"`    // en, de, es, etc.
-	Timezone    string `json:"timezone,omitempty"`    // UTC, America/New_York, etc.
+	Theme       string                 `json:"theme,omitempty"`    // light, dark
+	Language    string                 `json:"language,omitempty"` // en, de, es, etc.
+	Timezone    string                 `json:"timezone,omitempty"` // UTC, America/New_York, etc.
 	Preferences map[string]interface{} `json:"preferences,omitempty"`
 }
 
@@ -34,21 +34,21 @@ type UserCredentials struct {
 
 // UserRegistration represents user registration data
 type UserRegistration struct {
-	Email     string `json:"email"`
-	Password  string `json:"password"`
-	FirstName string `json:"firstName,omitempty"`
-	LastName  string `json:"lastName,omitempty"`
+	Email       string `json:"email"`
+	Password    string `json:"password"`
+	FirstName   string `json:"firstName,omitempty"`
+	LastName    string `json:"lastName,omitempty"`
 	InviteToken string `json:"inviteToken,omitempty"`
 }
 
 // UserUpdate represents user update data
 type UserUpdate struct {
-	FirstName *string `json:"firstName,omitempty"`
-	LastName  *string `json:"lastName,omitempty"`
-	Email     *string `json:"email,omitempty"`
-	Password  *string `json:"password,omitempty"`
-	Role      *string `json:"role,omitempty"`
-	Active    *bool   `json:"active,omitempty"`
+	FirstName *string       `json:"firstName,omitempty"`
+	LastName  *string       `json:"lastName,omitempty"`
+	Email     *string       `json:"email,omitempty"`
+	Password  *string       `json:"password,omitempty"`
+	Role      *string       `json:"role,omitempty"`
+	Active    *bool         `json:"active,omitempty"`
 	Settings  *UserSettings `json:"settings,omitempty"`
 }
 
@@ -64,40 +64,68 @@ type Session struct {
 	UserAgent string    `json:"userAgent,omitempty"`
 }
 
-// APIKey represents an API key for authentication
+// APIKey represents an API key for authentication.
+//
+// `Key` NEVER holds the plaintext key: it holds the SHA-256 hex digest
+// of the key that was handed to the user once, at creation time.
+// `Prefix` is the first 8 characters of the plaintext key and is the
+// lookup index - it identifies a key in listings without revealing it.
+//
+// `Permissions` are the explicit scopes of the key. An empty list means
+// "inherit the permissions of the owning user's role"; a non-empty list
+// narrows the key down to exactly those scopes.
 type APIKey struct {
-	ID        string    `json:"id"`
-	UserID    string    `json:"userId"`
-	Name      string    `json:"name"`
-	Key       string    `json:"key"` // Hashed in storage
-	Prefix    string    `json:"prefix"` // First 8 chars for identification
-	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
-	LastUsed  *time.Time `json:"lastUsed,omitempty"`
-	Active    bool      `json:"active"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID          string     `json:"id"`
+	UserID      string     `json:"userId"`
+	Name        string     `json:"name"`
+	Key         string     `json:"key"` // SHA-256 hex digest - never the plaintext
+	Prefix      string     `json:"prefix"`
+	Permissions []string   `json:"permissions,omitempty"`
+	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
+	LastUsed    *time.Time `json:"lastUsed,omitempty"`
+	Active      bool       `json:"active"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	UpdatedAt   time.Time  `json:"updatedAt"`
 }
+
+// Permission names understood by the API layer.
+//
+// The role permissions (workflow:read, credential:write, ...) are the
+// coarse scopes derived from a user's role. The permissions below are
+// the fine-grained ones that are NEVER granted by a role - they have to
+// be attached to an individual API key on purpose.
+const (
+	// PermissionCredentialReadData allows a caller to read the secret
+	// payload (`data`) of a credential. Without it the API answers with
+	// the safe envelope only (the same shape the list endpoint uses).
+	PermissionCredentialReadData = "credentials:read-data"
+
+	// PermissionCredentialExport allows the credential export/import
+	// bundle endpoints. Those endpoints are admin-only as well - the
+	// permission exists for keys that belong to an admin user.
+	PermissionCredentialExport = "credentials:export"
+)
 
 // InviteToken represents an invitation token
 type InviteToken struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	Token     string    `json:"token"`
-	Role      string    `json:"role"`
-	InvitedBy string    `json:"invitedBy"` // User ID
-	ExpiresAt time.Time `json:"expiresAt"`
+	ID        string     `json:"id"`
+	Email     string     `json:"email"`
+	Token     string     `json:"token"`
+	Role      string     `json:"role"`
+	InvitedBy string     `json:"invitedBy"` // User ID
+	ExpiresAt time.Time  `json:"expiresAt"`
 	UsedAt    *time.Time `json:"usedAt,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
+	CreatedAt time.Time  `json:"createdAt"`
 }
 
 // PasswordResetToken represents a password reset token
 type PasswordResetToken struct {
-	ID        string    `json:"id"`
-	UserID    string    `json:"userId"`
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expiresAt"`
+	ID        string     `json:"id"`
+	UserID    string     `json:"userId"`
+	Token     string     `json:"token"`
+	ExpiresAt time.Time  `json:"expiresAt"`
 	UsedAt    *time.Time `json:"usedAt,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
+	CreatedAt time.Time  `json:"createdAt"`
 }
 
 // UserRole defines available user roles
@@ -113,6 +141,22 @@ const (
 func (r UserRole) IsValid() bool {
 	switch r {
 	case RoleAdmin, RoleMember, RoleViewer:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsEditor reports whether the role may EDIT resources - and therefore
+// whether an authenticated session of that role may read the stored
+// secret payload of a credential (the credential editor pre-fills its
+// form with the real values).
+//
+// Viewers are read-only: they see the credential envelope, never the
+// secrets.
+func (r UserRole) IsEditor() bool {
+	switch r {
+	case RoleAdmin, RoleMember:
 		return true
 	default:
 		return false

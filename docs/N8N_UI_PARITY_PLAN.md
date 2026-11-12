@@ -35,6 +35,21 @@ A read-only drift check (`python scripts/parity/report.py --results tmp/parity-r
 
 `workflow-test.MD` is rendered from one saved report, with every non-passing case listed explicitly, and **every status-bearing line uses one Markdown table shape** — `| Suite | Case | Path | n8n | m9m | Verdict | Evidence |` — so `report.py::document_drift` parses the document with the same rule it uses for the harness report; the shape is documented in Section F of that document. Section J labels the old September 19/19 claim historical and superseded and now states the same canonical numbers as Section B. `parity/parity_gaps.json` retains historical evidence plus explicit current observations (`GAP-2026-11-11-AUTH-WIRE` and `GAP-2026-11-11-APIKEY-TRANSPORT` are now RESOLVED; `GAP-2026-09-10-1`, `GAP-2026-09-10-2`, `G1`, `G2`, `G3` are recorded with their fix commits). `credentials_n8n_api.MD` distinguishes current m9m routes/envelopes from n8n public API behavior, including secret-bearing detail reads, the rejection wire format, the row-per-item SQL output and the server-side `loadOptions` credential resolution. No runtime code, plans, harness files or n8n workflows were edited for this refresh; no commit, push or deploy was performed.
 
+## API authentication hardening — 2026-11-12 (working tree, not deployed)
+
+The m9m REST API is closed by default. The whole `/api/v1` subrouter sits behind one auth middleware (`internal/api/middleware.go`); the public allowlist is the single source of truth and contains only `/health`, `/healthz`, `/ready`, `/api/v1/auth/login`, `/api/v1/auth/register` (only while the instance has zero users), `/api/v1/auth/invites/accept`, the password-reset routes, `/webhook/*` and `/api/v1/webhooks/*`.
+
+Consequences for the parity harness:
+
+- The m9m expectation of the `C1_auth` case flipped from `m9m-open` to **`m9m-requires-key`**: `scripts/parity/cases/C1_auth.json` now expects HTTP **401** for an anonymous `/api/v1` probe and HTTP **200** only with a credential.
+- `scripts/parity/authprobe.py` and `scripts/parity/extended.py::_contract_auth_probe` probe exactly that pair (401 without a key, 200 with `X-API-Key`). The m9m key is read from `M9M_API_KEY`; it is never sent to n8n, and the n8n key (`N8N_API_KEY`) is never sent to m9m.
+- The key is accepted **only** in the `X-API-Key` header. A key in the query string is rejected on purpose (it would end up in access logs, proxy caches and browser history).
+- `scripts/queue-soak.sh`, `scripts/parity_orchestrator.py` and `sync-service/sync.py` send `X-API-Key` on every m9m call.
+- The credential secret protection changes the credential contract: `GET /api/v1/credentials/{id}` returns the `data` blob only for an editor JWT session or a key with the explicit `credentials:read-data` grant; the credential export/import bundle is admin-only and writes a structured audit entry. The parity evidence files under `tmp/parity-results/` are redacted in place, because the n8n credential inventory answers with the decrypted `data` blob of every credential.
+- The Sheets read key moved to the `M9M_SHEETS_API_KEY` environment variable (`scripts/update_parity_sheets.py`, `scripts/update_sheet.py`, `scripts/parity/report.py`). The previous literal is kept only as a deprecated fallback that prints a warning.
+
+The env contract (`M9M_AUTH_ENABLED`, `M9M_JWT_SECRET`, `M9M_API_KEY`, `M9M_ADMIN_EMAIL`, `M9M_ADMIN_PASSWORD`, `M9M_ALLOW_FIRST_REGISTER`) is documented in `documentation/docs/api/authentication.md` and mirrored in the `security:` block of `config/config.yaml`. **None of this is deployed yet** - the live server still runs the `ed67347` image, which expects the m9m API to be open.
+
 ## 1. Verdict
 
 **Yes — n8n-UI parity is feasible in m9m, and m9m is already roughly half-way there.**

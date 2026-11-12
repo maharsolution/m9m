@@ -6,9 +6,10 @@ POSTed to. Every fixture that needs writable state is created in a
 disposable local m9m instance (see ``localenv.py``).
 
 Authentication routing (C1): the n8n API key is sent to n8n only, the
-m9m API key to m9m only, and m9m receives no key at all when
-``M9M_API_KEY`` is not configured - the live deployment does not require
-one (``authprobe.py`` proves it read-only).
+m9m API key to m9m only. The m9m API is closed by default - every
+/api/v1 path answers 401 without a credential - so the harness sends
+the configured ``M9M_API_KEY`` in the ``X-API-Key`` header
+(``authprobe.py`` proves it read-only).
 """
 from __future__ import annotations
 
@@ -870,7 +871,40 @@ def _contract_auth_probe(case: dict, n8n_base: str, m9m_base: str,
     m9m_open = bool(m9m_anonymous) and all(status == 200 for status in m9m_anonymous)
     n8n_closed = any(status in (401, 403) for status in n8n_anonymous)
     n8n_authorized = any(status == 200 for status in n8n_configured)
-    if case.get("expect", "m9m-open") == "m9m-open":
+    expectation = case.get("expect", "m9m-requires-key")
+    if expectation == "m9m-requires-key":
+        # The m9m API is closed by default: every /api/v1 path needs a
+        # bearer token or an X-API-Key header, while the public
+        # allowlist (/healthz, /webhook/*, login, first registration)
+        # stays reachable without a credential.
+        m9m_protected = [status for host, path, variant, status in findings
+                         if host == "m9m" and variant == "anonymous"
+                         and path.startswith("/api/v1")]
+        m9m_public = [status for host, path, variant, status in findings
+                      if host == "m9m" and variant == "anonymous"
+                      and not path.startswith("/api/v1")]
+        m9m_authorized = [status for host, path, variant, status in findings
+                          if host == "m9m" and variant == "configured"
+                          and path.startswith("/api/v1")]
+        if not m9m_protected:
+            raise ValueError(f"no protected m9m path was probed: {findings}")
+        if any(status not in (401, 403) for status in m9m_protected):
+            raise ValueError(f"m9m still serves /api/v1 without a credential: {findings}")
+        if m9m_public and any(status != 200 for status in m9m_public):
+            raise ValueError(f"m9m public endpoint is no longer reachable: {findings}")
+        # The authorized probe is only meaningful when a key is
+        # configured for m9m - without one both probes are anonymous.
+        if api_headers("m9m") and m9m_authorized and any(status != 200 for status in m9m_authorized):
+            raise ValueError(f"m9m rejected the configured X-API-Key: {findings}")
+        if not n8n_closed:
+            raise ValueError(f"n8n did not reject the anonymous probe: {findings}")
+        if not n8n_authorized:
+            raise ValueError(f"n8n rejected the configured API key: {findings}")
+        return "PASS", ("m9m rejects anonymous /api/v1 calls (401) and accepts the "
+                        "configured X-API-Key; the public endpoints stay open; n8n "
+                        "rejects anonymous API calls and accepts the configured "
+                        "X-N8N-API-KEY")
+    if expectation == "m9m-open":
         if not m9m_open:
             raise ValueError(f"m9m requires authentication: {findings}")
         if not n8n_closed:

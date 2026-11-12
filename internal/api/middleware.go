@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/subtle"
 	"log"
 	"net/http"
 	"runtime/debug"
@@ -212,8 +213,69 @@ func AuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// AuthMiddlewareWithManager creates an authentication middleware with a configured AuthManager
+// AuthOptions configures the authentication middleware.
+type AuthOptions struct {
+	// StaticAPIKeys are the automation keys configured through
+	// M9M_API_KEY. They are matched against the SHA-256 digest of the
+	// presented key in constant time.
+	StaticAPIKeys []string
+
+	// StaticPermissions are the scopes a static API key gets. When it
+	// is empty, DefaultStaticKeyPermissions is used.
+	StaticPermissions []string
+}
+
+// DefaultStaticKeyPermissions are the scopes an automation key
+// (M9M_API_KEY) gets.
+//
+// The key can drive the workflows and the credential envelopes, but it
+// can NOT read the secret payload of a credential and it can NOT export
+// credentials - both of those need an explicit grant (a session of an
+// editor/admin, or a key with the matching permission).
+var DefaultStaticKeyPermissions = []string{
+	"workflow:read",
+	"workflow:write",
+	"workflow:execute",
+	"execution:read",
+	"credential:read",
+	"credential:write",
+}
+
+// AuthMiddlewareWithManager creates an authentication middleware with a configured AuthManager.
+//
+// The manager is the ONE auth system of m9m (internal/auth): it owns
+// the users, their roles, their API keys and the JWT format. The
+// deprecated second implementation in internal/api/auth_manager.go is
+// not used.
 func AuthMiddlewareWithManager(authManager *auth.AuthManager) func(http.Handler) http.Handler {
+	return AuthMiddlewareWithOptions(authManager, AuthOptions{})
+}
+
+// AuthMiddlewareWithOptions creates the authentication middleware with
+// the static automation keys.
+//
+// Two credentials are accepted:
+//
+//	Authorization: Bearer <jwt>   a session token of a logged-in user
+//	X-API-Key: <key>              an automation key (static or stored)
+//
+// A key in the query string is NOT accepted: query strings end up in
+// access logs, proxy caches and browser history.
+func AuthMiddlewareWithOptions(authManager *auth.AuthManager, opts AuthOptions) func(http.Handler) http.Handler {
+	staticPermissions := opts.StaticPermissions
+	if len(staticPermissions) == 0 {
+		staticPermissions = DefaultStaticKeyPermissions
+	}
+
+	// Pre-compute the digests of the static keys once.
+	staticDigests := make([][]byte, 0, len(opts.StaticAPIKeys))
+	for _, key := range opts.StaticAPIKeys {
+		if key == "" {
+			continue
+		}
+		staticDigests = append(staticDigests, []byte(auth.HashAPIKey(key)))
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Skip auth for public endpoints
@@ -231,15 +293,23 @@ func AuthMiddlewareWithManager(authManager *auth.AuthManager) func(http.Handler)
 			authHeader := r.Header.Get("Authorization")
 			if strings.HasPrefix(authHeader, "Bearer ") {
 				token := strings.TrimPrefix(authHeader, "Bearer ")
-				user, err = authManager.GetCurrentUser(token)
+				user, err = authManager.ValidateSessionToken(token)
 				if err != nil {
 					log.Printf("JWT validation failed: %v", err)
 				} else {
 					authMethod = "jwt"
+					// A session carries the identity and the role of the
+					// user. The permissions of the role are filled in
+					// below, when the context is completed.
+					authContext = &AuthContext{
+						UserID:     user.ID,
+						AuthMethod: authMethod,
+						Role:       user.Role,
+					}
 				}
 			}
 
-			// Try API key if no valid JWT
+			// Try the API key header if no valid JWT
 			if user == nil {
 				apiKey := r.Header.Get("X-API-Key")
 				if apiKey == "" {
@@ -250,17 +320,50 @@ func AuthMiddlewareWithManager(authManager *auth.AuthManager) func(http.Handler)
 				}
 
 				if apiKey != "" {
-					user, err = authManager.ValidateAPIKey(apiKey)
+					// A static (configured) automation key wins over the
+					// stored ones - it is the credential the operator
+					// configured for this instance.
+					if matchesStaticKey(apiKey, staticDigests) {
+						authContext = &AuthContext{
+							APIKeyID:            "static",
+							Permissions:         staticPermissions,
+							ExplicitPermissions: staticPermissions,
+							AuthMethod:          "api_key",
+						}
+						ctx := ContextWithAuth(r.Context(), authContext)
+						next.ServeHTTP(w, r.WithContext(ctx))
+						return
+					}
+
+					var key *auth.APIKey
+					user, key, err = authManager.ValidateAPIKeyWithPermissions(apiKey)
 					if err != nil {
 						log.Printf("API key validation failed: %v", err)
 					} else {
 						authMethod = "api_key"
+						permissions := key.Permissions
+						if len(permissions) == 0 {
+							// A key without explicit scopes inherits the
+							// permissions of its owner's role.
+							permissions = getPermissionsForRole(auth.UserRole(user.Role))
+						}
+						authContext = &AuthContext{
+							UserID:              user.ID,
+							APIKeyID:            key.ID,
+							Permissions:         permissions,
+							ExplicitPermissions: key.Permissions,
+							AuthMethod:          authMethod,
+							Role:                user.Role,
+						}
 					}
+				} else if r.URL.Query().Get("apiKey") != "" || r.URL.Query().Get("api_key") != "" {
+					// Query-parameter keys stay rejected on purpose.
+					log.Printf("SECURITY WARNING: API key provided in query parameter (rejected). Use the X-API-Key header instead.")
 				}
 			}
 
 			// If no valid authentication found, return 401
-			if user == nil {
+			if user == nil || authContext == nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
 				_, _ = w.Write([]byte(`{
@@ -271,27 +374,44 @@ func AuthMiddlewareWithManager(authManager *auth.AuthManager) func(http.Handler)
 				return
 			}
 
-			// Build permissions from role
-			userRole := auth.UserRole(user.Role)
-			var permissions []string
-			if userRole == auth.RoleAdmin {
-				permissions = []string{"admin"}
-			} else {
-				permissions = getPermissionsForRole(userRole)
+			if authContext.UserID == "" {
+				authContext.UserID = user.ID
+			}
+			if authContext.Role == "" {
+				authContext.Role = user.Role
 			}
 
-			// Create auth context
-			authContext = &AuthContext{
-				UserID:      user.ID,
-				Permissions: permissions,
-				AuthMethod:  authMethod,
+			// Build permissions from role
+			if len(authContext.Permissions) == 0 {
+				userRole := auth.UserRole(user.Role)
+				if userRole == auth.RoleAdmin {
+					authContext.Permissions = []string{"admin"}
+				} else {
+					authContext.Permissions = getPermissionsForRole(userRole)
+				}
 			}
 
 			// Add auth context to request
 			ctx := ContextWithAuth(r.Context(), authContext)
+			ctx = auth.ContextWithUser(ctx, user)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// matchesStaticKey compares the presented key against the digests of
+// the configured static keys in constant time.
+func matchesStaticKey(presented string, digests [][]byte) bool {
+	if presented == "" || len(digests) == 0 {
+		return false
+	}
+
+	candidate := []byte(auth.HashAPIKey(presented))
+	matched := 0
+	for _, digest := range digests {
+		matched |= subtle.ConstantTimeCompare(candidate, digest)
+	}
+	return matched == 1
 }
 
 // getPermissionsForRole returns the permissions for a given role
@@ -311,19 +431,35 @@ func getPermissionsForRole(role auth.UserRole) []string {
 	}
 }
 
+// publicPaths is THE public allowlist of the m9m API.
+//
+// It is the single place that decides which requests reach a handler
+// without a credential. Everything else under /api/v1 needs a bearer
+// token or an X-API-Key header.
+//
+//	/health, /healthz, /ready          liveness + readiness probes
+//	/api/v1/auth/login                login
+//	/api/v1/auth/register             first-boot registration
+//	/api/v1/auth/invites/accept       invitation acceptance
+//	/webhook/*                        webhook triggers (own auth)
+//	/api/v1/webhooks/*                webhook management for nodes
+//
+// The registration endpoint is only open while the instance has no
+// user at all - the auth handler enforces that, the allowlist only
+// decides that the request may reach it.
+var publicPaths = []string{
+	"/health",
+	"/healthz",
+	"/ready",
+	"/api/v1/auth/login",
+	"/api/v1/auth/register",
+	"/api/v1/auth/invites/accept",
+	"/api/v1/auth/password/reset",
+	"/api/v1/auth/password/reset/confirm",
+}
+
 // isPublicEndpoint checks if a path is a public endpoint that doesn't require authentication
 func isPublicEndpoint(path string) bool {
-	publicPaths := []string{
-		"/health",
-		"/healthz",
-		"/ready",
-		"/api/v1/auth/login",
-		"/api/v1/auth/register",
-		"/api/v1/auth/invite/accept",
-		"/api/v1/auth/password/reset",
-		"/api/v1/auth/password/reset/confirm",
-	}
-
 	for _, p := range publicPaths {
 		if path == p {
 			return true

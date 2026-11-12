@@ -1,9 +1,11 @@
 package auth
 
 import (
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -12,14 +14,21 @@ type AuthManager struct {
 	userStorage    UserStorage
 	jwtManager     *JWTManager
 	passwordHasher *PasswordHasher
+
+	// registrationOpen controls the public registration endpoint. It
+	// starts open (a fresh instance accepts exactly one registration -
+	// the owner) and is closed by the operator as soon as an owner
+	// account exists.
+	registrationOpen bool
 }
 
 // NewAuthManager creates a new authentication manager
 func NewAuthManager(userStorage UserStorage, jwtSecretKey string, tokenDuration time.Duration) *AuthManager {
 	return &AuthManager{
-		userStorage:    userStorage,
-		jwtManager:     NewJWTManager(jwtSecretKey, tokenDuration, "m9m"),
-		passwordHasher: NewPasswordHasher(),
+		userStorage:      userStorage,
+		jwtManager:       NewJWTManager(jwtSecretKey, tokenDuration, "m9m"),
+		passwordHasher:   NewPasswordHasher(),
+		registrationOpen: true,
 	}
 }
 
@@ -54,12 +63,14 @@ func (m *AuthManager) Login(credentials *UserCredentials) (string, *User, error)
 		return "", nil, fmt.Errorf("failed to generate token: %w", err)
 	}
 
-	// Create session
+	// Create session. The session lives in the user store, so it
+	// survives a restart of the server - and a logout revokes the
+	// token immediately.
 	session := &Session{
 		ID:        generateID("sess"),
 		UserID:    user.ID,
 		Token:     token,
-		ExpiresAt: time.Now().Add(24 * time.Hour),
+		ExpiresAt: time.Now().Add(m.jwtManager.tokenDuration),
 		CreatedAt: time.Now(),
 		LastUsed:  time.Now(),
 	}
@@ -225,30 +236,46 @@ func (m *AuthManager) DeleteUser(userID string, actingUserID string) error {
 	return m.userStorage.DeleteUser(userID)
 }
 
-// CreateAPIKey creates a new API key for a user
+// CreateAPIKey creates a new API key for a user.
+//
+// The key inherits the permissions of the owner's role.
 func (m *AuthManager) CreateAPIKey(userID, name string, expiresAt *time.Time) (*APIKey, string, error) {
+	return m.CreateAPIKeyWithPermissions(userID, name, nil, expiresAt)
+}
+
+// CreateAPIKeyWithPermissions creates a new API key for a user with an
+// explicit permission list.
+//
+// The plaintext key is generated here, hashed with SHA-256 and only
+// the digest is stored. The plaintext is returned to the caller exactly
+// once - there is no way to recover it from the store.
+//
+// An empty permission list means "inherit the permissions of the
+// owner's role"; a non-empty list narrows the key down to exactly
+// those scopes (e.g. "credentials:read-data").
+func (m *AuthManager) CreateAPIKeyWithPermissions(userID, name string, permissions []string, expiresAt *time.Time) (*APIKey, string, error) {
 	// Generate API key
 	key, prefix, err := GenerateAPIKey()
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to generate API key: %w", err)
 	}
 
-	// Hash the key for storage
-	hashedKey, err := m.passwordHasher.HashPassword(key)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to hash API key: %w", err)
-	}
+	// Hash the key for storage. API keys are high-entropy random
+	// strings, so a fast digest is the right primitive here (bcrypt
+	// would only slow the hot path down).
+	hashedKey := HashAPIKey(key)
 
 	apiKey := &APIKey{
-		ID:        generateID("apik"),
-		UserID:    userID,
-		Name:      name,
-		Key:       hashedKey,
-		Prefix:    prefix,
-		ExpiresAt: expiresAt,
-		Active:    true,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:          generateID("apik"),
+		UserID:      userID,
+		Name:        name,
+		Key:         hashedKey,
+		Prefix:      prefix,
+		Permissions: append([]string(nil), permissions...),
+		ExpiresAt:   expiresAt,
+		Active:      true,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
 	}
 
 	if err := m.userStorage.SaveAPIKey(apiKey); err != nil {
@@ -261,46 +288,58 @@ func (m *AuthManager) CreateAPIKey(userID, name string, expiresAt *time.Time) (*
 	return apiKey, key, nil
 }
 
-// ValidateAPIKey validates an API key and returns the user
+// ValidateAPIKey validates an API key and returns the user.
 func (m *AuthManager) ValidateAPIKey(key string) (*User, error) {
-	// Get API key by prefix (first 8 chars)
+	user, _, err := m.ValidateAPIKeyWithPermissions(key)
+	return user, err
+}
+
+// ValidateAPIKeyWithPermissions validates an API key and returns the
+// owning user plus the key record.
+//
+// The lookup goes through the key prefix (the first 8 characters of
+// the plaintext key) and is confirmed with a constant-time comparison
+// of the SHA-256 digests - the plaintext key is never stored and never
+// compared in constant time against a stored secret.
+func (m *AuthManager) ValidateAPIKeyWithPermissions(key string) (*User, *APIKey, error) {
 	if len(key) < 8 {
-		return nil, errors.New("invalid API key format")
+		return nil, nil, errors.New("invalid API key format")
 	}
 
 	prefix := key[:8]
 	apiKey, err := m.userStorage.GetAPIKeyByPrefix(prefix)
 	if err != nil {
-		// Fallback to full key lookup
-		apiKey, err = m.userStorage.GetAPIKey(key)
+		// Fallback to the hash lookup (a key whose prefix index is
+		// missing still authenticates when its digest is known).
+		apiKey, err = m.userStorage.GetAPIKey(HashAPIKey(key))
 		if err != nil {
-			return nil, errors.New("invalid API key")
+			return nil, nil, errors.New("invalid API key")
 		}
 	}
 
 	// Verify key
-	if err := m.passwordHasher.VerifyPassword(key, apiKey.Key); err != nil {
-		return nil, errors.New("invalid API key")
+	if subtle.ConstantTimeCompare([]byte(HashAPIKey(key)), []byte(apiKey.Key)) != 1 {
+		return nil, nil, errors.New("invalid API key")
 	}
 
 	// Check if active
 	if !apiKey.Active {
-		return nil, errors.New("API key is inactive")
+		return nil, nil, errors.New("API key is inactive")
 	}
 
 	// Check expiration
 	if apiKey.ExpiresAt != nil && time.Now().After(*apiKey.ExpiresAt) {
-		return nil, errors.New("API key expired")
+		return nil, nil, errors.New("API key expired")
 	}
 
 	// Get user
 	user, err := m.userStorage.GetUser(apiKey.UserID)
 	if err != nil {
-		return nil, errors.New("user not found")
+		return nil, nil, errors.New("user not found")
 	}
 
 	if !user.Active {
-		return nil, errors.New("user account is deactivated")
+		return nil, nil, errors.New("user account is deactivated")
 	}
 
 	// Update last used timestamp
@@ -310,7 +349,118 @@ func (m *AuthManager) ValidateAPIKey(key string) (*User, error) {
 		log.Printf("Warning: failed to update API key last used: %v", err)
 	}
 
-	return user, nil
+	return user, apiKey, nil
+}
+
+// PublicRegistrationOpen reports whether the public registration
+// endpoint may still create an account.
+//
+// Public registration is only open while the instance has no users at
+// all: the first account becomes the owner. Once an owner exists the
+// endpoint is closed and further accounts can only be created by an
+// admin (directly or through an invitation token).
+func (m *AuthManager) PublicRegistrationOpen() (bool, error) {
+	if !m.registrationOpen {
+		return false, nil
+	}
+
+	users, err := m.userStorage.ListUsers()
+	if err != nil {
+		return false, err
+	}
+
+	return len(users) == 0, nil
+}
+
+// SetRegistrationOpen opens or closes the public registration endpoint.
+// Closing it is what an operator does when the instance is bootstrapped
+// with an owner account: the first-boot registration window closes.
+func (m *AuthManager) SetRegistrationOpen(open bool) {
+	m.registrationOpen = open
+}
+
+// BootstrapOwner creates the owner account of a fresh instance.
+//
+// It is called on every boot with the M9M_ADMIN_EMAIL /
+// M9M_ADMIN_PASSWORD pair. The call is idempotent: an instance that
+// already has users is never touched, so restarting the server never
+// resets a password.
+func (m *AuthManager) BootstrapOwner(email, password string) (bool, error) {
+	email = strings.TrimSpace(email)
+	if email == "" || password == "" {
+		return false, errors.New("email and password are required")
+	}
+
+	if err := ValidateEmail(email); err != nil {
+		return false, fmt.Errorf("invalid admin email: %w", err)
+	}
+	if err := ValidatePassword(password); err != nil {
+		return false, fmt.Errorf("invalid admin password: %w", err)
+	}
+
+	users, err := m.userStorage.ListUsers()
+	if err != nil {
+		return false, err
+	}
+	if len(users) > 0 {
+		// An owner already exists - never overwrite it on restart.
+		return false, nil
+	}
+
+	if _, err := m.userStorage.GetUserByEmail(email); err == nil {
+		return false, nil
+	}
+
+	hashedPassword, err := m.passwordHasher.HashPassword(password)
+	if err != nil {
+		return false, fmt.Errorf("failed to hash the admin password: %w", err)
+	}
+
+	owner := &User{
+		ID:        generateID("user"),
+		Email:     email,
+		Password:  hashedPassword,
+		FirstName: "Owner",
+		Role:      string(RoleAdmin),
+		Active:    true,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	if err := m.userStorage.SaveUser(owner); err != nil {
+		return false, fmt.Errorf("failed to save the owner account: %w", err)
+	}
+
+	log.Printf("Bootstrapped owner account %s (%s)", owner.Email, owner.ID)
+
+	return true, nil
+}
+
+// ValidateSessionToken validates a bearer token AND requires a live
+// session for it.
+//
+// The session lives in the user store, so it survives a restart of the
+// server and a logout revokes the token immediately.
+func (m *AuthManager) ValidateSessionToken(tokenString string) (*User, error) {
+	claims, err := m.jwtManager.ValidateToken(tokenString)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := m.userStorage.GetUser(claims.UserID)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	if !user.Active {
+		return nil, errors.New("user account is deactivated")
+	}
+
+	if _, err := m.userStorage.GetSession(tokenString); err != nil {
+		return nil, errors.New("session expired or revoked")
+	}
+
+	return user.Sanitize(), nil
 }
 
 // InviteUser creates an invitation token for a new user

@@ -121,15 +121,38 @@ monitoring:
     path: "/health"
 
 # Security Configuration
+#
+# The runtime reads the authentication configuration from the
+# ENVIRONMENT (see DefaultAPIServerConfig in internal/api/server.go).
+# The block below documents that contract - it is the YAML mirror of
+# the env vars, not a second source of truth.
+#
+#   M9M_AUTH_ENABLED         "false" turns the auth middleware off
+#                            (serve default: true - the API is closed
+#                            by default)
+#   M9M_JWT_SECRET           >= 32 chars, signs the session tokens.
+#                            Required for logins that survive a restart.
+#   M9M_API_KEY              optional automation key (X-API-Key header)
+#   M9M_ADMIN_EMAIL          owner account of a fresh instance
+#   M9M_ADMIN_PASSWORD       password of that owner account
+#   M9M_ALLOW_FIRST_REGISTER "true" opens the first-boot registration
+#                            window (default: true when no owner is
+#                            configured)
+#
+# The server refuses to start when auth is enabled and neither
+# M9M_JWT_SECRET nor M9M_API_KEY is set.
 security:
-  # Basic authentication
-  basic_auth:
-    enabled: false
-    username: "admin"
-    # SECURITY: Change this password before enabling basic auth!
-    password: "<CHANGE_ME_BASIC_AUTH_PASSWORD>"
+  auth:
+    enabled: true
+    # Public endpoints (no credential needed):
+    #   /health, /healthz, /ready
+    #   /api/v1/auth/login, /api/v1/auth/register (only while the
+    #     instance has no user), /api/v1/auth/invites/accept
+    #   /webhook/*, /api/v1/webhooks/*
+    # Everything else under /api/v1 needs "Authorization: Bearer <jwt>"
+    # or the "X-API-Key" header (query-string keys are rejected).
 
-  # JWT authentication
+  # JWT authentication (M9M_JWT_SECRET)
   jwt:
     enabled: true
     # SECURITY: Generate a secure random secret (min 32 chars)!
@@ -137,9 +160,24 @@ security:
     secret: "<CHANGE_ME_JWT_SECRET_MIN_32_CHARS>"
     expiration: "24h"
 
-  # API keys
+  # API keys (M9M_API_KEY)
   api_keys:
     enabled: true
+    # The key is presented in the "X-API-Key" request header. A key in
+    # the query string is rejected on purpose.
+    header: "X-API-Key"
+
+  # Owner account of a fresh instance (M9M_ADMIN_EMAIL /
+  # M9M_ADMIN_PASSWORD). Both are read once, on the first boot; a
+  # restart never resets the password.
+  bootstrap_admin:
+    email: ""
+    password: ""
+
+  # First-boot registration window (M9M_ALLOW_FIRST_REGISTER). While it
+  # is open and the instance has no user, the first registration
+  # creates the owner; the window then closes.
+  allow_first_register: true
 
   # CORS settings
   cors:

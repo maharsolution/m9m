@@ -80,6 +80,25 @@ func (s *APIServer) RegisterRoutes(router *mux.Router) {
 
 	api := router.PathPrefix("/api/v1").Subrouter()
 
+	// The auth routes live on the SAME /api/v1 subrouter, so they sit
+	// behind the same authentication middleware as the rest of the API.
+	// The public allowlist (isPublicEndpoint in middleware.go) decides
+	// which of them may be reached without a credential: login,
+	// registration (only while the instance has no user) and invite
+	// acceptance.
+	if s.authHandler != nil {
+		s.authHandler.RegisterRoutes(api)
+	}
+
+	// Every other /api/v1 route needs a credential: a bearer token
+	// (Authorization: Bearer) or an API key (X-API-Key header).
+	//
+	// When no middleware is wired - the unit tests and the explicit
+	// M9M_AUTH_ENABLED=false opt-out - the API stays open.
+	if s.authMiddleware != nil {
+		api.Use(mux.MiddlewareFunc(s.authMiddleware))
+	}
+
 	api.HandleFunc("/workflows", s.ListWorkflows).Methods("GET", "OPTIONS")
 	api.HandleFunc("/workflows/count", s.CountWorkflows).Methods("GET", "OPTIONS")
 	api.HandleFunc("/workflows", s.CreateWorkflow).Methods("POST", "OPTIONS")

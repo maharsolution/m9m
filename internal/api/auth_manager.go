@@ -1,3 +1,23 @@
+// DEPRECATED - DO NOT WIRE.
+//
+// This file is the SECOND, parallel authentication implementation of
+// m9m. It is dead code: nothing constructs this AuthManager, nothing
+// calls AuthenticationMiddleware, and no route uses it.
+//
+// The one and only auth system of m9m is internal/auth
+// (internal/auth/auth_manager.go + internal/auth/auth_handler.go),
+// which owns the users, the roles, the API keys and the JWT format.
+// The API middleware in internal/api/middleware.go authenticates
+// against THAT manager.
+//
+// Keeping two implementations alive would mean two JWT formats and two
+// API-key stores in the same process - exactly the kind of split that
+// leads to "the middleware accepted a token the handler does not
+// understand". This file is therefore kept only as a reference for the
+// old wire format and must not be mounted.
+//
+// The AuthContext type used by the live middleware now lives in
+// auth_context.go.
 package api
 
 import (
@@ -53,15 +73,6 @@ type JWTClaims struct {
 	SessionID   string   `json:"session_id"`
 	Permissions []string `json:"permissions"`
 	jwt.RegisteredClaims
-}
-
-// AuthContext contains authentication information
-type AuthContext struct {
-	UserID      string
-	SessionID   string
-	APIKeyID    string
-	Permissions []string
-	AuthMethod  string // "jwt", "api_key"
 }
 
 // NewAuthManager creates a new authentication manager

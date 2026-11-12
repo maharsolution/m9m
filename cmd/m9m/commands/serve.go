@@ -2,6 +2,8 @@ package commands
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net/http"
@@ -17,6 +19,7 @@ import (
 
 	"github.com/neul-labs/m9m/internal/ai"
 	"github.com/neul-labs/m9m/internal/api"
+	"github.com/neul-labs/m9m/internal/auth"
 	"github.com/neul-labs/m9m/internal/credentials"
 	"github.com/neul-labs/m9m/internal/engine"
 	ainodes "github.com/neul-labs/m9m/internal/nodes/ai"
@@ -291,18 +294,85 @@ func runServe(cmd *cobra.Command, args []string) {
 		_ = sched.Stop()
 	}()
 
-	// Create API server
-	apiConfig := &api.APIServerConfig{
-		DevMode:            serveDevMode,
-		MaxPaginationLimit: 100,
-	}
+	// Create API server.
+	//
+	// The auth configuration comes from the environment (the
+	// DefaultAPIServerConfig env contract): M9M_AUTH_ENABLED,
+	// M9M_JWT_SECRET, M9M_API_KEY, M9M_ADMIN_EMAIL,
+	// M9M_ADMIN_PASSWORD, M9M_ALLOW_FIRST_REGISTER.
+	apiConfig := api.DefaultAPIServerConfig()
+	apiConfig.DevMode = serveDevMode
+	apiConfig.MaxPaginationLimit = 100
 
 	if serveDevMode {
 		apiConfig.AllowedOrigins = []string{"*"}
 		logger.Println("Development mode enabled (permissive CORS)")
 	}
 
+	// Fail fast: an instance that would serve an open API (auth
+	// enabled but neither a JWT secret nor an API key) refuses to boot.
+	if err := apiConfig.ValidateAuth(); err != nil {
+		logger.Fatalf("Authentication configuration error: %v", err)
+	}
+
 	apiServer := api.NewAPIServerWithConfig(eng, sched, store, apiConfig)
+
+	// Wire the authentication stack.
+	//
+	// internal/auth is the ONE auth system of m9m: it owns the users,
+	// their roles, their API keys and the JWT format. The second,
+	// parallel implementation in internal/api/auth_manager.go stays
+	// unwired on purpose - two JWT formats must never coexist.
+	//
+	// The users, the API keys and the sessions live in the SAME storage
+	// backend as the workflows, so they survive a restart of m9m.
+	if apiConfig.AuthEnabled {
+		jwtSecret := apiConfig.JWTSecret
+		if jwtSecret == "" {
+			// Auth is enabled with an API key only (ValidateAuth
+			// already refused the "no secret at all" case). The
+			// session tokens then get an ephemeral secret: they are
+			// valid for this boot only.
+			secretBytes := make([]byte, 32)
+			if _, randErr := rand.Read(secretBytes); randErr != nil {
+				logger.Fatalf("Failed to generate an ephemeral JWT secret: %v", randErr)
+			}
+			jwtSecret = hex.EncodeToString(secretBytes)
+			logger.Println("M9M_JWT_SECRET is not set - using an ephemeral secret; session tokens will NOT survive a restart")
+		}
+
+		userStorage := auth.NewPersistentUserStorage(store)
+		authManager := auth.NewAuthManager(userStorage, jwtSecret, 24*time.Hour)
+		authHandler := auth.NewAuthHandler(authManager)
+
+		// Bootstrap the owner account of a fresh instance. The call is
+		// idempotent: an instance that already has users is never
+		// touched, so a restart never resets a password.
+		if apiConfig.BootstrapAdminEmail != "" && apiConfig.BootstrapAdminPassword != "" {
+			created, bootErr := authManager.BootstrapOwner(apiConfig.BootstrapAdminEmail, apiConfig.BootstrapAdminPassword)
+			if bootErr != nil {
+				logger.Fatalf("Failed to bootstrap the owner account: %v", bootErr)
+			}
+			if created {
+				logger.Println("Bootstrapped the owner account from M9M_ADMIN_EMAIL/M9M_ADMIN_PASSWORD")
+			}
+			// An owner exists: the public registration window closes.
+			authManager.SetRegistrationOpen(false)
+		} else if !apiConfig.AllowFirstRegister {
+			authManager.SetRegistrationOpen(false)
+			logger.Println("Public registration is closed (M9M_ALLOW_FIRST_REGISTER is not enabled and no owner is configured)")
+		}
+
+		authMiddleware := api.AuthMiddlewareWithOptions(authManager, api.AuthOptions{
+			StaticAPIKeys: apiConfig.StaticAPIKeys,
+		})
+		apiServer.SetAuth(authManager, authHandler, authMiddleware)
+
+		logger.Printf("Authentication enabled | static API keys: %d | first registration open: %t",
+			len(apiConfig.StaticAPIKeys), apiConfig.AllowFirstRegister && apiConfig.BootstrapAdminEmail == "")
+	} else {
+		logger.Println("Authentication is DISABLED (M9M_AUTH_ENABLED=false) - the API is open")
+	}
 	apiServer.SetJobQueue(jobQueue)
 	// Register the `loadOptions` providers of the nodes whose critical
 	// parameter is a resource locator (n8n parity: the parameter panel

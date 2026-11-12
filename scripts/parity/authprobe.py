@@ -111,13 +111,27 @@ def main(argv: list[str] | None = None) -> int:
         row["status"] in (200, 301, 302)
         for row in rows
         if row["host"] == "m9m" and row["variant"] == "none")
+    m9m_api_rejected = any(
+        row["status"] in (401, 403)
+        for row in rows
+        if row["host"] == "m9m" and row["variant"] == "none"
+        and row["path"].startswith("/api/v1"))
+    m9m_authorized = any(
+        row["status"] == 200
+        for row in rows
+        if row["host"] == "m9m" and row["variant"] == "m9m-key"
+        and row["path"].startswith("/api/v1"))
     n8n_requires_key = any(
         row["status"] in (401, 403)
         for row in rows
         if row["host"] == "n8n" and row["variant"] == "none")
     print()
     print(f"m9m /api/v1 without any key: "
-          f"{'HTTP 200 - no auth required' if m9m_unauthenticated else 'rejected - auth required'}")
+          f"{'HTTP 401 - auth required' if m9m_api_rejected else 'HTTP 200 - no auth required'}")
+    print(f"m9m /api/v1 with the configured key: "
+          f"{'HTTP 200 - accepted' if m9m_authorized else 'not accepted (no M9M_API_KEY configured?)'}")
+    print(f"m9m public endpoints without any key: "
+          f"{'HTTP 200 - open' if m9m_unauthenticated else 'not open'}")
     print(f"n8n /api/v1 without any key: "
           f"{'rejected - auth required' if n8n_requires_key else 'HTTP 200 - no auth required'}")
     return 0
