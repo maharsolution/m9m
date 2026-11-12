@@ -666,15 +666,15 @@
     "semantic_hash": ""
   },
   "internal/auth/auth_handler.go": {
-    "mtime": 1794492978.6718445,
-    "seen": 1794494873.2775755,
-    "ast_hash": "59ae88aaa27d519fa48be90f4829f3ad",
+    "mtime": 1794518601.257291,
+    "seen": 1794521172.2005274,
+    "ast_hash": "ae5cde504a27945c3850bff1f4510470",
     "semantic_hash": ""
   },
   "internal/auth/auth_manager.go": {
-    "mtime": 1794492978.674253,
-    "seen": 1794494873.2775786,
-    "ast_hash": "b644593474fa726ec0ff1387f6105d19",
+    "mtime": 1794518584.635626,
+    "seen": 1794521172.2005317,
+    "ast_hash": "079ab7bd2ca11363c83455b53ffe5e2b",
     "semantic_hash": ""
   },
   "internal/auth/auth_test.go": {
@@ -690,9 +690,9 @@
     "semantic_hash": ""
   },
   "internal/auth/password.go": {
-    "mtime": 1788335854.0,
-    "seen": 1794395739.772942,
-    "ast_hash": "b120fee5b2350ad0e9f9569a0fe165f7",
+    "mtime": 1794518711.8139396,
+    "seen": 1794521172.2009137,
+    "ast_hash": "c2062996222984b23f2b0b95e4c1cc58",
     "semantic_hash": ""
   },
   "internal/auth/user.go": {
@@ -702,9 +702,9 @@
     "semantic_hash": ""
   },
   "internal/auth/user_storage.go": {
-    "mtime": 1794492964.9916706,
-    "seen": 1794494873.2778945,
-    "ast_hash": "70f79ba8f6216348696c449da52ff626",
+    "mtime": 1794518809.7605772,
+    "seen": 1794521172.2011657,
+    "ast_hash": "d508079ed97a436fabf8891003ef1e39",
     "semantic_hash": ""
   },
   "internal/compatibility/compatibility_test.go": {
@@ -2754,15 +2754,15 @@
     "semantic_hash": ""
   },
   "web/src/components/workflow/NodePanel.vue": {
-    "mtime": 1794516238.5466304,
-    "seen": 1794517454.3741248,
-    "ast_hash": "5c96f9bab16ae84042eabda24f7fb9a7",
+    "mtime": 1794521046.5251017,
+    "seen": 1794521172.3022826,
+    "ast_hash": "71089ff3296377c854d9275d85e09a56",
     "semantic_hash": ""
   },
   "web/src/components/workflow/WorkflowCanvas.vue": {
-    "mtime": 1794516577.0614786,
-    "seen": 1794517454.3741264,
-    "ast_hash": "944e43b4a5d49688b64587e30a867261",
+    "mtime": 1794524394.2586603,
+    "seen": 1794525507.7725728,
+    "ast_hash": "80b6948a18e4747cc9d70dd1c5d96b27",
     "semantic_hash": ""
   },
   "web/src/components/workflow/WorkflowEditorToolbar.vue": {
@@ -2862,9 +2862,9 @@
     "semantic_hash": ""
   },
   "web/src/stores/workflowEditor.ts": {
-    "mtime": 1794384969.5541747,
-    "seen": 1794395739.7739334,
-    "ast_hash": "0412589cf7b05206843b918f0505acf9",
+    "mtime": 1794519431.5864055,
+    "seen": 1794521172.3108544,
+    "ast_hash": "a5da374a202757b08ab1714728d23f96",
     "semantic_hash": ""
   },
   "web/src/types/api.ts": {
@@ -2922,9 +2922,9 @@
     "semantic_hash": ""
   },
   "web/src/views/ExecutionDetail.vue": {
-    "mtime": 1791788982.969822,
-    "seen": 1794395739.7740028,
-    "ast_hash": "6f5dcd59094ea9b3eb958acccbb6d1b5",
+    "mtime": 1794517647.2692835,
+    "seen": 1794521172.31341,
+    "ast_hash": "f13caa47c82f4e7629aa0aa61b07ba01",
     "semantic_hash": ""
   },
   "web/src/views/ExecutionHistory.vue": {
@@ -2970,9 +2970,9 @@
     "semantic_hash": ""
   },
   "web/src/views/WorkflowEditor.vue": {
-    "mtime": 1794516600.736551,
-    "seen": 1794517454.380455,
-    "ast_hash": "fd9a5c4d13c856ea2b95982b2c13f3e5",
+    "mtime": 1794519639.8862867,
+    "seen": 1794521172.3146133,
+    "ast_hash": "f6386abb67d9b1ed77aa66467264f883",
     "semantic_hash": ""
   },
   "web/src/views/WorkflowList.vue": {
@@ -6621,6 +6621,24 @@
     "mtime": 1794285410.0700214,
     "seen": 1794494873.4049356,
     "ast_hash": "243528019ede221c7fcaba4cb36dd0fd",
+    "semantic_hash": ""
+  },
+  "internal/auth/session_key_test.go": {
+    "mtime": 1794518711.8164704,
+    "seen": 1794521172.2010493,
+    "ast_hash": "ecf1b4a65ebf8272afccf83e462f2e24",
+    "semantic_hash": ""
+  },
+  "web/src/lib/doubleClick.test.ts": {
+    "mtime": 1794519457.8708465,
+    "seen": 1794521172.3076034,
+    "ast_hash": "66370c5868aae8dfaaed628ae6d53873",
+    "semantic_hash": ""
+  },
+  "web/src/lib/doubleClick.ts": {
+    "mtime": 1794519445.8336327,
+    "seen": 1794521172.3076065,
+    "ast_hash": "0fb2eb47289a54d523c9e157d9315f63",
     "semantic_hash": ""
   },
   "web/package-lock.json": {

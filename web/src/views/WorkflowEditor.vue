@@ -22,7 +22,6 @@ const tagsStore = useTagsStore()
 // The node creator is an overlay that is opened on demand (toolbar
 // button or the Ctrl+F shortcut) — n8n parity.
 const showNodePalette = ref(false)
-const showNodePanel = ref(false)
 const showAI = ref(false)
 const showTagPicker = ref(false)
 const showVersionDrawer = ref(false)
@@ -37,7 +36,16 @@ const canvasRef = ref<InstanceType<typeof WorkflowCanvas> | null>(null)
 const workflowId = computed(() => route.params.id as string | undefined)
 const isNewWorkflow = computed(() => !workflowId.value || workflowId.value === 'new')
 const workflow = computed(() => workflowStore.currentWorkflow)
-const selectedNode = computed(() => workflowEditorStore.selectedNode)
+
+/**
+ * The node the details view is showing.
+ *
+ * The NDV is a layer of its own (n8n parity): a single click on a
+ * node only selects it, a double click opens the panel. The store
+ * owns the open node, so the panel survives a selection change and
+ * the selection survives the panel closing.
+ */
+const ndvNode = computed(() => workflowEditorStore.ndvNode)
 
 /** Tags currently attached to the open workflow. */
 const currentWorkflowTags = computed(() =>
@@ -144,10 +152,8 @@ watch(
   }
 )
 
-// Watch for selected node changes to show/hide panel
-watch(selectedNode, (node) => {
-  showNodePanel.value = !!node
-})
+// The node details view follows the store's NDV state — it is opened
+// by a double click on a node card, not by the selection.
 
 // Confirm before leaving with unsaved changes
 onBeforeRouteLeave((_to, _from, next) => {
@@ -421,9 +427,10 @@ const exportWorkflowFile = async () => {
 
     <!--
       The node details view is a modal above everything. It renders
-      itself as a fixed overlay.
+      itself as a fixed overlay and closes without touching the
+      canvas selection.
     -->
-    <NodePanel v-if="showNodePanel && selectedNode" />
+    <NodePanel v-if="ndvNode" @close="workflowEditorStore.closeNodeDetails()" />
 
     <!-- Tag management for the open workflow -->
     <TagPicker

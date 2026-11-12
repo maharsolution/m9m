@@ -221,6 +221,7 @@ export const useWorkflowEditorStore = defineStore('workflowEditor', () => {
 
   function resetEditorState() {
     selectedNodeIds.value = []
+    ndvNodeId.value = null
     isDirty.value = false
     historyStore.reset()
   }
@@ -330,6 +331,10 @@ export const useWorkflowEditorStore = defineStore('workflowEditor', () => {
     recordHistory('Delete node')
     if (removeNodeFromWorkflow(workflow, nodeId)) {
       selectedNodeIds.value = selectedNodeIds.value.filter((id) => id !== nodeId)
+      // The NDV cannot show a node that no longer exists.
+      if (ndvNodeId.value === nodeId) {
+        ndvNodeId.value = null
+      }
       isDirty.value = true
     }
   }
@@ -503,6 +508,59 @@ export const useWorkflowEditorStore = defineStore('workflowEditor', () => {
   }
 
   // ------------------------------------------------------------------
+  // Node details view (NDV)
+  //
+  // n8n parity: the NDV is a layer of its own. A single click on a
+  // node only *selects* it (the 6px ring on the card), a double click
+  // opens the NDV. The open node therefore lives in its own state
+  // instead of being derived from the selection — closing the NDV
+  // keeps the node selected, and selecting another node while the
+  // NDV is open does not silently swap the panel's content.
+  // ------------------------------------------------------------------
+
+  /** Id of the node the NDV is showing (null when the NDV is closed). */
+  const ndvNodeId = ref<string | null>(null)
+
+  /** The node the NDV is showing — null while the NDV is closed. */
+  const ndvNode = computed(() => {
+    const workflow = workflowStore.currentWorkflow
+    if (!workflow || !ndvNodeId.value) {
+      return null
+    }
+
+    return workflow.nodes.find((node) => node.id === ndvNodeId.value) ?? null
+  })
+
+  /** True while the NDV is open. */
+  const isNodeDetailsOpen = computed(() => ndvNode.value !== null)
+
+  /**
+   * Opens the NDV for a node. Unknown ids are ignored so a stale
+   * click (e.g. on a node that was just deleted) cannot open the
+   * panel.
+   */
+  function openNodeDetails(nodeId: string) {
+    const workflow = workflowStore.currentWorkflow
+    if (!workflow) {
+      return
+    }
+
+    if (!workflow.nodes.some((node) => node.id === nodeId)) {
+      return
+    }
+
+    ndvNodeId.value = nodeId
+  }
+
+  /**
+   * Closes the NDV. The canvas selection is intentionally left
+   * untouched — n8n keeps the node selected after the NDV closes.
+   */
+  function closeNodeDetails() {
+    ndvNodeId.value = null
+  }
+
+  // ------------------------------------------------------------------
   // Copy / paste / duplicate
   // ------------------------------------------------------------------
 
@@ -655,6 +713,11 @@ export const useWorkflowEditorStore = defineStore('workflowEditor', () => {
     selectedNodes,
     selectedNode,
     selectedNodeCount,
+    ndvNodeId,
+    ndvNode,
+    isNodeDetailsOpen,
+    openNodeDetails,
+    closeNodeDetails,
     hasClipboard,
     canUndo,
     canRedo,

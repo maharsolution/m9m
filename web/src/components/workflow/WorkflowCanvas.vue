@@ -4,7 +4,7 @@ import { VueFlow, useVueFlow, SelectionMode } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
-import type { Node, Edge, Connection } from '@vue-flow/core'
+import type { Node, Edge, Connection, NodeMouseEvent } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
@@ -14,6 +14,7 @@ import BaseNode from '@/components/nodes/BaseNode.vue'
 import { useWorkflowEditorStore, useWorkflowStore, useNodesStore } from '@/stores'
 import { useThemeStore } from '@/stores/theme'
 import { buildFlowEdges, buildFlowNodes, parseEdgeId } from '@/lib/workflowGraph'
+import { createDoubleClickDetector } from '@/lib/doubleClick'
 import {
   STICKY_NOTE_DEFAULT_HEIGHT,
   STICKY_NOTE_DEFAULT_WIDTH,
@@ -69,7 +70,7 @@ const {
   onNodeDragStop,
   onSelectionDragStart,
   onSelectionDragStop,
-  project,
+  screenToFlowCoordinate,
   zoomIn,
   zoomOut,
   fitView,
@@ -78,6 +79,8 @@ const {
   // reactive prop would not switch the mode at runtime.
   panOnDrag,
   selectionKeyCode,
+  panActivationKeyCode,
+  zoomActivationKeyCode,
 } = useVueFlow()
 
 const flowNodes = computed<FlowNode[]>(() => {
@@ -110,21 +113,48 @@ const flowEdges = computed<Edge[]>(() => buildFlowEdges(workflowStore.currentWor
 // --------------------------------------------------------------------
 // Panning vs. marquee selection
 //
-// n8n's canvas uses the *left* mouse button for the drag-box marquee
-// and reserves the middle button (plus the space bar) for panning.
-// Vue Flow supports the same split, but the pan mode has to be
-// toggled explicitly, because `pan-on-drag` is a static list of mouse
-// buttons.
+// n8n's canvas (n8n/packages/frontend/editor-ui/src/features/
+// workflows/canvas/components/Canvas.vue) splits the pointer like this:
 //
-// While panning mode is off:
-//   * left drag on the empty canvas  -> marquee (box) selection
+//   * middle mouse button            -> pan  (`panningMouseButton = [1]`)
+//   * space / ctrl (⌘ on macOS)      -> panning mode (`panningKeyCode`)
+//   * left drag on the empty canvas  -> the marquee rectangle on
+//                                        desktop (`selectionKeyCode =
+//                                        true`), the pan gesture on
+//                                        mobile (`selectionKeyCode =
+//                                        'Shift'`)
+//
+// While the panning key is held, n8n swaps the modes
+// (`switchToPanningMode` / `switchToSelectionMode`): the marquee is
+// disarmed and the left button pans.
+//
+// m9m follows n8n's *mobile* split, because the requested journey is
+// "drag the empty canvas and the whole workflow moves with the
+// pointer":
+//
+//   * left drag on the empty canvas  -> pan
+//   * shift + left drag              -> marquee rectangle
 //   * middle drag                     -> pan
-// While panning mode is on (space held):
-//   * left drag                       -> pan
+//   * space / ctrl / ⌘ + drag        -> pan (marquee disarmed)
+//
+// Vue Flow expresses this with two store values: `panOnDrag` (the
+// mouse buttons that pan the canvas) and `selectionKeyCode` (the key
+// that arms the marquee). Both have to be written into the store —
+// Vue Flow copies its props into the state once, at setup time.
 // --------------------------------------------------------------------
 
+/** The modifier n8n uses for the panning mode (⌘ on macOS). */
+const PANNING_MODIFIER =
+  typeof navigator !== 'undefined' && /mac|iphone|ipad/i.test(navigator.userAgent)
+    ? 'Meta'
+    : 'Control'
+
 const panningMode = ref(false)
-const isPanningKeyDown = (event: KeyboardEvent) => event.code === 'Space'
+
+const isPanningKeyDown = (event: KeyboardEvent) =>
+  event.code === 'Space' ||
+  event.key === PANNING_MODIFIER ||
+  event.code === PANNING_MODIFIER
 
 /**
  * Writes the current canvas mode into the Vue Flow store.
@@ -132,15 +162,15 @@ const isPanningKeyDown = (event: KeyboardEvent) => event.code === 'Space'
  * `panOnDrag` lists the mouse buttons that pan the canvas and
  * `selectionKeyCode` arms the marquee:
  *
- *   * marquee mode (default): `panOnDrag = [1]` (middle button pans),
- *     `selectionKeyCode = true` (left drag on the pane draws the
- *     selection rectangle).
- *   * panning mode (space held): `panOnDrag = [0, 1]` (left button
- *     pans as well), `selectionKeyCode = null` (no marquee).
+ *   * default: `panOnDrag = [0, 1]` (left + middle drag pan),
+ *              `selectionKeyCode = 'Shift'` (shift + left drag draws
+ *              the marquee rectangle).
+ *   * panning mode (space / ctrl held): `panOnDrag = [0, 1]`,
+ *              `selectionKeyCode = null` (no marquee at all).
  */
 const applyCanvasMode = () => {
-  panOnDrag.value = panningMode.value ? [0, 1] : [1]
-  selectionKeyCode.value = panningMode.value ? null : true
+  panOnDrag.value = [0, 1]
+  selectionKeyCode.value = panningMode.value ? null : 'Shift'
 }
 
 watch(panningMode, applyCanvasMode)
@@ -149,7 +179,9 @@ const onKeyDown = (event: KeyboardEvent) => {
   if (isPanningKeyDown(event) && !isEditableTarget(event.target)) {
     panningMode.value = true
     // Stop the browser from scrolling the page while space is held.
-    event.preventDefault()
+    if (event.code === 'Space') {
+      event.preventDefault()
+    }
   }
 }
 
@@ -157,6 +189,15 @@ const onKeyUp = (event: KeyboardEvent) => {
   if (isPanningKeyDown(event)) {
     panningMode.value = false
   }
+}
+
+/**
+ * A key release can be missed when the window loses the focus while
+ * the modifier is held. n8n resets the canvas mode on blur
+ * (`onWindowBlur` -> `switchToSelectionMode`), m9m does the same.
+ */
+const onWindowBlur = () => {
+  panningMode.value = false
 }
 
 /** True when the event target is a text input (space must type there). */
@@ -192,15 +233,29 @@ const onViewportChange = (viewport: { zoom: number }) => {
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('keyup', onKeyUp)
+  window.addEventListener('blur', onWindowBlur)
   // Vue Flow applies its props once, when the <VueFlow> component is
   // set up, so the initial mode has to be pushed into the store
   // afterwards.
   applyCanvasMode()
+  // n8n arms the same keys for panning *and* for zooming
+  // (`:pan-activation-key-code="panningKeyCode"` and
+  //  `:zoom-activation-key-code="panningKeyCode"` in Canvas.vue), so
+  // space / ctrl + drag pans and space / ctrl + wheel zooms.
+  panActivationKeyCode.value = ['Space', PANNING_MODIFIER]
+  zoomActivationKeyCode.value = ['Space', PANNING_MODIFIER]
+  window.addEventListener('pointerdown', onPointerDown, true)
+  window.addEventListener('pointermove', onPointerMove, true)
+  window.addEventListener('pointerup', onPointerUp, true)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
   window.removeEventListener('keyup', onKeyUp)
+  window.removeEventListener('blur', onWindowBlur)
+  window.removeEventListener('pointerdown', onPointerDown, true)
+  window.removeEventListener('pointermove', onPointerMove, true)
+  window.removeEventListener('pointerup', onPointerUp, true)
   panningMode.value = false
 })
 
@@ -226,6 +281,59 @@ onNodeDragStart(captureDragSnapshot)
 onNodeDragStop(releaseDragSnapshot)
 onSelectionDragStart(captureDragSnapshot)
 onSelectionDragStop(releaseDragSnapshot)
+
+// --------------------------------------------------------------------
+// Node interaction — click selects, double click opens the NDV
+//
+// n8n parity: a single click on a node card only *selects* it (the
+// 6px ring on the card); the node details view opens on a double
+// click.
+//
+// The browser's `dblclick` event is deliberately not used: a node
+// drag that ends on the same card can produce a `dblclick`, which
+// would open the NDV in the middle of a drag. Every pointer press is
+// measured instead — a press that travels more than a few pixels is
+// a drag and never counts as a click.
+// --------------------------------------------------------------------
+
+const doubleClick = createDoubleClickDetector()
+
+const onPointerDown = (event: PointerEvent) => {
+  doubleClick.press(event.clientX, event.clientY)
+}
+
+const onPointerMove = (event: PointerEvent) => {
+  doubleClick.move(event.clientX, event.clientY)
+}
+
+const onPointerUp = () => {
+  doubleClick.release()
+}
+
+/**
+ * Vue Flow reports every click on a node card. Two of them, in quick
+ * succession on the same node, open the node details view.
+ *
+ * Sticky notes are excluded: a double click on a sticky note edits
+ * its content (n8n parity), it never opens the NDV.
+ */
+const onNodeClick = ({ event, node }: NodeMouseEvent) => {
+  const workflowNode = workflowStore.currentWorkflow?.nodes.find((n) => n.id === node.id)
+  if (workflowNode?.type === STICKY_NOTE_TYPE) {
+    doubleClick.reset()
+    return
+  }
+
+  // Touch events carry no pointer coordinates — they never form a
+  // double click.
+  if (!('clientX' in event)) return
+
+  if (!doubleClick.click(node.id, event.timeStamp, event.clientX, event.clientY)) {
+    return
+  }
+
+  workflowEditorStore.openNodeDetails(node.id)
+}
 
 onNodesChange((changes) => {
   changes.forEach((change) => {
@@ -309,10 +417,14 @@ const onDrop = (event: DragEvent) => {
   const nodeTypeInfo = nodesStore.getNodeType(nodeType)
   if (!nodeTypeInfo) return
 
-  const { left, top } = (event.target as HTMLElement).getBoundingClientRect()
-  const position = project({
-    x: event.clientX - left,
-    y: event.clientY - top,
+  // The node lands where the pointer is. `screenToFlowCoordinate`
+  // projects the screen position onto the canvas: it takes the
+  // container bounds and the viewport transform (pan + zoom) into
+  // account, so a drop is correct after the canvas was panned or
+  // zoomed. The result is snapped to the canvas grid, like n8n.
+  const position = screenToFlowCoordinate({
+    x: event.clientX,
+    y: event.clientY,
   })
 
   // Ensure a unique node `name` (used as the connections map key).
@@ -466,6 +578,7 @@ defineExpose({ zoomIn: zoomInCanvas, zoomOut: zoomOutCanvas, resetZoom: resetZoo
       :delete-key-code="null"
       :disable-keyboard-a11y="true"
       @viewport-change="onViewportChange"
+      @node-click="onNodeClick"
     >
       <Background
         :color="canvasDotColor"
@@ -536,6 +649,33 @@ defineExpose({ zoomIn: zoomInCanvas, zoomOut: zoomOutCanvas, resetZoom: resetZoo
  */
 .vue-flow__node {
   transition: none;
+}
+
+/*
+ * The dotted background is decoration, not a surface. It must not
+ * swallow the pointer: Vue Flow's pane needs the press to draw the
+ * marquee rectangle, the click to clear the selection and the drag
+ * to pan the canvas.
+ */
+.vue-flow__background {
+  pointer-events: none;
+}
+
+/*
+ * The pointer follows the canvas mode (n8n parity):
+ *   * `grab` / `grabbing` while the canvas can be panned
+ *   * `crosshair` while the marquee rectangle is armed (shift held)
+ */
+.vue-flow--m9m.vue-flow .vue-flow__pane.draggable {
+  cursor: grab;
+}
+
+.vue-flow--m9m.vue-flow .vue-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+.vue-flow--m9m.vue-flow .vue-flow__pane.selection {
+  cursor: crosshair;
 }
 
 /*
