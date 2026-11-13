@@ -28,6 +28,7 @@
 
 import {
   ExpressionSyntaxError,
+  ExpressionUnterminatedError,
   type BinaryOperator,
   type ExpressionChunk,
   type ExpressionNode,
@@ -663,7 +664,7 @@ export function parseValue(source: string): ValueChunk[] {
 
     const close = findClosingBraces(source, open + 2)
     if (close === -1) {
-      throw new ExpressionSyntaxError(
+      throw new ExpressionUnterminatedError(
         "Unterminated expression: missing '}}'",
         open,
         source.length,
@@ -687,6 +688,13 @@ export function parseValue(source: string): ValueChunk[] {
       // the offset of the chunk to stay absolute inside `source`.
       node = shiftSpans(parseExpression(body), open + 2)
     } catch (error) {
+      if (error instanceof ExpressionUnterminatedError) {
+        throw new ExpressionUnterminatedError(
+          error.message,
+          open + 2 + error.start,
+          open + 2 + error.end,
+        )
+      }
       if (error instanceof ExpressionSyntaxError) {
         throw new ExpressionSyntaxError(
           error.message,

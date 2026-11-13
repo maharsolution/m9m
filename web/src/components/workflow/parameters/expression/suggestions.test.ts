@@ -31,6 +31,7 @@ const itemPayload = {
   id: 7,
   name: 'Bob',
   email: 'bob@example.com',
+  body: { text: 'Hello', kind: 'note' },
   address: {
     city: 'Jakarta',
     zip: '12345',
@@ -255,8 +256,30 @@ describe('nested field completion', () => {
     expect(labels).toEqual(['city'])
   })
 
-  it('does not offer a field for a fuzzy name', () => {
+  it('offers a fuzzy field name', () => {
+    const labels = suggestionsAt('{{$json.bdy', undefined, nestedSources).map(
+      (suggestion) => suggestion.label,
+    )
+
+    expect(labels).toEqual(['body'])
+  })
+
+  it('offers a fuzzy field name of a nested level', () => {
+    const labels = suggestionsAt('{{$json.address.cty', undefined, nestedSources).map(
+      (suggestion) => suggestion.label,
+    )
+
+    expect(labels).toEqual(['city'])
+  })
+
+  it('does not offer a field of a deeper level', () => {
     expect(suggestionsAt('{{$json.cty', undefined, nestedSources)).toEqual([])
+  })
+
+  it('offers nothing for an unresolved path', () => {
+    expect(suggestionsAt('{{$json.nope.', undefined, nestedSources)).toEqual([])
+    expect(suggestionsAt('{{$json.nope.bdy', undefined, nestedSources)).toEqual([])
+    expect(suggestionsAt('{{$json.address.nope.bdy', undefined, nestedSources)).toEqual([])
   })
 
   it('knows the path segment that is being typed', () => {

@@ -620,8 +620,9 @@ function nodeFieldNames(
 /**
  * The suggestion entries of a set of field names.
  *
- * A field name is typed literally, so the list is filtered by an exact
- * or a prefix match — never by a fuzzy one.
+ * A field name is typed literally, so an exact or a prefix match wins
+ * over a scattered one — but a scattered match is offered as well, so
+ * `bdy` still finds `body`.
  */
 function itemFieldSuggestions(
   fields: string[],
@@ -638,16 +639,29 @@ function itemFieldSuggestions(
   }))
 }
 
-/** Filters field names by an exact or a prefix match. */
+/**
+ * Filters field names by their match quality.
+ *
+ * The ranking of {@link matchRank} decides: an exact match first, then
+ * a prefix, a substring and finally a scattered one — `bdy` finds
+ * `body`. The order of the level is kept inside a group of equally
+ * good matches.
+ *
+ * Only the fields of a level that really exists are filtered — a path
+ * that does not resolve offers nothing at all (see
+ * {@link resolveFieldTree}).
+ */
 function filterFieldNames(fields: string[], needle: string): string[] {
   if (needle === '') return fields
 
-  const exact = fields.filter((field) => field === needle)
-  const prefixed = fields.filter(
-    (field) => field !== needle && field.toLowerCase().startsWith(needle.toLowerCase()),
-  )
-
-  return [...exact, ...prefixed]
+  return fields
+    .map((field, index) => ({ field, index, rank: matchRank(field, needle) }))
+    .filter((entry) => entry.rank !== MATCH_NONE)
+    .sort((left, right) => {
+      if (left.rank !== right.rank) return left.rank - right.rank
+      return left.index - right.index
+    })
+    .map((entry) => entry.field)
 }
 
 /**

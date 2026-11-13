@@ -39,6 +39,7 @@
 import {
   ExpressionEvaluationError,
   ExpressionSyntaxError,
+  ExpressionUnterminatedError,
   type ExpressionChunk,
   type ExpressionError,
   type ExpressionNode,
@@ -614,6 +615,16 @@ function createNodeProxy(output: unknown): Record<string, unknown> {
 
 /** Normalise a thrown error into an {@link ExpressionError}. */
 function toExpressionError(error: unknown, offset: number): ExpressionError {
+  // The unterminated error is a syntax error, but it gets its own kind:
+  // the editor keeps the banner away while the expression is still open.
+  if (error instanceof ExpressionUnterminatedError) {
+    return {
+      message: error.message,
+      start: error.start + offset,
+      end: error.end + offset,
+      kind: 'unterminated',
+    }
+  }
   if (error instanceof ExpressionSyntaxError) {
     return {
       message: error.message,

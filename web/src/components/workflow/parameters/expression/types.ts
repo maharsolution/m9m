@@ -124,9 +124,14 @@ export type ValueChunk = TextChunk | ExpressionChunk
  *
  * `syntax` means the expression cannot be parsed at all, `runtime`
  * means it is valid but could not be evaluated (missing data, a wrong
- * argument count, …).
+ * argument count, …) and `unterminated` means the `{{` of the
+ * expression has no matching `}}` yet.
+ *
+ * The last kind is separate from `syntax` because an unterminated
+ * expression is not broken — the user is still typing. The editor
+ * suppresses it while the caret sits inside the open expression.
  */
-export type ExpressionErrorKind = 'syntax' | 'runtime'
+export type ExpressionErrorKind = 'syntax' | 'runtime' | 'unterminated'
 
 /**
  * An error produced by the engine.
@@ -152,6 +157,20 @@ export class ExpressionSyntaxError extends Error {
     this.name = 'ExpressionSyntaxError'
     this.start = start
     this.end = end
+  }
+}
+
+/**
+ * Thrown by the parser when a `{{` has no matching `}}`.
+ *
+ * It is a syntax error, but a very specific one: the expression is
+ * not broken, it is unfinished. The editor uses the separate class to
+ * keep the red banner away while the user is still typing.
+ */
+export class ExpressionUnterminatedError extends ExpressionSyntaxError {
+  constructor(message: string, start: number, end: number) {
+    super(message, start, end)
+    this.name = 'ExpressionUnterminatedError'
   }
 }
 

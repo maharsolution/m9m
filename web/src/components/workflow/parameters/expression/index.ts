@@ -27,6 +27,7 @@ export {
 export {
   ExpressionEvaluationError,
   ExpressionSyntaxError,
+  ExpressionUnterminatedError,
   type BinaryOperator,
   type CallNode,
   type ConditionalNode,
@@ -66,6 +67,12 @@ export {
   type EvaluationResult,
   type ExpressionContext,
 } from './evaluator'
+
+export {
+  isExpressionOpenAtCaret,
+  selectDisplayError,
+  type DisplayErrorOptions,
+} from './errors'
 
 export {
   FUNCTION_CATALOGUE,

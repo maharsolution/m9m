@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest'
 import { evaluateExpression, evaluateValue, type ExpressionContext } from './evaluator'
 import { parseExpression, parseValue } from './parser'
-import { ExpressionSyntaxError } from './types'
+import { ExpressionSyntaxError, type ExpressionError } from './types'
 
 /** Evaluate an expression and return its value, failing on errors. */
 function evaluate(source: string, context: ExpressionContext = {}): unknown {
@@ -40,7 +40,7 @@ function evaluateParameter(source: string, context: ExpressionContext = {}): unk
 function evaluateError(
   source: string,
   context: ExpressionContext = {},
-): { message: string; start: number; end: number; kind: 'syntax' | 'runtime' } {
+): ExpressionError {
   const result = evaluateExpression(source, context)
   if (result.ok) throw new Error(`evaluation of "${source}" unexpectedly succeeded`)
   return result.error

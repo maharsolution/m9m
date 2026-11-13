@@ -11,6 +11,7 @@ import {
   evaluateValue,
   formatPreview,
   FUNCTION_CATALOGUE,
+  selectDisplayError,
   suggestForPosition,
   VARIABLES,
   type AvailableNode,
@@ -192,31 +193,26 @@ const showSuggestions = computed(
 /**
  * The error the editor shows.
  *
- * A half-written expression is not an error while the autocomplete is
- * open — n8n shows the suggestion list instead of a red banner, and
- * the error only appears when the list cannot help any more.
+ * The rules live in `selectDisplayError` so they can be unit tested:
  *
- * A runtime error is only shown when the editor has data to evaluate
- * the expression against. Without a preview there is nothing to
- * resolve `$json` with, and a red banner would only report that the
- * editor knows nothing — not that the expression is wrong.
+ * - A half-written expression is not an error while the autocomplete
+ *   is open — n8n shows the suggestion list instead of a red banner.
+ * - The *unterminated* error is suppressed while the caret sits in an
+ *   expression that is not closed yet, even when the suggestion list
+ *   is empty: `{{$json.bdy` is unfinished, not broken.
+ * - A runtime error is only shown when the editor has data to evaluate
+ *   the expression against. Without a preview there is nothing to
+ *   resolve `$json` with, and a red banner would only report that the
+ *   editor knows nothing — not that the expression is wrong.
  */
-const displayError = computed(() => {
-  if (showSuggestions.value) return null
-
-  const current = error.value
-  if (!current) return null
-
-  if (
-    current.kind === 'runtime' &&
-    props.sampleInput === undefined &&
-    current.message.startsWith('Cannot read property')
-  ) {
-    return null
-  }
-
-  return current
-})
+const displayError = computed(() =>
+  selectDisplayError(error.value, {
+    text: text.value,
+    caret: caret.value,
+    suggestionsOpen: showSuggestions.value,
+    hasSampleInput: props.sampleInput !== undefined,
+  }),
+)
 
 /** True when the field holds an expression. */
 const isExpression = computed(() => expressionMode.value)
