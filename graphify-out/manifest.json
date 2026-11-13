@@ -648,9 +648,9 @@
     "semantic_hash": ""
   },
   "internal/api/workflows.go": {
-    "mtime": 1794575174.5423908,
-    "seen": 1794575561.1951792,
-    "ast_hash": "1622b7f437dafcbd43ab127d27a50c78",
+    "mtime": 1794582379.0255415,
+    "seen": 1794582764.7653143,
+    "ast_hash": "757aa9336cd46523272b8ae32ca88c25",
     "semantic_hash": ""
   },
   "internal/audit/audit_logger.go": {
@@ -5298,9 +5298,9 @@
     "semantic_hash": ""
   },
   "web/src/components/workflow/parameters/ExpressionField.vue": {
-    "mtime": 1794579699.7615526,
-    "seen": 1794580027.9708624,
-    "ast_hash": "4bc56002b3ce878a93292ff79f82a0b8",
+    "mtime": 1794582084.2752519,
+    "seen": 1794582324.7375958,
+    "ast_hash": "e1ad0932d2b16084fb66ccce44808398",
     "semantic_hash": ""
   },
   "web/src/components/workflow/parameters/ExpressionInput.vue": {
@@ -5364,9 +5364,9 @@
     "semantic_hash": ""
   },
   "web/src/components/workflow/parameters/expression/evaluator.ts": {
-    "mtime": 1794575329.218813,
-    "seen": 1794575561.3298087,
-    "ast_hash": "ce53aaf6b0878e26cdbaecfc9d15f476",
+    "mtime": 1794582021.6601558,
+    "seen": 1794582324.7403986,
+    "ast_hash": "d83fe52e91ef45b06ba6dc9edee35082",
     "semantic_hash": ""
   },
   "web/src/components/workflow/parameters/expression/functions.ts": {
@@ -5382,9 +5382,9 @@
     "semantic_hash": ""
   },
   "web/src/components/workflow/parameters/expression/index.ts": {
-    "mtime": 1794579673.1524277,
-    "seen": 1794580027.9724495,
-    "ast_hash": "83d3f61207bb83128b412f5f0673bed6",
+    "mtime": 1794582047.3596208,
+    "seen": 1794582324.74081,
+    "ast_hash": "ff03f93694ecd6c69ed733444e010db4",
     "semantic_hash": ""
   },
   "web/src/components/workflow/parameters/expression/native.ts": {
@@ -5394,15 +5394,15 @@
     "semantic_hash": ""
   },
   "web/src/components/workflow/parameters/expression/parser.ts": {
-    "mtime": 1794401695.927863,
-    "seen": 1794402979.2396972,
-    "ast_hash": "4d355d64e1dd314512dcd291464f8e11",
+    "mtime": 1794581996.4407604,
+    "seen": 1794582324.741061,
+    "ast_hash": "3980d339523633a515e0903e091e26b1",
     "semantic_hash": ""
   },
   "web/src/components/workflow/parameters/expression/types.ts": {
-    "mtime": 1794575316.814509,
-    "seen": 1794575561.330386,
-    "ast_hash": "2d7596b079e50c48d2c2842f73eb08ce",
+    "mtime": 1794581955.4061449,
+    "seen": 1794582324.7410758,
+    "ast_hash": "aa37b2c17c0558d25eff1ff3bd544c2e",
     "semantic_hash": ""
   },
   "web/src/components/workflow/parameters/expression/variables.ts": {
@@ -5532,9 +5532,9 @@
     "semantic_hash": ""
   },
   "bug-fix.MD": {
-    "mtime": 1794578813.5084777,
-    "seen": 1794580027.989665,
-    "ast_hash": "2a3a7aa69f9e29711e3cfe6d28c94f46",
+    "mtime": 1794581868.18881,
+    "seen": 1794582324.7656734,
+    "ast_hash": "9c400c5e3e38ad111bdff6550d91718c",
     "semantic_hash": ""
   },
   "credentials_n8n_api.MD": {
@@ -5856,9 +5856,9 @@
     "semantic_hash": ""
   },
   "web/src/components/workflow/parameters/expression/expression.test.ts": {
-    "mtime": 1794575394.9124126,
-    "seen": 1794575561.329813,
-    "ast_hash": "9172639d55c47289828b998184a31715",
+    "mtime": 1794582150.1981342,
+    "seen": 1794582324.740403,
+    "ast_hash": "b30e1af718f18a3ad5fb09a4b8cf8c07",
     "semantic_hash": ""
   },
   "internal/credentials/oauth_envelope_test.go": {
@@ -6762,15 +6762,15 @@
     "semantic_hash": ""
   },
   "web/src/components/workflow/parameters/expression/suggestions.test.ts": {
-    "mtime": 1794579923.8886933,
-    "seen": 1794580027.9726517,
-    "ast_hash": "05181b68e67fe325dc2bd74a2b33a6f7",
+    "mtime": 1794582195.687917,
+    "seen": 1794582324.7410653,
+    "ast_hash": "ea6b08526e7bff765f1cb3f4e4436691",
     "semantic_hash": ""
   },
   "web/src/components/workflow/parameters/expression/suggestions.ts": {
-    "mtime": 1794579758.7865314,
-    "seen": 1794580027.972654,
-    "ast_hash": "9f6045217a27a49f0f1eaf0c5279925f",
+    "mtime": 1794582104.2943752,
+    "seen": 1794582324.7410703,
+    "ast_hash": "a5352c9bdd166baad743cb478f961d56",
     "semantic_hash": ""
   },
   "web/src/components/workflow/parameters/webhookUrls.test.ts": {
@@ -6831,6 +6831,24 @@
     "mtime": 1794577324.4620523,
     "seen": 1794577863.5036168,
     "ast_hash": "745d7df53131fd5238bbcd034d1d472f",
+    "semantic_hash": ""
+  },
+  "web/src/components/workflow/parameters/expression/errors.test.ts": {
+    "mtime": 1794582382.8133924,
+    "seen": 1794582764.9268727,
+    "ast_hash": "48d27f1fa8cee21a1d1e423cd982bc53",
+    "semantic_hash": ""
+  },
+  "web/src/components/workflow/parameters/expression/errors.ts": {
+    "mtime": 1794582364.4596095,
+    "seen": 1794582764.9268775,
+    "ast_hash": "c4ccec4e7f234f414f4cd0cd567a5045",
+    "semantic_hash": ""
+  },
+  "internal/api/workflows_patch_test.go": {
+    "mtime": 1794582618.9400485,
+    "seen": 1794582764.7656996,
+    "ast_hash": "d9e08f54c0e99d6dfbe1b77e186efe79",
     "semantic_hash": ""
   },
   "web/package-lock.json": {

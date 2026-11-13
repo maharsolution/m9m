@@ -3,9 +3,9 @@
 | Field | Value |
 | --- | --- |
 | Document | `bug-fix.MD` — canonical bug register and triage rules |
-| Version | `0.5.0-draft+5` |
+| Version | `0.5.0-draft+6` |
 | Status | **Living document** — updated as bugs are opened, triaged, and closed |
-| Last updated | 2026-11-13 (nested-field completion + fuzzy matching — BUG-UI-2026-11-13-007; connection/linkage deletion — BUG-UI-2026-11-13-005; expression autocomplete / placeholder suggestions — BUG-UI-2026-11-13-006; webhook test vs production URL parity — BUG-BE-2026-11-13-001; node-creator self-close + n8n click-to-add — BUG-UI-2026-11-13-003; "new workflow" stale canvas — BUG-UI-2026-11-13-004; node-add canvas fix — BUG-UI-2026-11-13-001; execution-detail canvas auto-fit — BUG-UI-2026-11-13-002; auth env contract documented in `.env.example`) |
+| Last updated | 2026-11-13 (workflow PATCH merge — BUG-BE-2026-11-13-002; unfinished-expression banner + fuzzy field names — BUG-UI-2026-11-13-010; Set node v3 raw-JSON fallback — BUG-UI-2026-11-13-009 (open); nested-field completion + fuzzy matching — BUG-UI-2026-11-13-007; connection/linkage deletion — BUG-UI-2026-11-13-005; expression autocomplete / placeholder suggestions — BUG-UI-2026-11-13-006; webhook test vs production URL parity — BUG-BE-2026-11-13-001) |
 | Owner | Mahar Solution (current maintainer) |
 | Repository | <https://github.com/maharsolution/m9m> |
 | Companion docs | `m9m.MD` (PRD), `parity/parity_gaps.json` (machine-readable parity backlog), `workflow-test.MD` (live parity report), `gap-current-vs-doc.MD` (docs drift), `n8n-nodes.MD` (node parity reference) |
@@ -53,6 +53,9 @@ Legend: **P0** = wire-compat / correctness blocker · **P1** = engine correctnes
 | BUG-UI-2026-11-13-005 | A connection between two joined nodes cannot be deleted — click, Delete/Backspace and hover X were all inert | **P1** | **RESOLVED** (2026-11-13, connections promoted to a first-class selection in `web/src/stores/workflowEditor.ts` (`selectedEdgeIds`, `removeSelectedEdges`); new `web/src/components/workflow/WorkflowEdge.vue` hover X; `web/src/lib/edgeSelection.ts` + 9 unit tests; 181 Vitest tests green — see §9.34) | TBD | user-reported | 2026-11-13 |
 | BUG-UI-2026-11-13-006 | Expression fields have no autocomplete / placeholder suggestions (`{{json.webho` showed a red error and no list) | **P1** | **RESOLVED** (2026-11-13, context-aware autocomplete in `expression/suggestions.ts` — variables, `$node["Name"]`, item fields; `ExpressionField.vue` listbox with ↑/↓/Enter/Esc; `NodePanel.vue` provides the context; 21 new unit tests + 181 Vitest tests green — see §9.35) | TBD | user-reported | 2026-11-13 |
 | BUG-UI-2026-11-13-007 | The completion stopped at the first level and matched prefixes only — `$json.address.` was empty, `jsn` found nothing | **P2** | **RESOLVED** (2026-11-13, recursive `FieldTree` of the execution payload (`MAX_FIELD_DEPTH = 5`) + ranked fuzzy matching (`matchRank`, prefix above scattered); 23 new unit tests, 204 Vitest tests green — see §9.36) | TBD | user-requested | 2026-11-13 |
+| BUG-UI-2026-11-13-009 | Set node `typeVersion: 3` renders only "Advanced: Raw Parameters" — the structured Mode/Assignments form is missing (v1 renders it) | **P2** | **OPEN** (found in the live probe of BUG-UI-2026-11-13-007; root cause to confirm — the editor appears to fall back to the raw-JSON editor when the version-specific parameter schema is missing) | TBD | live-verification | 2026-11-13 |
+| BUG-BE-2026-11-13-002 | `PATCH /api/v1/workflows/{id}` wiped the name and every connection (`{"active":true}` → `name:""`, `connections:null`) | **P1** | **RESOLVED** (2026-11-13, PATCH is a real merge now — presence map + typed decode in `internal/api/workflows.go`; PUT keeps full-replace; 9 new Go tests — see §9.37) | TBD | live-verification | 2026-11-13 |
+| BUG-UI-2026-11-13-010 | The red banner appeared while the expression was unfinished (`{{$json.nope.`), and the fuzzy matcher skipped field names (`{{$json.bdy` found nothing) | **P2** | **RESOLVED** (2026-11-13, dedicated `unterminated` error kind + pure `selectDisplayError` rule in the new `expression/errors.ts`; `filterFieldNames()` now ranks with `matchRank`; 15 new unit tests, 219 Vitest tests green — see §9.38) | TBD | live-verification | 2026-11-13 |
 | BUG-CAP-2026-09-09-001 | Capability gap: tracking flow / debugger visualisation | P6 | **RESOLVED** (2026-10-12, `web/src/lib/edgesTakenRenderer.ts` + 12 tests; `EdgesTaken` data → per-edge style transform for the Vue Flow graph) | TBD | Sheet row 1 | 2026-09-09 |
 | BUG-CAP-2026-09-09-002 | Capability gap: UI designer — node-to-node connectivity not visible in editor | P6 | **RESOLVED** (2026-10-12, edges-taken renderer is the line-renderer for the editor canvas; same data shape drives the debugger and the canvas — see §9.22) | TBD | Sheet row 2 | 2026-09-09 |
 | BUG-CAP-2026-09-09-003 | Capability gap: credential store UI cannot register credential data | P6 | **RESOLVED** (2026-10-12, `web/src/types/credentials.ts` + `web/src/lib/credentialSchema.ts` (validate/toPayload/fieldFor) + 13 tests; "New" form now has a structured per-type view backed by the `OAuth2Schema`) | TBD | Sheet row 3 | 2026-09-09 |
@@ -579,13 +582,90 @@ No open P1 bugs at the time of this writing. The most recent P1 issues were the 
 
 **Verification.** `cd web; npm run test` → **204 tests / 18 files** passed (181 → 204, +23 new cases); `npm run build` → vue-tsc clean; `graphify update .` → 18235 nodes / 45783 edges. New cases cover nested resolution (2–3 levels, arrays of objects, per node), unresolvable paths → `[]`, fuzzy subsequence matching (`jsn` → `$json`), rank priority (prefix above scattered) and the 25-item cap.
 
-**Remaining risk.** (1) Arrays are reached through their keys (`$json.items.`), not by index — `$json.items[0].x` does not resolve. (2) The tree stops at 5 levels. (3) Fields exist only after a run. (4) Fuzzy = in-order subsequence with at most one third of the characters absent; scrambled needles are not matched. (5) Field names are matched exactly / by prefix, never fuzzy. (6) The root list is now alphabetical within a kind instead of catalogue order.
+**Remaining risk.** (1) Arrays are reached through their keys (`$json.items.`), not by index — `$json.items[0].x` does not resolve. (2) The tree stops at 5 levels. (3) Fields exist only after a run. (4) Fuzzy = in-order subsequence with at most one third of the characters absent; scrambled needles are not matched. (5) Field names are matched exactly / by prefix, never fuzzy — closed by §9.38. (6) The root list is now alphabetical within a kind instead of catalogue order.
+
+### BUG-BE-2026-11-13-002 — `PATCH /api/v1/workflows/{id}` wiped the name and every connection
+
+| Field | Value |
+| --- | --- |
+| Severity | **P1** (data loss on a partial update — a one-field PATCH destroyed the workflow's identity and graph) |
+| Status | **RESOLVED** (2026-11-13 — PATCH is a true merge now; see §9.37) |
+| Source | Live verification of BUG-UI-2026-11-13-007 (2026-11-13) — reproduced against the deployed server, then confirmed by hand |
+| Discovered | 2026-11-13 |
+| Owner | TBD |
+| Target milestone | 0.5.0 |
+
+**Observed.** `PATCH http://187.77.113.218:8080/api/v1/workflows/<id>` with the body `{"active": true}` answered 200 and echoed `"name":""` and `"connections":null` — the workflow lost its name and every connection. Reproduced twice (probe workflow, deleted afterwards).
+
+**Expected.** PATCH changes only the fields the body carries; everything else keeps its stored value. `{"active":true}` must not touch the name, the nodes or the connections.
+
+**Root cause.** `internal/api/workflows.go` (HEAD:216) — `UpdateWorkflow` decoded the request body into a `model.Workflow` and handed it to `storage.UpdateWorkflow()`: a full-record replace. Every absent key decoded to its zero value. `internal/api/routes.go` (HEAD:142) mapped **both** PUT and PATCH to that one handler, so PATCH never had a partial-update path. The web UI was not affected (it uses `PUT` plus `POST /activate` / `/deactivate`), but every API client that patched a workflow lost its graph.
+
+**Fix (applied).**
+1. `internal/api/workflows.go` — `UpdateWorkflow` branches on the verb: PATCH → `patchWorkflow()`, PUT → the unchanged full replace.
+2. `patchWorkflow()` — read the stored record, copy it, apply only the present keys, store it, reconcile the webhooks, echo the record.
+3. `applyWorkflowPatch()` — the body is decoded twice: into `map[string]json.RawMessage` (presence map: which keys were really sent) and into `model.Workflow` (typed values). Only the present keys are copied, so `{"name":""}` still clears the name while an absent `name` is preserved; the server-managed keys (`id`, `createdAt`, `updatedAt`) are ignored.
+4. `reconcileWorkflowWebhooks()` — the webhook re-registration extracted from the PUT path and shared by both verbs (before, PATCH re-registered webhooks from the wiped record).
+5. `internal/api/workflows_patch_test.go` (new) — 9 tests: partial patches (active / name / connections), explicit empty name, unknown workflow → 404, invalid JSON → 400, PUT still replaces the whole record, and activate/deactivate keep the record intact.
+
+**Verification.** `go build ./...` exit 0; `go vet ./internal/api/...` exit 0; `go test ./internal/api/... -count=1` green.
+
+**Remaining risk.** The merge works on the JSON key level: a client that wants to clear a list must send it explicitly (an absent key is preserved) — that is the intended PATCH semantics.
+
+### BUG-UI-2026-11-13-010 — the red banner appeared while the expression was still unfinished; fuzzy matching skipped field names
+
+| Field | Value |
+| --- | --- |
+| Severity | **P2** (editor feedback — a half-written expression was reported as broken, and a typo in a field name found nothing) |
+| Status | **RESOLVED** (2026-11-13 — see §9.38) |
+| Source | Live verification of BUG-UI-2026-11-13-007 (2026-11-13, deployed build `5bb4391`) |
+| Discovered | 2026-11-13 |
+| Owner | TBD |
+| Target milestone | 0.5.0 |
+
+**Observed.** (1) Typing `{{$json.nope.` or `{{$json.bdy` — an expression that is not closed yet — showed the red banner "Unterminated expression: missing '}}'" even though the user was simply typing. (2) The fuzzy matcher of BUG-UI-2026-11-13-007 only reached the root list: `{{jsn` found `$json`, but `{{$json.bdy` found nothing while `{{$json.bo` found `body` (prefix only).
+
+**Expected.** (1) A half-written expression is unfinished, not broken — the banner only appears for a closed expression that really fails. (2) The field names of a resolved level are matched fuzzily too.
+
+**Root cause.** (1) `web/src/components/workflow/parameters/ExpressionField.vue` suppressed the error only while the suggestion list was open; with an empty list the unterminated-expression error surfaced. The evaluator did not distinguish an unfinished expression from a broken one. (2) `expression/suggestions.ts` — `filterFieldNames()` matched the field names by prefix only; the new `matchRank()` was used for the root list but not for the fields of a level.
+
+**Fix (applied).**
+1. `expression/types.ts` — `ExpressionErrorKind` gains `'unterminated'`; `ExpressionUnterminatedError` (new).
+2. `expression/parser.ts` — a missing `}}` now throws `ExpressionUnterminatedError`; `expression/evaluator.ts` maps it to `kind: 'unterminated'`.
+3. `expression/errors.ts` (new, 12 tests) — `isExpressionOpenAtCaret(text, caret)` (a `{{` before the caret with no `}}` before it) and `selectDisplayError()`, which suppresses **only** the unterminated error while the caret sits in the open expression; every other syntax/runtime error still shows.
+4. `ExpressionField.vue` — `displayError` delegates to `selectDisplayError` (the dropdown rule and the runtime rule are unchanged).
+5. `expression/suggestions.ts` — `filterFieldNames()` ranks the fields with `matchRank` (`bdy` → `body`, `cty` → `city`), drops the non-matches and keeps the level order inside a rank group; an unresolved path still offers nothing.
+
+**Verification.** `cd web; npm run test` → **219 tests / 19 files** passed (204 → 219); `npm run build` → vue-tsc clean.
+
+**Remaining risk.** The "open expression" test is caret-based, so an unfinished expression *behind* the caret still shows its error (correct). The fuzzy tolerance for fields is the same as for the root list (in-order subsequence, at most one third of the characters may be missing).
 
 ---
 
 ## 4. P2 — Performance & reliability
 
-No open P2 bugs. Continue to monitor via:
+### BUG-UI-2026-11-13-009 — Set node `typeVersion: 3` renders only the raw-JSON fallback in the editor
+
+| Field | Value |
+| --- | --- |
+| Severity | **P2** (editor/node parity gap — a v3 Set node cannot be edited with the structured form) |
+| Status | **OPEN** (found during the live verification of BUG-UI-2026-11-13-007; root cause not yet confirmed) |
+| Source | Live browser probe on 2026-11-13 (deployed build `5bb4391`) |
+| Discovered | 2026-11-13 |
+| Owner | TBD |
+| Target milestone | 0.5.1 |
+
+**Observed.** A Set node with `typeVersion: 3` shows only **"Advanced: Raw Parameters"** in the node details view — the structured **Mode / Assignments** form does not appear. The same node with `typeVersion: 1` renders Mode + Assignments normally.
+
+**Expected.** n8n parity: the Set node renders its structured form regardless of the type version, because m9m's Set description (`internal/nodes/transform/set.go`) already knows the v3 parameters (`mode`, `assignments`, `jsonOutput`, `keepOnlySet`, `includeOtherFields`).
+
+**Suspected cause (to confirm).** The editor resolves the parameter schema per node type + `typeVersion` and falls back to the raw-JSON editor when the version-specific schema is not found; the v3 shape (`assignments.assignments[]`, `includeOtherFields`) is then rendered as unknown.
+
+**Next step.** Reproduce with a v3 Set node, check how `web/src/components/workflow/parameters/` picks the schema (`ParameterField.vue` / the node description lookup) and add the v3 mapping — or register the Set description per type version.
+
+**Remaining risk.** Workflows imported from n8n that contain v3 Set nodes can only be edited through the raw JSON field, which is a poor experience and hides the expression editor's completion for those nodes.
+
+No open P2 bugs otherwise. Continue to monitor via:
 - `m9m benchmark` on every release.
 - `test-workflows/soak/` weekly run (if not yet present, file a BUG to create it).
 - `prometheus` `m9m_workflow_duration_seconds` and `m9m_workflow_concurrent_executions` SLO breach alerts.
@@ -1359,6 +1439,8 @@ These are not bugs in m9m — m9m makes a deliberate product choice not to ship 
 
 **Verification.** `cd web; npm run test` → 181 tests / 18 files passed; `npm run build` → vue-tsc clean. Manual on `http://localhost:3000/workflows/new` with a real mouse + keyboard: click connection → it highlights as selected → **Delete** → the connection disappears → **Undo** restores it; hover → the X appears → click → removed → **Undo** restores it.
 
+**Live verification (2026-11-13, deployed build `cd9df90`).** Browser check against the deployed editor (`http://187.77.113.218:8080`, admin session): clicking the connection between the Webhook and the Set node applied the `selected` class and changed the stroke (`oklch(0.7807 0.136 5.02)` → `oklch(0.5909 0.1611 5.09)`), and the toolbar offered "Remove connection". `Delete` → the edge count went 2→1, `Backspace` → 2→1, `Ctrl+Z` restored 1→2 in both cases. Hovering the connection rendered the X button (`.m9m-edge-remove`, 40×40 px, `opacity: 1`, centred on the link inside `.vue-flow__edge-labels`); clicking it removed the edge (2→1) and `Ctrl+Z` restored it.
+
 **Remaining risk.** Vue Flow's marquee selection still only selects nodes — a marquee drawn over a connection does not add it to the connection selection (shift/ctrl-click does).
 
 ### 9.35 BUG-UI-2026-11-13-006 — expression fields had no autocomplete / placeholder suggestions (closed)
@@ -1375,6 +1457,8 @@ These are not bugs in m9m — m9m makes a deliberate product choice not to ship 
 **Fix.** `expression/suggestions.ts` (new, 21 unit tests) — `detectExpressionPosition` (caret inside `{{ … }}`? which token? behind a dot? inside `$node["…"]`?), `filterSuggestions`, `suggestForPosition` (context variables + `$node["Name"]` + item fields + per-node fields + functions), `applySuggestionAt` (inserts a complete expression, returns the new caret). `web/src/lib/expressionContext.ts` (injection key), `expressionFields.ts` (3 tests — item fields and per-node output fields from the last execution payload), `suggestionList.ts` (4 tests — tells the details view the autocomplete owns the keyboard). `NodePanel.vue` provides the expression context (node input payload + sibling node outputs) and yields the capture-phase Escape to an open suggestion list instead of closing the panel. `ParameterField.vue` forwards `availableNodes` / `itemFields` / `nodeFields`. `ExpressionField.vue` renders the listbox, handles ↑/↓/Enter/Tab/Esc with `stopPropagation`, inserts on mouse click, re-syncs the caret after insertion, and suppresses the error banner while the dropdown is open. `expression/types.ts` + `evaluator.ts` — `ExpressionError.kind: 'syntax' | 'runtime'` so a half-typed expression is not reported as broken; `expression/expression.test.ts` rewritten as a real suite (19 tests — the known pre-existing "No test suite found" failure is gone).
 
 **Verification.** `cd web; npm run test` → 181 tests / 18 files passed; `npm run build` → vue-tsc clean. Manual (Set node → Assignments → value): `{{` → 8 suggestions and **no** red error; `$js` → the list narrows to `$json`; **Enter** inserts `{{$json` with the caret following; `{{$nod` → narrows to `$node` / `$node["Set"]`; a mouse click inserts `{{$node["Set"].json`; closing with `}}` clears the error; a complete `{{$json.foo}}` without sample data shows no false red banner; **Esc** closes only the dropdown (the node details view stays open).
+
+**Live verification (2026-11-13, deployed build `cd9df90`).** Browser check against the deployed editor (`http://187.77.113.218:8080`, admin session): `{{` opened the listbox with `$json`, `$input`, `$node`, `$workflow`, `$execution`, `$now`, `$runIndex`, `$node["Webhook"]`, `$node["Set"]`, `$node["Respond to Webhook"]`; `$js` narrowed it to exactly `$json`; `ArrowDown` + `Enter` expanded the half-typed token to `{{$json` with the caret at 7 (right behind the insertion) and closed the listbox; `Esc` closed the listbox while the node details view stayed open (`.ndv-header__name` = `Set`); no red banner appeared while a partial expression was typed (also after 3 s idle), while the closed broken expression `{{$json..}}` did show the banner `Expected a name but found '.' {{$json..}}`.
 
 **Remaining risk.** Field-level completion needs one completed execution — until the workflow has run, only the context variables and the node names are offered. `NodePanel`'s capture-phase Escape yields to any expanded `role="combobox"`, so a future native select could swallow one Escape too early.
 
@@ -1393,7 +1477,43 @@ These are not bugs in m9m — m9m makes a deliberate product choice not to ship 
 
 **Verification.** `cd web; npm run test` → **204 tests / 18 files** passed (181 → 204); `npm run build` → vue-tsc clean; `graphify update .` → 18235 nodes / 45783 edges. New cases: nested resolution (2–3 levels deep, arrays of objects, per node), unresolvable path → `[]`, fuzzy subsequence (`jsn` → `$json`), rank priority (prefix above scattered), alphabetical order inside a group, and the list cap.
 
-**Remaining risk.** Arrays resolve through their keys, not by index (`$json.items[0].x` does not resolve); the tree stops at 5 levels; fields exist only after a run; fuzzy = in-order subsequence with at most one third of the characters absent (scrambled needles are not matched); field names are matched exactly / by prefix, never fuzzy; the root list is now alphabetical within a kind.
+**Live verification (2026-11-13, deployed build `5bb4391`).** Browser check against the deployed editor (`http://187.77.113.218:8080`, admin session) with a probe workflow that was executed with a nested payload (`{"user":{"name":"ada","address":{"city":"jakarta","zip":12345}},"tags":["a","b"],"count":7}`): `$json` resolves to the Webhook node's output item (n8n semantics — `body`, `executionMode`, `headers`, `params`, `query`, `webhookUrl`), so the request payload sits under `$json.body.` — `$json.body.` offered `count`, `tags`, `user`; `$json.body.user.` offered `address`, `name`; `$json.body.user.address.` offered `city`, `zip`; `$json.body.user.address.ci` narrowed to `city` alone. Both negative probes stayed empty (`$json.nope.` and `$json.body.nope.` → no listbox at all). Fuzzy matching worked on the root list (`{{jsn` → `$json`, `{{wnf` → `$workflow`) but not on field names (`{{$json.bdy` → empty, `{{$json.bo` → `body`, i.e. prefix only) — see §9.37. The probe workflow and its three executions were deleted afterwards (GET → 404).
+
+**Remaining risk.** Arrays resolve through their keys, not by index (`$json.items[0].x` does not resolve); the tree stops at 5 levels; fields exist only after a run; fuzzy = in-order subsequence with at most one third of the characters absent (scrambled needles are not matched); field names are matched exactly / by prefix, never fuzzy — closed by §9.38; the root list is now alphabetical within a kind.
+
+### 9.37 BUG-BE-2026-11-13-002 — `PATCH /api/v1/workflows/{id}` wiped the name and every connection (closed)
+
+| Field | Value |
+| --- | --- |
+| Severity | **P1** (data loss on a partial update) |
+| Closed | 2026-11-13 |
+| Fixed in | `internal/api/workflows.go`, `internal/api/workflows_patch_test.go` (new) |
+| Closed by | PATCH is a real merge (presence map + typed decode) — PUT keeps its full-replace semantics |
+
+**Root cause.** `internal/api/workflows.go` (HEAD:216) — `UpdateWorkflow` decoded the request body into a `model.Workflow` and stored it verbatim (a full-record replace); every key absent from the body decoded to its zero value. `internal/api/routes.go` (HEAD:142) mapped **both** PUT and PATCH to that handler, so PATCH never had a partial-update path: `{"active":true}` stored `name:""` and `connections:null`. Reproduced against the deployed server (2026-11-13) — the probe workflow was deleted afterwards.
+
+**Fix.** `UpdateWorkflow` branches on the verb (PATCH → `patchWorkflow()`, PUT → the unchanged full replace). `patchWorkflow()` reads the stored record, copies it, applies only the present keys, stores it, reconciles the webhooks and echoes the record. `applyWorkflowPatch()` decodes the body twice — into `map[string]json.RawMessage` (presence map) and into `model.Workflow` (typed values) — so `{"name":""}` still clears the name while an absent `name` is preserved; `id`, `createdAt` and `updatedAt` stay server-managed. `reconcileWorkflowWebhooks()` extracts the webhook re-registration from the PUT path and shares it with PATCH (before, PATCH re-registered webhooks from the wiped record). The activate/deactivate endpoints were checked and are unaffected — they issue a targeted `UPDATE ... SET active = …`.
+
+**Verification.** `go build ./...` exit 0; `go vet ./internal/api/...` exit 0; `go test ./internal/api/... -count=1` green. `internal/api/workflows_patch_test.go` (new, 9 tests): active-only patch keeps name + nodes + connections, name-only patch keeps connections + nodes, connections patch applies the new connections, explicit empty name is applied, unknown workflow → 404, invalid JSON → 400, PUT still replaces the whole record, activate/deactivate keep the record intact.
+
+**Remaining risk.** The merge is key-based: a client that wants to clear a list must send it explicitly (an absent key is preserved) — the intended PATCH semantics.
+
+### 9.38 BUG-UI-2026-11-13-010 — the red banner appeared while the expression was unfinished; fuzzy matching skipped field names (closed)
+
+| Field | Value |
+| --- | --- |
+| Severity | **P2** (editor feedback) |
+| Closed | 2026-11-13 |
+| Fixed in | `web/src/components/workflow/parameters/expression/errors.ts` (new), `web/src/components/workflow/parameters/expression/errors.test.ts` (new), `web/src/components/workflow/parameters/expression/types.ts`, `web/src/components/workflow/parameters/expression/parser.ts`, `web/src/components/workflow/parameters/expression/evaluator.ts`, `web/src/components/workflow/parameters/expression/suggestions.ts`, `web/src/components/workflow/parameters/expression/suggestions.test.ts`, `web/src/components/workflow/parameters/ExpressionField.vue` |
+| Closed by | A dedicated `unterminated` error kind + a pure `selectDisplayError` rule, and `matchRank` for the field names |
+
+**Root cause.** (1) `ExpressionField.vue` suppressed the error only while the suggestion list was open — with an empty list the unterminated-expression error surfaced while the user was still typing; the evaluator did not distinguish "unfinished" from "broken". (2) `expression/suggestions.ts` — `filterFieldNames()` matched the field names by prefix only; the new `matchRank()` was used for the root list but not for the fields of a level.
+
+**Fix.** `expression/types.ts` — `ExpressionErrorKind` gains `'unterminated'` (new `ExpressionUnterminatedError`). `expression/parser.ts` — a missing `}}` throws that error; `evaluator.ts` maps it to `kind: 'unterminated'`. `expression/errors.ts` (new) — `isExpressionOpenAtCaret(text, caret)` (a `{{` before the caret with no `}}` before it) and `selectDisplayError()`, which suppresses **only** the unterminated error while the caret sits inside the open expression; every other syntax/runtime error still shows. `ExpressionField.vue` delegates its `displayError` to it. `expression/suggestions.ts` — `filterFieldNames()` ranks the fields with `matchRank` (`bdy` → `body`, `cty` → `city`), drops the non-matches and keeps the level order inside a rank group; an unresolved path still offers nothing.
+
+**Verification.** `cd web; npm run test` → **219 tests / 19 files** passed (204 → 219, +15); `npm run build` → vue-tsc clean; `graphify update .` → 18250 nodes / 45823 edges. New cases (12 in `errors.test.ts`, 4 in `suggestions.test.ts`): open expression detected, closed expression detected, unterminated error suppressed while the expression is open (also with an empty suggestion list), closed-but-broken expression still reported, the error of an expression behind the caret still reported, the error hidden while the list is open, fuzzy field name, fuzzy field name of a nested level, a deeper level is not offered, and an unresolved path stays empty.
+
+**Remaining risk.** The "open expression" test is caret-based (an unfinished expression behind the caret still reports its error — correct). The field names inherit the fuzzy tolerance of the root list (in-order subsequence, at most one third of the characters may be missing).
 
 ---
 
