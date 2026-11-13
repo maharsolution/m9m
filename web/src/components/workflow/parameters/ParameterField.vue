@@ -129,6 +129,7 @@ const availableNodes = computed(() =>
     name: node.name,
     type: node.type,
     fields: expressionContext?.value.nodeFields[node.name] ?? [],
+    fieldTree: expressionContext?.value.nodeTrees[node.name],
   })),
 )
 
@@ -137,6 +138,12 @@ const itemFields = computed(() => expressionContext?.value.itemFields ?? [])
 
 /** The fields per node (`$node["Set"].json.<field>`). */
 const nodeFields = computed(() => expressionContext?.value.nodeFields ?? {})
+
+/** The nested fields of the current item (`$json.address.city`). */
+const itemTree = computed(() => expressionContext?.value.itemTree)
+
+/** The nested fields per node (`$node["Set"].json.address`). */
+const nodeTrees = computed(() => expressionContext?.value.nodeTrees ?? {})
 
 /** The stored value as text — the expression editor works on strings. */
 const stringValue = computed(() => {
@@ -430,6 +437,8 @@ function onDateTimeInput(event: Event) {
         :available-nodes="availableNodes"
         :item-fields="itemFields"
         :node-fields="nodeFields"
+        :item-tree="itemTree"
+        :node-trees="nodeTrees"
         :disabled="disabled"
         @update:model-value="onStringInput"
       />

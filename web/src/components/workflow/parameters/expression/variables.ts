@@ -22,6 +22,7 @@
  * The autocomplete itself lives in `./suggestions`.
  */
 
+import type { FieldTree } from '@/lib/expressionFields'
 import { FUNCTIONS } from './functions'
 import {
   applySuggestionAt,
@@ -41,6 +42,8 @@ export interface AvailableNode {
   typeVersion?: number
   /** Field names the node produced — used by `$node["Name"].json.<field>`. */
   fields?: string[]
+  /** The nested fields the node produced — `$node["Name"].json.a.b`. */
+  fieldTree?: FieldTree
 }
 
 /** Metadata for one context variable. */
@@ -124,6 +127,7 @@ export function suggest(prefix: string, availableNodes: AvailableNode[] = []): S
     nodeName: null,
     segments: [],
     nodeNamePrefix: null,
+    partialSegment: null,
     afterDot: false,
   }
 

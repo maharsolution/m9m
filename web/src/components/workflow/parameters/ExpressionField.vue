@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, useId, watch } from 'vue'
 import { ExclamationTriangleIcon, LightBulbIcon } from '@heroicons/vue/24/outline'
 import type { NodeProperty } from '@/types/node'
+import type { FieldTree } from '@/lib/expressionFields'
 import {
   applySuggestionAt,
   createPreviewContext,
@@ -47,6 +48,10 @@ const props = withDefaults(
     itemFields?: string[]
     /** Field names per node name (`$node["Name"].json.<field>`). */
     nodeFields?: Record<string, string[]>
+    /** The nested fields of the current item (`$json.address.city`). */
+    itemTree?: FieldTree
+    /** The nested fields per node name (`$node["Name"].json.address`). */
+    nodeTrees?: Record<string, FieldTree>
     /** Optional `$json` payload used for the live preview. */
     sampleInput?: unknown
     /** Disabled state (read-only panels). */
@@ -58,6 +63,8 @@ const props = withDefaults(
     availableNodes: () => [],
     itemFields: () => [],
     nodeFields: () => ({}),
+    itemTree: undefined,
+    nodeTrees: () => ({}),
     sampleInput: undefined,
     disabled: false,
   },
@@ -221,6 +228,8 @@ const sources = computed<SuggestionSources>(() => ({
   functions: FUNCTION_CATALOGUE,
   itemFields: props.itemFields,
   nodeFields: props.nodeFields,
+  itemTree: props.itemTree,
+  nodeTrees: props.nodeTrees,
 }))
 
 /** Sync the editor state when the model changes from the outside. */

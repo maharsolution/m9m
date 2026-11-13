@@ -84,9 +84,18 @@ export {
   applySuggestionAt,
   detectExpressionPosition,
   filterSuggestions,
+  matchRank,
   matchesLabel,
   suggestForPosition,
+  MATCH_EXACT,
+  MATCH_FUZZY,
+  MATCH_LOOSE_PREFIX,
+  MATCH_NONE,
+  MATCH_PREFIX,
+  MATCH_SUBSTRING,
   MAX_SUGGESTIONS,
   type ExpressionPosition,
   type SuggestionSources,
 } from './suggestions'
+
+export type { FieldTree } from '@/lib/expressionFields'

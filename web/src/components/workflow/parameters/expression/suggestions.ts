@@ -7,6 +7,7 @@
  *   `{{`              → the variables, the nodes and the functions
  *   `{{$js`           → the same list, filtered
  *   `{{$json.`        → the fields of the current item
+ *   `{{$json.address.` → the fields of `address` (nested paths)
  *   `{{$node["Set"].` → the fields the node "Set" produced
  *
  * The engine is pure: it reads the text and the caret, and returns
@@ -15,6 +16,7 @@
  * a DOM.
  */
 
+import type { FieldTree } from '@/lib/expressionFields'
 import type { FunctionDefinition } from './functions'
 import type { AvailableNode, VariableDefinition } from './variables'
 
@@ -36,6 +38,27 @@ export interface Suggestion {
 /** Maximum number of suggestions returned for one position. */
 export const MAX_SUGGESTIONS = 25
 
+/** The needle matches the label exactly. */
+export const MATCH_EXACT = 0
+/** The needle is a prefix of the label. */
+export const MATCH_PREFIX = 1
+/** The needle is a prefix of the label, ignoring punctuation. */
+export const MATCH_LOOSE_PREFIX = 2
+/** The label contains the needle. */
+export const MATCH_SUBSTRING = 3
+/** The needle matches the label as a scattered subsequence. */
+export const MATCH_FUZZY = 4
+/** The needle does not match the label at all. */
+export const MATCH_NONE = -1
+
+/** The order the kinds are listed in (variables, nodes, functions). */
+const KIND_ORDER: Record<SuggestionKind, number> = {
+  variable: 0,
+  node: 1,
+  function: 2,
+  field: 3,
+}
+
 /** Where the caret sits inside an expression. */
 export interface ExpressionPosition {
   /** True when the caret is inside an expression. */
@@ -52,6 +75,8 @@ export interface ExpressionPosition {
   segments: string[]
   /** The name typed inside `$node["…"]` while it is still open. */
   nodeNamePrefix: string | null
+  /** The path segment that is currently being typed (`$json.add`). */
+  partialSegment: string | null
   /** True when the caret sits directly behind a dot. */
   afterDot: boolean
 }
@@ -68,6 +93,10 @@ export interface SuggestionSources {
   itemFields: string[]
   /** The fields per node name (`$node["Name"].json.<field>`). */
   nodeFields: Record<string, string[]>
+  /** The nested field tree of the current item (`$json.address.city`). */
+  itemTree?: FieldTree
+  /** The nested field tree per node name (`$node["Name"].json.address`). */
+  nodeTrees?: Record<string, FieldTree>
 }
 
 /** A position that is not inside an expression. */
@@ -79,6 +108,7 @@ const OUTSIDE_EXPRESSION: ExpressionPosition = {
   nodeName: null,
   segments: [],
   nodeNamePrefix: null,
+  partialSegment: null,
   afterDot: false,
 }
 
@@ -139,6 +169,7 @@ function parseBody(body: string): ExpressionPosition {
       nodeName: null,
       segments: [],
       nodeNamePrefix: openNode[1] ?? '',
+      partialSegment: null,
       afterDot: false,
     }
   }
@@ -153,6 +184,7 @@ function parseBody(body: string): ExpressionPosition {
       nodeName: null,
       segments: [],
       nodeNamePrefix: openShorthand[1] ?? '',
+      partialSegment: null,
       afterDot: false,
     }
   }
@@ -173,6 +205,12 @@ function parseBody(body: string): ExpressionPosition {
   const pathCore = replaceLength > 0 ? core.slice(0, core.length - replaceLength) : core
   const parsed = parsePath(pathCore)
 
+  // The token belongs to the path (and is not the root itself) when
+  // the path in front of it ends with a dot: `$json.add` types the
+  // segment `add` of the path `$json.`.
+  const partialSegment =
+    !endsWithDot && replaceLength > 0 && pathCore.endsWith('.') ? prefix : null
+
   return {
     inExpression: true,
     prefix,
@@ -181,6 +219,7 @@ function parseBody(body: string): ExpressionPosition {
     nodeName: parsed.nodeName,
     segments: parsed.segments,
     nodeNamePrefix: null,
+    partialSegment,
     afterDot: endsWithDot,
   }
 }
@@ -231,35 +270,130 @@ function splitSegments(path: string): string[] {
 }
 
 /**
+ * The quality of the match between a label and a needle.
+ *
+ * `0` is an exact match, `1` a prefix, `2` a loose prefix (a needle
+ * that starts with `$`, matched without the punctuation), `3` a
+ * substring and `4` a fuzzy match — the characters of the needle occur
+ * in the label, in order, but scattered. `-1` means the needle does
+ * not match the label at all.
+ */
+export function matchRank(label: string, needle: string): number {
+  if (needle === '') {
+    return MATCH_EXACT
+  }
+
+  const lowerLabel = label.toLowerCase()
+  const lowerNeedle = needle.toLowerCase()
+
+  if (lowerLabel === lowerNeedle) return MATCH_EXACT
+  if (lowerLabel.startsWith(lowerNeedle)) return MATCH_PREFIX
+
+  if (lowerNeedle.startsWith('$')) {
+    const plainLabel = plainCharacters(label)
+    const plainNeedle = plainCharacters(needle)
+    if (plainNeedle !== '' && plainLabel.startsWith(plainNeedle)) {
+      return MATCH_LOOSE_PREFIX
+    }
+  }
+
+  if (lowerLabel.includes(lowerNeedle)) return MATCH_SUBSTRING
+
+  return fuzzyRank(label, needle)
+}
+
+/**
  * Whether a label matches the needle.
  *
  * A prefix match wins; a needle that starts with `$` also matches a
  * label whose non-word characters are skipped, so `$nod` matches
- * `$node["Set"]`.
+ * `$node["Set"]`. A needle whose characters are scattered over the
+ * label matches as well — `jsn` finds `$json`.
  */
 export function matchesLabel(label: string, needle: string): boolean {
-  const haystack = label.toLowerCase()
-  const lowerNeedle = needle.toLowerCase()
-  if (lowerNeedle === '') return true
-  if (haystack.startsWith(lowerNeedle)) return true
-  if (lowerNeedle.startsWith('$')) {
-    return haystack.replace(/[^a-z]/g, '').startsWith(lowerNeedle.replace(/[^a-z]/g, ''))
-  }
-  return haystack.includes(lowerNeedle)
+  return matchRank(label, needle) !== MATCH_NONE
 }
 
-/** Filters a list of suggestions by the needle. */
+/**
+ * The rank of a scattered (subsequence) match.
+ *
+ * The characters of the needle have to occur in the label in order,
+ * but they do not have to be adjacent. Up to a third of the needle may
+ * be missing from the label — `wnf` still finds `$workflow` and
+ * `jn["st` still finds `$node["Set"]`.
+ */
+function fuzzyRank(label: string, needle: string): number {
+  const haystack = plainCharacters(label)
+  const chars = plainCharacters(needle)
+
+  if (chars === '' || haystack === '') return MATCH_NONE
+
+  let position = 0
+  let missing = 0
+
+  for (const char of chars) {
+    const found = haystack.indexOf(char, position)
+    if (found === -1) {
+      missing += 1
+      continue
+    }
+    position = found + 1
+  }
+
+  if (missing > Math.floor(chars.length / 3)) return MATCH_NONE
+
+  return MATCH_FUZZY
+}
+
+/** The letters and digits of a string, lower cased. */
+function plainCharacters(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+/**
+ * Filters a list of suggestions by the needle.
+ *
+ * The list is sorted: the best match first (exact, prefix, substring,
+ * fuzzy) and alphabetical inside a group. It never grows beyond
+ * {@link MAX_SUGGESTIONS} entries.
+ */
 export function filterSuggestions(
   suggestions: Suggestion[],
   needle: string,
 ): Suggestion[] {
-  if (needle === '') {
-    return suggestions.slice(0, MAX_SUGGESTIONS)
-  }
-
   return suggestions
-    .filter((suggestion) => matchesLabel(suggestion.label, needle))
+    .map((suggestion, index) => ({
+      suggestion,
+      index,
+      rank: matchRank(suggestion.label, needle),
+    }))
+    .filter((entry) => entry.rank !== MATCH_NONE)
+    .sort(compareEntries)
     .slice(0, MAX_SUGGESTIONS)
+    .map((entry) => entry.suggestion)
+}
+
+/** Sorts the matched entries: rank, then kind, then alphabetically. */
+function compareEntries(
+  left: { suggestion: Suggestion; index: number; rank: number },
+  right: { suggestion: Suggestion; index: number; rank: number },
+): number {
+  if (left.rank !== right.rank) return left.rank - right.rank
+
+  const kind = KIND_ORDER[left.suggestion.kind] - KIND_ORDER[right.suggestion.kind]
+  if (kind !== 0) return kind
+
+  const label = compareLabels(left.suggestion.label, right.suggestion.label)
+  if (label !== 0) return label
+
+  return left.index - right.index
+}
+
+/** Compares two labels without depending on the locale. */
+function compareLabels(left: string, right: string): number {
+  if (left < right) return -1
+  if (left > right) return 1
+  return 0
 }
 
 /**
@@ -267,10 +401,10 @@ export function filterSuggestions(
  *
  * The list depends on what the user typed:
  *
- *   * right after `{{` — the variables, the nodes and the functions,
- *   * a variable name — the same list, filtered,
- *   * a node name — the nodes whose name matches,
- *   * behind a dot — the fields of the item or of the node.
+ * * right after `{{` — the variables, the nodes and the functions,
+ * * a variable name — the same list, filtered,
+ * * a node name — the nodes whose name matches,
+ * * behind a dot — the fields of the item or of the node.
  */
 export function suggestForPosition(
   position: ExpressionPosition,
@@ -285,7 +419,14 @@ export function suggestForPosition(
   }
 
   if (position.afterDot) {
-    return fieldSuggestions(position, sources)
+    return fieldSuggestions(position, sources) ?? []
+  }
+
+  // The user is typing a field of a path (`$json.add`) — the fields of
+  // the path are offered, not the root list.
+  if (position.partialSegment !== null) {
+    const fields = fieldSuggestions(position, sources)
+    if (fields) return fields
   }
 
   const root = filterSuggestions(rootSuggestions(sources), position.prefix)
@@ -344,35 +485,122 @@ function functionSuggestions(functions: FunctionDefinition[]): Suggestion[] {
 }
 
 /**
- * The field suggestions for a position behind a dot.
+ * The field suggestions for a position inside a path.
  *
- * `$json.` offers the fields of the current item, `$node["Set"].`
- * the fields the node produced.
+ * `$json.` offers the fields of the current item, `$json.address.` the
+ * fields of `address`, `$node["Set"].` the fields the node produced.
+ * A path that does not resolve offers nothing — the editor never
+ * guesses a field that is not in the payload.
+ *
+ * Returns `null` when the position is not a field position at all.
  */
 function fieldSuggestions(
   position: ExpressionPosition,
   sources: SuggestionSources,
-): Suggestion[] {
+): Suggestion[] | null {
   const root = position.root
   const segments = position.segments
 
   if (root === '$json' || root === 'json') {
-    if (segments.length === 0) {
-      return itemFieldSuggestions(sources.itemFields, '$json')
+    const tree = sources.itemTree
+    if (!tree) {
+      // Without a tree only the top level fields are known.
+      if (segments.length > 0) return []
+      return itemFieldSuggestions(
+        sources.itemFields,
+        '$json',
+        position.partialSegment,
+      )
     }
-    return []
+
+    const resolved = resolveFieldTree(tree, segments)
+    if (!resolved) return []
+
+    return itemFieldSuggestions(
+      resolved.fields,
+      ownerPath('$json', segments),
+      position.partialSegment,
+    )
   }
 
   if ((root === '$node' || root === '$') && position.nodeName) {
-    const fields = nodeFieldNames(position.nodeName, sources)
-    const known = segments.every((segment) => segment === 'json' || segment === 'item')
-    if (fields.length > 0 && known) {
-      return itemFieldSuggestions(fields, `$node["${position.nodeName}"]`)
+    const owner = `$node["${position.nodeName}"]`
+    const tree = nodeFieldTree(position.nodeName, sources)
+
+    if (!tree) {
+      const fields = nodeFieldNames(position.nodeName, sources)
+      const known = segments.every((segment) => segment === 'json' || segment === 'item')
+      if (fields.length > 0 && known) {
+        return itemFieldSuggestions(
+          fields,
+          ownerPath(owner, segments),
+          position.partialSegment,
+        )
+      }
+      return []
     }
-    return []
+
+    const resolved = resolveFieldTree(tree, payloadSegments(segments))
+    if (!resolved) return []
+
+    return itemFieldSuggestions(
+      resolved.fields,
+      ownerPath(owner, segments),
+      position.partialSegment,
+    )
   }
 
-  return []
+  return null
+}
+
+/**
+ * Walks the field tree along a path.
+ *
+ * Returns `null` when a segment of the path does not exist.
+ */
+function resolveFieldTree(tree: FieldTree, segments: string[]): FieldTree | null {
+  let current = tree
+
+  for (const segment of segments) {
+    if (!Object.prototype.hasOwnProperty.call(current.children, segment)) {
+      return null
+    }
+    current = current.children[segment]
+  }
+
+  return current
+}
+
+/**
+ * The segments below the payload of a node.
+ *
+ * `json` and `item` address the payload itself, so they are dropped.
+ */
+function payloadSegments(segments: string[]): string[] {
+  const result = [...segments]
+  while (result.length > 0 && (result[0] === 'json' || result[0] === 'item')) {
+    result.shift()
+  }
+  return result
+}
+
+/** The path a field belongs to — shown as the detail of the entry. */
+function ownerPath(owner: string, segments: string[]): string {
+  return segments.length === 0 ? owner : `${owner}.${segments.join('.')}`
+}
+
+/** The field tree of a node. */
+function nodeFieldTree(
+  nodeName: string,
+  sources: SuggestionSources,
+): FieldTree | undefined {
+  const fromContext = sources.nodeTrees?.[nodeName]
+  if (fromContext) {
+    return fromContext
+  }
+
+  const node = sources.nodes.find((candidate) => candidate.name === nodeName)
+  return node?.fieldTree
 }
 
 /** The field names of a node. */
@@ -389,14 +617,37 @@ function nodeFieldNames(
   return node?.fields ?? []
 }
 
-/** The suggestion entries of a set of field names. */
-function itemFieldSuggestions(fields: string[], owner: string): Suggestion[] {
-  return fields.map((field) => ({
+/**
+ * The suggestion entries of a set of field names.
+ *
+ * A field name is typed literally, so the list is filtered by an exact
+ * or a prefix match — never by a fuzzy one.
+ */
+function itemFieldSuggestions(
+  fields: string[],
+  owner: string,
+  partial: string | null,
+): Suggestion[] {
+  const names = partial === null ? fields : filterFieldNames(fields, partial)
+
+  return names.slice(0, MAX_SUGGESTIONS).map((field) => ({
     kind: 'field' as const,
     label: field,
     detail: `field of ${owner}`,
     insertText: field,
   }))
+}
+
+/** Filters field names by an exact or a prefix match. */
+function filterFieldNames(fields: string[], needle: string): string[] {
+  if (needle === '') return fields
+
+  const exact = fields.filter((field) => field === needle)
+  const prefixed = fields.filter(
+    (field) => field !== needle && field.toLowerCase().startsWith(needle.toLowerCase()),
+  )
+
+  return [...exact, ...prefixed]
 }
 
 /**

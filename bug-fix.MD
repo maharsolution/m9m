@@ -3,9 +3,9 @@
 | Field | Value |
 | --- | --- |
 | Document | `bug-fix.MD` — canonical bug register and triage rules |
-| Version | `0.5.0-draft+4` |
+| Version | `0.5.0-draft+5` |
 | Status | **Living document** — updated as bugs are opened, triaged, and closed |
-| Last updated | 2026-11-13 (connection/linkage deletion — BUG-UI-2026-11-13-005; expression autocomplete / placeholder suggestions — BUG-UI-2026-11-13-006; webhook test vs production URL parity — BUG-BE-2026-11-13-001; node-creator self-close + n8n click-to-add — BUG-UI-2026-11-13-003; "new workflow" stale canvas — BUG-UI-2026-11-13-004; node-add canvas fix — BUG-UI-2026-11-13-001; execution-detail canvas auto-fit — BUG-UI-2026-11-13-002; auth env contract documented in `.env.example`) |
+| Last updated | 2026-11-13 (nested-field completion + fuzzy matching — BUG-UI-2026-11-13-007; connection/linkage deletion — BUG-UI-2026-11-13-005; expression autocomplete / placeholder suggestions — BUG-UI-2026-11-13-006; webhook test vs production URL parity — BUG-BE-2026-11-13-001; node-creator self-close + n8n click-to-add — BUG-UI-2026-11-13-003; "new workflow" stale canvas — BUG-UI-2026-11-13-004; node-add canvas fix — BUG-UI-2026-11-13-001; execution-detail canvas auto-fit — BUG-UI-2026-11-13-002; auth env contract documented in `.env.example`) |
 | Owner | Mahar Solution (current maintainer) |
 | Repository | <https://github.com/maharsolution/m9m> |
 | Companion docs | `m9m.MD` (PRD), `parity/parity_gaps.json` (machine-readable parity backlog), `workflow-test.MD` (live parity report), `gap-current-vs-doc.MD` (docs drift), `n8n-nodes.MD` (node parity reference) |
@@ -52,6 +52,7 @@ Legend: **P0** = wire-compat / correctness blocker · **P1** = engine correctnes
 | BUG-BE-2026-11-13-001 | `/webhook-test/<path>` always 404'd — no test URL to capture input/output during flow design | **P1** | **RESOLVED** (2026-11-13, derived test-webhook index covering inactive workflows in `internal/webhooks/manager.go`; Webhook node panel now shows Production URL + Test URL; 14 Go tests + 6 Vitest cases — see §9.33) | TBD | user-reported | 2026-11-13 |
 | BUG-UI-2026-11-13-005 | A connection between two joined nodes cannot be deleted — click, Delete/Backspace and hover X were all inert | **P1** | **RESOLVED** (2026-11-13, connections promoted to a first-class selection in `web/src/stores/workflowEditor.ts` (`selectedEdgeIds`, `removeSelectedEdges`); new `web/src/components/workflow/WorkflowEdge.vue` hover X; `web/src/lib/edgeSelection.ts` + 9 unit tests; 181 Vitest tests green — see §9.34) | TBD | user-reported | 2026-11-13 |
 | BUG-UI-2026-11-13-006 | Expression fields have no autocomplete / placeholder suggestions (`{{json.webho` showed a red error and no list) | **P1** | **RESOLVED** (2026-11-13, context-aware autocomplete in `expression/suggestions.ts` — variables, `$node["Name"]`, item fields; `ExpressionField.vue` listbox with ↑/↓/Enter/Esc; `NodePanel.vue` provides the context; 21 new unit tests + 181 Vitest tests green — see §9.35) | TBD | user-reported | 2026-11-13 |
+| BUG-UI-2026-11-13-007 | The completion stopped at the first level and matched prefixes only — `$json.address.` was empty, `jsn` found nothing | **P2** | **RESOLVED** (2026-11-13, recursive `FieldTree` of the execution payload (`MAX_FIELD_DEPTH = 5`) + ranked fuzzy matching (`matchRank`, prefix above scattered); 23 new unit tests, 204 Vitest tests green — see §9.36) | TBD | user-requested | 2026-11-13 |
 | BUG-CAP-2026-09-09-001 | Capability gap: tracking flow / debugger visualisation | P6 | **RESOLVED** (2026-10-12, `web/src/lib/edgesTakenRenderer.ts` + 12 tests; `EdgesTaken` data → per-edge style transform for the Vue Flow graph) | TBD | Sheet row 1 | 2026-09-09 |
 | BUG-CAP-2026-09-09-002 | Capability gap: UI designer — node-to-node connectivity not visible in editor | P6 | **RESOLVED** (2026-10-12, edges-taken renderer is the line-renderer for the editor canvas; same data shape drives the debugger and the canvas — see §9.22) | TBD | Sheet row 2 | 2026-09-09 |
 | BUG-CAP-2026-09-09-003 | Capability gap: credential store UI cannot register credential data | P6 | **RESOLVED** (2026-10-12, `web/src/types/credentials.ts` + `web/src/lib/credentialSchema.ts` (validate/toPayload/fieldFor) + 13 tests; "New" form now has a structured per-type view backed by the `OAuth2Schema`) | TBD | Sheet row 3 | 2026-09-09 |
@@ -553,6 +554,32 @@ No open P1 bugs at the time of this writing. The most recent P1 issues were the 
 **Verification.** `cd web; npm run test` → 181 tests / 18 files passed; `npm run build` → vue-tsc clean. Manual (Set node → Assignments → value): `{{` → 8 suggestions and **no** red error; `$js` → the list narrows to `$json`; **Enter** inserts `{{$json` with the caret following; `{{$nod` → narrows to `$node` / `$node["Set"]`; a mouse click inserts `{{$node["Set"].json`; closing with `}}` clears the error; a complete `{{$json.foo}}` without sample data shows no false red banner; **Esc** closes only the dropdown (the node details view stays open).
 
 **Remaining risk.** Field-level completion needs one completed execution — until the workflow has run, only the context variables and the node names are offered. `NodePanel`'s capture-phase Escape yields to any expanded `role="combobox"`, so a future native select could swallow one Escape too early.
+
+### BUG-UI-2026-11-13-007 — Completion was one level deep and matched prefixes only
+
+| Field | Value |
+| --- | --- |
+| Severity | **P2** (usability gap in the expression editor — the completion was correct but shallow) |
+| Status | **RESOLVED** (2026-11-13 — nested field tree + ranked fuzzy matching; see §9.36) |
+| Source | User request 2026-11-13 ("tambahkan nested-field completion (butuh walk objek hasil execution) atau fuzzy matching") after the §9.35 delivery |
+| Discovered | 2026-11-13 |
+| Owner | TBD |
+| Target milestone | 0.5.0 |
+
+**Observed.** The completion of §9.35 stopped at the first level: `$json.` listed the top-level fields only, `$json.address.` offered nothing, and the filter matched prefixes/substrings only — typing `jsn` found nothing although `$json` was the intended target.
+
+**Expected.** The completion walks the payload of the last execution, so a nested path resolves level by level; the filter tolerates typos and out-of-order characters, with exact and prefix hits always ranked above scattered ones.
+
+**Root cause.** (1) `web/src/lib/expressionFields.ts` flattened the payload — `collectJsonFields()` returned `Object.keys()` of the top level only, so the shape below the first level was thrown away. (2) `expression/suggestions.ts` — `matchesLabel()` compared prefixes/substrings; there was no ranking and no notion of a path segment that is still being typed (`$json.add` was filtered against the root list instead of the fields of `$json`).
+
+**Fix (applied).**
+1. `web/src/lib/expressionFields.ts` — `FieldTree` (`{ fields, children }`), `collectJsonFieldTree()` (recursive, arrays resolved through their object elements, `MAX_FIELD_DEPTH = 5`), `buildExpressionFieldSources()` now also returns `itemTree` + `nodeTrees` (the flat lists are kept).
+2. `expression/suggestions.ts` — `matchRank()` + `MATCH_EXACT/PREFIX/LOOSE_PREFIX/SUBSTRING/FUZZY/NONE`, ranked sorting in `filterSuggestions()` (rank → kind → alphabetical → stable, cap 25); `ExpressionPosition.partialSegment` (the path segment being typed); `fieldSuggestions()` resolves a path through the tree and returns `[]` when a segment does not exist — the editor never guesses.
+3. Plumbing — `ExpressionField.vue` takes `itemTree` / `nodeTrees`, `ParameterField.vue` forwards them, `NodePanel.vue` unchanged (`buildExpressionFieldSources()` returns the trees).
+
+**Verification.** `cd web; npm run test` → **204 tests / 18 files** passed (181 → 204, +23 new cases); `npm run build` → vue-tsc clean; `graphify update .` → 18235 nodes / 45783 edges. New cases cover nested resolution (2–3 levels, arrays of objects, per node), unresolvable paths → `[]`, fuzzy subsequence matching (`jsn` → `$json`), rank priority (prefix above scattered) and the 25-item cap.
+
+**Remaining risk.** (1) Arrays are reached through their keys (`$json.items.`), not by index — `$json.items[0].x` does not resolve. (2) The tree stops at 5 levels. (3) Fields exist only after a run. (4) Fuzzy = in-order subsequence with at most one third of the characters absent; scrambled needles are not matched. (5) Field names are matched exactly / by prefix, never fuzzy. (6) The root list is now alphabetical within a kind instead of catalogue order.
 
 ---
 
@@ -1313,6 +1340,8 @@ These are not bugs in m9m — m9m makes a deliberate product choice not to ship 
 
 **Verification.** `go build ./...` exit 0; `go vet` on the touched packages exit 0; `go test ./internal/webhooks/...` — 14 new tests green (inactive resolution, production-stays-404, same workflow+node for both URLs, active/updatedAt/workflow-ID tie-breaks, path rename, method change, deletion, non-webhook workflows ignored, nothing persisted, lazy refresh, HTTP-level 200 vs 404, both paths on an active workflow, n8n-shaped 404); `internal/api` green; `npm run build` clean; `npm run test` 177 tests / 17 files passed; `graphify update .` re-run. Local curl: inactive `POST /webhook/webhook_xml` → 404; inactive `POST /webhook-test/webhook_xml` → 200 with `"executionMode":"test"`; after rename old path → 404, new path → 200; after activate `POST /webhook/webhook_xml_v2` → 200 with `"executionMode":"production"` and `POST /webhook-test/webhook_xml_v2` → 200 with `"executionMode":"test"`. Pre-existing failures in `internal/{blobstore,monitoring,nodes/cli,nodes/data,nodes/database,queue,sandbox,showcase,variables}` and `internal/webhooks/TestStreamResponse_Hijack` reproduce identically on a pristine `git archive HEAD` checkout.
 
+**Live verification (2026-11-13, deployed build `cd9df90`, image `harbor.solutiontech.id/m9m/m9m-core:latest`).** The deploy pulled the new image and recreated `m9m-backend` (healthy). Against the deployed host: inactive workflow `bx5` (POST path `bx`) → `POST http://187.77.113.218:8080/webhook-test/bx` → **200** with `"executionMode":"test"`, while `POST http://187.77.113.218:8080/webhook/bx` → **404** with the n8n-style hint ("The workflow must be active for a production URL to run successfully…"). Active workflow `nodetest-respondToWebhook` (path `n16-vaf1v`) → `/webhook-test/n16-vaf1v` → **200** `"executionMode":"test"` and `/webhook/n16-vaf1v` → **200** `"executionMode":"production"`. `python scripts/test-parity-sheet.py --phase post` → **6/6 PASS** (webhook_code, simple_webhook_3, webhook_callrest, simple_webhook_2, bocahtuanakal, webhook_xml). A recursive scan of the 68 deployed JS chunks finds `webhook-test` + `webhookUrl` inside `/assets/WorkflowEditor-Dbvol-xM.js`, i.e. the browser really receives the new Webhook node panel.
+
 **Remaining risk.** (1) The trigger output's `webhookUrl` still omits the endpoint prefix (`http://host:port/<path>` instead of n8n's `http://host:port/webhook/<path>`) — pre-existing in `internal/nodes/trigger/webhook.go`, deliberately left untouched because the production wire shape must stay byte-identical for the parity sheet; fix separately with a parity-sheet re-run. (2) The parity sheet targets the deployed host and needs a post-deploy `--phase post` run. (3) Workflows created outside the REST API (MCP) are picked up by the lazy rebuild within ≤2 s, not instantly. (4) The test index is process-local; a restart re-scans the store at startup (`serve.go:404`).
 
 ### 9.34 BUG-UI-2026-11-13-005 — a connection between two joined nodes could not be deleted (closed)
@@ -1348,6 +1377,23 @@ These are not bugs in m9m — m9m makes a deliberate product choice not to ship 
 **Verification.** `cd web; npm run test` → 181 tests / 18 files passed; `npm run build` → vue-tsc clean. Manual (Set node → Assignments → value): `{{` → 8 suggestions and **no** red error; `$js` → the list narrows to `$json`; **Enter** inserts `{{$json` with the caret following; `{{$nod` → narrows to `$node` / `$node["Set"]`; a mouse click inserts `{{$node["Set"].json`; closing with `}}` clears the error; a complete `{{$json.foo}}` without sample data shows no false red banner; **Esc** closes only the dropdown (the node details view stays open).
 
 **Remaining risk.** Field-level completion needs one completed execution — until the workflow has run, only the context variables and the node names are offered. `NodePanel`'s capture-phase Escape yields to any expanded `role="combobox"`, so a future native select could swallow one Escape too early.
+
+### 9.36 BUG-UI-2026-11-13-007 — the completion was one level deep and matched prefixes only (closed)
+
+| Field | Value |
+| --- | --- |
+| Severity | **P2** (usability gap in the expression editor) |
+| Closed | 2026-11-13 |
+| Fixed in | `web/src/lib/expressionFields.ts`, `web/src/lib/expressionFields.test.ts`, `web/src/components/workflow/parameters/expression/suggestions.ts`, `web/src/components/workflow/parameters/expression/suggestions.test.ts`, `web/src/components/workflow/parameters/expression/variables.ts`, `web/src/components/workflow/parameters/expression/index.ts`, `web/src/components/workflow/parameters/ExpressionField.vue`, `web/src/components/workflow/parameters/ParameterField.vue` |
+| Closed by | A recursive field tree of the execution payload + ranked fuzzy matching |
+
+**Root cause.** (1) `web/src/lib/expressionFields.ts` flattened the payload — `collectJsonFields()` returned only `Object.keys()` of the top level, so everything below the first level was discarded. (2) `expression/suggestions.ts` — `matchesLabel()` compared prefixes/substrings only, there was no ranking, and a half-typed path segment (`$json.add`) was filtered against the root list instead of the fields of `$json`.
+
+**Fix.** `expressionFields.ts` — `FieldTree` (`{ fields, children }`), `collectJsonFieldTree()` (recursive; an array is resolved through the objects it holds; `MAX_FIELD_DEPTH = 5`), and `buildExpressionFieldSources()` now also returns `itemTree` + `nodeTrees` while keeping the flat lists. `expression/suggestions.ts` — `matchRank()` with `MATCH_EXACT / PREFIX / LOOSE_PREFIX / SUBSTRING / FUZZY / NONE`, ranked and deterministic sorting in `filterSuggestions()` (rank → kind → alphabetical → stable, capped at 25), `ExpressionPosition.partialSegment` for the segment being typed, and `fieldSuggestions()` walking the tree — a path that does not resolve returns `[]`, the editor never guesses. Plumbing: `ExpressionField.vue` takes `itemTree` / `nodeTrees`, `ParameterField.vue` forwards them, `NodePanel.vue` needs no change.
+
+**Verification.** `cd web; npm run test` → **204 tests / 18 files** passed (181 → 204); `npm run build` → vue-tsc clean; `graphify update .` → 18235 nodes / 45783 edges. New cases: nested resolution (2–3 levels deep, arrays of objects, per node), unresolvable path → `[]`, fuzzy subsequence (`jsn` → `$json`), rank priority (prefix above scattered), alphabetical order inside a group, and the list cap.
+
+**Remaining risk.** Arrays resolve through their keys, not by index (`$json.items[0].x` does not resolve); the tree stops at 5 levels; fields exist only after a run; fuzzy = in-order subsequence with at most one third of the characters absent (scrambled needles are not matched); field names are matched exactly / by prefix, never fuzzy; the root list is now alphabetical within a kind.
 
 ---
 
