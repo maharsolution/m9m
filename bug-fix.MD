@@ -3,9 +3,9 @@
 | Field | Value |
 | --- | --- |
 | Document | `bug-fix.MD` — canonical bug register and triage rules |
-| Version | `0.4.0-draft+1` |
+| Version | `0.5.0-draft+1` |
 | Status | **Living document** — updated as bugs are opened, triaged, and closed |
-| Last updated | 2026-10-12 (Kafka SASL + 5×P5 hygiene + JWT fuzz 21-case + 31-node Properties migration + UI retry + OAuth2 RFC 6749 + OIDC SSO + RBAC enforcement + 12 P6 implementations: edges-taken renderer, queue-soak, scaling, leader, sub-workflow palette, static data, blobstore, streaming) |
+| Last updated | 2026-11-13 (node-add canvas fix — BUG-UI-2026-11-13-001; execution-detail canvas auto-fit + full-panel fill — BUG-UI-2026-11-13-002; auth env contract documented in `.env.example`) |
 | Owner | Mahar Solution (current maintainer) |
 | Repository | <https://github.com/maharsolution/m9m> |
 | Companion docs | `m9m.MD` (PRD), `parity/parity_gaps.json` (machine-readable parity backlog), `workflow-test.MD` (live parity report), `gap-current-vs-doc.MD` (docs drift), `n8n-nodes.MD` (node parity reference) |
@@ -45,6 +45,8 @@ Legend: **P0** = wire-compat / correctness blocker · **P1** = engine correctnes
 | BUG-DOC-2026-09-11-008 | OTel env-var docs drift vs `internal/otel/env.go` (8 names off) | P5 | **RESOLVED** (2026-09-11, Phase 8 Ticket 5 — see `observability/index.md` + `api/telemetry.md` + `configuration/environment.md`) | TBD | — | 2026-09-11 |
 | BUG-UI-2026-09-09-001 | `INodeTypeDescription.properties` only populated for top-10 + MongoDB | P3 | **RESOLVED** (2026-10-12, 31 nodes populate `Properties`; remaining ~4 long-tail nodes use the raw-JSON fallback) | TBD | — | 2026-10-06 |
 | BUG-UI-2026-09-09-002 | NDV: per-node `Settings` tab and per-node retry controls — partial | P3 | **RESOLVED** (2026-10-12, Settings tab renders for every node; "Retry from here" button wired to `POST /retry-node` + `web/test/executions-retryNode.test.mjs` covers the call) | TBD | — | 2026-10-06 |
+| BUG-UI-2026-11-13-001 | Nodes cannot be added to the editor canvas — node-creator scrim swallowed the palette drag/drop | **P1** | **RESOLVED** (2026-11-13, scrim made visual-only `pointer-events-none` + document-level click-outside guard in `web/src/components/workflow/NodePalette.vue`; `web/src/lib/nodeCreator.ts` + 4 unit tests — see §9.31) | TBD | user-reported | 2026-11-13 |
+| BUG-UI-2026-11-13-002 | Execution-detail graph canvas collapsed to a 61 px strip instead of filling the panel | P3 | **RESOLVED** (2026-11-13, definite height chain + auto-fit on init/resize in `web/src/views/ExecutionDetail.vue`; `web/src/lib/executionCanvasFit.ts` + unit tests — see §9.30) | TBD | user-reported | 2026-11-13 |
 | BUG-CAP-2026-09-09-001 | Capability gap: tracking flow / debugger visualisation | P6 | **RESOLVED** (2026-10-12, `web/src/lib/edgesTakenRenderer.ts` + 12 tests; `EdgesTaken` data → per-edge style transform for the Vue Flow graph) | TBD | Sheet row 1 | 2026-09-09 |
 | BUG-CAP-2026-09-09-002 | Capability gap: UI designer — node-to-node connectivity not visible in editor | P6 | **RESOLVED** (2026-10-12, edges-taken renderer is the line-renderer for the editor canvas; same data shape drives the debugger and the canvas — see §9.22) | TBD | Sheet row 2 | 2026-09-09 |
 | BUG-CAP-2026-09-09-003 | Capability gap: credential store UI cannot register credential data | P6 | **RESOLVED** (2026-10-12, `web/src/types/credentials.ts` + `web/src/lib/credentialSchema.ts` (validate/toPayload/fieldFor) + 13 tests; "New" form now has a structured per-type view backed by the `OAuth2Schema`) | TBD | Sheet row 3 | 2026-09-09 |
@@ -68,7 +70,7 @@ Legend: **P0** = wire-compat / correctness blocker · **P1** = engine correctnes
 | BUG-RFC-2026-09-11-002 | `plugins/README.md` referenced `github.com/maharsolution/m9m-plugins` (404) | P5 | **RESOLVED** | — | — | 2026-09-11 |
 | BUG-RFC-2026-09-11-003 | `M9M_COPILOT_*` legacy env vars lacked deprecation warning | P5 | **RESOLVED** (`internal/ai/config.go::warnCopilotLegacy`) | — | — | 2026-09-11 |
 
-Counts (2026-10-12, after 0.4.0 cycle + UI/Security/RBAC full impls + 12 P6 implementations): **0 OPEN across all priorities** (3 P0 + 1 P3-Kafka + 2 P3-UI + 4 P4-SEC + 12 P6 + 13 P5 + 5 P5-RFC = **40 RESOLVED + 8 deferred-with-justification** (SAML inside SEC-003, per-resource RBAC inside SEC-004, OAuth2 callback HTTP wiring, Slack/GSheets/Notion/Stripe migration — all pinned to 0.6.0 with explicit owner + next-action)).
+Counts (2026-11-13, after the 0.5.0 cycle + 2 UI fixes — node-add canvas and execution-detail canvas fit): **0 OPEN across all priorities** (3 P0 + 1 P1-UI + 1 P3-Kafka + 3 P3-UI + 4 P4-SEC + 12 P6 + 13 P5 + 5 P5-RFC = **42 RESOLVED + 8 deferred-with-justification** (SAML inside SEC-003, per-resource RBAC inside SEC-004, OAuth2 callback HTTP wiring, Slack/GSheets/Notion/Stripe migration — all pinned to 0.6.0 with explicit owner + next-action)).
 
 ---
 
@@ -368,6 +370,32 @@ Operator should either:
 
 No open P1 bugs at the time of this writing. The most recent P1 issues were the engine-semantics cluster that landed in the 2026-09-10 cycle (`BUG-2026-09-10-001`, `BUG-2026-09-10-002`); see §9.
 
+### BUG-UI-2026-11-13-001 — Node creator overlay blocked adding nodes to the canvas
+
+| Field | Value |
+| --- | --- |
+| Severity | **P1** (frontend regression — the editor's core add-node path was fully blocked) |
+| Status | **RESOLVED** (2026-11-13 — scrim made visual-only; see §9.31) |
+| Source | User report 2026-11-13 ("temuan bug tidak bisa menambah nodes di canvas"); regression introduced by commit `7ea6409` (n8n-parity layout) |
+| Discovered | 2026-11-13 |
+| Owner | TBD |
+| Target milestone | 0.5.0 |
+
+**Observed.** Opening the node creator (palette) and dragging a node onto the canvas did nothing: the palette closed and the canvas stayed empty. Production hit-test on `http://187.77.113.218:8080/workflows/new`: `document.elementFromPoint` over the canvas returned `.m9m-scrim`, `dragover.defaultPrevented === false`, and the drop produced **0 nodes**.
+
+**Expected.** Dropping a node from the palette adds it to the canvas (n8n behaviour), while the canvas stays pannable and selectable underneath the open creator.
+
+**Root cause.** Commit `7ea6409` made the node creator a full-screen overlay (`absolute inset-0 z-30`) whose dimming layer `.m9m-scrim` was `pointer-events-auto`. HTML5 drag-and-drop hit-tests the topmost element under the cursor, so `dragover`/`drop` were delivered to the scrim instead of the canvas root (`@dragover="onDragOver"` / `@drop="onDrop"` in `web/src/components/workflow/WorkflowCanvas.vue`). The canvas never cancelled `dragover`, the browser refused the drop, `onDrop` never ran — and the scrim's `@click="emit('close')"` closed the creator, producing the "palette closes, nothing added" symptom.
+
+**Fix (applied).**
+1. `web/src/components/workflow/NodePalette.vue` — the scrim is visual only (`pointer-events-none`, `@click` removed); the creator is closed by a document-level `click` guard that ignores clicks inside the panel.
+2. `web/src/lib/nodeCreator.ts` (new) — `isOutsidePanel(target, panel)`, a DOM-free outside-click predicate, unit-tested in `web/src/lib/nodeCreator.test.ts` (4 cases).
+3. `web/src/components/workflow/WorkflowCanvas.vue` — `onDrop` calls `event.preventDefault()` first, so the browser's default drop navigation never runs.
+
+**Verification.** Production baseline reproduced (drop target `.m9m-scrim`, `dragover` not prevented, 0 nodes added). Local post-fix build on `:8099`: drop target `.vue-flow__pane vue-flow__container draggable`, `dragoverPrevented === true`, payload `n8n-nodes-base.httpRequest`, node count 1, empty state cleared. `npm run build` clean (vue-tsc); `npm run test` 94 tests / 10 files passed (only the known pre-existing `expression.test.ts` "No test suite found" fails). n8n parity re-checked on the fixed build: single-click selects only, double-click opens the 3-column NDV, empty-canvas drag pans (`__zoom.x` 42.5 → 322.5), Shift+drag marquee-selects, node drag moves only that node with the viewport unchanged.
+
+**Remaining risk.** The canvas stays interactive while the creator is open (n8n parity). The drop was exercised with a scripted `DataTransfer`/`DragEvent` sequence plus `elementFromPoint` hit-testing (CDP `Input.*` is blocked in this environment) — one confirming human drag on the deployed build is recommended.
+
 **Backlog watch-list** (file a ticket if any of these reproduce):
 - Sub-workflow edge preservation across deep recursion (commit `a2fc20d` already covers the common case; verify depth 3+).
 - `splitInBatches` "done" branch fires twice when the input collection is empty.
@@ -429,6 +457,33 @@ No open P2 bugs. Continue to monitor via:
 3. `web/test/executions-retryNode.test.mjs` (new file, 4 cases): correct path + body, `inputData` override (n8n "Run with edited input"), backend-error propagation, base-URL prefix guard. The test mocks `apiClient.post` and asserts the exact wire shape the live UI uses, so a future refactor (TanStack Query migration, new field) cannot silently break the wiring.
 
 **Verification.** `npm test web/test/executions-retryNode.test.mjs` passes 4/4; live UI smoke test confirms the "Retry from here" button on the execution graph calls the endpoint, navigates to the new execution, and renders the new execution detail.
+
+### BUG-UI-2026-11-13-002 — Execution-detail graph canvas collapsed to a 61 px strip instead of filling the panel
+
+| Field | Value |
+| --- | --- |
+| Severity | **P3** (UX) |
+| Status | **RESOLVED** (2026-11-13 — canvas fills the panel, graph auto-fits on init and on every resize; see §9.30) |
+| Source | User report 2026-11-13 ("canvas-nya di execution detail sangat kecil, make fit to window for whole panel"); production measurement on `http://187.77.113.218:8080` |
+| Discovered | 2026-11-13 |
+| Owner | TBD |
+| Target milestone | 0.5.0 |
+
+**Observed.** In `/executions/{id}` the Vue Flow canvas rendered as a thin 61 px strip. Production measurement (viewport 1122×922): `.vue-flow` = 512×61, parent `flex-1 relative bg-[#f5f5f7]` = 512×61, `flex-1 flex min-h-0` = 1032×61, `h-full flex flex-col` = 1032×206, `mx-auto w-full max-w-[1280px] px-6 py-6` = 1080×254 (auto height). The graph was unreadable and the node-details column still took half of the panel.
+
+**Expected.** n8n parity: the execution graph spans the free width of the panel, the node-details column is capped, and the graph is fitted to the container — and re-fitted whenever the container changes size.
+
+**Root cause.** The page used a percentage-height chain (`h-full`) that terminated in an auto-height ancestor (`mx-auto w-full max-w-[1280px] px-6 py-6` inside `main.flex-1.overflow-auto`). A percentage height against an auto-height parent resolves to the content height, so the canvas collapsed to the height of its own toolbar (61 px). Vue Flow derives its viewport transform from the *measured* container, so the collapsed measurement also produced a degenerate transform — and Vue Flow never recomputes it on its own, which is why the `fit-view-on-init` prop alone could not repair the layout.
+
+**Fix (applied).** `web/src/views/ExecutionDetail.vue`:
+1. Definite height chain — page root `h-full flex flex-col min-h-0`, content row `flex-1 flex min-h-0 min-w-0`, graph column `flex-1 min-w-0 min-h-0 relative …`, `<VueFlow>` root `h-full w-full`.
+2. Node-details column capped: `w-[520px] shrink-0 max-w-[50%]` — the graph keeps the free space (at 1440 px viewport the graph column is ~872 px wide).
+3. Explicit auto-fit replaces the `fit-view-on-init` prop: `@init` captures the Vue Flow store and schedules a fit, `@nodes-initialized` re-fits when the workflow arrives asynchronously, a `ResizeObserver` on `instance.vueFlowRef` re-fits when the panel is resized, `window.resize` is belt and braces. Options: `padding: 0.2`, `minZoom: 0.3`, `maxZoom: 1.2`, `includeHiddenNodes: false`.
+4. Scheduling logic extracted to `web/src/lib/executionCanvasFit.ts` (`EXECUTION_FIT_VIEW_OPTIONS`, `isFittableSize`, `createFitScheduler` with a 120 ms debounce) and unit-tested in `web/src/lib/executionCanvasFit.test.ts`.
+
+**Verification.** `cd web && npm run build` clean (vue-tsc); `npm test` green except the pre-existing `src/components/workflow/parameters/expression/expression.test.ts` ("No test suite found"). Live measurement against the local server (`http://127.0.0.1:8099`, workflow `workflow_1794553582301653300_1`, execution `exec_1794553598450512400`): `.vue-flow` = 312×526 (was 512×61), 3 nodes and 2 edges rendered, transform `translate(-7.21px, 209.97px) scale(0.342)` — a real fit, not the default viewport. Container-resize refit confirmed: shrinking the node-details column from 520 px to 100 px re-fitted the graph (`scale(0.3)` → `scale(0.370339)`). The executed-path highlighting (`edgesTaken`), node badges and the node-data panel are unchanged.
+
+**Remaining risk.** The fit uses the container's measured size; a workflow with hundreds of nodes is clamped at `minZoom: 0.3` and stays small — same behaviour as n8n's zoom-to-fit.
 
 ### BUG-2026-10-12-002 — Kafka nodes do not read injected SASL credentials
 
@@ -1028,6 +1083,42 @@ These are not bugs in m9m — m9m makes a deliberate product choice not to ship 
   - The wrapper sets `X-Accel-Buffering: no` + `Cache-Control: no-cache` so nginx / common reverse proxies don't buffer the response.
 - **Why this is the right shape for production streaming:** the existing `sendResponse` writes one shot; this wrapper adds the incremental path. Webhook handlers pick one or the other based on the response's `Stream` flag.
 - **Resolved at:** 2026-10-12.
+
+---
+
+### 9.30 BUG-UI-2026-11-13-002 — Execution-detail canvas collapsed to a 61 px strip (closed)
+
+| Field | Value |
+| --- | --- |
+| Severity | **P3** (UX) |
+| Closed | 2026-11-13 |
+| Fixed in | `web/src/views/ExecutionDetail.vue`, `web/src/lib/executionCanvasFit.ts`, `web/src/lib/executionCanvasFit.test.ts` |
+| Closed by | CSS height-chain fix (definite height, `min-h-0`/`min-w-0`) + explicit `fitView` on init / nodes-initialized / ResizeObserver / window resize |
+
+**Root cause.** Percentage-height chain (`h-full`) against an auto-height ancestor collapsed the Vue Flow container to its toolbar height (61 px); Vue Flow then computed the viewport transform from that collapsed measurement and never recomputed it.
+
+**Fix.** Definite height chain + `h-full w-full` on the flow root, node-details column capped at 50 % width, debounced auto-fit driven by `@init`, `@nodes-initialized`, a `ResizeObserver` on the measured flow element and `window.resize`.
+
+**Verification.** Production baseline 512×61 → local post-fix 312×526 with a real fit transform (`scale(0.342)`); resize refit confirmed (`scale(0.3)` → `scale(0.370339)`); build and unit tests green.
+
+---
+
+### 9.31 BUG-UI-2026-11-13-001 — Node creator overlay blocked adding nodes to the canvas (closed)
+
+| Field | Value |
+| --- | --- |
+| Severity | **P1** (blocks the core editor function — nodes cannot be added at all) |
+| Closed | 2026-11-13 |
+| Fixed in | `web/src/components/workflow/NodePalette.vue`, `web/src/components/workflow/WorkflowCanvas.vue`, `web/src/lib/nodeCreator.ts`, `web/src/lib/nodeCreator.test.ts` |
+| Closed by | Scrim made visual-only (`pointer-events-none`) + document-level click-outside guard for the node creator |
+
+**Root cause.** Commit `7ea6409` (n8n-parity layout) turned the node creator into a full-screen overlay whose dimming layer `.m9m-scrim` was `pointer-events-auto` at `z-30`. HTML5 drag-and-drop hit-tests the topmost element under the cursor, so the palette drag delivered `dragover`/`drop` to the scrim instead of `WorkflowCanvas.vue` (`@dragover="onDragOver"` / `@drop="onDrop"`). The canvas `dragover` was therefore never cancelled, the browser refused the drop, `onDrop` never fired, and **no node was ever added**; the same overlay also closed the creator on the drop's click, so the user saw the palette close with an empty canvas.
+
+**Fix.** The scrim is now visual only (`pointer-events-none`), so the canvas keeps receiving the palette drag, its pan and its selection. The creator is closed by a document-level `click` guard that ignores clicks inside the panel (`isOutsidePanel` in `web/src/lib/nodeCreator.ts`, 4 unit tests). `onDrop` additionally calls `preventDefault()` as a defensive stop for the browser's default drop action.
+
+**Verification.** Production baseline (`187.77.113.218:8080/workflows/new`): `elementFromPoint` → `.m9m-scrim`, `dragover.defaultPrevented === false`, drop → 0 nodes. Local post-fix build on `:8099`: drop target `.vue-flow__pane vue-flow__container draggable`, `dragoverPrevented === true`, payload `n8n-nodes-base.httpRequest`, node count 1, empty state cleared. `npm run build` clean (vue-tsc), `npm run test` 94 tests / 10 files passed (known pre-existing `expression.test.ts` "No test suite found" ignored). n8n parity re-checked green: single-click selects only, double-click opens the 3-column NDV, empty-canvas drag pans, Shift+drag marquee-selects, node drag moves only that node (viewport unchanged). `graphify update .` re-run.
+
+**Remaining risk.** The canvas stays interactive while the node creator is open (n8n parity). If the product wants a dimmed *and* inert canvas, the scrim must keep pointer events and the drop target must be re-pointed instead. The drop was exercised with a scripted `DataTransfer`/`DragEvent` sequence plus `elementFromPoint` hit-testing (CDP `Input.*` is blocked in this environment), so one confirming human drag on the deployed build is worth doing.
 
 ---
 

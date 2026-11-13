@@ -25,11 +25,18 @@ const authStore = useAuthStore()
 
 /**
  * The editor (`/workflows/new` and `/workflows/:id`) fills the whole
- * viewport — it brings its own toolbar and canvas. The version-history
- * page (`/workflows/:id/versions`) is a regular page and stays inside
- * the content container.
+ * viewport — it brings its own toolbar and canvas. The execution
+ * detail (`/executions/:id`) does the same: the graph panel spans the
+ * full width of the content area (n8n parity) and needs the whole
+ * viewport height to fit the workflow graph. The version-history page
+ * (`/workflows/:id/versions`) is a regular page and stays inside the
+ * content container.
  */
-const isFullBleed = computed(() => /^\/workflows\/(new|[^/]+)$/.test(route.path))
+const isFullBleed = computed(
+  () =>
+    /^\/workflows\/(new|[^/]+)$/.test(route.path) ||
+    /^\/executions\/[^/]+$/.test(route.path),
+)
 
 onMounted(async () => {
   // Initialize auth

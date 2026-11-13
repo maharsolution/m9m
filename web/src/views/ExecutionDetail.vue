@@ -29,9 +29,10 @@
  * same payload is rendered three different ways without any
  * filtering.
  */
-import { ref, computed, markRaw, onMounted, watch } from 'vue'
+import { ref, computed, markRaw, onMounted, onBeforeUnmount, watch, nextTick, unref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VueFlow } from '@vue-flow/core'
+import type { VueFlowStore } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import '@vue-flow/core/dist/style.css'
 import {
@@ -52,6 +53,12 @@ import {
   useWorkflowStore,
 } from '@/stores'
 import { buildFlowNodes, buildFlowEdges, parseEdgeId } from '@/lib/workflowGraph'
+import {
+  createFitScheduler,
+  EXECUTION_FIT_VIEW_OPTIONS,
+  isFittableSize,
+} from '@/lib/executionCanvasFit'
+import type { FitScheduler } from '@/lib/executionCanvasFit'
 import type { Workflow, WorkflowNode, DataItem } from '@/types'
 import type { NodeType, NodeProperty } from '@/types/node'
 import ExecutionDataView from '@/components/execution/ExecutionDataView.vue'
@@ -117,6 +124,11 @@ const dataTabs = computed<Array<{ id: DataTab; label: string; icon?: any; title?
 })
 
 onMounted(async () => {
+  // The graph is re-fitted whenever the viewport changes — Vue Flow
+  // computes the viewport transform once and never recomputes it on
+  // its own.
+  window.addEventListener('resize', requestFit)
+
   // Fire the type-catalog fetch in parallel with the execution /
   // workflow fetch so the NDV can look up node-type properties
   // immediately when the user clicks a node.
@@ -388,6 +400,91 @@ const flowEdges = computed(() => {
       style: { ...(e.style ?? {}), stroke, strokeWidth: 2.5 },
     }
   })
+})
+
+// ---------------------------------------------------------------------------
+// Canvas sizing / auto-fit
+// ---------------------------------------------------------------------------
+// n8n parity: the execution detail view shows the workflow graph across
+// the full width of the panel. The graph column therefore fills the free
+// space next to the Node Details View, and the graph is re-fitted
+// whenever that space changes.
+//
+// Vue Flow derives the viewport transform from the *measured* container
+// (`state.dimensions`), so a fit issued while the container is still
+// collapsed produces a degenerate transform — and Vue Flow never
+// recomputes it on its own. Refit triggers:
+//
+//   - `init`              → the flow instance became available
+//   - `nodes-initialized` → the nodes were measured (the workflow loads
+//                           asynchronously, long after the first paint)
+//   - ResizeObserver      → the panel itself was resized
+//   - window resize       → belt & braces
+const canvasRef = ref<HTMLElement | null>(null)
+let flowInstance: VueFlowStore | null = null
+let fitScheduler: FitScheduler | null = null
+let resizeObserver: ResizeObserver | null = null
+
+// requestFit asks for a (debounced) refit. Safe to call before the flow
+// instance exists — the request is simply dropped.
+function requestFit() {
+  fitScheduler?.schedule()
+}
+
+// onFlowInit receives the Vue Flow store instance (the `init` event
+// payload) — that is the only handle that can re-fit the graph.
+function onFlowInit(instance: VueFlowStore) {
+  flowInstance = instance
+  fitScheduler?.cancel()
+  fitScheduler = createFitScheduler(
+    (options) => instance.fitView(options),
+    EXECUTION_FIT_VIEW_OPTIONS,
+  )
+  requestFit()
+  observeCanvas()
+}
+
+// observeCanvas watches the canvas for size changes. Vue Flow computes
+// the viewport transform from the measured container and never re-fits
+// on its own, so the graph has to be re-fitted whenever the panel is
+// resized (window, sidebar, NDV width).
+function observeCanvas() {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  // `vueFlowRef` is the `.vue-flow` root element; the template ref is
+  // the fallback for the case where the flow instance is not ready yet.
+  const el = unref(flowInstance?.vueFlowRef) ?? canvasRef.value
+  if (!el) return
+  resizeObserver = new ResizeObserver(() => {
+    const { width, height } = el.getBoundingClientRect()
+    if (!isFittableSize(width, height)) return
+    requestFit()
+  })
+  resizeObserver.observe(el)
+}
+
+// The graph panel only exists once the execution has loaded, so the
+// observer is (re-)attached whenever the panel element is replaced.
+watch(
+  canvasRef,
+  () => {
+    observeCanvas()
+  },
+  { flush: 'post' },
+)
+
+// The workflow — and with it the node set — arrives asynchronously:
+// refit once the new nodes are in place.
+watch([flowNodes, flowEdges], () => {
+  nextTick(() => requestFit())
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', requestFit)
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  fitScheduler?.cancel()
+  fitScheduler = null
 })
 
 const selectedNodeId = computed<string | null>(() => {
@@ -866,7 +963,7 @@ function downloadData() {
 </script>
 
 <template>
-  <div class="h-full flex flex-col">
+  <div class="h-full flex flex-col min-h-0">
     <!-- Header -->
     <div class="px-6 pt-6 pb-4 border-b border-slate-200 dark:border-slate-700">
       <div class="flex items-center gap-4">
@@ -951,9 +1048,14 @@ function downloadData() {
     </div>
 
     <!-- Body -->
-    <div v-if="execution" class="flex-1 flex min-h-0">
-      <!-- Left: workflow graph -->
-      <div class="flex-1 relative bg-[#f5f5f7] dark:bg-slate-900">
+    <div v-if="execution" class="flex-1 flex min-h-0 min-w-0">
+      <!-- Left: workflow graph. The column fills the free space next
+           to the NDV (n8n parity) and the graph is re-fitted whenever
+           that space changes — see the canvas sizing block above. -->
+      <div
+        ref="canvasRef"
+        class="flex-1 min-w-0 min-h-0 relative bg-[#f5f5f7] dark:bg-slate-900"
+      >
         <VueFlow
           :nodes="flowNodes"
           :edges="flowEdges"
@@ -964,8 +1066,9 @@ function downloadData() {
           :nodes-draggable="false"
           :nodes-connectable="false"
           :elements-selectable="true"
-          fit-view-on-init
-          :fit-view-on-init-options="{ padding: 0.25, minZoom: 0.7, maxZoom: 1.2, includeHiddenNodes: false }"
+          class="h-full w-full"
+          @init="onFlowInit"
+          @nodes-initialized="requestFit"
           @node-click="onNodeClick"
         >
           <Background :pattern-color="'#cbd5e1'" :gap="20" />
@@ -1023,8 +1126,9 @@ function downloadData() {
         </div>
       </div>
 
-      <!-- Right: Node Details View -->
-      <div class="w-[520px] border-l border-slate-200 dark:border-slate-700 flex flex-col bg-white dark:bg-slate-800">
+      <!-- Right: Node Details View. Fixed width, but never wider than
+           half the panel — the graph column keeps the free space. -->
+      <div class="w-[520px] shrink-0 max-w-[50%] border-l border-slate-200 dark:border-slate-700 flex flex-col bg-white dark:bg-slate-800">
         <div v-if="selectedNode" class="flex-1 flex flex-col min-h-0">
           <!-- Node header -->
           <div class="p-4 border-b border-slate-200 dark:border-slate-700">

@@ -411,6 +411,10 @@ onConnect((params: Connection) => {
 })
 
 const onDrop = (event: DragEvent) => {
+  // The drop is handled here: stop the browser's default action (it
+  // would otherwise try to open / navigate to the dragged item).
+  event.preventDefault()
+
   const nodeType = event.dataTransfer?.getData('application/vueflow')
   if (!nodeType) return
 

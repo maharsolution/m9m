@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import { useNodesStore, useWorkflowEditorStore } from '@/stores'
 import { NODE_CATEGORIES, getNodeCategory } from '@/types/node'
 import { nodeIconFor } from '@/components/nodes/BaseNode.vue'
+import { isOutsidePanel } from '@/lib/nodeCreator'
 import type { NodeType, NodeCategory } from '@/types'
 
 const emit = defineEmits<{
@@ -13,6 +14,31 @@ const emit = defineEmits<{
 
 const nodesStore = useNodesStore()
 const workflowEditorStore = useWorkflowEditorStore()
+
+/**
+ * The node creator floats over the canvas. Its scrim dims the canvas
+ * but stays *visual only* — it never takes pointer events, so the
+ * canvas keeps receiving the drag-and-drop that adds a node (and the
+ * canvas stays pannable / selectable while the creator is open, n8n
+ * parity).
+ *
+ * Because the scrim cannot take the click, the creator is closed by a
+ * document-level click guard: a click outside the panel closes it.
+ */
+const panelRef = ref<HTMLElement | null>(null)
+
+const onDocumentClick = (event: MouseEvent) => {
+  if (!isOutsidePanel(event.target, panelRef.value)) return
+  emit('close')
+}
+
+onMounted(() => {
+  document.addEventListener('click', onDocumentClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', onDocumentClick)
+})
 
 const searchQuery = ref('')
 const expandedCategories = ref<Set<NodeCategory>>(new Set(['trigger', 'action', 'transform']))
@@ -93,16 +119,21 @@ const iconFor = (node: NodeType) => nodeIconFor(node.name, getNodeCategory(node.
     scrim over the canvas. The panel is anchored to the editor
     shell, so it starts below the editor header and floats above
     the canvas.
+
+    The scrim dims the canvas but never takes pointer events: it must
+    not swallow the drag-and-drop that adds a node, nor the clicks
+    that pan / select on the canvas. The creator is closed by the
+    document-level click guard in the script block instead.
   -->
   <div class="absolute inset-0 z-30 pointer-events-none">
-    <!-- Scrim -->
+    <!-- Scrim — visual only -->
     <div
-      class="m9m-scrim absolute inset-0 top-[65px] pointer-events-auto"
-      @click="emit('close')"
+      class="m9m-scrim absolute inset-0 top-[65px] pointer-events-none"
     />
 
     <!-- Panel -->
     <div
+      ref="panelRef"
       class="m9m-panel absolute right-0 top-[65px] bottom-0 w-[385px] pointer-events-auto flex flex-col border-l border-default"
     >
       <!-- Header -->
