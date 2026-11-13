@@ -1200,6 +1200,8 @@ These are not bugs in m9m — m9m makes a deliberate product choice not to ship 
 
 **Verification.** Trusted CDP mouse (`Input.dispatchMouseEvent`, `isTrusted: true`): HEAD build on `:3100` — toolbar click self-closed the creator (`stillOpen: false`), drag added 0 nodes, "New Workflow" left 1 stale node on the canvas. Fixed build on `:3000` — creator stays open (`stillOpen: true`), trusted drag adds a node (0 → 1), trusted click adds another (1 → 2), "New Workflow" → 0 nodes with the empty-state overlay, `Ctrl+N` → 2 → 0. `npm run build` clean (vue-tsc); `npm run test` 112 tests / 12 files passed (known pre-existing `expression.test.ts` "No test suite found" ignored). Screenshots: `tmp/shots/00-before-palette-self-closes.png`, `tmp/shots/02-node-added-by-drag.png`, `tmp/shots/03-node-added-by-click.png`, `tmp/shots/repro-3100-2-after-new-workflow.png` (before) vs `tmp/shots/repro-3000-2-after-new-workflow.png` (after). `graphify update .` re-run.
 
+**Live verification (2026-11-13, after deploy of commit `898522d`).** Harbor build → `harbor.solutiontech.id/m9m/m9m-core:latest`; server `m9m-backend` recreated and healthy; `GET /healthz` → 200. On `http://187.77.113.218:8080/workflows/new` with trusted mouse input: clicking the toolbar **Nodes** button leaves the creator **open** (the new help text "Click a node to add it, or drag it onto the canvas" is served), clicking **Webhook** adds the node (`nodeCount 0 → 1`, node label `Webhook`, empty state cleared) and the creator stays open; clicking **New Workflow** while already on `/workflows/new` now yields `nodeCount 0` with the empty-state overlay (previously the previous draft stayed on the canvas).
+
 ---
 
 ## 10. Filing & triage
