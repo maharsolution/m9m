@@ -24,13 +24,17 @@ async function handleUseTemplate(template: Template) {
   // attaches the session's bearer token — the backend rejects
   // anonymous /api/v1 calls with 401 once auth is enabled.
   try {
-    const response = await apiClient.post<{ workflowId?: string }>(
+    // The backend answers with the created workflow object (201), so
+    // the new id sits in `id`; `workflowId` is accepted as well for
+    // older/alternative payloads.
+    const response = await apiClient.post<{ workflowId?: string; id?: string }>(
       `/templates/${template.id}/apply`
     );
 
     const data = response.data;
-    if (data?.workflowId) {
-      router.push(`/workflows/${data.workflowId}`);
+    const workflowId = data?.workflowId || data?.id;
+    if (workflowId) {
+      router.push(`/workflows/${workflowId}`);
     } else {
       router.push('/workflows/new');
     }
