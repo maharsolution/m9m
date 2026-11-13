@@ -193,6 +193,10 @@ const openWorkflow = (workflow: Workflow) => {
 }
 
 const createWorkflow = () => {
+  // The editor counts the request: opening a new workflow while the
+  // editor already shows one does not change the route, so the canvas
+  // would keep the previous draft.
+  workflowEditorStore.requestNewWorkflow()
   router.push('/workflows/new')
 }
 

@@ -2688,9 +2688,9 @@
     "semantic_hash": ""
   },
   "web/src/components/layout/Sidebar.vue": {
-    "mtime": 1794494674.4499934,
-    "seen": 1794494873.3643215,
-    "ast_hash": "ba35385746ce9902c45afd04be099842",
+    "mtime": 1794559774.2772558,
+    "seen": 1794561355.3190823,
+    "ast_hash": "25e97dad6e05904fc54ae9bf3a35035a",
     "semantic_hash": ""
   },
   "web/src/components/nodes/BaseNode.vue": {
@@ -2748,9 +2748,9 @@
     "semantic_hash": ""
   },
   "web/src/components/workflow/NodePalette.vue": {
-    "mtime": 1794552184.0920331,
-    "seen": 1794553729.3976128,
-    "ast_hash": "d8ca6214f01ea4c15829b72897c8a252",
+    "mtime": 1794558809.0135643,
+    "seen": 1794561355.3224535,
+    "ast_hash": "61cbf8795b0dcb2338ad0e4de3330412",
     "semantic_hash": ""
   },
   "web/src/components/workflow/NodePanel.vue": {
@@ -2760,9 +2760,9 @@
     "semantic_hash": ""
   },
   "web/src/components/workflow/WorkflowCanvas.vue": {
-    "mtime": 1794552185.7254577,
-    "seen": 1794553729.3981009,
-    "ast_hash": "ec0f82baf80213db70c8d9b51f1eff6a",
+    "mtime": 1794558853.841806,
+    "seen": 1794561355.3227658,
+    "ast_hash": "229d63bef12639696b960078520e7b9a",
     "semantic_hash": ""
   },
   "web/src/components/workflow/WorkflowEditorToolbar.vue": {
@@ -2862,9 +2862,9 @@
     "semantic_hash": ""
   },
   "web/src/stores/workflowEditor.ts": {
-    "mtime": 1794544398.6553502,
-    "seen": 1794544855.044515,
-    "ast_hash": "11fc669ef6df7dac683e737698a0ef7b",
+    "mtime": 1794558936.01662,
+    "seen": 1794561355.331116,
+    "ast_hash": "3ae7bcb0b32d5c46ddef2a6e52e0ce59",
     "semantic_hash": ""
   },
   "web/src/types/api.ts": {
@@ -2970,15 +2970,15 @@
     "semantic_hash": ""
   },
   "web/src/views/WorkflowEditor.vue": {
-    "mtime": 1794519639.8862867,
-    "seen": 1794521172.3146133,
-    "ast_hash": "f6386abb67d9b1ed77aa66467264f883",
+    "mtime": 1794561177.1465445,
+    "seen": 1794561355.3334925,
+    "ast_hash": "c05c6220fd3014b55428d3015c5e11d8",
     "semantic_hash": ""
   },
   "web/src/views/WorkflowList.vue": {
-    "mtime": 1794544386.0062923,
-    "seen": 1794544855.0479288,
-    "ast_hash": "778dfa815b911b182bff0c7820852c72",
+    "mtime": 1794559787.8275495,
+    "seen": 1794561355.3334966,
+    "ast_hash": "d45376377248a2a1df915e4fc72327da",
     "semantic_hash": ""
   },
   "web/src/vite-env.d.ts": {
@@ -5532,9 +5532,9 @@
     "semantic_hash": ""
   },
   "bug-fix.MD": {
-    "mtime": 1794553873.288382,
-    "seen": 1794553911.3069417,
-    "ast_hash": "cf9e70a53b8c22fe3a35c03b3e87cbfd",
+    "mtime": 1794555250.6746678,
+    "seen": 1794561355.3437395,
+    "ast_hash": "d7b64ed9b182c3058cd8cc41fff18874",
     "semantic_hash": ""
   },
   "credentials_n8n_api.MD": {
@@ -6714,15 +6714,39 @@
     "semantic_hash": ""
   },
   "web/src/lib/nodeCreator.test.ts": {
-    "mtime": 1794552089.8362093,
-    "seen": 1794553729.4079683,
-    "ast_hash": "aa73b596733bd45dc4206945cd4f12de",
+    "mtime": 1794559853.2861345,
+    "seen": 1794561355.3291311,
+    "ast_hash": "7f5e93aa4162ef84ae034a79645a0fae",
     "semantic_hash": ""
   },
   "web/src/lib/nodeCreator.ts": {
-    "mtime": 1794552087.7166986,
-    "seen": 1794553729.4079726,
-    "ast_hash": "f34f35e17a17748bff4bdef88ea33729",
+    "mtime": 1794558729.8228528,
+    "seen": 1794561355.329135,
+    "ast_hash": "3d6f73240fdf766be57a77b466c0f5e2",
+    "semantic_hash": ""
+  },
+  "web/src/lib/nodeId.ts": {
+    "mtime": 1794558741.2473524,
+    "seen": 1794561355.3291378,
+    "ast_hash": "d0c93b1ebfd71883d100fc1195e2d4c1",
+    "semantic_hash": ""
+  },
+  "web/src/lib/nodePlacement.test.ts": {
+    "mtime": 1794558757.1695137,
+    "seen": 1794561355.3291404,
+    "ast_hash": "163e776ac5f06c376eea4a730d5ef315",
+    "semantic_hash": ""
+  },
+  "web/src/lib/nodePlacement.ts": {
+    "mtime": 1794558736.7814655,
+    "seen": 1794561355.3291423,
+    "ast_hash": "ca3b3abe6f06e96004ca882918ac824b",
+    "semantic_hash": ""
+  },
+  "web/src/stores/workflowEditor.test.ts": {
+    "mtime": 1794559931.9961123,
+    "seen": 1794561355.331113,
+    "ast_hash": "796b90c22a2b3388e370821a2e7bc80e",
     "semantic_hash": ""
   },
   "web/package-lock.json": {

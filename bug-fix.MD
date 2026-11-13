@@ -3,9 +3,9 @@
 | Field | Value |
 | --- | --- |
 | Document | `bug-fix.MD` — canonical bug register and triage rules |
-| Version | `0.5.0-draft+1` |
+| Version | `0.5.0-draft+2` |
 | Status | **Living document** — updated as bugs are opened, triaged, and closed |
-| Last updated | 2026-11-13 (node-add canvas fix — BUG-UI-2026-11-13-001; execution-detail canvas auto-fit + full-panel fill — BUG-UI-2026-11-13-002; auth env contract documented in `.env.example`) |
+| Last updated | 2026-11-13 (node-creator self-close + n8n click-to-add — BUG-UI-2026-11-13-003; "new workflow" stale canvas — BUG-UI-2026-11-13-004; node-add canvas fix — BUG-UI-2026-11-13-001; execution-detail canvas auto-fit — BUG-UI-2026-11-13-002; auth env contract documented in `.env.example`) |
 | Owner | Mahar Solution (current maintainer) |
 | Repository | <https://github.com/maharsolution/m9m> |
 | Companion docs | `m9m.MD` (PRD), `parity/parity_gaps.json` (machine-readable parity backlog), `workflow-test.MD` (live parity report), `gap-current-vs-doc.MD` (docs drift), `n8n-nodes.MD` (node parity reference) |
@@ -47,6 +47,8 @@ Legend: **P0** = wire-compat / correctness blocker · **P1** = engine correctnes
 | BUG-UI-2026-09-09-002 | NDV: per-node `Settings` tab and per-node retry controls — partial | P3 | **RESOLVED** (2026-10-12, Settings tab renders for every node; "Retry from here" button wired to `POST /retry-node` + `web/test/executions-retryNode.test.mjs` covers the call) | TBD | — | 2026-10-06 |
 | BUG-UI-2026-11-13-001 | Nodes cannot be added to the editor canvas — node-creator scrim swallowed the palette drag/drop | **P1** | **RESOLVED** (2026-11-13, scrim made visual-only `pointer-events-none` + document-level click-outside guard in `web/src/components/workflow/NodePalette.vue`; `web/src/lib/nodeCreator.ts` + 4 unit tests; deployed `7928eae`, live-verified on `187.77.113.218:8080` — see §9.31) | TBD | user-reported | 2026-11-13 |
 | BUG-UI-2026-11-13-002 | Execution-detail graph canvas collapsed to a 61 px strip instead of filling the panel | P3 | **RESOLVED** (2026-11-13, definite height chain + auto-fit on init/resize in `web/src/views/ExecutionDetail.vue`; `web/src/lib/executionCanvasFit.ts` + unit tests; deployed `7928eae`, live-verified on `187.77.113.218:8080` — see §9.30) | TBD | user-reported | 2026-11-13 |
+| BUG-UI-2026-11-13-003 | Node creator closed itself on the opening click; clicking a node never added it | **P1** | **RESOLVED** (2026-11-13, clock-correct outside-click guard `shouldCloseCreator` + n8n click-to-add; `web/src/lib/nodeCreator.ts`, `web/src/lib/nodePlacement.ts`, `web/src/lib/nodeId.ts` + unit tests; verified with trusted mouse input — see §9.32) | TBD | user-reported | 2026-11-13 |
+| BUG-UI-2026-11-13-004 | "New workflow" kept the previous canvas (nodes, selection, viewport) | **P1** | **RESOLVED** (2026-11-13, explicit new-workflow request + clean-draft reset + viewport reset in `web/src/stores/workflowEditor.ts` and `web/src/views/WorkflowEditor.vue`; `Ctrl+N` wired; unit tests in `web/src/stores/workflowEditor.test.ts` — see §9.32) | TBD | user-reported | 2026-11-13 |
 | BUG-CAP-2026-09-09-001 | Capability gap: tracking flow / debugger visualisation | P6 | **RESOLVED** (2026-10-12, `web/src/lib/edgesTakenRenderer.ts` + 12 tests; `EdgesTaken` data → per-edge style transform for the Vue Flow graph) | TBD | Sheet row 1 | 2026-09-09 |
 | BUG-CAP-2026-09-09-002 | Capability gap: UI designer — node-to-node connectivity not visible in editor | P6 | **RESOLVED** (2026-10-12, edges-taken renderer is the line-renderer for the editor canvas; same data shape drives the debugger and the canvas — see §9.22) | TBD | Sheet row 2 | 2026-09-09 |
 | BUG-CAP-2026-09-09-003 | Capability gap: credential store UI cannot register credential data | P6 | **RESOLVED** (2026-10-12, `web/src/types/credentials.ts` + `web/src/lib/credentialSchema.ts` (validate/toPayload/fieldFor) + 13 tests; "New" form now has a structured per-type view backed by the `OAuth2Schema`) | TBD | Sheet row 3 | 2026-09-09 |
@@ -402,6 +404,61 @@ No open P1 bugs at the time of this writing. The most recent P1 issues were the 
 - Sub-workflow edge preservation across deep recursion (commit `a2fc20d` already covers the common case; verify depth 3+).
 - `splitInBatches` "done" branch fires twice when the input collection is empty.
 - `RunAwareNodeExecutor` returns the wrong `runIndex` when a node is referenced by two upstream branches with different iteration counts.
+
+### BUG-UI-2026-11-13-003 — Node creator closed itself on the opening click; clicks never added a node
+
+| Field | Value |
+| --- | --- |
+| Severity | **P1** (frontend regression — the editor's core add-node path was blocked for real mouse users) |
+| Status | **RESOLVED** (2026-11-13 — clock-correct outside-click guard + n8n click-to-add; see §9.32) |
+| Source | User report 2026-11-13 ("masih nih klik nodes belum bisa, panelnya langsung hilang lagi setelah di klik") against deployed build `7928eae` |
+| Discovered | 2026-11-13 |
+| Owner | TBD |
+| Target milestone | 0.5.0 |
+
+**Observed.** Clicking the toolbar "Nodes" button made the creator flash and disappear (~450 ms); a real drag from the creator added nothing. Clicking a node in the creator also added nothing.
+
+**Expected.** The creator stays open until it is dismissed, and a node reaches the canvas by drag **or** by click (n8n parity: clicking a node in the node creator adds it).
+
+**Root cause.** `web/src/components/workflow/NodePalette.vue` (HEAD:30–37): the document-level click guard was attached in `onMounted`, i.e. while the click that opened the creator was still bubbling towards `document`. The same trusted click then reached the guard, whose target was the toolbar button — outside `.m9m-panel` — so `isOutsidePanel()` returned `true` and `emit('close')` unmounted the panel (mount `t=1794557109413`, unmount `t=1794557109860`, 447 ms later). No `dragstart` could ever fire. Second defect: the palette rows had no `@click` handler at all, while n8n adds the node when a node-creator entry is clicked — so a click produced nothing.
+
+**Fix (applied).**
+1. `web/src/lib/nodeCreator.ts` — `shouldCloseCreator(target, panel, openedAt, eventTimeStamp)`: a click at or before the mount timestamp is the opening click and is ignored (`performance.now()` and `event.timeStamp` share the page time origin); unit-tested in `web/src/lib/nodeCreator.test.ts`.
+2. `web/src/components/workflow/NodePalette.vue` — the guard is attached one tick after mount (`setTimeout …, 0`) and uses `shouldCloseCreator`; palette rows gained `@click="onItemClick(node)"` → `add-node` emit, with a 300 ms `lastDragEndAt` grace so the click that ends a drag cannot add a second node.
+3. `web/src/lib/nodePlacement.ts` (new) — `uniqueNodeName`, `centerOfRect`, `isSpotTaken`, `freeNodePosition`; `web/src/lib/nodeId.ts` (new) — `generateNodeId()` (`crypto.randomUUID` + fallback for insecure origins).
+4. `web/src/components/workflow/WorkflowCanvas.vue` — `addNodeOfType()` is shared by the drop path and the new click path; `addNodeAtCenter()` places a clicked node at the centre of the visible canvas on a free spot.
+5. `web/src/views/WorkflowEditor.vue` — `@add-node="onAddNodeFromPalette"`.
+
+**Verification.** Trusted CDP mouse (`Input.dispatchMouseEvent`, `isTrusted: true`) against the HEAD build on `:3100`: toolbar click → creator self-closed (`stillOpen: false`), so the drag added 0 nodes; the Ctrl+F path proved the drop machinery itself worked (0 → 1). Fixed build on `:3000`: creator stays open (`stillOpen: true`), trusted drag adds a node (0 → 1), trusted click adds another (1 → 2). `npm run build` clean (vue-tsc); `npm run test` 112 tests / 12 files passed (only the known pre-existing `expression.test.ts` "No test suite found" fails). Screenshots: `tmp/shots/00-before-palette-self-closes.png`, `tmp/shots/02-node-added-by-drag.png`, `tmp/shots/03-node-added-by-click.png`. `graphify update .` re-run.
+
+**Remaining risk.** The canvas stays interactive while the creator is open (n8n parity); if the product wants a dimmed *and* inert canvas, the scrim must keep pointer events and the drop target must be re-pointed. On viewports narrower than ~385 px the creator overlays the whole canvas: a clicked node is added at the canvas centre and is revealed after the creator is closed.
+
+### BUG-UI-2026-11-13-004 — "New workflow" kept the previous canvas (nodes, selection and viewport)
+
+| Field | Value |
+| --- | --- |
+| Severity | **P1** (the editor opens on the wrong document) |
+| Status | **RESOLVED** (2026-11-13 — explicit new-workflow request + clean-draft reset + viewport reset; see §9.32) |
+| Source | User report 2026-11-13 ("when create new workflow, the canvas still showing the old canvas, not clean canvas") |
+| Discovered | 2026-11-13 |
+| Owner | TBD |
+| Target milestone | 0.5.0 |
+
+**Observed.** After creating a new workflow the canvas still showed the previous workflow's nodes instead of an empty canvas.
+
+**Expected.** A new workflow always opens empty: no nodes, no connections, no selection, no undo history and the default viewport.
+
+**Root cause.** The reset was bound to the route: `web/src/views/WorkflowEditor.vue` (HEAD:121–153) reset the draft only from `watch(workflowId, …)`, while "New workflow" only did `router.push('/workflows/new')` (`web/src/views/WorkflowList.vue`, `web/src/components/layout/Sidebar.vue`). When the editor was already on `/workflows/new` the route did not change, so the watcher never ran and the previous draft's nodes stayed on the canvas; the `current.id === ''` early return skipped the reset for every seeded draft, `createNewWorkflow()` never reset the viewport, and `Ctrl+N` was not wired at all (`useKeyboardShortcuts.ts:342` defines `onNewWorkflow`, no view registered it).
+
+**Fix (applied).**
+1. `web/src/stores/workflowEditor.ts` — `newWorkflowRequest` counter + `requestNewWorkflow()`; `createNewWorkflow()` clears nodes/connections (new draft), selection, the open NDV, the dirty flag and the undo history; unit-tested in `web/src/stores/workflowEditor.test.ts` (4 cases).
+2. `web/src/views/WorkflowEditor.vue` — `startCleanWorkflow()` on mount, on route change and on `newWorkflowRequest`; `syncCanvasViewport()` resets the viewport for an empty document and fits a loaded one; `Ctrl+N` wired to the same request.
+3. `web/src/views/WorkflowList.vue` + `web/src/components/layout/Sidebar.vue` — bump the request counter before routing.
+4. `web/src/components/workflow/WorkflowCanvas.vue` — `resetViewport()` / `fitToNodes()` exposed.
+
+**Verification.** Trusted CDP input, HEAD build on `:3100`: on `/workflows/new` with 1 node, "New Workflow" left the URL at `/workflows/new` and the node on the canvas (stale). Fixed build on `:3000`: the same action → 0 nodes with the empty-state overlay; `Ctrl+N` → 2 → 0 nodes. `npm run build` clean (vue-tsc); `npm run test` 112 tests / 12 files passed. Screenshots: `tmp/shots/repro-3100-2-after-new-workflow.png` (before) vs `tmp/shots/repro-3000-2-after-new-workflow.png` (after), `tmp/shots/04-ctrl-n-empty-canvas.png`, `tmp/shots/05-new-workflow-empty-canvas.png`.
+
+**Remaining risk.** The Duplicate action still seeds a draft that keeps the source workflow's nodes (intended); the clean reset only runs for a plain "New workflow" request.
 
 ---
 
@@ -1123,6 +1180,25 @@ These are not bugs in m9m — m9m makes a deliberate product choice not to ship 
 **Verification.** Production baseline (`187.77.113.218:8080/workflows/new`): `elementFromPoint` → `.m9m-scrim`, `dragover.defaultPrevented === false`, drop → 0 nodes. Local post-fix build on `:8099`: drop target `.vue-flow__pane vue-flow__container draggable`, `dragoverPrevented === true`, payload `n8n-nodes-base.httpRequest`, node count 1, empty state cleared. `npm run build` clean (vue-tsc), `npm run test` 94 tests / 10 files passed (known pre-existing `expression.test.ts` "No test suite found" ignored). n8n parity re-checked green: single-click selects only, double-click opens the 3-column NDV, empty-canvas drag pans, Shift+drag marquee-selects, node drag moves only that node (viewport unchanged). `graphify update .` re-run.
 
 **Remaining risk.** The canvas stays interactive while the node creator is open (n8n parity). If the product wants a dimmed *and* inert canvas, the scrim must keep pointer events and the drop target must be re-pointed instead. The drop was exercised with a scripted `DataTransfer`/`DragEvent` sequence plus `elementFromPoint` hit-testing (CDP `Input.*` is blocked in this environment); confirmed on the deployed build — drop target `.vue-flow__pane`, `dragoverPrevented === true`, canvas node count 0 → 1 on `187.77.113.218:8080`.
+
+---
+
+### 9.32 BUG-UI-2026-11-13-003 / BUG-UI-2026-11-13-004 — node creator self-closed on the opening click; "new workflow" kept the old canvas (closed)
+
+| Field | Value |
+| --- | --- |
+| Severity | **P1** (editor's add-node path blocked; editor could open on the wrong document) |
+| Closed | 2026-11-13 |
+| Fixed in | `web/src/components/workflow/NodePalette.vue`, `web/src/components/workflow/WorkflowCanvas.vue`, `web/src/views/WorkflowEditor.vue`, `web/src/views/WorkflowList.vue`, `web/src/components/layout/Sidebar.vue`, `web/src/stores/workflowEditor.ts`, `web/src/lib/nodeCreator.ts`, `web/src/lib/nodePlacement.ts` (new), `web/src/lib/nodeId.ts` (new) |
+| Closed by | Clock-correct outside-click guard (`shouldCloseCreator`) + n8n click-to-add + explicit new-workflow request with clean-draft and viewport reset |
+
+**Root cause (add-node).** `web/src/components/workflow/NodePalette.vue` (HEAD:30–37) attached the document-level click guard in `onMounted`, i.e. while the click that opened the creator was still bubbling towards `document`. That same trusted click reached the guard; its target was the toolbar button, outside `.m9m-panel`, so `isOutsidePanel()` returned `true` and `emit('close')` unmounted the panel 447 ms after it appeared — before any `dragstart` could fire. Independently, the palette rows had no `@click` handler, while n8n adds the node when a node-creator entry is clicked.
+
+**Root cause (stale canvas).** The reset was bound to the route (`watch(workflowId, …)` in `web/src/views/WorkflowEditor.vue`, HEAD:121–153) while "New workflow" only did `router.push('/workflows/new')`. On `/workflows/new` the route does not change, so the watcher never ran and the previous draft stayed on the canvas; the `current.id === ''` early return skipped the reset for seeded drafts, `createNewWorkflow()` never reset the viewport, and `Ctrl+N` was never wired (`useKeyboardShortcuts.ts:342` defines `onNewWorkflow`, no view registered it).
+
+**Fix.** `web/src/lib/nodeCreator.ts` — `shouldCloseCreator(target, panel, openedAt, eventTimeStamp)` ignores the click that opened the creator (`performance.now()` and `event.timeStamp` share the page time origin); the guard is attached one tick after mount. `web/src/components/workflow/NodePalette.vue` — palette rows gained `@click="onItemClick(node)"` → `add-node` emit with a 300 ms post-drag grace. `web/src/lib/nodePlacement.ts` (new) — `uniqueNodeName`, `centerOfRect`, `isSpotTaken`, `freeNodePosition`; `web/src/lib/nodeId.ts` (new) — `generateNodeId()`. `web/src/components/workflow/WorkflowCanvas.vue` — `addNodeOfType()` shared by the drop and click paths, `addNodeAtCenter()` places a clicked node at the centre of the visible canvas on a free spot, `resetViewport()` / `fitToNodes()` exposed. `web/src/stores/workflowEditor.ts` — `newWorkflowRequest` counter + `requestNewWorkflow()`, clean `createNewWorkflow()`. `web/src/views/WorkflowEditor.vue` — `startCleanWorkflow()` on mount / route change / new-workflow request, `syncCanvasViewport()`, `Ctrl+N` wired. `web/src/views/WorkflowList.vue` + `web/src/components/layout/Sidebar.vue` bump the request counter before routing.
+
+**Verification.** Trusted CDP mouse (`Input.dispatchMouseEvent`, `isTrusted: true`): HEAD build on `:3100` — toolbar click self-closed the creator (`stillOpen: false`), drag added 0 nodes, "New Workflow" left 1 stale node on the canvas. Fixed build on `:3000` — creator stays open (`stillOpen: true`), trusted drag adds a node (0 → 1), trusted click adds another (1 → 2), "New Workflow" → 0 nodes with the empty-state overlay, `Ctrl+N` → 2 → 0. `npm run build` clean (vue-tsc); `npm run test` 112 tests / 12 files passed (known pre-existing `expression.test.ts` "No test suite found" ignored). Screenshots: `tmp/shots/00-before-palette-self-closes.png`, `tmp/shots/02-node-added-by-drag.png`, `tmp/shots/03-node-added-by-click.png`, `tmp/shots/repro-3100-2-after-new-workflow.png` (before) vs `tmp/shots/repro-3000-2-after-new-workflow.png` (after). `graphify update .` re-run.
 
 ---
 

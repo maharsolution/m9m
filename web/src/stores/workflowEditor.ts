@@ -16,6 +16,8 @@ import {
 import { useWorkflowStore } from './workflow'
 import { useHistoryStore, type WorkflowSnapshot } from './history'
 import { computeAutoLayout } from '@/lib/autoLayout'
+import { uniqueNodeName } from '@/lib/nodePlacement'
+import { generateNodeId } from '@/lib/nodeId'
 import {
   addConnectionByNodeId,
   addConnectionToWorkflow,
@@ -39,39 +41,6 @@ interface EditorClipboard {
     sourceOutput: number
     targetInput: number
   }>
-}
-
-let nodeIdCounter = 0
-
-/**
- * Unique node id. `crypto.randomUUID` is unavailable on insecure
- * origins (the editor is often served over plain http), so a
- * timestamp + counter fallback is used there.
- */
-function generateNodeId(): string {
-  const cryptoApi = globalThis.crypto
-  if (cryptoApi && typeof cryptoApi.randomUUID === 'function') {
-    return cryptoApi.randomUUID()
-  }
-  nodeIdCounter += 1
-  return `node_${Date.now().toString(36)}_${nodeIdCounter.toString(36)}`
-}
-
-/**
- * n8n's naming convention: the first instance keeps the bare display
- * name ("HTTP Request"), duplicates get a numeric suffix without a
- * space ("HTTP Request1"). Node names are the keys of the n8n
- * `connections` map, so they must stay unique.
- */
-function uniqueNodeName(baseName: string, taken: Set<string>): string {
-  if (!taken.has(baseName)) {
-    return baseName
-  }
-  let counter = 1
-  while (taken.has(`${baseName}${counter}`)) {
-    counter += 1
-  }
-  return `${baseName}${counter}`
 }
 
 function cloneWorkflowNode(node: WorkflowNode): WorkflowNode {
@@ -245,8 +214,23 @@ export const useWorkflowEditorStore = defineStore('workflowEditor', () => {
   function createNewWorkflow(sourceWorkflow?: Workflow, overrides: Partial<Workflow> = {}) {
     workflowStore.setCurrentWorkflow(createWorkflowDraft(sourceWorkflow, overrides))
     selectedNodeIds.value = []
+    ndvNodeId.value = null
     isDirty.value = true
     historyStore.reset()
+  }
+
+  /**
+   * Bumped when the operator asks for a brand-new workflow.
+   *
+   * The editor watches this counter: a "New workflow" action while the
+   * editor already shows a new workflow does not change the route, so
+   * the route watcher never fires and the canvas would keep the
+   * previous draft.
+   */
+  const newWorkflowRequest = ref(0)
+
+  function requestNewWorkflow() {
+    newWorkflowRequest.value += 1
   }
 
   // ------------------------------------------------------------------
@@ -734,6 +718,8 @@ export const useWorkflowEditorStore = defineStore('workflowEditor', () => {
     markDirty,
     markClean,
     createNewWorkflow,
+    newWorkflowRequest,
+    requestNewWorkflow,
     addNode,
     updateNode,
     removeNode,

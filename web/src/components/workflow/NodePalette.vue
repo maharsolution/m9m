@@ -4,12 +4,18 @@ import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import { useNodesStore, useWorkflowEditorStore } from '@/stores'
 import { NODE_CATEGORIES, getNodeCategory } from '@/types/node'
 import { nodeIconFor } from '@/components/nodes/BaseNode.vue'
-import { isOutsidePanel } from '@/lib/nodeCreator'
+import { shouldCloseCreator } from '@/lib/nodeCreator'
 import type { NodeType, NodeCategory } from '@/types'
 
 const emit = defineEmits<{
   /** The scrim was clicked or the panel was dismissed. */
   close: []
+  /**
+   * A node type was clicked in the creator. n8n adds the node to the
+   * canvas on a plain click (not only on a drag) — the parent decides
+   * where the node lands.
+   */
+  'add-node': [nodeType: string]
 }>()
 
 const nodesStore = useNodesStore()
@@ -27,16 +33,49 @@ const workflowEditorStore = useWorkflowEditorStore()
  */
 const panelRef = ref<HTMLElement | null>(null)
 
+/**
+ * When the panel was mounted. The click that OPENED the creator is
+ * older than that — it must not close the creator again.
+ */
+let openedAt = 0
+
+/**
+ * A drag that just finished must not also count as a click —
+ * otherwise dropping a node onto the canvas would add it twice.
+ */
+let lastDragEndAt = 0
+
+/** Clicks right after a drag ended belong to that drag. */
+const DRAG_END_GRACE_MS = 300
+
 const onDocumentClick = (event: MouseEvent) => {
-  if (!isOutsidePanel(event.target, panelRef.value)) return
+  if (!shouldCloseCreator(event.target, panelRef.value, openedAt, event.timeStamp)) {
+    return
+  }
   emit('close')
 }
 
+let listenerTimer: ReturnType<typeof setTimeout> | null = null
+
 onMounted(() => {
-  document.addEventListener('click', onDocumentClick)
+  openedAt = performance.now()
+  // The guard is attached one tick late: the click that opened the
+  // creator is still bubbling towards the document while the panel
+  // mounts. A listener attached right away would see that very click,
+  // find a target outside the panel and close the creator again —
+  // the panel would flash and vanish before a node could be dragged
+  // out of it.
+  listenerTimer = setTimeout(() => {
+    listenerTimer = null
+    document.addEventListener('click', onDocumentClick)
+  }, 0)
 })
 
 onUnmounted(() => {
+  if (listenerTimer !== null) {
+    clearTimeout(listenerTimer)
+    listenerTimer = null
+  }
   document.removeEventListener('click', onDocumentClick)
 })
 
@@ -94,10 +133,36 @@ const toggleCategory = (category: NodeCategory) => {
 }
 
 const onDragStart = (event: DragEvent, nodeType: NodeType) => {
+  lastDragEndAt = 0
   if (event.dataTransfer) {
     event.dataTransfer.setData('application/vueflow', nodeType.name)
     event.dataTransfer.effectAllowed = 'move'
   }
+}
+
+/**
+ * A drag that just finished must not also count as a click — otherwise
+ * dropping a node onto the canvas would add it twice.
+ */
+const onDragEnd = () => {
+  lastDragEndAt = performance.now()
+}
+
+/**
+ * Clicking a node type adds it to the canvas.
+ *
+ * n8n parity: the node creator adds a node when you CLICK it, not only
+ * when you drag it onto the canvas. m9m only supported the drag, so a
+ * user who clicked a node in the panel saw nothing happen and assumed
+ * the feature was broken.
+ */
+const onItemClick = (nodeType: NodeType) => {
+  // The click that ends a drag belongs to that drag.
+  if (lastDragEndAt && performance.now() - lastDragEndAt < DRAG_END_GRACE_MS) {
+    lastDragEndAt = 0
+    return
+  }
+  emit('add-node', nodeType.name)
 }
 
 /**
@@ -221,6 +286,8 @@ const iconFor = (node: NodeType) => nodeIconFor(node.name, getNodeCategory(node.
               :key="node.name"
               :draggable="true"
               @dragstart="onDragStart($event, node)"
+              @dragend="onDragEnd"
+              @click="onItemClick(node)"
               class="flex items-start gap-3 px-2 py-2 rounded-md cursor-grab active:cursor-grabbing hover:bg-hover transition-colors group"
             >
               <component
@@ -253,7 +320,7 @@ const iconFor = (node: NodeType) => nodeIconFor(node.name, getNodeCategory(node.
       <!-- Help Text -->
       <div class="px-4 py-3 shrink-0 border-t border-default">
         <p class="text-xs text-tertiary">
-          Drag nodes onto the canvas to add them to your workflow
+          Click a node to add it, or drag it onto the canvas
         </p>
       </div>
     </div>

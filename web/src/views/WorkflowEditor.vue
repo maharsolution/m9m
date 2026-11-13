@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue'
 import WorkflowEditorToolbar from '@/components/workflow/WorkflowEditorToolbar.vue'
@@ -33,9 +33,52 @@ const exportNotice = ref<{ type: 'success' | 'error'; message: string } | null>(
 // can drive the zoom.
 const canvasRef = ref<InstanceType<typeof WorkflowCanvas> | null>(null)
 
+/**
+ * Adds a node to the canvas when the user clicks a node type in the
+ * node creator.
+ *
+ * n8n parity: the creator adds a node on a click AND on a drag. The
+ * node lands in the centre of the visible canvas, so it is always in
+ * view.
+ */
+const onAddNodeFromPalette = (nodeType: string) => {
+  canvasRef.value?.addNodeAtCenter(nodeType)
+}
+
 const workflowId = computed(() => route.params.id as string | undefined)
 const isNewWorkflow = computed(() => !workflowId.value || workflowId.value === 'new')
 const workflow = computed(() => workflowStore.currentWorkflow)
+
+/**
+ * Puts the canvas back into a known view after the document changed.
+ *
+ * Vue Flow keeps the pan / zoom of the previous document when another
+ * workflow is opened in the same editor, so the new workflow would
+ * show up half off-screen. An empty workflow starts at the default
+ * view, a loaded workflow is fitted into the viewport.
+ */
+const syncCanvasViewport = () => {
+  void nextTick(() => {
+    setTimeout(() => {
+      const canvas = canvasRef.value
+      if (!canvas) return
+      if (workflow.value?.nodes.length) {
+        canvas.fitToNodes()
+      } else {
+        canvas.resetViewport()
+      }
+    }, 0)
+  })
+}
+
+/**
+ * Opens an empty workflow: no nodes, no connections, no selection and
+ * no undo history of the previous document.
+ */
+const startCleanWorkflow = () => {
+  workflowEditorStore.createNewWorkflow()
+  syncCanvasViewport()
+}
 
 /**
  * The node the details view is showing.
@@ -91,9 +134,10 @@ onMounted(async () => {
   if (!isNewWorkflow.value && workflowId.value) {
     await workflowStore.fetchWorkflow(workflowId.value)
     workflowEditorStore.resetEditorState()
+    syncCanvasViewport()
     await loadWorkflowTags(workflowId.value)
   } else {
-    workflowEditorStore.createNewWorkflow()
+    startCleanWorkflow()
   }
 })
 
@@ -133,7 +177,7 @@ watch(
       if (current && current.id === '') {
         return
       }
-      workflowEditorStore.createNewWorkflow()
+      startCleanWorkflow()
       return
     }
     if (workflow.value?.id === newId) {
@@ -145,10 +189,24 @@ watch(
     try {
       await workflowStore.fetchWorkflow(newId)
       workflowEditorStore.resetEditorState()
+      syncCanvasViewport()
       await loadWorkflowTags(newId)
     } catch (e) {
       console.error('Failed to load workflow on route change:', e)
     }
+  }
+)
+
+// A "New workflow" action while the editor ALREADY shows a new
+// workflow: the route does not change, so the watcher above never
+// fires and the canvas would keep the nodes of the previous draft.
+// The store counts the request, the editor answers it with a clean
+// canvas.
+watch(
+  () => workflowEditorStore.newWorkflowRequest,
+  () => {
+    if (!isNewWorkflow.value) return
+    startCleanWorkflow()
   }
 )
 
@@ -290,6 +348,15 @@ useWorkflowShortcuts({
   onNudge: (dx, dy) => {
     workflowEditorStore.nudgeSelected(dx, dy)
   },
+  // Ctrl+N opens a brand-new workflow. The route alone is not enough:
+  // when the editor already shows a new workflow the route does not
+  // change, so the request counter is what resets the canvas.
+  onNewWorkflow: () => {
+    workflowEditorStore.requestNewWorkflow()
+    if (!isNewWorkflow.value) {
+      router.push('/workflows/new')
+    }
+  },
   // Ctrl+F opens the node creator — the same shortcut n8n uses to
   // jump into the node search.
   onSearch: () => {
@@ -422,6 +489,7 @@ const exportWorkflowFile = async () => {
       <NodePalette
         v-if="showNodePalette"
         @close="showNodePalette = false"
+        @add-node="onAddNodeFromPalette"
       />
     </transition>
 

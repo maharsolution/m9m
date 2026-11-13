@@ -23,7 +23,7 @@ import {
   ChartBarIcon,
   CalendarDaysIcon,
 } from '@heroicons/vue/24/outline'
-import { useWorkflowStore, useCredentialsStore, useExecutionStore } from '@/stores'
+import { useWorkflowStore, useCredentialsStore, useExecutionStore, useWorkflowEditorStore } from '@/stores'
 import { getBuildInfo, type BuildInfo } from '@/api/buildInfo'
 import Tooltip from '@/components/common/Tooltip.vue'
 
@@ -32,6 +32,7 @@ const router = useRouter()
 const workflowStore = useWorkflowStore()
 const credentialsStore = useCredentialsStore()
 const executionStore = useExecutionStore()
+const workflowEditorStore = useWorkflowEditorStore()
 
 // buildInfo is fetched once on mount from /api/v1/version so the
 // footer chip below reflects the exact source identity stamped into the
@@ -75,7 +76,13 @@ const isActive = (path: string) => {
 }
 
 const createNewWorkflow = () => {
-  router.push('/workflows/new')
+  // The editor counts the request: a new workflow opened while the
+  // editor already shows one does not change the route, so the canvas
+  // would keep the previous draft.
+  workflowEditorStore.requestNewWorkflow()
+  if (route.path !== '/workflows/new') {
+    router.push('/workflows/new')
+  }
 }
 
 // ---------------------------------------------------------------------------

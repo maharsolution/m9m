@@ -14,6 +14,8 @@ import BaseNode from '@/components/nodes/BaseNode.vue'
 import { useWorkflowEditorStore, useWorkflowStore, useNodesStore } from '@/stores'
 import { useThemeStore } from '@/stores/theme'
 import { buildFlowEdges, buildFlowNodes, parseEdgeId } from '@/lib/workflowGraph'
+import { centerOfRect, freeNodePosition, uniqueNodeName } from '@/lib/nodePlacement'
+import { generateNodeId } from '@/lib/nodeId'
 import { createDoubleClickDetector } from '@/lib/doubleClick'
 import {
   STICKY_NOTE_DEFAULT_HEIGHT,
@@ -71,6 +73,7 @@ const {
   onSelectionDragStart,
   onSelectionDragStop,
   screenToFlowCoordinate,
+  setViewport,
   zoomIn,
   zoomOut,
   fitView,
@@ -410,26 +413,17 @@ onConnect((params: Connection) => {
   )
 })
 
-const onDrop = (event: DragEvent) => {
-  // The drop is handled here: stop the browser's default action (it
-  // would otherwise try to open / navigate to the dragged item).
-  event.preventDefault()
-
-  const nodeType = event.dataTransfer?.getData('application/vueflow')
-  if (!nodeType) return
-
+/**
+ * Adds a node of the given type at a flow position.
+ *
+ * Shared by the two ways a node enters the canvas:
+ *   - drag-and-drop: the pointer position of the drop, and
+ *   - the node creator's click-to-add (n8n parity): the centre of the
+ *     visible canvas.
+ */
+const addNodeOfType = (nodeType: string, position: { x: number; y: number }) => {
   const nodeTypeInfo = nodesStore.getNodeType(nodeType)
   if (!nodeTypeInfo) return
-
-  // The node lands where the pointer is. `screenToFlowCoordinate`
-  // projects the screen position onto the canvas: it takes the
-  // container bounds and the viewport transform (pan + zoom) into
-  // account, so a drop is correct after the canvas was panned or
-  // zoomed. The result is snapped to the canvas grid, like n8n.
-  const position = screenToFlowCoordinate({
-    x: event.clientX,
-    y: event.clientY,
-  })
 
   // Ensure a unique node `name` (used as the connections map key).
   // If two nodes of the same type end up with the same name, the
@@ -450,14 +444,10 @@ const onDrop = (event: DragEvent) => {
   const existingNames = new Set(
     (workflowStore.currentWorkflow?.nodes ?? []).map((n) => n.name)
   )
-  let name = baseName
-  let counter = 1
-  while (existingNames.has(name)) {
-    name = `${baseName}${counter++}`
-  }
+  const name = uniqueNodeName(baseName, existingNames)
 
   const newNode: WorkflowNode = {
-    id: `node_${Date.now()}`,
+    id: generateNodeId(),
     name,
     type: nodeType,
     typeVersion: nodeTypeInfo.version,
@@ -466,6 +456,52 @@ const onDrop = (event: DragEvent) => {
   }
 
   workflowEditorStore.addNode(newNode)
+}
+
+const onDrop = (event: DragEvent) => {
+  // The drop is handled here: stop the browser's default action (it
+  // would otherwise try to open / navigate to the dragged item).
+  event.preventDefault()
+
+  const nodeType = event.dataTransfer?.getData('application/vueflow')
+  if (!nodeType) return
+
+  // The node lands where the pointer is. `screenToFlowCoordinate`
+  // projects the screen position onto the canvas: it takes the
+  // container bounds and the viewport transform (pan + zoom) into
+  // account, so a drop is correct after the canvas was panned or
+  // zoomed. The result is snapped to the canvas grid, like n8n.
+  const position = screenToFlowCoordinate({
+    x: event.clientX,
+    y: event.clientY,
+  })
+
+  addNodeOfType(nodeType, position)
+}
+
+/**
+ * Adds a node of the given type at the centre of the visible canvas.
+ *
+ * n8n parity: the node creator adds a node when the user CLICKS a node
+ * type in the panel, not only when the node is dragged onto the canvas.
+ * The node lands in the middle of the current viewport — on a free
+ * spot, so it is never hidden behind an existing card.
+ */
+const addNodeAtCenter = (nodeType: string) => {
+  const root = canvasRoot.value
+  if (!root) return
+
+  const rect = root.getBoundingClientRect()
+  const center = centerOfRect(rect)
+  const position = screenToFlowCoordinate({
+    x: center.x,
+    y: center.y,
+  })
+
+  const nodes = workflowStore.currentWorkflow?.nodes ?? []
+  const [x, y] = freeNodePosition([position.x, position.y], nodes)
+
+  addNodeOfType(nodeType, { x, y })
 }
 
 const onDragOver = (event: DragEvent) => {
@@ -507,7 +543,37 @@ const resetZoomCanvas = () => {
   void fitView({ padding: 0.2, duration: 200 })
 }
 
-defineExpose({ zoomIn: zoomInCanvas, zoomOut: zoomOutCanvas, resetZoom: resetZoomCanvas })
+/**
+ * The viewport an empty canvas starts with — the same one the
+ * `<VueFlow>` element is initialised with.
+ */
+const DEFAULT_VIEWPORT = { x: 100, y: 100, zoom: 1 }
+
+/**
+ * Puts the canvas back to the default view.
+ *
+ * Vue Flow keeps the pan / zoom of the previous document when another
+ * workflow is opened in the same editor, so the new workflow would
+ * show up half off-screen. The editor calls this when the document
+ * changes.
+ */
+const resetViewport = () => {
+  void setViewport(DEFAULT_VIEWPORT, { duration: 0 })
+}
+
+/** Fits the nodes of the current workflow into the viewport. */
+const fitToNodes = () => {
+  void fitView({ padding: 0.2, duration: 200 })
+}
+
+defineExpose({
+  zoomIn: zoomInCanvas,
+  zoomOut: zoomOutCanvas,
+  resetZoom: resetZoomCanvas,
+  resetViewport,
+  fitToNodes,
+  addNodeAtCenter,
+})
 </script>
 
 <template>

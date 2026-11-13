@@ -28,3 +28,32 @@ export function isOutsidePanel(target: unknown, panel: PanelElement | null): boo
   if (target === null || target === undefined) return true
   return !panel.contains(target)
 }
+
+/**
+ * True when a click has to close the node creator.
+ *
+ * The click that OPENED the creator must never close it again. The
+ * panel is mounted while that very click is still bubbling towards
+ * the document, so a document-level guard would see it, find a target
+ * outside the panel and close the creator in the same tick — the
+ * creator opened and vanished again before the pointer even moved.
+ * That is what made "drag a node onto the canvas" impossible: there
+ * was no panel left to drag from.
+ *
+ * `openedAt` (when the panel was mounted) and `eventTimeStamp` (the
+ * click's own timestamp) have to come from the same clock:
+ * `performance.now()` and `event.timeStamp` do — both are relative to
+ * the page's time origin. A click whose timestamp is at or before the
+ * mount therefore happened before the panel existed and is ignored.
+ */
+export function shouldCloseCreator(
+  target: unknown,
+  panel: PanelElement | null,
+  openedAt: number,
+  eventTimeStamp: number
+): boolean {
+  if (!panel) return false
+  // The click that opened the creator predates the panel.
+  if (eventTimeStamp <= openedAt) return false
+  return isOutsidePanel(target, panel)
+}
