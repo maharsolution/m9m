@@ -1,16 +1,21 @@
 <script setup lang="ts">
-import { computed, ref, useId, watch } from 'vue'
+import { computed, nextTick, ref, useId, watch } from 'vue'
 import { ExclamationTriangleIcon, LightBulbIcon } from '@heroicons/vue/24/outline'
 import type { NodeProperty } from '@/types/node'
 import {
-  applySuggestion,
+  applySuggestionAt,
   createPreviewContext,
+  detectExpressionPosition,
   evaluateExpression,
   evaluateValue,
   formatPreview,
-  suggest,
-  suggestionPrefix,
+  FUNCTION_CATALOGUE,
+  suggestForPosition,
+  VARIABLES,
+  type AvailableNode,
+  type ExpressionPosition,
   type Suggestion,
+  type SuggestionSources,
 } from './expression/index'
 
 /**
@@ -23,19 +28,12 @@ import {
  * - a plain-text mode and an expression mode (`fx` toggle),
  * - live evaluation with a preview row,
  * - an inline error banner with the offending span highlighted,
- * - a keyboard-navigable autocomplete for variables, nodes and
- *   functions.
+ * - a keyboard-navigable autocomplete for variables, nodes, item
+ *   fields and functions.
  *
  * The evaluation happens in the browser with the hand-written engine
  * in `./expression` — no `eval`, no `new Function`, no `with`.
  */
-
-/** A node that can be referenced through `$node["Name"]`. */
-interface AvailableNode {
-  name: string
-  type: string
-  typeVersion?: number
-}
 
 const props = withDefaults(
   defineProps<{
@@ -45,6 +43,10 @@ const props = withDefaults(
     property?: NodeProperty
     /** Nodes that can be referenced through `$node["Name"]`. */
     availableNodes?: AvailableNode[]
+    /** Field names of the current item (`$json.<field>`). */
+    itemFields?: string[]
+    /** Field names per node name (`$node["Name"].json.<field>`). */
+    nodeFields?: Record<string, string[]>
     /** Optional `$json` payload used for the live preview. */
     sampleInput?: unknown
     /** Disabled state (read-only panels). */
@@ -54,6 +56,8 @@ const props = withDefaults(
     modelValue: '',
     property: undefined,
     availableNodes: () => [],
+    itemFields: () => [],
+    nodeFields: () => ({}),
     sampleInput: undefined,
     disabled: false,
   },
@@ -84,6 +88,9 @@ const text = ref('')
 /** Caret offset inside {@link text}. */
 const caret = ref(0)
 
+/** The editor element — the caret is placed explicitly after an insert. */
+const inputRef = ref<HTMLInputElement | HTMLTextAreaElement | null>(null)
+
 /** Autocomplete suggestions for the current prefix. */
 const suggestions = ref<Suggestion[]>([])
 
@@ -92,6 +99,17 @@ const activeSuggestion = ref(0)
 
 /** Whether the suggestion dropdown is visible. */
 const suggestionsOpen = ref(false)
+
+/**
+ * Set right after an insertion.
+ *
+ * The browser fires a `keyup` / `click` after the insert, and that
+ * event would open the list again on the inserted text.
+ */
+const suppressRefresh = ref(false)
+
+/** The caret position the current suggestions were built for. */
+const position = ref<ExpressionPosition | null>(null)
 
 /** Label of the field. */
 const label = computed(() => props.property?.displayName ?? 'Expression')
@@ -148,10 +166,11 @@ const preview = computed(() => {
 
 /** The offending source, split around the highlighted span. */
 const errorSnippet = computed(() => {
-  if (!error.value) return null
+  const current = error.value
+  if (!current) return null
   const source = text.value
-  const start = Math.max(0, Math.min(error.value.start, source.length))
-  const end = Math.max(start, Math.min(error.value.end, source.length))
+  const start = Math.max(0, Math.min(current.start, source.length))
+  const end = Math.max(start, Math.min(current.end, source.length))
   const before = source.slice(Math.max(0, start - 24), start)
   const middle = source.slice(start, end)
   const after = source.slice(end, end + 24)
@@ -163,8 +182,46 @@ const showSuggestions = computed(
   () => suggestionsOpen.value && suggestions.value.length > 0,
 )
 
+/**
+ * The error the editor shows.
+ *
+ * A half-written expression is not an error while the autocomplete is
+ * open — n8n shows the suggestion list instead of a red banner, and
+ * the error only appears when the list cannot help any more.
+ *
+ * A runtime error is only shown when the editor has data to evaluate
+ * the expression against. Without a preview there is nothing to
+ * resolve `$json` with, and a red banner would only report that the
+ * editor knows nothing — not that the expression is wrong.
+ */
+const displayError = computed(() => {
+  if (showSuggestions.value) return null
+
+  const current = error.value
+  if (!current) return null
+
+  if (
+    current.kind === 'runtime' &&
+    props.sampleInput === undefined &&
+    current.message.startsWith('Cannot read property')
+  ) {
+    return null
+  }
+
+  return current
+})
+
 /** True when the field holds an expression. */
 const isExpression = computed(() => expressionMode.value)
+
+/** The data the autocomplete completes with. */
+const sources = computed<SuggestionSources>(() => ({
+  variables: VARIABLES,
+  nodes: props.availableNodes,
+  functions: FUNCTION_CATALOGUE,
+  itemFields: props.itemFields,
+  nodeFields: props.nodeFields,
+}))
 
 /** Sync the editor state when the model changes from the outside. */
 watch(
@@ -196,6 +253,7 @@ function onInput(event: Event) {
   const target = event.target as HTMLInputElement | HTMLTextAreaElement
   text.value = target.value
   caret.value = target.selectionStart ?? target.value.length
+  suppressRefresh.value = false
   publish()
   refreshSuggestions()
 }
@@ -204,6 +262,14 @@ function onInput(event: Event) {
 function onSelect(event: Event) {
   const target = event.target as HTMLInputElement | HTMLTextAreaElement
   caret.value = target.selectionStart ?? target.value.length
+
+  // Right after an insertion the list has to stay closed — the next
+  // `keyup` / `click` would open it again on the inserted text.
+  if (suppressRefresh.value) {
+    suppressRefresh.value = false
+    return
+  }
+
   refreshSuggestions()
 }
 
@@ -214,16 +280,27 @@ function toggleExpression() {
   refreshSuggestions()
 }
 
-/** Recompute the suggestions for the current caret position. */
+/**
+ * Recompute the suggestions for the current caret position.
+ *
+ * The list opens as soon as the caret is inside an expression — right
+ * after `{{`, behind a dot, or in the middle of a token — and closes
+ * again when the caret leaves the expression.
+ */
 function refreshSuggestions() {
-  const prefix = suggestionPrefix(text.value, caret.value)
-  if (prefix === '') {
+  const current = detectExpressionPosition(text.value, caret.value, {
+    insideExpression: expressionMode.value,
+  })
+  position.value = current
+
+  if (!current.inExpression) {
     suggestions.value = []
     suggestionsOpen.value = false
     activeSuggestion.value = 0
     return
   }
-  suggestions.value = suggest(prefix, props.availableNodes)
+
+  suggestions.value = suggestForPosition(current, sources.value)
   suggestionsOpen.value = suggestions.value.length > 0
   activeSuggestion.value = 0
 }
@@ -231,26 +308,42 @@ function refreshSuggestions() {
 /** Insert the highlighted suggestion at the caret. */
 function applyActiveSuggestion() {
   const suggestion = suggestions.value[activeSuggestion.value]
-  if (!suggestion) return
-  const result = applySuggestion(text.value, caret.value, suggestion.insertText)
+  const current = position.value
+  if (!suggestion || !current) return
+  const result = applySuggestionAt(text.value, caret.value, current, suggestion.insertText)
   text.value = result.text
   caret.value = result.caret
   publish()
   suggestionsOpen.value = false
   suggestions.value = []
+  activeSuggestion.value = 0
+  suppressRefresh.value = true
+
+  // The browser keeps the caret where it was when the value of the
+  // field is replaced. The caret has to follow the insertion, or the
+  // next character lands in the wrong place.
+  void nextTick(() => {
+    const element = inputRef.value
+    if (!element || typeof element.setSelectionRange !== 'function') return
+    element.setSelectionRange(result.caret, result.caret)
+  })
 }
 
 /** Keyboard handling for the editor and the suggestion dropdown. */
 function onKeydown(event: KeyboardEvent) {
   if (showSuggestions.value) {
+    // The dropdown owns the keyboard while it is open — the editor
+    // (and the canvas behind it) must not react to these keys.
     if (event.key === 'ArrowDown') {
       event.preventDefault()
+      event.stopPropagation()
       activeSuggestion.value =
         (activeSuggestion.value + 1) % suggestions.value.length
       return
     }
     if (event.key === 'ArrowUp') {
       event.preventDefault()
+      event.stopPropagation()
       activeSuggestion.value =
         (activeSuggestion.value - 1 + suggestions.value.length) %
         suggestions.value.length
@@ -258,13 +351,20 @@ function onKeydown(event: KeyboardEvent) {
     }
     if (event.key === 'Enter' || event.key === 'Tab') {
       event.preventDefault()
+      event.stopPropagation()
       applyActiveSuggestion()
       return
     }
     if (event.key === 'Escape') {
       event.preventDefault()
+      event.stopPropagation()
       suggestionsOpen.value = false
       suggestions.value = []
+      activeSuggestion.value = 0
+      // The browser fires a `keyup` right after the `keydown`. Without
+      // this the list would be reopened by `onSelect` and the caret
+      // would still sit inside the expression.
+      suppressRefresh.value = true
       return
     }
     return
@@ -290,6 +390,7 @@ function onSuggestionClick(suggestion: Suggestion) {
         <textarea
           v-if="multiline"
           :id="inputId"
+          ref="inputRef"
           v-model="text"
           :rows="rows"
           :placeholder="placeholder"
@@ -311,6 +412,7 @@ function onSuggestionClick(suggestion: Suggestion) {
         <input
           v-else
           :id="inputId"
+          ref="inputRef"
           v-model="text"
           type="text"
           :placeholder="placeholder"
@@ -335,7 +437,7 @@ function onSuggestionClick(suggestion: Suggestion) {
           v-if="showSuggestions"
           :id="listboxId"
           role="listbox"
-          class="absolute z-30 mt-1 w-full max-h-64 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800"
+          class="absolute z-30 mt-1 w-full max-h-64 overflow-y-auto rounded-lg border border-default bg-surface shadow-lg"
         >
           <button
             v-for="(suggestion, index) in suggestions"
@@ -346,16 +448,21 @@ function onSuggestionClick(suggestion: Suggestion) {
             class="flex w-full items-baseline gap-2 px-3 py-1.5 text-left text-sm"
             :class="
               index === activeSuggestion
-                ? 'bg-primary-50 text-primary-700 dark:bg-slate-700 dark:text-primary-300'
-                : 'text-slate-700 dark:text-slate-200'
+                ? 'bg-hover text-primary'
+                : 'text-secondary'
             "
             @mousedown.prevent="onSuggestionClick(suggestion)"
           >
             <span class="font-mono text-xs shrink-0">{{ suggestion.label }}</span>
-            <span class="truncate text-xs text-slate-500 dark:text-slate-400">{{
+            <span class="truncate text-xs text-tertiary">{{
               suggestion.detail
             }}</span>
           </button>
+          <p
+            class="border-t border-subtle px-3 py-1 text-[11px] text-tertiary"
+          >
+            ↑ ↓ to navigate · Enter to insert · Esc to close
+          </p>
         </div>
       </div>
 
@@ -382,13 +489,13 @@ function onSuggestionClick(suggestion: Suggestion) {
 
     <!-- Parse error -->
     <p
-      v-if="error"
+      v-if="displayError"
       role="alert"
       class="flex items-start gap-1.5 text-xs text-red-600 dark:text-red-400"
     >
       <ExclamationTriangleIcon class="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
       <span>
-        {{ error.message }}
+        {{ displayError.message }}
         <span
           v-if="errorSnippet"
           class="font-mono text-[11px] text-red-500 dark:text-red-300"

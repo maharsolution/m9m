@@ -614,17 +614,26 @@ function createNodeProxy(output: unknown): Record<string, unknown> {
 
 /** Normalise a thrown error into an {@link ExpressionError}. */
 function toExpressionError(error: unknown, offset: number): ExpressionError {
-  if (error instanceof ExpressionSyntaxError || error instanceof ExpressionEvaluationError) {
+  if (error instanceof ExpressionSyntaxError) {
     return {
       message: error.message,
       start: error.start + offset,
       end: error.end + offset,
+      kind: 'syntax',
+    }
+  }
+  if (error instanceof ExpressionEvaluationError) {
+    return {
+      message: error.message,
+      start: error.start + offset,
+      end: error.end + offset,
+      kind: 'runtime',
     }
   }
   if (error instanceof Error) {
-    return { message: error.message, start: offset, end: offset }
+    return { message: error.message, start: offset, end: offset, kind: 'runtime' }
   }
-  return { message: String(error), start: offset, end: offset }
+  return { message: String(error), start: offset, end: offset, kind: 'runtime' }
 }
 
 /** Strip the `=` / `{{ … }}` envelope and return the body plus its offset. */

@@ -18,15 +18,29 @@
  * The function list comes from the registry the Go engine installs in
  * `internal/expressions/functions.go` — see {@link FUNCTIONS} in
  * `./functions` for the full catalogue with signatures and examples.
+ *
+ * The autocomplete itself lives in `./suggestions`.
  */
 
-import { FUNCTIONS, type FunctionCategory } from './functions'
+import { FUNCTIONS } from './functions'
+import {
+  applySuggestionAt,
+  detectExpressionPosition,
+  suggestForPosition,
+  type ExpressionPosition,
+  type Suggestion,
+  type SuggestionKind,
+} from './suggestions'
+
+export type { Suggestion, SuggestionKind }
 
 /** A node the editor knows about. */
 export interface AvailableNode {
   name: string
   type: string
   typeVersion?: number
+  /** Field names the node produced — used by `$node["Name"].json.<field>`. */
+  fields?: string[]
 }
 
 /** Metadata for one context variable. */
@@ -78,31 +92,8 @@ export const VARIABLES: VariableDefinition[] = [
   },
 ]
 
-/** Kind of an autocomplete suggestion. */
-export type SuggestionKind = 'variable' | 'node' | 'function'
-
-/** One autocomplete suggestion. */
-export interface Suggestion {
-  /** What kind of entry this is. */
-  kind: SuggestionKind
-  /** Text shown in the dropdown. */
-  label: string
-  /** Secondary text shown next to the label. */
-  detail: string
-  /** Text inserted into the editor when the entry is selected. */
-  insertText: string
-}
-
 /** The functions m9m registers, re-exported for the editor. */
 export const FUNCTION_CATALOGUE = FUNCTIONS
-
-/** Maximum number of suggestions returned by {@link suggest}. */
-const MAX_SUGGESTIONS = 25
-
-/** Normalise a prefix for case-insensitive comparison. */
-function normalise(value: string): string {
-  return value.toLowerCase()
-}
 
 /** Build the `$node["Name"]` entries for the given nodes. */
 export function nodeSuggestions(nodes: AvailableNode[] = []): Suggestion[] {
@@ -125,75 +116,24 @@ export function nodeSuggestions(nodes: AvailableNode[] = []): Suggestion[] {
  * @returns matching suggestions, most relevant first.
  */
 export function suggest(prefix: string, availableNodes: AvailableNode[] = []): Suggestion[] {
-  const needle = normalise(prefix)
-
-  if (needle === '') {
-    return [
-      ...VARIABLES.map((variable) => variableSuggestion(variable)),
-      ...nodeSuggestions(availableNodes),
-    ].slice(0, MAX_SUGGESTIONS)
+  const position: ExpressionPosition = {
+    inExpression: true,
+    prefix,
+    replaceLength: prefix.length,
+    root: null,
+    nodeName: null,
+    segments: [],
+    nodeNamePrefix: null,
+    afterDot: false,
   }
 
-  const suggestions: Suggestion[] = []
-
-  for (const variable of VARIABLES) {
-    if (matches(variable.name, needle)) {
-      suggestions.push(variableSuggestion(variable))
-    }
-  }
-
-  for (const node of nodeSuggestions(availableNodes)) {
-    if (matches(node.label, needle)) {
-      suggestions.push(node)
-    }
-  }
-
-  // A prefix that does not start with `$` is most likely a function name.
-  if (!needle.startsWith('$')) {
-    for (const fn of FUNCTIONS) {
-      if (matches(fn.name, needle)) {
-        suggestions.push(functionSuggestion(fn))
-      }
-    }
-  }
-
-  return suggestions.slice(0, MAX_SUGGESTIONS)
-}
-
-/** Build the suggestion entry for a variable. */
-function variableSuggestion(variable: VariableDefinition): Suggestion {
-  return {
-    kind: 'variable',
-    label: variable.name,
-    detail: variable.description,
-    insertText: variable.name,
-  }
-}
-
-/** Build the suggestion entry for a function. */
-function functionSuggestion(fn: {
-  name: string
-  description: string
-  signature: string
-  category: FunctionCategory
-}): Suggestion {
-  return {
-    kind: 'function',
-    label: fn.name,
-    detail: `${fn.signature} — ${fn.description}`,
-    insertText: `${fn.name}(`,
-  }
-}
-
-/** Whether a label matches the needle (prefix match first, then contains). */
-function matches(label: string, needle: string): boolean {
-  const haystack = normalise(label)
-  if (haystack.startsWith(needle)) return true
-  if (needle.startsWith('$')) {
-    // `$node["Set"]` should still match a `$nod` prefix.
-    return haystack.replace(/[^a-z]/g, '').startsWith(needle.replace(/[^a-z]/g, ''))
-  }
-  return haystack.includes(needle)
+  return suggestForPosition(position, {
+    variables: VARIABLES,
+    nodes: availableNodes,
+    functions: FUNCTIONS,
+    itemFields: [],
+    nodeFields: {},
+  })
 }
 
 /**
@@ -208,12 +148,13 @@ function matches(label: string, needle: string): boolean {
  * @returns the prefix, or an empty string when there is none.
  */
 export function suggestionPrefix(text: string, caret: number): string {
-  const before = text.slice(0, Math.max(0, caret))
-  const quoted = before.match(/\$node\["[^"]*$/i)
-  if (quoted) return quoted[0]
+  const position = detectExpressionPosition(text, caret, { insideExpression: true })
 
-  const match = before.match(/[$A-Za-z_][$A-Za-z0-9_]*$/)
-  return match ? match[0] : ''
+  if (position.nodeNamePrefix !== null) {
+    return text.slice(Math.max(0, caret - position.replaceLength), caret)
+  }
+
+  return position.prefix
 }
 
 /**
@@ -229,8 +170,6 @@ export function applySuggestion(
   caret: number,
   insertText: string,
 ): { text: string; caret: number } {
-  const prefix = suggestionPrefix(text, caret)
-  const start = Math.max(0, caret - prefix.length)
-  const next = `${text.slice(0, start)}${insertText}${text.slice(caret)}`
-  return { text: next, caret: start + insertText.length }
+  const position = detectExpressionPosition(text, caret, { insideExpression: true })
+  return applySuggestionAt(text, caret, position, insertText)
 }

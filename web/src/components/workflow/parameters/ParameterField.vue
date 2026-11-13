@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, inject, ref, watch } from 'vue'
 import type { NodeProperty } from '@/types/node'
 import { useWorkflowStore } from '@/stores/workflow'
+import { EXPRESSION_CONTEXT_KEY } from '@/lib/expressionContext'
 import CollectionField from './CollectionField.vue'
 import ExpressionField from './ExpressionField.vue'
 import ExpressionInput from './ExpressionInput.vue'
@@ -11,6 +12,8 @@ import IconField from './IconField.vue'
 import MultiSelectField from './MultiSelectField.vue'
 import ResourceLocatorField from './ResourceLocatorField.vue'
 import ResourceMapperField from './ResourceMapperField.vue'
+import WebhookUrlField from './WebhookUrlField.vue'
+import { isWebhookNodeType } from './webhookUrls'
 
 /**
  * Metadata-driven parameter renderer.
@@ -75,6 +78,21 @@ const unsupportedType = computed(() => {
 })
 
 // ---------------------------------------------------------------------
+// webhook URLs
+// ---------------------------------------------------------------------
+
+/**
+ * True for the Webhook node's `path` parameter. n8n shows BOTH the
+ * production URL (`/webhook/<path>`) and the test URL
+ * (`/webhook-test/<path>`) next to the path field — the test URL is the
+ * one that works while the workflow is still inactive, which is how the
+ * input / output of a flow is captured during design.
+ */
+const isWebhookPathField = computed(
+  () => props.property.name === 'path' && isWebhookNodeType(props.nodeTypeName),
+)
+
+// ---------------------------------------------------------------------
 // string
 // ---------------------------------------------------------------------
 
@@ -96,6 +114,13 @@ function onStringInput(next: string) {
 const workflowStore = useWorkflowStore()
 
 /**
+ * The completion data of the open node (the fields of the current item
+ * and the fields every other node produced). The node details view
+ * provides it; a field rendered outside of it simply has no data.
+ */
+const expressionContext = inject(EXPRESSION_CONTEXT_KEY, null)
+
+/**
  * Nodes of the current workflow, offered to the expression editor so
  * `$node["Set"]` can be autocompleted.
  */
@@ -103,8 +128,15 @@ const availableNodes = computed(() =>
   (workflowStore.currentWorkflow?.nodes ?? []).map((node) => ({
     name: node.name,
     type: node.type,
+    fields: expressionContext?.value.nodeFields[node.name] ?? [],
   })),
 )
+
+/** The fields of the current item (`$json.<field>`). */
+const itemFields = computed(() => expressionContext?.value.itemFields ?? [])
+
+/** The fields per node (`$node["Set"].json.<field>`). */
+const nodeFields = computed(() => expressionContext?.value.nodeFields ?? {})
 
 /** The stored value as text — the expression editor works on strings. */
 const stringValue = computed(() => {
@@ -396,6 +428,8 @@ function onDateTimeInput(event: Event) {
         :model-value="stringValue"
         :property="property"
         :available-nodes="availableNodes"
+        :item-fields="itemFields"
+        :node-fields="nodeFields"
         :disabled="disabled"
         @update:model-value="onStringInput"
       />
@@ -407,6 +441,10 @@ function onDateTimeInput(event: Event) {
         :rows="stringRows"
         :disabled="disabled"
         @update:model-value="onStringInput"
+      />
+      <WebhookUrlField
+        v-if="isWebhookPathField"
+        :path="stringValue"
       />
       <p
         v-if="unsupportedType"

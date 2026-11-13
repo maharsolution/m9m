@@ -329,10 +329,15 @@ func (s *APIServer) ImportWorkflows(w http.ResponseWriter, r *http.Request) {
 		// An imported workflow may already be active (only with
 		// activeState=fromJson). Register its webhooks so trigger
 		// nodes work right away, like CreateWorkflow does.
-		if s.webhookManager != nil && workflow.Active {
-			if regErr := s.webhookManager.RegisterWorkflowWebhooks(workflow, false); regErr != nil {
-				fmt.Printf("[m9m] warning: failed to register webhooks for imported workflow %s: %v\n", workflow.ID, regErr)
+		if s.webhookManager != nil {
+			if workflow.Active {
+				if regErr := s.webhookManager.RegisterWorkflowWebhooks(workflow, false); regErr != nil {
+					fmt.Printf("[m9m] warning: failed to register webhooks for imported workflow %s: %v\n", workflow.ID, regErr)
+				}
 			}
+			// The test URL (/webhook-test/{path}) resolves for imported
+			// workflows too, active or not.
+			s.webhookManager.SyncWorkflowTestHooks(workflow)
 		}
 
 		summary.Workflows = append(summary.Workflows, WorkflowImportItem{

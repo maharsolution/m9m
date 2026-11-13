@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import {
   XMarkIcon,
   TrashIcon,
@@ -20,6 +20,9 @@ import type { Credential } from '@/types/api'
 import type { DataItem, WorkflowExecution } from '@/types'
 import type { NodeProperty } from '@/types/node'
 import { resolveNodeCredentialTypes } from '@/lib/credentialSchema'
+import { EXPRESSION_CONTEXT_KEY } from '@/lib/expressionContext'
+import { buildExpressionFieldSources } from '@/lib/expressionFields'
+import { isSuggestionListOpen } from '@/lib/suggestionList'
 import {
   deleteParameterValue,
   getParameterValue,
@@ -413,6 +416,27 @@ const inputText = computed(() => formatItems(nodeInput.value))
 const outputText = computed(() => formatItems(nodeOutput.value))
 
 /**
+ * The completion data of the expression editor.
+ *
+ * The fields of the current item (`$json.<field>`) and the fields every
+ * other node produced (`$node["Name"].json.<field>`) come from the
+ * last execution — the same data the Input / Output columns show.
+ */
+const expressionContext = computed(() =>
+  buildExpressionFieldSources(
+    nodeInput.value?.[0]?.json,
+    Object.fromEntries(
+      Object.entries(latestExecution.value?.nodeData ?? {}).map(([name, items]) => [
+        name,
+        items?.[0]?.json,
+      ]),
+    ),
+  ),
+)
+
+provide(EXPRESSION_CONTEXT_KEY, expressionContext)
+
+/**
  * The empty state of a data column. It never invents data: it either
  * says that the workflow has not run yet, or that the node did not
  * take part in the last run.
@@ -457,9 +481,16 @@ const outputEmpty = computed(() => emptyState('output'))
  * The handler runs in the capture phase and stops the propagation so
  * the canvas' "deselect" shortcut (Escape) does not fire: closing the
  * NDV must leave the node selected (n8n parity).
+ *
+ * The autocomplete of the expression editor owns Escape while its
+ * suggestion list is open — the list closes first and the panel stays
+ * open (n8n parity). Because the handler runs in the capture phase it
+ * cannot be stopped from the field, so the open list is detected
+ * here.
  */
 const onKeyDown = (event: KeyboardEvent) => {
   if (event.key !== 'Escape') return
+  if (isSuggestionListOpen(event.target)) return
   event.stopPropagation()
   event.preventDefault()
   close()

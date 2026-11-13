@@ -4,16 +4,18 @@ import { VueFlow, useVueFlow, SelectionMode } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
-import type { Node, Edge, Connection, NodeMouseEvent } from '@vue-flow/core'
+import type { Node, Edge, Connection, NodeMouseEvent, EdgeMouseEvent } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 
 import BaseNode from '@/components/nodes/BaseNode.vue'
+import WorkflowEdge from '@/components/workflow/WorkflowEdge.vue'
 import { useWorkflowEditorStore, useWorkflowStore, useNodesStore } from '@/stores'
 import { useThemeStore } from '@/stores/theme'
 import { buildFlowEdges, buildFlowNodes, parseEdgeId } from '@/lib/workflowGraph'
+import { isMultiSelectModifier } from '@/lib/edgeSelection'
 import { centerOfRect, freeNodePosition, uniqueNodeName } from '@/lib/nodePlacement'
 import { generateNodeId } from '@/lib/nodeId'
 import { createDoubleClickDetector } from '@/lib/doubleClick'
@@ -111,7 +113,39 @@ const flowNodes = computed<FlowNode[]>(() => {
   })
 })
 
-const flowEdges = computed<Edge[]>(() => buildFlowEdges(workflowStore.currentWorkflow))
+const flowEdges = computed<Edge[]>(() => {
+  const edges = buildFlowEdges(workflowStore.currentWorkflow)
+  const selected = new Set(workflowEditorStore.selectedEdgeIds)
+
+  // The connections are drawn by the editor's own edge component: it
+  // carries the remove button n8n shows while the pointer hovers a
+  // connection.
+  return edges.map((edge) => ({
+    ...edge,
+    type: 'm9m',
+    selected: selected.has(edge.id),
+  }))
+})
+
+// --------------------------------------------------------------------
+// Connection selection
+//
+// n8n parity: a connection is selected like a node. It is removed
+// with the Delete key (the editor store owns the delete request) or
+// with the button the edge component shows while the pointer hovers
+// the connection.
+// --------------------------------------------------------------------
+
+/** A click on a connection selects it; a modified click extends the selection. */
+const onEdgeClick = ({ edge, event }: EdgeMouseEvent) => {
+  const addToSelection = 'shiftKey' in event && isMultiSelectModifier(event)
+  workflowEditorStore.selectEdge(edge.id, addToSelection)
+}
+
+/** A click on the empty canvas drops the connection selection. */
+const onPaneClick = () => {
+  workflowEditorStore.clearEdgeSelection()
+}
 
 // --------------------------------------------------------------------
 // Panning vs. marquee selection
@@ -321,6 +355,10 @@ const onPointerUp = () => {
  * its content (n8n parity), it never opens the NDV.
  */
 const onNodeClick = ({ event, node }: NodeMouseEvent) => {
+  // A node and a connection are never selected at the same time
+  // (n8n parity): picking a node drops the connection selection.
+  workflowEditorStore.clearEdgeSelection()
+
   const workflowNode = workflowStore.currentWorkflow?.nodes.find((n) => n.id === node.id)
   if (workflowNode?.type === STICKY_NOTE_TYPE) {
     doubleClick.reset()
@@ -516,6 +554,18 @@ const nodeTypes: Record<string, any> = {
   custom: markRaw(BaseNode),
 }
 
+/**
+ * The edge types of the canvas.
+ *
+ * `m9m` is the editor's own connection: it draws the line like the
+ * default edge and adds the remove button n8n shows while the pointer
+ * hovers a connection.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const edgeTypes: Record<string, any> = {
+  m9m: markRaw(WorkflowEdge),
+}
+
 const getMinimapNodeColor = (node: Node) => {
   const category = node.data?.category
   switch (category) {
@@ -630,6 +680,7 @@ defineExpose({
       :nodes="flowNodes"
       :edges="flowEdges"
       :node-types="nodeTypes"
+      :edge-types="edgeTypes"
       :default-viewport="{ x: 100, y: 100, zoom: 1 }"
       :min-zoom="0.2"
       :max-zoom="2"
@@ -649,6 +700,8 @@ defineExpose({
       :disable-keyboard-a11y="true"
       @viewport-change="onViewportChange"
       @node-click="onNodeClick"
+      @edge-click="onEdgeClick"
+      @pane-click="onPaneClick"
     >
       <Background
         :color="canvasDotColor"

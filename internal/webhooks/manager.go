@@ -34,16 +34,52 @@ type WebhookManager struct {
 	workflowStorage storage.WorkflowStorage
 	engine          engine.WorkflowEngine
 	activeHooks     map[string]*Webhook // path:method:test -> webhook
-	mu              sync.RWMutex
+	// testHooks indexes the n8n-style test webhooks served under
+	// `/webhook-test/<path>`. Unlike `activeHooks` it also holds the
+	// webhooks of workflows that are NOT active — the test URL has to
+	// work while the flow is still being designed. The index is
+	// derived from the workflow store (never persisted) and is rebuilt
+	// whenever a workflow changes.
+	testHooks map[string]*Webhook
+	// testHookCandidates keeps every candidate per key so a single
+	// workflow can be re-indexed (or removed) without rescanning the
+	// whole store: key -> workflowID -> candidate.
+	testHookCandidates map[string]map[string]testHookCandidate
+	// testHooksBuiltAt records when the test-webhook index was last rebuilt
+	// from the workflow store. It throttles the lazy rebuild that happens
+	// when a test-path lookup misses, so a flood of unknown test URLs
+	// cannot turn into a flood of workflow-store scans.
+	//
+	// The timestamp is only touched by the full store scan — a single
+	// workflow sync keeps the index current without resetting the throttle,
+	// so a workflow created outside the REST API (e.g. through the MCP
+	// tools) is still picked up by the next lazy rebuild.
+	testHooksBuiltAt time.Time
+	mu               sync.RWMutex
+}
+
+// testHooksRefreshInterval is the minimum age of the test-webhook index
+// before a cache miss triggers a rebuild. Mutations call
+// RefreshTestHooks directly, so this only bounds the lazy path.
+const testHooksRefreshInterval = 2 * time.Second
+
+// testHookCandidate is one indexed test webhook plus the metadata used
+// to break ties when two workflows expose the same path + method.
+type testHookCandidate struct {
+	hook      *Webhook
+	active    bool
+	updatedAt time.Time
 }
 
 // NewWebhookManager creates a new webhook manager
 func NewWebhookManager(webhookStorage WebhookStorage, workflowStorage storage.WorkflowStorage, engine engine.WorkflowEngine) *WebhookManager {
 	return &WebhookManager{
-		storage:         webhookStorage,
-		workflowStorage: workflowStorage,
-		engine:          engine,
-		activeHooks:     make(map[string]*Webhook),
+		storage:            webhookStorage,
+		workflowStorage:    workflowStorage,
+		engine:             engine,
+		activeHooks:        make(map[string]*Webhook),
+		testHooks:          make(map[string]*Webhook),
+		testHookCandidates: make(map[string]map[string]testHookCandidate),
 	}
 }
 
@@ -120,20 +156,251 @@ func (m *WebhookManager) GetWebhook(webhookID string) (*Webhook, error) {
 	return m.storage.GetWebhook(webhookID)
 }
 
-// GetWebhookByPath retrieves a webhook by path and method
+// GetWebhookByPath retrieves a webhook by path and method.
+//
+// Production lookups (`isTest == false`) resolve only webhooks of ACTIVE
+// workflows — they are served from the `activeHooks` cache, exactly as
+// before.
+//
+// Test lookups (`isTest == true`) additionally resolve the n8n-style
+// `/webhook-test/<path>` URL of a workflow that is not active yet. The
+// test index is derived from the workflow store, so both URLs point at
+// the same webhook node / workflow.
 func (m *WebhookManager) GetWebhookByPath(path string, method string, isTest bool) (*Webhook, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
 	path = normalizePath(path)
 	key := makeWebhookKey(path, method, isTest)
 
+	m.mu.RLock()
 	webhook, exists := m.activeHooks[key]
-	if !exists {
-		return nil, fmt.Errorf("webhook not found: %s %s (test=%v)", method, path, isTest)
+	m.mu.RUnlock()
+	if exists {
+		return webhook, nil
 	}
 
-	return webhook, nil
+	if isTest {
+		if hook, ok := m.lookupTestHook(path, method); ok {
+			return hook, nil
+		}
+	}
+
+	return nil, fmt.Errorf("webhook not found: %s %s (test=%v)", method, path, isTest)
+}
+
+// lookupTestHook resolves a `/webhook-test/<path>` URL from the
+// test-webhook index. When the path is unknown the index is rebuilt
+// once (rate limited) so a workflow that changed since the last rebuild
+// is picked up even if the mutation path did not refresh the index.
+func (m *WebhookManager) lookupTestHook(path, method string) (*Webhook, bool) {
+	key := makeWebhookKey(path, method, true)
+
+	m.mu.RLock()
+	hook, ok := m.testHooks[key]
+	m.mu.RUnlock()
+	if ok {
+		return hook, true
+	}
+
+	if !m.testHooksStale() {
+		return nil, false
+	}
+
+	if err := m.RefreshTestHooks(); err != nil {
+		log.Printf("⚠️  Failed to refresh test webhooks: %v", err)
+		return nil, false
+	}
+
+	m.mu.RLock()
+	hook, ok = m.testHooks[key]
+	m.mu.RUnlock()
+	return hook, ok
+}
+
+// testHooksStale reports whether the test-webhook index is old enough to
+// be rebuilt on a cache miss.
+func (m *WebhookManager) testHooksStale() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return time.Since(m.testHooksBuiltAt) >= testHooksRefreshInterval
+}
+
+// RefreshTestHooks rebuilds the in-memory test-webhook index from the
+// workflow store. Every workflow — active or not — contributes its
+// webhook nodes, so a flow that is still being designed is reachable
+// under `/webhook-test/<path>`.
+//
+// The index is derived, never persisted: the webhook storage table
+// keeps holding production registrations only, so `/api/v1/webhooks`
+// keeps its current shape.
+func (m *WebhookManager) RefreshTestHooks() error {
+	if m.workflowStorage == nil {
+		return nil
+	}
+
+	workflows, err := m.listAllWorkflows()
+	if err != nil {
+		return err
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.testHookCandidates = make(map[string]map[string]testHookCandidate)
+	for _, wf := range workflows {
+		if wf == nil {
+			continue
+		}
+		m.indexWorkflowTestHooksLocked(wf)
+	}
+	m.rebuildTestHooksLocked()
+	m.testHooksBuiltAt = time.Now()
+
+	log.Printf("📡 Indexed %d test webhooks from %d workflows", len(m.testHooks), len(workflows))
+	return nil
+}
+
+// SyncWorkflowTestHooks re-indexes the test webhooks of a single
+// workflow. It is called after every workflow mutation (create,
+// update, activate, deactivate, import) so `/webhook-test/<path>`
+// always reflects the latest node definition — including a changed
+// path or HTTP method.
+func (m *WebhookManager) SyncWorkflowTestHooks(workflow *model.Workflow) {
+	if workflow == nil {
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.indexWorkflowTestHooksLocked(workflow)
+	m.rebuildTestHooksLocked()
+}
+
+// RemoveWorkflowTestHooks drops the test webhooks of a workflow. Used
+// when a workflow is deleted so its test URL stops resolving.
+func (m *WebhookManager) RemoveWorkflowTestHooks(workflowID string) {
+	if workflowID == "" {
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for key, byWorkflow := range m.testHookCandidates {
+		delete(byWorkflow, workflowID)
+		if len(byWorkflow) == 0 {
+			delete(m.testHookCandidates, key)
+		}
+	}
+	m.rebuildTestHooksLocked()
+}
+
+// indexWorkflowTestHooksLocked indexes the webhook nodes of one
+// workflow. Previous candidates of that workflow are dropped first so a
+// renamed path or a changed HTTP method does not leave a stale entry
+// behind.
+//
+// The caller must hold the write lock.
+func (m *WebhookManager) indexWorkflowTestHooksLocked(workflow *model.Workflow) {
+	for key, byWorkflow := range m.testHookCandidates {
+		delete(byWorkflow, workflow.ID)
+		if len(byWorkflow) == 0 {
+			delete(m.testHookCandidates, key)
+		}
+	}
+
+	for _, node := range workflow.Nodes {
+		if !isWebhookNode(node.Type) {
+			continue
+		}
+		hook := m.createWebhookFromNode(workflow, &node, true)
+		if hook.Path == "" || hook.Path == "/" {
+			// A webhook node without a path has no addressable URL.
+			continue
+		}
+		// Index entries are never persisted, so the id is derived from
+		// the workflow + node. It only shows up on the webhook
+		// execution records.
+		hook.ID = fmt.Sprintf("test-%s-%s", workflow.ID, node.Name)
+		// `Active` reports whether the owning workflow is active — the
+		// test URL works in both cases.
+		hook.Active = workflow.Active
+
+		key := makeWebhookKey(hook.Path, hook.Method, true)
+		byWorkflow, exists := m.testHookCandidates[key]
+		if !exists {
+			byWorkflow = make(map[string]testHookCandidate)
+			m.testHookCandidates[key] = byWorkflow
+		}
+		byWorkflow[workflow.ID] = testHookCandidate{
+			hook:      hook,
+			active:    workflow.Active,
+			updatedAt: workflow.UpdatedAt,
+		}
+	}
+}
+
+// rebuildTestHooksLocked recomputes the winning candidate per key.
+//
+// The caller must hold the write lock.
+func (m *WebhookManager) rebuildTestHooksLocked() {
+	index := make(map[string]*Webhook, len(m.testHookCandidates))
+	for key, byWorkflow := range m.testHookCandidates {
+		var best *testHookCandidate
+		for _, candidate := range byWorkflow {
+			if best == nil || preferTestCandidate(candidate, *best) {
+				candidateCopy := candidate
+				best = &candidateCopy
+			}
+		}
+		if best != nil {
+			index[key] = best.hook
+		}
+	}
+	m.testHooks = index
+}
+
+// testHookScanPageSize is the page size used when walking the workflow
+// store. The SQL backends apply `LIMIT ?` verbatim, so a zero limit
+// would return no rows at all — the scan therefore pages explicitly.
+const testHookScanPageSize = 200
+
+// listAllWorkflows returns every workflow in the store, paging through
+// the storage layer so the SQL backends (which apply `LIMIT ?`
+// verbatim) do not truncate the result set.
+func (m *WebhookManager) listAllWorkflows() ([]*model.Workflow, error) {
+	var all []*model.Workflow
+	offset := 0
+
+	for {
+		page, _, err := m.workflowStorage.ListWorkflows(storage.WorkflowFilters{
+			Offset: offset,
+			Limit:  testHookScanPageSize,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to list workflows for test webhooks: %w", err)
+		}
+		all = append(all, page...)
+		if len(page) < testHookScanPageSize {
+			return all, nil
+		}
+		offset += testHookScanPageSize
+	}
+}
+
+// preferTestCandidate reports whether the candidate test-webhook
+// should win over the one already indexed for the same path + method.
+// An active workflow wins over an inactive one (its production URL is
+// live as well); on a tie the more recently updated workflow wins and
+// the workflow id breaks the remaining ties so the choice stays
+// deterministic.
+func preferTestCandidate(candidate, current testHookCandidate) bool {
+	if candidate.active != current.active {
+		return candidate.active
+	}
+	if !candidate.updatedAt.Equal(current.updatedAt) {
+		return candidate.updatedAt.After(current.updatedAt)
+	}
+	return candidate.hook.WorkflowID > current.hook.WorkflowID
 }
 
 // ListWebhooks lists all webhooks for a workflow

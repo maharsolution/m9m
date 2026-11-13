@@ -120,6 +120,15 @@ export interface ExpressionChunk extends SourceSpan {
 export type ValueChunk = TextChunk | ExpressionChunk
 
 /**
+ * The kind of an expression error.
+ *
+ * `syntax` means the expression cannot be parsed at all, `runtime`
+ * means it is valid but could not be evaluated (missing data, a wrong
+ * argument count, …).
+ */
+export type ExpressionErrorKind = 'syntax' | 'runtime'
+
+/**
  * An error produced by the engine.
  *
  * `start`/`end` are offsets into the source that was parsed, so the
@@ -129,6 +138,8 @@ export interface ExpressionError {
   message: string
   start: number
   end: number
+  /** Whether the expression is invalid or merely could not run. */
+  kind: ExpressionErrorKind
 }
 
 /** Thrown by the parser when the source is not valid m9m expression syntax. */

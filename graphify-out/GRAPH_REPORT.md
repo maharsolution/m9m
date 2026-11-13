@@ -1,24 +1,24 @@
 # Graph Report - m9m  (2026-11-13)
 
 ## Corpus Check
-- 1047 files · ~1,686,542 words
+- 1061 files · ~1,693,050 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 28 file(s) not represented in the graph (top: (none) 7, .map 4, .css 3)
 
 ## Summary
-- 18091 nodes · 45401 edges · 836 communities (702 shown, 134 thin omitted)
-- Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 5717 edges (avg confidence: 0.84)
+- 18213 nodes · 45701 edges · 827 communities (690 shown, 137 thin omitted)
+- Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 5752 edges (avg confidence: 0.84)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `9c972cb7`
+- Built from commit: `5e5c94aa`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - net/http.Request
 - if_conditions.go
-- server_test.go
+- ExecutionHistory.vue
 - monitoring_test.go
 - WorkflowStorage
 - NewMemoryStorage
@@ -29,27 +29,27 @@
 - functions.ts
 - runtime_test.go
 - RemoteClient
-- stores/index.ts
+- Sidebar.vue
 - api/tags.ts
 - 6. Isu Konsistensi & Kecil
-- CollectionField.vue
+- WorkflowExecution
 - Workflow
 - context.Context
 - .GetRaw
 - wordcut.js
 - MemoryUserStorage
 - NewBaseNode
-- NodeProperty
+- net/http.Handler
 - Distributed m9m Architecture with BadgerDB + Raft + NNG
 - gitlab_node_test.go
 - m9m Plugin System
 - Credentials.vue
-- n8n sync-service hardening
+- normalize_n8n_workflow
 - Contributing to m9m
 - nodes/index.md
 - WorkflowCanvas.vue
 - github.com/dop251/goja.Runtime
-- MonitoringManager
+- time.Time
 - PrometheusCollector
 - live-browser.js
 - RemoteClient
@@ -72,11 +72,11 @@
 - Webhook Node
 - Webhooks Overview
 - Workflow
-- ConnectionRouter
+- CloudStorageNode
 - m9m.cc
-- Daemon
+- router.go
 - NewBaseNode
-- import_workflows_from_file
+- NewSetNode
 - n8n vs m9m Feature Comparison & Gap Analysis
 - Security Review and Hardening Guide
 - Workflow Commands
@@ -93,21 +93,21 @@
 - .ImportWorkflows
 - sync.py
 - reliability_test.go
-- Webhook
+- .ExecuteWebhook
 - DistributedWebSocketManager
 - m9m Deployment Guide
 - JSON Node
 - Production Checklist
 - Examples
-- extensions.go
+- ConfigProvider
 - Schedules API
 - Execution Commands
 - AWS S3 Node
-- parser.ts
+- expression/index.ts
 - Deployment Guide
 - m9m Example Workflows
 - TemplateManager
-- WebhookManager
+- extensions.go
 - NodePanel.vue
 - LambdaOperationsNode
 - re
@@ -120,12 +120,12 @@
 - CLI Nodes
 - formatValue
 - workflowEditor.ts
-- Architectural / Capability
+- MockWorkflowEngine
 - Webhook Node
-- AlertManager
+- alerting.go
 - mcp/types.go
 - testing.T
-- MemoryStorage
+- newTagsFilterTestServer
 - templates_test.go
 - ExecutionDetail.vue
 - leader_test.go
@@ -151,7 +151,7 @@
 - el
 - CredentialStore
 - Node Commands
-- AgentAI.vue
+- credentials_kafka_test.go
 - SQLConnectorNode
 - rate_limiter.go
 - m9m SDK & Language Bindings
@@ -161,22 +161,21 @@
 - io.Writer
 - variable_manager_test.go
 - compilerOptions
-- NewSetNode
+- VersionManager
 - Settings.vue
-- ObjectInfo
 - Database Configuration
 - lambda_operations_test.go
-- time.Time
+- Worker
 - GitLabNode
-- OAuth2Client
+- NewHTTPRequestNode
 - Set Node
 - Slack Node
 - expression/index.ts
 - cloud_storage_test.go
 - pathlib
-- ExpressionCache
+- Client
 - .Execute
-- credentialSchema.ts
+- n8n Core Nodes — Reference for m9m Implementation
 - Migrate from n8n to m9m
 - Send Email Node
 - HTTP Request Node
@@ -187,7 +186,7 @@
 - document_drift
 - AuditLogger
 - AuthHandler
-- credentials_kafka_test.go
+- Snapshot
 - Deployment Overview
 - Expressions Overview
 - output_formats
@@ -202,7 +201,7 @@
 - Data Flow
 - N8nNodeExecutor
 - ArrayExtensions
-- Workspace
+- Daemon
 - bundle.4e0fa4ba.min.js
 - with
 - Node Categories
@@ -210,9 +209,9 @@
 - m9m/workflow.go
 - match
 - ApplyKafkaCredentialAuth
-- test-parity-negative.py
+- scaling.go
 - PythonRuntime
-- GojaExpressionEvaluator
+- EnhancedWorkflowEngine
 - m9m-cli
 - compilerOptions
 - Workspace
@@ -222,7 +221,7 @@
 - Security Configuration
 - S3OperationsNode
 - m9m-cli
-- VersionManager
+- queue_test.go
 - evaluator.ts
 - workflows_import_export_test.go
 - useKeyboardShortcuts.ts
@@ -235,24 +234,24 @@
 - oidc_test.go
 - mongodb_pool_test.go
 - Workflow import / export
-- AuthManager
+- WebhookManager
 - WorkflowEngine
 - 9. Resolved archive (kept for traceability)
 - FilterNode
-- api/ai.ts
+- test_extended.py
 - initPageChat
-- ExecutionOutput.vue
+- vue
 - lunr.ro.min.js
-- credential_conn.go
+- go_pkg_encoding_json
 - SKILL.md
 - data-processing-pipeline.json
 - requirements
 - metadata
-- handler_test.go
+- AgentAI.vue
 - NewConnectionRouter
 - resumeSession
 - Workflow CRUD endpoints
-- evaluateCondition
+- transform/conditions.go
 - applyEditing
 - github.com/gorilla/mux.Router
 - trigger_test.go
@@ -265,13 +264,13 @@
 - lunr.es.min.js
 - lunr.pt.min.js
 - FunctionHelp
-- credentials_kafka_test.go
+- credential_conn.go
 - NodeProperty
 - resolveProduceValue
 - NodeDescription
-- s3_operations.go
-- test_extended.py
-- resolveCredentialAuthData
+- PerformanceOptimizer
+- signatures.py
+- Engine and execution
 - ExpressionField.vue
 - Documentation Structure
 - AI
@@ -282,14 +281,14 @@
 - metadata
 - parity_orchestrator.py
 - LogicExtensions
-- 3. Per-node-type parameter surfaces (the part the user wants)
+- Credentials — live connection verification
 - localenv.py
 - HealthChecker
 - WorkQueue
 - geocoder.rest.yaml
 - Your first m9m workflow
 - Nodes Overview
-- Creating Workflows
+- Workflow Examples
 - 7. Components
 - lunr.hu.min.js
 - lunr.ru.min.js
@@ -298,7 +297,7 @@
 - Workflows Overview
 - install.sh
 - VariableHandler
-- debug_test.go
+- credentialSchema.ts
 - .executeWithContext
 - RBACStore
 - m9m Deployment Guide
@@ -307,48 +306,48 @@
 - default_value
 - sso_test.go
 - jwt_fuzz_test.go
-- go_pkg_os
+- go_pkg_fmt
 - mongodb_test.go
 - PluginHandler
 - WebhookNode
+- SMTPNode
+- flusherRecorder
 - api/otel.ts
-- CLI Reference
-- observability.go
 - Why m9m?
 - requirements
 - m9m — Product Requirements Document (PRD)
 - aws_s3_region
 - .ListWorkflows
 - nodejs/package.json
-- queue_test.go
+- JobQueue
 - sentimentAnalysis.grpc.yaml
 - 7. P5 — Documentation & repo hygiene
-- TagHandler
+- Parser
 - PluginRegistry
 - deploy
 - Array Functions
 - http_method
 - backup_schedule
 - compression_level
-- WebSocketConnection
+- node.ts
 - OpenTelemetry tracing
 - GoogleSheetsNode
-- audit_logger.go
+- sso_test.go
 - SandboxConfig
-- dataString
+- SQLiteJobQueue
 - setupCredentialExportServer
 - Generation endpoints
-- Client
+- NewCredentialManager
 - PerformanceDashboard.vue
-- .RegisterWebhook
-- Manager
+- audit_logger.go
+- scaling_test.go
 - Code Standards
 - engine.ts
 - API Endpoints
 - Variables and Environments
 - Frequently Asked Questions
 - lunr.fi.min.js
-- flusherRecorder
+- streaming_test.go
 - FilterField.vue
 - metadata
 - error_handling
@@ -364,35 +363,35 @@
 - workflow
 - column_mappings
 - delimiter
-- WorkflowEditorToolbar.vue
+- PropertyEditor.vue
 - hash.ts
 - startVariantObserver
 - ai/config_test.go
 - doJSON
-- .SaveRaw
+- .DeleteRaw
 - globSync
 - rbac_middleware_test.go
 - mountSvelteComponentVariant
 - Workflows
-- Workflow Examples
+- CLI Reference
 - Production Deployment Guide
 - Migration Guide: From n8n to m9m
 - Step-by-Step Migration Process
 - Environments API
-- Execution edges and `EdgesTaken`
+- .execute
 - lunr.de.min.js
 - smtp_test.go
 - ObjectExtensions
 - initGlobalBar
 - kafka_trigger_consumer_test.go
 - DemoWorkflow
-- newNodeTypeOptionsTestServer
+- WorkflowEditorToolbar.vue
 - github_node_test.go
 - updatePendingCounter
 - Health & System
 - Milestones
-- ListSpreadsheets
-- LiveContractFixtures
+- go_pkg_fmt
+- TagHandler
 - parameters
 - check_interval
 - email_recipient
@@ -403,7 +402,7 @@
 - max_backup_versions
 - retention_days
 - net/http.Response
-- NewRetryPolicy
+- Execution edges and `EdgesTaken`
 - 7. Functional requirements
 - Responsive Design
 - kubernetes.yaml
@@ -413,7 +412,7 @@
 - Common Issues and Solutions
 - Common Issues and Solutions
 - document.md
-- .execute
+- WebhookNode
 - Deployment
 - email_subject
 - success_status_codes
@@ -439,7 +438,7 @@
 - workflow_name
 - filter_conditions
 - has_header
-- .ExecuteWithContext
+- ExpressionCache
 - notification_email
 - output_directory
 - workflow_name
@@ -447,10 +446,10 @@
 - e
 - onboard.md
 - serve.go
-- IconField.vue
-- FileField.vue
+- newVersionRoutesTestServer
+- ParameterField.vue
 - Security Policy
-- n8n ↔ m9m sync bridge
+- NewRatingSystem
 - String Functions
 - Key Interfaces and Patterns
 - tracing
@@ -460,7 +459,7 @@
 - Performance Tuning
 - PostgreSQL Setup
 - Migration Checklist
-- Current Implementation Status
+- m9m Technical Specification - Updated
 - Best Practices
 - Variables API
 - Telemetry API
@@ -471,23 +470,23 @@
 - ConfigStore
 - staticdata_test.go
 - SendGridNode
-- 2026-10-12 cycle — 0.4.0 progress
+- OAuth2Client
 - Workflow
 - lunr.da.min.js
 - 10. Implementation plan (sequenced, no code changes until execution phase)
-- PluginType
+- NewTemplateNode
 - cors
 - scrape_configs
 - containers
 - Best Practices
 - search.a264c092.min.js
 - Troubleshooting
-- PerformanceOptimizer
+- rbac_test.go
 - Security Setup
 - Common Migration Scenarios
 - LoadConfigFromEnv
 - UiJourneyArtifact
-- Parser
+- api/ai.ts
 - manager_content_type_test.go
 - Impeccable Asset Producer
 - Architecture
@@ -497,9 +496,9 @@
 - Troubleshooting
 - Best Practices
 - sync.Mutex
-- ExtractSwitchRules
+- FileField.vue
 - Handler
-- [0.1.0-beta.1] - 2024-01-22
+- versions/version.go
 - Operate mode depth (and Read notes)
 - The Toolkit
 - Workflows
@@ -533,19 +532,19 @@
 - Pre-Migration Assessment
 - Step 1: Export Workflows from n8n
 - 3. API surface gap (~20 endpoints undocumented)
-- sso_test.go
+- Config
 - runner.py
 - namespace
 - spec
-- cloud_storage.go
+- newWorkflowDebugTestServer
 - actOnAgentTarget
 - Cron Node
 - versioning_test.go
-- Snapshot
+- ObjectInfo
 - Encryption
 - animate.md
 - .Refresh
-- TagHandler
+- Store
 - Error Handling
 - Engine Components
 - Security Architecture
@@ -564,9 +563,9 @@
 - Logging
 - Performance Issues
 - Secret m9m-secrets
-- io.Reader
+- NewXmlNode
 - FSM
-- m9m
+- .Produce
 - basic.test.js
 - Secret rotation checklist
 - xmlJsonHelper.test.mjs
@@ -577,7 +576,7 @@
 - DataTableNode
 - Quick Start
 - .Execute
-- PythonCode Node
+- Architectural / Capability
 - New visual work
 - Architecture Overview
 - Backup and Recovery
@@ -590,18 +589,18 @@
 - Integration with Workflows
 - CredentialData
 - m9m n8n Sync Bridge (`sync-service/sync.py`)
-- newWorkflowDebugTestServer
+- Configuration Overview
 - Redis Queue
 - Monitoring
 - 5. P3 — Observability & DX
 - Getting Help
-- OptionProviderRegistry
+- MarketplaceAnalytics
 - critique.md
 - test-versions.sh
 - axios/index.js
 - uuid/index.js
 - check-no-backups.sh
-- blob/localfs_test.go
+- NewSecurityScanner
 - file
 - Simplify the Design
 - Licensing and commercial use
@@ -623,7 +622,7 @@
 - ParamSpec
 - Aiven Kafka samples
 - input_file_path
-- .Chat
+- ReadBinaryFileNode
 - clarify.md
 - APIHandler
 - development
@@ -639,27 +638,27 @@
 - Nielsen's 10 Heuristics
 - polish.md
 - quieter.md
-- API Compatibility Layer - Implementation Summary
+- src/native.ts
 - Function Node
 - Switch Node
 - PodDisruptionBudget m9m-pdb
 - Split In Batches Node
 - Item Lists Node
-- versions/version.go
+- blob/localfs_test.go
 - JSON Node
 - Generate Combined Critique Report
 - Init flow
-- model/workflow.go
+- googleSheetsSpreadsheetOptions
 - FromContext
-- m9m Implementation Roadmap - Updated
+- applyAIViewToForm
 - Common Cognitive Load Violations
 - ServiceAccount m9m-sa
 - Tags
 - iOS platform
 - Shape
-- RunAwareNodeExecutor
-- Input.vue
-- vue
+- edgesTakenRenderer.ts
+- rows_test.go
+- JWTManager
 - check_repo_hygiene.sh script
 - Common Patterns
 - Android platform
@@ -668,22 +667,22 @@
 - ai/config.go
 - useFormValidation
 - Persona-Based Design Testing
-- .FixError
-- credentials.N8NCipher
+- decrypt_n8n_credential_data
+- API Compatibility Layer - Implementation Summary
 - Contributing Guidelines
 - Future Enhancements
 - Testing and Validation
-- NewBulkhead
+- m9m Implementation Roadmap - Updated
 - wrappy
 - init-mysql-db.sh
 - init-pg-db.sh
 - queue-soak.sh
 - BaseNode
-- rbac_test.go
+- os.Signal
 - features
 - Getting Started
-- Performance Metrics
-- ReliableEngineConfig
+- log.Logger
+- credentials.N8NCipher
 - Number Functions
 - Impeccable Finish Reviewer
 - Impeccable Manual Edit Applier
@@ -695,20 +694,20 @@
 - FAQ
 - Appendix B — engineering follow-up tickets (Phase 8)
 - writeXMLElement
-- .UserForRequest
+- Performance Metrics
 - m9m — Bug-fix Tracker & Triage Playbook
 - Create Schedule
-- Testing Checklist
-- Critical Missing Features for Maximal Compatibility
-- Phase 4: Missing Node Types for Maximal Compatibility (Weeks 7-10)
+- UpdateScheduler
+- NewMarketplaceCache
+- .UserForRequest
 - Type Functions
 - Object Functions
 - Diagnostic Scan
-- Critical Missing Components for Maximal Compatibility
-- Compatibility Requirements
-- Testing Strategy
+- m9m ↔ n8n UI Parity — Feasibility, Gap Analysis & Implementation Plan
+- runExec
+- Testing Checklist
 - 10. Filing & triage
-- NewXmlNode
+- Critical Missing Features for Maximal Compatibility
 - Implementation Details
 - Utility Functions
 - Expression Functions
@@ -716,164 +715,155 @@
 - Adaptation Strategies
 - Impeccable Documenter
 - Region map
-- NewTwilioNodeWithClient
+- Phase 4: Missing Node Types for Maximal Compatibility (Weeks 7-10)
 - 6. P4 — Security
 - Limitations and Considerations
 - n8n compatibility
 - NewStripeNodeWithClient
 - General
 - Troubleshooting
-- SandboxType
+- Sandbox
 - Heuristics Scoring Guide
 - Persuade and Experience
 - Integration Status
 - ExpressionConverter
 - Support & Resources
-- 2. P0 — Parity & wire-compat (open)
+- File Summary
 - How It All Works Together
 - Performance Characteristics
-- File Summary
 - Long-term Enhancements
 - Success Metrics
 - Risk Mitigation
+- errReader
 - .ExecuteWorkflowWithContext
-- Future Expansion Areas
-- Performance Considerations for Scaling
-- Security Requirements
-- NodeJSGlobals
-- hasTextRows
-- Deployment Considerations
-- Frequently asked questions
-- Licensing and commercial use
-- Data Model Enhancements Needed
-- Comparisons
-- SDKs
-- Integration Requirements
-- validateURLForSSRF
-- Monitoring and Observability
-- Reliability
-- Performance
-- fakeRowsDriver
 - Developer Notes
 - Migration Guide
 - Known Limitations
 - How to Use Right Now
+- hasTextRows
 - Phase 1: Expression Engine (Weeks 1-2)
+- Frequently asked questions
+- Licensing and commercial use
+- Ie
+- Comparisons
+- SDKs
 - Phase 2: Credential Management (Weeks 3-4)
+- validateURLForSSRF
 - Phase 3: Webhook Support (Weeks 5-6)
+- Reliability
+- Performance
 - Phase 5: Workflow Orchestration (Weeks 11-12)
 - Phase 6: Performance and Production Readiness (Weeks 13-14)
-- m9m Technical Specification - Updated
-- go_pkg_context
+- NodeJSGlobals
+- SchedulerMetricsSnapshot
 - responseWriter
-- normalizeWebhookHeaders
+- 3. P1 — Engine correctness
 - kafkaAuth
-- keyBasedBalancer
 
 ## God Nodes (most connected - your core abstractions)
 1. `DataItem` - 386 edges
-2. `Workflow` - 205 edges
-3. `APIServer` - 160 edges
+2. `Workflow` - 209 edges
+3. `APIServer` - 159 edges
 4. `NewMemoryStorage()` - 134 edges
 5. `WorkflowStorage` - 127 edges
 6. `ExpressionContext` - 97 edges
 7. `BaseNode` - 85 edges
 8. `NewBaseNode()` - 83 edges
-9. `NodeProperty` - 78 edges
-10. `vue` - 77 edges
+9. `vue` - 80 edges
+10. `NodeProperty` - 78 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Phase 2: API Server Decomposition` --references--> `APIServer`  [INFERRED]
   docs/REFRACTOR_PLAN.md → internal/api/templates.go
-- `Security Features` --references--> `Function`  [INFERRED]
-  CHANGELOG.md → internal/expressions/evaluator_old.go
 - `Goja Runtime Sandboxing` --references--> `Function`  [INFERRED]
   docs/security/security-review.md → internal/expressions/evaluator_old.go
-- `P2 — Workflow-level features (≈ 8–12 d)` --references--> `WorkflowSettings`  [INFERRED]
-  docs/N8N_UI_PARITY_PLAN.md → internal/model/workflow.go
 - `2.2 Node spans` --references--> `Node`  [INFERRED]
   docs/opentelemetry.MD → internal/model/workflow.go
+- `P1 — Metadata-driven parameter panel (the "detail edit workflow" core) (≈ 12–18 d)` --references--> `NodeProperty`  [INFERRED]
+  docs/N8N_UI_PARITY_PLAN.md → internal/nodes/base/node.go
+- `1. The n8n model in 30 seconds` --references--> `NodeDescription`  [INFERRED]
+  n8n-nodes.MD → internal/nodes/base/node.go
 
 ## Import Cycles
-- None detected.
+- 2-file cycle: `web/src/components/workflow/parameters/expression/suggestions.ts -> web/src/components/workflow/parameters/expression/variables.ts -> web/src/components/workflow/parameters/expression/suggestions.ts`
 
-## Communities (836 total, 134 thin omitted)
+## Communities (827 total, 137 thin omitted)
 
 ### Community 0 - "net/http.Request"
 Cohesion: 0.06
-Nodes (22): APIServer, nodeTypeOptionRequest, defaultSuggestions(), skeletonWorkflow(), clientIP(), containsDangerousPattern(), formatDuration(), nodeTypeEntry() (+14 more)
+Nodes (21): APIServer, nodeTypeOptionRequest, defaultSuggestions(), skeletonWorkflow(), clientIP(), containsDangerousPattern(), formatDuration(), nodeTypeEntry() (+13 more)
 
 ### Community 1 - "if_conditions.go"
 Cohesion: 0.12
 Nodes (36): IfCondition, CanonicalIfOperatorName(), CompareIfValues(), EvaluateIfConditions(), ExtractIfConditions(), ifCompareFloat(), ifCompareOrdered(), ifConditionsArray() (+28 more)
 
-### Community 2 - "server_test.go"
-Cohesion: 0.06
-Nodes (59): SetVersionManager(), NewAPIServer(), setupTestServer(), TestActivateWorkflow(), TestCancelExecution_NotRunning(), TestCancelExecution_Running(), TestCancelExecution_TrackedRunning(), TestCORSPreflight() (+51 more)
+### Community 2 - "ExecutionHistory.vue"
+Cohesion: 0.03
+Nodes (52): vue-router, themeStore, baseControlClass, controlClass, controlId, describedBy, emit, handleInput() (+44 more)
 
 ### Community 3 - "monitoring_test.go"
 Cohesion: 0.07
-Nodes (78): NewAlertManager(), NewMonitoringManager(), NewMetricsCollector(), newMockAlertHandler(), newTestErrorMetric(), newTestExecutionMetric(), newTestMonitoringConfig(), TestAlertManager_AddHandler() (+70 more)
+Nodes (81): NewAlertManager(), collectSystemInfo(), NewMonitoringManager(), NewMetricsCollector(), newMockAlertHandler(), newTestErrorMetric(), newTestExecutionMetric(), newTestMonitoringConfig() (+73 more)
 
 ### Community 4 - "WorkflowStorage"
-Cohesion: 0.06
-Nodes (102): initCloudMode(), main(), NewRemoteClient(), NewServer(), NewAIAnthropicTool(), NewAIOpenAITool(), NewHTTPRequestTool(), NewSendDiscordTool() (+94 more)
+Cohesion: 0.05
+Nodes (109): initCloudMode(), main(), NewServer(), NewAIAnthropicTool(), NewAIOpenAITool(), NewHTTPRequestTool(), NewSendDiscordTool(), NewSendSlackTool() (+101 more)
 
 ### Community 5 - "NewMemoryStorage"
-Cohesion: 0.03
-Nodes (149): firstNonEmpty(), runServe(), openStorage(), storageOptions, DefaultConfig(), NewAI(), TestAI_BuildPrompts(), TestDefaultConfig() (+141 more)
+Cohesion: 0.02
+Nodes (174): registerLoadOptionProviders(), firstNonEmpty(), runServe(), openStorage(), storageOptions, Dynamic options (`loadOptions`) resolve credentials server-side, DefaultConfig(), NewAI() (+166 more)
 
 ### Community 6 - "DataItem"
 Cohesion: 0.04
-Nodes (27): RetryNodeRequest, ExecutionParams, Node, NodeOutput, N8nCompatibilityTest, ElasticsearchHTTPClient, ElasticsearchNode, captureNode (+19 more)
+Nodes (24): RetryNodeRequest, ExecutionParams, Node, NodeOutput, N8nCompatibilityTest, ElasticsearchHTTPClient, ElasticsearchNode, captureNode (+16 more)
 
 ### Community 7 - "time.Time"
-Cohesion: 0.07
-Nodes (19): ExecutionMetrics, SchedulerMetrics, CachedQuery, CompatibilityInfo, InstallationStatistics, MarketplaceAnalytics, MarketplaceCache, MarketplaceManager (+11 more)
+Cohesion: 0.12
+Nodes (11): CachedQuery, CompatibilityInfo, InstallationStatistics, MarketplaceCache, MarketplaceManager, MarketplaceTemplate, PopularityMetrics, Repository (+3 more)
 
 ### Community 8 - "VariableManager"
 Cohesion: 0.06
-Nodes (17): generateID(), TestVariableContext_GetValue(), NewPersistentVariableStorage(), Environment, EnvironmentCreateRequest, EnvironmentUpdateRequest, MemoryVariableStorage, PersistentVariableStorage (+9 more)
+Nodes (18): NewVariableHandler(), generateID(), TestVariableContext_GetValue(), NewPersistentVariableStorage(), Environment, EnvironmentCreateRequest, EnvironmentUpdateRequest, MemoryVariableStorage (+10 more)
 
 ### Community 9 - "Schedules.vue"
 Cohesion: 0.03
-Nodes (79): @heroicons/vue, createSchedule(), deleteSchedule(), disableSchedule(), enableSchedule(), getSchedule(), getScheduleHistory(), getSchedules() (+71 more)
+Nodes (76): @heroicons/vue, createSchedule(), deleteSchedule(), disableSchedule(), enableSchedule(), getSchedule(), getScheduleHistory(), getSchedules() (+68 more)
 
 ### Community 10 - "functions.ts"
 Cohesion: 0.04
-Nodes (115): applyBinary(), compare(), looseEquals(), abs(), addDays(), addHours(), addMinutes(), andFunction() (+107 more)
+Nodes (96): addDays(), addHours(), addMinutes(), andFunction(), ARRAY_MEMBER_BUILTINS, average(), BUILTIN_MIN_ARGS, capitalise() (+88 more)
 
 ### Community 11 - "runtime_test.go"
 Cohesion: 0.06
 Nodes (52): CompatibilityTestSuite, NewCompatibilityTestSuite(), TestN8nJavaScriptRuntime(), TestN8nNodeExecution(), TestN8nWorkflowImport(), TestPerformanceBenchmarks(), TestRealWorldWorkflows(), NewJavaScriptRuntime() (+44 more)
 
 ### Community 12 - "RemoteClient"
-Cohesion: 0.03
-Nodes (14): WorkflowExecution, generateID(), boolToInt(), NewMySQLStorage(), NewPostgresStorage(), NewSQLiteStorage(), bootstrapDefaultWorkspace(), ensureColumn() (+6 more)
-
-### Community 13 - "stores/index.ts"
 Cohesion: 0.02
-Nodes (96): axios, pinia, vue-router, BuildInfo, getBuildInfo(), apiClient, getNodeType(), getNodeTypes() (+88 more)
+Nodes (15): mysqlKeyLimitStorage, DataTableStore, MemoryStorage, boolToInt(), NewMySQLStorage(), NewPostgresStorage(), NewSQLiteStorage(), bootstrapDefaultWorkspace() (+7 more)
+
+### Community 13 - "Sidebar.vue"
+Cohesion: 0.03
+Nodes (54): BuildInfo, getBuildInfo(), apiClient, ConnectionStatus, MessageHandler, PushTicketResponse, StatusHandler, WebSocketConnection (+46 more)
 
 ### Community 14 - "api/tags.ts"
 Cohesion: 0.02
-Nodes (152): addWorkflowTag(), compareVersions(), createTag(), createVersion(), deleteTag(), deleteVersion(), getTag(), getVersion() (+144 more)
+Nodes (152): pinia, pinia@^2.2.4, addWorkflowTag(), compareVersions(), createTag(), createVersion(), deleteTag(), deleteVersion() (+144 more)
 
 ### Community 15 - "6. Isu Konsistensi & Kecil"
 Cohesion: 0.06
 Nodes (32): 1. Ringkasan Eksekutif, 2. Lingkup & Metode, 3. Hasil yang Terverifikasi Berfungsi, 4. Temuan Kritis — Keamanan, 5. Bug Fungsional, 6. Isu Konsistensi & Kecil, 7. Rekomendasi Prioritas, 8. Kondisi Instance Setelah Pengujian (+24 more)
 
-### Community 16 - "CollectionField.vue"
-Cohesion: 0.03
-Nodes (103): getNodeType(), getNodeTypeOptions(), getNodeTypes(), NodeTypeOption, unwrapOptions(), addRow(), bucketKey, defs (+95 more)
+### Community 16 - "WorkflowExecution"
+Cohesion: 0.11
+Nodes (6): ExecuteWorkflowWithContext(), ResolveExecutionError(), WorkflowExecution, generateExecutionID(), generateID(), resolveWorkspaceID()
 
 ### Community 17 - "Workflow"
-Cohesion: 0.13
-Nodes (11): What is an "edge"?, BinaryData, Connection, CredentialReference, NodeConnections, NodeDescription, WorkflowData, WorkflowNode (+3 more)
+Cohesion: 0.12
+Nodes (13): WorkflowEngine, BinaryData, Connection, CredentialReference, DataItem, ExecutionResult, NodeDescription, NodeExecutorFn (+5 more)
 
 ### Community 18 - "context.Context"
 Cohesion: 0.11
-Nodes (15): ContextWithUser(), UserFromContext(), ExecuteWorkflowWithContext(), WithExecutionRetry(), GetArray(), GetIntOr(), GetMap(), GetString() (+7 more)
+Nodes (13): ContextWithUser(), UserFromContext(), WithExecutionRetry(), GetArray(), GetIntOr(), GetMap(), GetString(), GetStringOr() (+5 more)
 
 ### Community 19 - ".GetRaw"
 Cohesion: 0.07
@@ -884,16 +874,16 @@ Cohesion: 0.03
 Nodes (27): cleanUpNextTick(), createReduce(), _deepEqual(), drainQueue(), expectedException(), fail(), finish(), getMessage() (+19 more)
 
 ### Community 21 - "MemoryUserStorage"
-Cohesion: 0.04
+Cohesion: 0.06
 Nodes (14): failingSessionStorage, InviteToken, MemoryUserStorage, PasswordResetToken, persistedUser, PersistentUserStorage, UserSettings, UserStorage (+6 more)
 
 ### Community 22 - "NewBaseNode"
 Cohesion: 0.01
-Nodes (287): main(), printPerformanceSummary(), runConcurrencyBenchmarks(), runExpressionBenchmarks(), runWorkflowBenchmarks(), showSystemInfo(), registerNodes(), runBenchmark() (+279 more)
+Nodes (277): main(), printPerformanceSummary(), runConcurrencyBenchmarks(), runExpressionBenchmarks(), runWorkflowBenchmarks(), showSystemInfo(), registerNodes(), runBenchmark() (+269 more)
 
-### Community 23 - "NodeProperty"
-Cohesion: 0.09
-Nodes (32): NodeMetadata, OptionValue, BoolProp(), CollectionProp(), CommonSettings(), FileModes(), FileProp(), FilterConditionProp() (+24 more)
+### Community 23 - "net/http.Handler"
+Cohesion: 0.05
+Nodes (20): AuthContext, AuthManager, authTestHarness, AuthFromContext(), RequireAuthFromContext(), NewAuthManager(), canReadCredentialData(), AuthMiddleware() (+12 more)
 
 ### Community 24 - "Distributed m9m Architecture with BadgerDB + Raft + NNG"
 Cohesion: 0.04
@@ -909,59 +899,55 @@ Nodes (49): 1. Create Plugin, 2. Implement Logic, 3. Test Plugin, 4. Use in Work
 
 ### Community 27 - "Credentials.vue"
 Cohesion: 0.04
-Nodes (73): Credentials — UI, createCredential(), CredentialListResponse, deleteCredential(), getCredential(), getCredentials(), getCredentialSchema(), getCredentialTypes() (+65 more)
+Nodes (72): Credentials — UI, createCredential(), CredentialListResponse, deleteCredential(), getCredential(), getCredentials(), getCredentialSchema(), getCredentialTypes() (+64 more)
 
-### Community 28 - "n8n sync-service hardening"
-Cohesion: 0.25
-Nodes (4): n8n sync-service hardening, InvalidWorkflowError, normalize_credentials(), sanitize_type_versions()
+### Community 28 - "normalize_n8n_workflow"
+Cohesion: 0.05
+Nodes (24): _coerce_type_version(), normalize_n8n_workflow(), normalize_node_position(), normalize_tags(), to_m9m_payload(), unique_node_name(), _uuid4(), test_normalize_active_from_json_opt_in() (+16 more)
 
 ### Community 29 - "Contributing to m9m"
 Cohesion: 0.04
 Nodes (48): 1. Before You Start, 1. Code Documentation, 1. Fork and Clone, 1. Formatting, 1. Node Structure, 1. Test Structure, 2. Branch Naming, 2. Install Dependencies (+40 more)
 
 ### Community 30 - "nodes/index.md"
-Cohesion: 0.06
-Nodes (9): Configuration File Location, Configuration Methods, Configuration Overview, Configuration Sections, Full Configuration Example, Next Steps, Quick Start Configuration, Validating Configuration (+1 more)
+Cohesion: 0.05
+Nodes (30): 30-second quickstart, Community, Documentation, Key features, License, m9m, Run your first workflow, Why m9m? (vs n8n) (+22 more)
 
 ### Community 31 - "WorkflowCanvas.vue"
 Cohesion: 0.04
 Nodes (42): credentialCount, draft, editing, editorStore, iconComponent, isComfortable, isSticky, isTrigger (+34 more)
 
-### Community 32 - "github.com/dop251/goja.Runtime"
-Cohesion: 0.15
-Nodes (4): 2. JavaScript Plugin System, StringExtensions, convertFromJSArray(), convertToJSArray()
-
-### Community 33 - "MonitoringManager"
-Cohesion: 0.08
-Nodes (11): collectSystemInfo(), ErrorMetric, ExecutionMetric, HealthIssue, HealthStatus, MetricsCollector, MetricsSummary, MonitoringDashboard (+3 more)
+### Community 33 - "time.Time"
+Cohesion: 0.05
+Nodes (28): APIKey, AuditEvent, Session, APIKey, Session, BlobInfo, ContainerInfo, ExecutionError (+20 more)
 
 ### Community 34 - "PrometheusCollector"
-Cohesion: 0.08
-Nodes (3): NewPrometheusCollector(), PrometheusCollector, responseWriter
+Cohesion: 0.05
+Nodes (17): CgroupStats, TestRetryLoopPollInterval_EnvInvalidFallsBackToDefault(), clampRetryLoopInterval(), parseRetryLoopInterval(), resolveRetryLoopPollInterval(), retryLoopIntervalFromParams(), retryLoopIntervalFromWorkflow(), NewPrometheusCollector() (+9 more)
 
 ### Community 35 - "live-browser.js"
 Cohesion: 0.03
 Nodes (140): absolutizeUrls(), applyGlobalBarLabelState(), applyPlaceholderSizingStyles(), averageRgb01(), beginEditPin(), bindEditBadgeProxy(), bufferToBase64(), buildAnnotationsForCapture() (+132 more)
 
 ### Community 36 - "RemoteClient"
-Cohesion: 0.06
-Nodes (7): tagListEnvelope, paginateTags(), sortTags(), ExecutionFilters, Tag, WorkflowFilters, RemoteClient
+Cohesion: 0.05
+Nodes (12): CredentialResponse, tagListEnvelope, NewRemoteClient(), toCredentialResponse(), toCredentialResponseWithData(), paginateTags(), sortTags(), Credential (+4 more)
 
 ### Community 37 - "connectSSE"
 Cohesion: 0.09
 Nodes (74): abortSvelteComponentInjection(), beginNewLiveConfiguration(), buildInsertPlaceholderSnapshotFromDom(), cancelEditing(), cancelEditingToPicking(), cancelInsertConfigure(), cleanup(), cleanupAcceptedSession() (+66 more)
 
 ### Community 38 - "extended.py"
-Cohesion: 0.07
-Nodes (28): _contract_credentials(), _contract_cron(), _contract_drift(), _contract_go_test(), _contract_load(), _contract_local_error(), _contract_roundtrip(), _contract_subworkflow() (+20 more)
+Cohesion: 0.05
+Nodes (34): api_headers(), _contract_auth_probe(), _contract_credentials(), _contract_cron(), _contract_drift(), _contract_go_test(), _contract_load(), _contract_local_error() (+26 more)
 
 ### Community 39 - "glob"
 Cohesion: 0.13
 Nodes (6): glob(), inflight(), makeres(), once(), readdirCb(), slice()
 
 ### Community 40 - "update_parity_sheets.py"
-Cohesion: 0.07
-Nodes (26): _agree(), case_table(), count_rows(), display_value(), evidence_index(), headers_equal(), load_cases(), load_reports() (+18 more)
+Cohesion: 0.06
+Nodes (27): _agree(), case_table(), count_rows(), display_value(), evidence_index(), headers_equal(), load_cases(), load_reports() (+19 more)
 
 ### Community 41 - "VersionManager"
 Cohesion: 0.15
@@ -980,8 +966,8 @@ Cohesion: 0.08
 Nodes (44): NewS3OperationsNode(), TestNewS3OperationsNode_ReturnsNonNil(), TestS3Config_FieldsAssignment(), TestS3CopySource_Fields(), TestS3Encryption_Fields(), TestS3LifecycleConfig_Fields(), TestS3Object_Fields(), TestS3Operation_StructDefaults() (+36 more)
 
 ### Community 45 - "Server"
-Cohesion: 0.06
-Nodes (29): startMetricsServer(), CredentialDeniedError(), ExecutionFailedError(), InvalidParamsError(), NodeNotFoundError(), PluginError(), ResourceNotFoundError(), ScheduleError() (+21 more)
+Cohesion: 0.07
+Nodes (24): CredentialDeniedError(), ExecutionFailedError(), InvalidParamsError(), NodeNotFoundError(), PluginError(), ResourceNotFoundError(), ScheduleError(), TimeoutError() (+16 more)
 
 ### Community 46 - "validation.ts"
 Cohesion: 0.08
@@ -1000,12 +986,12 @@ Cohesion: 0.05
 Nodes (42): Environment Variable, Examples, Examples, Examples, Examples, Examples, Examples, Examples (+34 more)
 
 ### Community 51 - "json"
-Cohesion: 0.09
-Nodes (27): connection_count(), describe(), diff_types(), export_workflow(), fetch_n8n_workflow(), import_workflow(), list_n8n_workflows(), m9m_headers() (+19 more)
+Cohesion: 0.08
+Nodes (29): connection_count(), describe(), diff_types(), export_workflow(), fetch_n8n_workflow(), import_workflow(), list_n8n_workflows(), m9m_headers() (+21 more)
 
 ### Community 52 - "BlobStorageNode"
-Cohesion: 0.10
-Nodes (13): AzureConfig, BlobCopyOptions, BlobLeaseOptions, BlobOperation, BlobOperationResult, BlobProperties, BlobStorageNode, CloudStorageNode (+5 more)
+Cohesion: 0.19
+Nodes (8): AzureConfig, BlobCopyOptions, BlobLeaseOptions, BlobOperation, BlobOperationResult, BlobProperties, BlobStorageNode, ExpressionContext
 
 ### Community 53 - "Webhook Node"
 Cohesion: 0.05
@@ -1016,28 +1002,28 @@ Cohesion: 0.05
 Nodes (41): 1. Use Descriptive Paths, 2. Validate Input, 3. Respond Quickly, 4. Handle Errors, 5. Log Requests, Accessing Webhook Data, Best Practices, Common Use Cases (+33 more)
 
 ### Community 55 - "Workflow"
-Cohesion: 0.04
-Nodes (72): Template, connectionRouterImpl, numErr, EngineAdapter, mockLookup, pollMongo, recordingMongo, atoiSafe() (+64 more)
+Cohesion: 0.05
+Nodes (48): Template, numErr, EngineAdapter, mockExecutor, mockLookup, WorkflowResult, ContextWorkflowEngine, atoiSafe() (+40 more)
 
-### Community 56 - "ConnectionRouter"
-Cohesion: 0.09
-Nodes (4): MockWorkflowEngine, ExecutionResult, ConnectionRouter, MockWorkflowEngine
+### Community 56 - "CloudStorageNode"
+Cohesion: 0.15
+Nodes (11): CloudStorageNode, GCPConfig, StorageBucket, StorageCORSPolicy, StorageEncryption, StorageLifecycle, StorageLoggingConfig, StorageOperation (+3 more)
 
 ### Community 57 - "m9m.cc"
 Cohesion: 0.10
 Nodes (15): CredentialManager, constructor, CredentialManager::CredentialManager(), handle_, Engine, constructor, Engine::Engine(), handle_ (+7 more)
 
-### Community 58 - "Daemon"
-Cohesion: 0.20
-Nodes (15): ExampleStreamingHandler(), ExampleStreamResponse(), newFlusherRecorder(), NewStreamResponse(), splitLines(), TestStreamResponse_Hijack(), TestStreamResponse_Hijack_Unsupported(), TestStreamResponse_NilWriter() (+7 more)
+### Community 58 - "router.go"
+Cohesion: 0.11
+Nodes (15): connectionRouterImpl, addSplitInBatchesDoneBranchDependencies(), CollectBranchDescendants(), CollectDirectBranchTargets(), containsString(), debugTraceRouteDataEntry(), deepestProcessBranchNode(), GetLoopDoneOrder() (+7 more)
 
 ### Community 59 - "NewBaseNode"
 Cohesion: 0.06
 Nodes (26): BaseNode, CredentialData, CredentialManager, FunctionNode, NodeDescription, NodeExecutor, NodeMetadata, NodeProperty (+18 more)
 
-### Community 60 - "import_workflows_from_file"
-Cohesion: 0.08
-Nodes (22): build_arg_parser(), import_workflows_from_file(), main(), _print_import_verdicts(), _no_http(), _recording_http(), test_cli_active_state_from_json_camel_case_alias(), test_cli_active_state_from_json_flag() (+14 more)
+### Community 60 - "NewSetNode"
+Cohesion: 0.10
+Nodes (30): TestSetNode_ExecutionIdFromRunData(), TestSetNode_IncludeOtherFieldsTopLevel(), NewSetNode(), TestSetNodeRawModeAcceptsObjectJSONOutput(), TestSetNodeRawModeInferredFromJSONOutput(), TestSetNodeRawModeInvalidJSONFails(), TestSetNodeRawModeReplacesItemBody(), shouldReplaceJSON() (+22 more)
 
 ### Community 61 - "n8n vs m9m Feature Comparison & Gap Analysis"
 Cohesion: 0.05
@@ -1056,8 +1042,8 @@ Cohesion: 0.07
 Nodes (59): roundTripperFunc, TestAnthropicNode_Execute_CredentialEnvelopeWinsOverLegacyKey(), TestAnthropicNode_Execute_EmptyEnvelopeKeyFallsBackToLegacyKey(), TestAnthropicNode_Execute_MissingAPIKeyErrorDoesNotLeakSecret(), TestAnthropicNode_Execute_UsesCredentialEnvelopeAPIKey(), TestAnthropicNode_Execute_UsesLegacyAPIKey(), isMiniMax(), NewAnthropicNode() (+51 more)
 
 ### Community 65 - "blobstore_test.go"
-Cohesion: 0.08
-Nodes (22): BlobStore, fakeStore, LocalStore, S3Config, S3Store, contains(), NewLocalStore(), NewS3Store() (+14 more)
+Cohesion: 0.09
+Nodes (19): BlobStore, fakeStore, LocalStore, S3Config, S3Store, contains(), NewLocalStore(), NewS3Store() (+11 more)
 
 ### Community 66 - "blob_storage_test.go"
 Cohesion: 0.09
@@ -1081,7 +1067,7 @@ Nodes (37): 1. Native Compilation, 2. Efficient Memory Management, 3. Superior C
 
 ### Community 71 - "Plugin System - Technical Documentation"
 Cohesion: 0.06
-Nodes (36): 1. Plugin Registry (`registry.go`), 3. gRPC Plugin System, 4. REST API Plugin System, 5. Wrapper Pattern, Architecture, Common Issues, Component Details, Data Flow (+28 more)
+Nodes (31): Architecture, Common Issues, Data Flow, Debug Mode, Error Handling, File Structure, Future Enhancements, gRPC Plugin Execution (+23 more)
 
 ### Community 72 - "Webhooks API"
 Cohesion: 0.05
@@ -1089,23 +1075,23 @@ Nodes (37): 401 Unauthorized, 404 Not Found, 405 Method Not Allowed, 503 Workflo
 
 ### Community 73 - "test_sync.py"
 Cohesion: 0.05
-Nodes (46): `sync-service/sync.py` (the n8n → m9m bridge), normalize_n8n_workflow(), normalize_tags(), to_m9m_payload(), _uuid4(), validate_n8n_workflow(), test_normalize_active_forced_false_by_default(), test_normalize_active_from_json_opt_in() (+38 more)
+Nodes (44): import_workflows_from_file(), main(), validate_n8n_workflow(), _no_http(), _recording_http(), test_cli_active_state_from_json_camel_case_alias(), test_cli_active_state_from_json_flag(), test_cli_dry_run_makes_zero_http_requests() (+36 more)
 
 ### Community 74 - ".ImportWorkflows"
-Cohesion: 0.05
-Nodes (24): credentialImportEntry, CredentialResponse, importedCredentialSet, workflowCredentialBundle, RaftCommand, credentialNameTypeKey(), decodeCredentialPayload(), parseCredentialImportPayload() (+16 more)
+Cohesion: 0.09
+Nodes (20): credentialImportEntry, importedCredentialSet, workflowCredentialBundle, RaftCommand, credentialNameTypeKey(), decodeCredentialPayload(), parseCredentialImportPayload(), parseImportBundlePayload() (+12 more)
 
 ### Community 75 - "sync.py"
-Cohesion: 0.04
-Nodes (32): _coerce_type_version(), debug_credentials(), decrypt_n8n_credential_data(), fetch_m9m_node_types(), fetch_n8n_credentials(), fetch_n8n_data_tables(), fetch_n8n_workflows(), health() (+24 more)
+Cohesion: 0.05
+Nodes (30): n8n sync-service hardening, build_arg_parser(), debug_credentials(), fetch_m9m_node_types(), fetch_n8n_credentials(), fetch_n8n_data_tables(), fetch_n8n_workflows(), health() (+22 more)
 
 ### Community 76 - "reliability_test.go"
-Cohesion: 0.12
-Nodes (29): NewDeadLetterQueue(), TestCircuitBreaker_ClosedState(), TestCircuitBreaker_ClosesAfterMultipleSuccessesInHalfOpen(), TestCircuitBreaker_ClosesAfterSuccessInHalfOpen(), TestCircuitBreaker_HalfOpenTransition(), TestCircuitBreaker_NilConfigUsesDefault(), TestCircuitBreaker_OnStateChangeCallback(), TestCircuitBreaker_OpensOnFailures() (+21 more)
+Cohesion: 0.05
+Nodes (73): ReliableEngineConfig, DefaultReliableEngineConfig(), NewReliableWorkflowEngine(), DefaultDLQConfig(), NewDeadLetterQueue(), NewHealthChecker(), TestBulkhead_AllowsConcurrent(), TestBulkhead_ContextCancellation() (+65 more)
 
-### Community 77 - "Webhook"
-Cohesion: 0.13
-Nodes (9): TestLiveAuthData_HonoursCredentialUpdate(), NewWebhookManager(), NewMemoryWebhookStorage(), NewPersistentWebhookStorage(), MemoryWebhookStorage, PersistentWebhookStorage, Webhook, WebhookExecution (+1 more)
+### Community 77 - ".ExecuteWebhook"
+Cohesion: 0.08
+Nodes (31): 7. Reference: the implementation, TestIsDecorativeNodeType(), isDecorativeNodeType(), BuildExecutionNodeData(), findLastNodeName(), findStartNodeName(), TestBuildExecutionNodeData_DebugMode_RetainsAllNodes(), TestBuildExecutionNodeData_ProductionMode_EmptyLastNodeAndEmptyResult() (+23 more)
 
 ### Community 78 - "DistributedWebSocketManager"
 Cohesion: 0.10
@@ -1127,9 +1113,9 @@ Nodes (36): Access Control, Audit Logging, Authentication, Autoscaling, Backup S
 Cohesion: 0.06
 Nodes (35): Branch, Common Use Cases, Create Issue, Examples, Examples, Get Pipeline Status, Get Project, Get Pull Request (+27 more)
 
-### Community 83 - "extensions.go"
-Cohesion: 0.03
-Nodes (68): ConfigProvider, NullProvider, QuotaDecision, QuotaRequest, Subscription, Tier, UsageEvent, billingProvider (+60 more)
+### Community 83 - "ConfigProvider"
+Cohesion: 0.18
+Nodes (8): ConfigProvider, NullProvider, QuotaDecision, QuotaRequest, Subscription, Tier, UsageEvent, Provider
 
 ### Community 84 - "Schedules API"
 Cohesion: 0.07
@@ -1143,9 +1129,9 @@ Nodes (35): Examples, Examples, Examples, Examples, Examples, Examples, Examples
 Cohesion: 0.06
 Nodes (34): Access Tiers, Advanced Options, Authentication Comparison, AWS Lambda Node, AWS S3 Node, Azure Blob Storage Node, Cloud Storage Nodes, Delete Object (+26 more)
 
-### Community 87 - "parser.ts"
-Cohesion: 0.08
-Nodes (34): evaluateExpression(), evaluateValue(), ExpressionContext, stripEnvelope(), toExpressionError(), assertEqual(), deepEqual(), evaluate() (+26 more)
+### Community 87 - "expression/index.ts"
+Cohesion: 0.10
+Nodes (35): createPreviewContext(), EvaluationResult, formatPreview(), BUILTIN_FUNCTIONS, BuiltinFunction, FunctionCategory, getBuiltinFunction(), isDigit() (+27 more)
 
 ### Community 88 - "Deployment Guide"
 Cohesion: 0.06
@@ -1159,21 +1145,21 @@ Nodes (33): Adding New Examples, Advanced Patterns, API Integration, Array Manip
 Cohesion: 0.11
 Nodes (13): NewExpressionContext(), WorkflowTemplate, InstallationOptions, InstallationRequest, InstallationResult, Parameter, TemplateCategory, TemplateInstallOperation (+5 more)
 
-### Community 91 - "WebhookManager"
-Cohesion: 0.11
-Nodes (16): GlobalExtract(), authDataFromCredential(), carrierFromRequest(), firstHeaderCI(), generateExecutionID(), generateWebhookExecutionID(), WebhookManager, lastNodeResponseBody() (+8 more)
+### Community 91 - "extensions.go"
+Cohesion: 0.04
+Nodes (63): billingProvider, blobStore, Engine, observabilityEmitter, quotaEnforcer, snapshotSink, testNode, Counter (+55 more)
 
 ### Community 92 - "NodePanel.vue"
-Cohesion: 0.04
-Nodes (58): cancelExecution(), deleteExecution(), getExecution(), getExecutions(), retryExecution(), retryNode(), RetryNodeRequest, BoundCredential (+50 more)
+Cohesion: 0.03
+Nodes (84): vitest, cancelExecution(), deleteExecution(), getExecution(), getExecutions(), retryExecution(), retryNode(), RetryNodeRequest (+76 more)
 
 ### Community 93 - "LambdaOperationsNode"
 Cohesion: 0.21
 Nodes (8): LambdaConfig, LambdaConfiguration, LambdaDeadLetterConfig, LambdaOperation, LambdaOperationsNode, LambdaResult, LambdaTracingConfig, LambdaVpcConfig
 
 ### Community 94 - "re"
-Cohesion: 0.12
-Nodes (14): derive_description(), derive_title(), has_frontmatter(), keywords_for(), main(), process(), slug_to_title(), main() (+6 more)
+Cohesion: 0.11
+Nodes (14): main(), page_url(), strip_frontmatter(), _google_auth(), main(), _verify_snapshot(), _write_single_cell(), _classify() (+6 more)
 
 ### Community 95 - "m9m: API Compatibility & Licensing Guide"
 Cohesion: 0.06
@@ -1209,19 +1195,15 @@ Nodes (23): arrayToHash(), debuglog(), deprecate(), format(), formatArray(), for
 
 ### Community 103 - "workflowEditor.ts"
 Cohesion: 0.05
-Nodes (52): Workflow import/export (n8n JSON), activateWorkflow(), createWorkflow(), deactivateWorkflow(), deleteWorkflow(), duplicateWorkflow(), executeWorkflow(), exportWorkflow() (+44 more)
-
-### Community 104 - "Architectural / Capability"
-Cohesion: 0.09
-Nodes (21): Architectural / Capability, NewInProcessBus(), TestInProcessBus_CloseRejectsEnqueue(), TestInProcessBus_CloseUnblocksWait(), TestInProcessBus_EnqueueAndWait(), TestInProcessBus_ResultRoundTrip(), TestRunner_StartStop(), TestRunner_StartValidates() (+13 more)
+Nodes (53): Workflow import/export (n8n JSON), activateWorkflow(), createWorkflow(), deactivateWorkflow(), deleteWorkflow(), duplicateWorkflow(), executeWorkflow(), exportWorkflow() (+45 more)
 
 ### Community 105 - "Webhook Node"
 Cohesion: 0.13
 Nodes (15): Authentication Options, Basic Authentication, Description, Example, Header Authentication, HTTP Methods, No Authentication, Output (+7 more)
 
-### Community 106 - "AlertManager"
-Cohesion: 0.08
-Nodes (18): CreateDefaultAlertRules(), NewEmailAlertHandler(), NewLogAlertHandler(), NewWebhookAlertHandler(), TestAlertManager_CreateDefaultAlertRules(), TestAlertManager_EmailAlertHandler(), TestAlertManager_LogAlertHandler(), TestAlertManager_WebhookAlertHandler() (+10 more)
+### Community 106 - "alerting.go"
+Cohesion: 0.11
+Nodes (13): CreateDefaultAlertRules(), NewEmailAlertHandler(), NewLogAlertHandler(), NewWebhookAlertHandler(), TestAlertManager_CreateDefaultAlertRules(), TestAlertManager_EmailAlertHandler(), TestAlertManager_LogAlertHandler(), TestAlertManager_WebhookAlertHandler() (+5 more)
 
 ### Community 107 - "mcp/types.go"
 Cohesion: 0.09
@@ -1229,27 +1211,27 @@ Nodes (36): Resource attributes, Tool, JSONContent(), SuccessContent(), TextCont
 
 ### Community 108 - "testing.T"
 Cohesion: 0.01
-Nodes (323): TestChatMessage(), TestGenerateWorkflowRequest(), TestSuggestNodesRequest(), TestProviderCatalog_DefaultModelsAreDistinct(), TestProviderCatalog_EveryEntryIsComplete(), TestProviderCatalog_HasAllExpectedProviders(), newAuthTestHarness(), TestAuthMiddleware_JWTSessionIs200() (+315 more)
+Nodes (346): TestChatMessage(), TestGenerateWorkflowRequest(), TestSuggestNodesRequest(), TestProviderCatalog_DefaultModelsAreDistinct(), TestProviderCatalog_EveryEntryIsComplete(), TestProviderCatalog_HasAllExpectedProviders(), newAuthTestHarness(), TestAuthMiddleware_JWTSessionIs200() (+338 more)
 
-### Community 109 - "MemoryStorage"
-Cohesion: 0.14
-Nodes (17): tagsFilterEnvelope, mysqlKeyLimitStorage, decodeTagsFilterEnvelope(), getWorkflowsFiltered(), newTagsFilterTestServer(), seedTagsFilterFixtures(), TestListWorkflowsEmptyTagFilterIsUnchanged(), TestListWorkflowsFiltersBySingleTagID() (+9 more)
+### Community 109 - "newTagsFilterTestServer"
+Cohesion: 0.37
+Nodes (15): tagsFilterEnvelope, decodeTagsFilterEnvelope(), getWorkflowsFiltered(), newTagsFilterTestServer(), seedTagsFilterFixtures(), TestListWorkflowsEmptyTagFilterIsUnchanged(), TestListWorkflowsFiltersBySingleTagID(), TestListWorkflowsFiltersBySingleTagName() (+7 more)
 
 ### Community 110 - "templates_test.go"
-Cohesion: 0.06
-Nodes (82): NewMarketplaceAnalytics(), NewMarketplaceCache(), NewMarketplaceManager(), NewRatingSystem(), NewSecurityScanner(), NewUpdateScheduler(), NewTemplateNode(), newMinimalWorkflowTemplate() (+74 more)
+Cohesion: 0.11
+Nodes (53): NewMarketplaceManager(), newMinimalWorkflowTemplate(), newTestTemplateManager(), seedTemplate(), TestAddTemplateToCategory_DuplicatePrevented(), TestGenerateWorkflowName_Default(), TestGenerateWorkflowName_WithParameter(), TestGetTemplate_NotFound() (+45 more)
 
 ### Community 111 - "ExecutionDetail.vue"
 Cohesion: 0.03
-Nodes (66): inferType(), jsonText, Props, props, safeData, schemaEntries, tableColumns, tableRows (+58 more)
+Nodes (66): @vue-flow/core, @vue-flow/core@^1.38.0, inferType(), jsonText, Props, props, safeData, schemaEntries (+58 more)
 
 ### Community 112 - "leader_test.go"
 Cohesion: 0.14
 Nodes (14): fakeRaft, LeaderElector, RaftBackend, RaftState, NewLeaderElector(), TestLeaderElector_IsLeader(), TestLeaderElector_LeaderAddress(), TestLeaderElector_NilSafe() (+6 more)
 
 ### Community 113 - "auth.AuthManager"
-Cohesion: 0.07
-Nodes (13): JWTClaims, JWTManager, PasswordHasher, UserCredentials, UserRegistration, generateID(), TestGenerateRandomToken(), TestValidateEmail() (+5 more)
+Cohesion: 0.06
+Nodes (22): AuthOptions, PasswordHasher, UserCredentials, UserRegistration, TestCreateAPIKey_ShowsTheSecretOnce(), AuthMiddlewareWithManager(), AuthMiddlewareWithOptions(), getPermissionsForRole() (+14 more)
 
 ### Community 114 - "Write Binary File Node"
 Cohesion: 0.06
@@ -1263,17 +1245,21 @@ Nodes (31): Asterisk (*), Business Scenarios, Check Syntax, Comma (,), Common Mi
 Cohesion: 0.06
 Nodes (31): 1. Always Authenticate Production Webhooks, 2. Use Strong Secrets, 3. Store Secrets Securely, 4. Use HTTPS, 5. Validate Timestamps, 6. Rate Limit, 7. Log and Monitor, Authentication Methods (+23 more)
 
+### Community 117 - "github.com/dop251/goja.Value"
+Cohesion: 0.14
+Nodes (5): 2. JavaScript Plugin System, MathExtensions, flattenArgs(), convertFromJSArray(), convertToJSArray()
+
 ### Community 118 - "elasticsearch_test.go"
 Cohesion: 0.10
-Nodes (30): NewElasticsearchNode(), setupESServer(), TestElasticsearchNode_Bulk(), TestElasticsearchNode_CreateIndex(), TestElasticsearchNode_Delete(), TestElasticsearchNode_Description(), TestElasticsearchNode_Get(), TestElasticsearchNode_Index() (+22 more)
+Nodes (28): setupESServer(), TestElasticsearchNode_Bulk(), TestElasticsearchNode_CreateIndex(), TestElasticsearchNode_Delete(), TestElasticsearchNode_Description(), TestElasticsearchNode_Get(), TestElasticsearchNode_Index(), TestElasticsearchNode_IndexWithID() (+20 more)
 
 ### Community 119 - "model/workflow.go"
-Cohesion: 0.08
-Nodes (29): NodeFactory, outputExecError(), outputExecResult(), outputJSON(), parseExecInput(), runExec(), ExecResult, NodeTypeInfo (+21 more)
+Cohesion: 0.10
+Nodes (32): NodeFactory, getJSONKeys(), main(), runWorkflowTest(), ExecResult, NodeTypeInfo, NodeCredentialSpec, assertCredentialSlots() (+24 more)
 
 ### Community 120 - "Changelog"
-Cohesion: 0.12
-Nodes (17): [0.2.0] - 2026-05-07, [0.2.0-parity] - 2026-09-10, Added, Changed, Changelog, Contributors, Expression Evaluation Performance, Fixed (+9 more)
+Cohesion: 0.07
+Nodes (30): [0.1.0-beta.1] - 2024-01-22, [0.2.0] - 2026-05-07, [0.2.0-parity] - 2026-09-10, Added, Added, Changed, Changed, Changelog (+22 more)
 
 ### Community 121 - "MCP Integration - Claude Code for Workflow Automation"
 Cohesion: 0.07
@@ -1289,7 +1275,7 @@ Nodes (18): addRow(), currentMode, declaredDefault(), emit, emitValue(), isPlain
 
 ### Community 124 - "WorkflowCanvas.vue"
 Cohesion: 0.03
-Nodes (70): 5.5 Fix the canvas state colouring — **DONE (2026-09-09 live)**, @dagrejs/dagre, @dagrejs/dagre@^1.1.8, addNodeAtCenter(), addNodeOfType(), canvasBackground, canvasDotColor, canvasRoot (+62 more)
+Nodes (90): 5.5 Fix the canvas state colouring — **DONE (2026-09-09 live)**, addNodeAtCenter(), addNodeOfType(), canvasBackground, canvasDotColor, canvasRoot, DEFAULT_VIEWPORT, doubleClick (+82 more)
 
 ### Community 125 - "m9m"
 Cohesion: 0.08
@@ -1301,18 +1287,18 @@ Nodes (11): runDemo(), PrintDemoJSON(), PrintDemoTable(), RunDemos(), TestDemo_C
 
 ### Community 127 - "workflow_importer.go"
 Cohesion: 0.08
-Nodes (28): ConversionIssue, ExportOptions, ImportOptions, ImportStatistics, N8nConnection, N8nConnectionGroup, n8nExportConnection, n8nExportConnections (+20 more)
+Nodes (29): ConversionIssue, ExportOptions, ImportOptions, ImportStatistics, N8nConnection, N8nConnectionGroup, n8nExportConnection, n8nExportConnections (+21 more)
 
 ### Community 128 - "Kubernetes Deployment"
 Cohesion: 0.07
 Nodes (29): Check Events, Check Pod Status, ConfigMap, Custom Values, Deployment, Grafana Dashboard, Helm Chart, HorizontalPodAutoscaler (+21 more)
 
 ### Community 129 - "lunr.tr.min.js"
-Cohesion: 0.23
-Nodes (26): o(), a(), b(), c(), d(), E(), er(), f() (+18 more)
+Cohesion: 0.11
+Nodes (50): Lr(), a(), c(), d(), e(), l(), m(), n() (+42 more)
 
 ### Community 130 - "data_table_test.go"
-Cohesion: 0.21
+Cohesion: 0.18
 Nodes (26): memStore, dataTableKey(), NewDataTableNode(), rowIDFromKey(), tablePrefix(), newMemStore(), seedRow(), TestDataTableNode_Delete() (+18 more)
 
 ### Community 131 - "WorkflowList.vue"
@@ -1324,20 +1310,20 @@ Cohesion: 0.07
 Nodes (57): actionLabel(), applyConfigureBarChrome(), bindConfigureCountPillTooltip(), bindConfigureInlineControlHover(), bindConfigureModifierPillHover(), buildConfigureActionControl(), buildConfigureCountControl(), buildConfigureRow() (+49 more)
 
 ### Community 133 - "CredentialStore"
-Cohesion: 0.13
+Cohesion: 0.08
 Nodes (12): Credential, CredentialMetadata, CredentialStore, getSaltFilePath(), NewCredentialStore(), setupTestEnv(), TestCredentialDeletion(), TestCredentialEncryption() (+4 more)
 
 ### Community 134 - "Node Commands"
 Cohesion: 0.07
 Nodes (28): Categories, Examples, Examples, Examples, Examples, Examples, Flags, Flags (+20 more)
 
-### Community 135 - "AgentAI.vue"
-Cohesion: 0.10
-Nodes (24): chatWithAI(), generateAIWorkflow(), suggestAINodes(), activeTab, addSuggestedNode(), applyGeneratedWorkflow(), chatInput, ChatMessage (+16 more)
+### Community 135 - "credentials_kafka_test.go"
+Cohesion: 0.16
+Nodes (23): kafkaProbeStub, isKafkaAuthError(), testKafkaConnection(), newKafkaRESTProxy(), TestKafkaCredentialSchema_DeclaresExactlyOneUsernameAndOnePassword(), TestKafkaCredentialSchema_KeepsAuthSelectors(), TestTestKafkaConnection_AnonymousProbeOnlyWithoutCredentials(), TestTestKafkaConnection_CanonicalUsernamePasswordAuthenticate() (+15 more)
 
 ### Community 136 - "SQLConnectorNode"
-Cohesion: 0.28
-Nodes (5): DatabaseConfig, QueryResult, SQLConnectorNode, quoteIdentifier(), validateSQLIdentifier()
+Cohesion: 0.08
+Nodes (15): DatabaseConfig, QueryResult, SQLConnectorNode, WriteBinaryFileNode, findExpressionEnd(), findExpressionStart(), GojaExpressionEvaluator, jsonMarshal() (+7 more)
 
 ### Community 137 - "rate_limiter.go"
 Cohesion: 0.15
@@ -1356,7 +1342,7 @@ Cohesion: 0.06
 Nodes (33): AI & LLM Nodes, Analysis Task, Anthropic Node, Basic Completion, Basic Completion, Code Generation, Common Patterns, Curl — read effective config (+25 more)
 
 ### Community 142 - "io.Writer"
-Cohesion: 0.18
+Cohesion: 0.16
 Nodes (13): FormatNumber(), FormatSavings(), FormatSpeedup(), NewTable(), PrintDivider(), SectionHeader(), StatusLine(), SubHeader() (+5 more)
 
 ### Community 143 - "variable_manager_test.go"
@@ -1367,17 +1353,13 @@ Nodes (25): NewVariableManager(), createTestVariable(), newTestVariableManager()
 Cohesion: 0.10
 Nodes (20): compilerOptions, allowImportingTsExtensions, baseUrl, isolatedModules, jsx, lib, module, moduleDetection (+12 more)
 
-### Community 145 - "NewSetNode"
-Cohesion: 0.08
-Nodes (41): defaultGuardParams(), newRetryLoopEngine(), retryLoopWorkflow(), runRetryWorkflow(), TestRetryLoop_CounterAdvancesAndGuardTerminates(), TestRetryLoop_ExitsEarlyWhenReplyArrives(), TestRetryLoop_MultiConditionGuardIsDetected(), TestRetryLoop_MultiConditionGuardOrShortCircuits() (+33 more)
+### Community 145 - "VersionManager"
+Cohesion: 0.12
+Nodes (4): SetVersionManager(), compareParameters(), generateID(), VersionManager
 
 ### Community 146 - "Settings.vue"
-Cohesion: 0.03
-Nodes (56): Theme, aiApiKey, aiBaseUrl, aiEffective, aiEnabled, aiEnvSource, aiError, aiInfo (+48 more)
-
-### Community 147 - "ObjectInfo"
-Cohesion: 0.13
-Nodes (6): Disabled, LocalFS, ObjectInfo, PutOptions, Store, NewDisabled()
+Cohesion: 0.04
+Nodes (55): aiApiKey, aiBaseUrl, aiEffective, aiEnabled, aiEnvSource, aiError, aiInfo, aiLoading (+47 more)
 
 ### Community 148 - "Database Configuration"
 Cohesion: 0.08
@@ -1387,13 +1369,13 @@ Nodes (25): Backup, Benefits, CLI Override, CLI Override, Connection Pooling, Co
 Cohesion: 0.10
 Nodes (35): NewLambdaOperationsNode(), TestLambdaConfig_FieldsAssignment(), TestLambdaConfiguration_Fields(), TestLambdaDeadLetterConfig_Fields(), TestLambdaOperation_StructDefaults(), TestLambdaOperationsNode_Description_Category(), TestLambdaOperationsNode_Description_DescriptionField(), TestLambdaOperationsNode_Description_Name() (+27 more)
 
-### Community 150 - "time.Time"
-Cohesion: 0.04
-Nodes (37): AuditEvent, APIKey, Session, S3Object, BlobInfo, ContainerInfo, ExecutionError, ExpressionError (+29 more)
+### Community 150 - "Worker"
+Cohesion: 0.10
+Nodes (7): ResultMessage, WorkMessage, NewWorker(), executionState, Worker, WorkerConfig, WorkerStats
 
-### Community 152 - "OAuth2Client"
-Cohesion: 0.29
-Nodes (5): fakeExchanger, HTTPClient, OAuth2Client, RefreshTokenResponse, TokenExchanger
+### Community 152 - "NewHTTPRequestNode"
+Cohesion: 0.12
+Nodes (21): TestHTTPRequestNodeFlatAndNestedShapesProduceIdenticalOutput(), TestHTTPRequest_UsesJsonBody_SpecifyBodyJSON(), newExpressionContext(), TestEvaluateParameters_BracketAccessAndMethod(), TestEvaluateParameters_FallsBackToLegacyEvaluator(), TestEvaluateParameters_InterpolatedString(), TestEvaluateParameters_NestedPath(), TestEvaluateParameters_NumberBecomesString() (+13 more)
 
 ### Community 153 - "Set Node"
 Cohesion: 0.08
@@ -1404,28 +1386,24 @@ Cohesion: 0.06
 Nodes (33): Creating a Discord Webhook, Discord Node, Dynamic Alert, Dynamic Message, Example, Example — adaptive card, Example — text, Examples (+25 more)
 
 ### Community 155 - "expression/index.ts"
-Cohesion: 0.12
-Nodes (32): EvaluationResult, BUILTIN_FUNCTIONS, BuiltinFunction, FunctionCategory, FunctionDefinition, FUNCTIONS, getBuiltinFunction(), BinaryNode (+24 more)
+Cohesion: 0.11
+Nodes (34): FunctionDefinition, FUNCTIONS, applySuggestionAt(), detectExpressionPosition(), ExpressionPosition, fieldSuggestions(), filterSuggestions(), functionSuggestion() (+26 more)
 
 ### Community 156 - "cloud_storage_test.go"
 Cohesion: 0.09
 Nodes (38): NewCloudStorageNode(), TestCloudStorageNode_ConvertToGCSLifecycle_BasicRule(), TestCloudStorageNode_ConvertToGCSLifecycle_EmptyRules(), TestCloudStorageNode_ConvertToGCSLifecycle_MultipleRules(), TestCloudStorageNode_ConvertToGCSLifecycle_SetStorageClass(), TestCloudStorageNode_ConvertToGCSLifecycle_WithCreatedBefore(), TestCloudStorageNode_ConvertToGCSLifecycle_WithInvalidCreatedBefore(), TestCloudStorageNode_ConvertToGCSLifecycle_WithIsLive() (+30 more)
 
 ### Community 157 - "pathlib"
-Cohesion: 0.07
-Nodes (15): main(), _probe(), probe_host(), api_headers(), load_env(), _parse(), main(), percentile() (+7 more)
-
-### Community 158 - "ExpressionCache"
-Cohesion: 0.22
-Nodes (4): CachedResult, CacheStats, ExpressionCache, NewExpressionCache()
+Cohesion: 0.10
+Nodes (15): derive_description(), derive_title(), has_frontmatter(), keywords_for(), main(), process(), slug_to_title(), main() (+7 more)
 
 ### Community 159 - ".Execute"
-Cohesion: 0.17
-Nodes (9): BubblewrapSandbox, CgroupManager, CgroupStats, NewCommandBuilder(), New(), NewCgroupManager(), parseCPUStat(), splitLines() (+1 more)
+Cohesion: 0.21
+Nodes (7): BubblewrapSandbox, CgroupManager, NewCommandBuilder(), New(), NewCgroupManager(), NewStreamingExecution(), ResourceLimits
 
-### Community 160 - "credentialSchema.ts"
-Cohesion: 0.14
-Nodes (19): credentialSlots, BACKEND_CREDENTIAL_TYPE_SET, BACKEND_CREDENTIAL_TYPES, BackendCredentialType, CREDENTIAL_TYPE_LABELS, credentialTypeLabel(), fieldFor(), isBackendCredentialType() (+11 more)
+### Community 160 - "n8n Core Nodes — Reference for m9m Implementation"
+Cohesion: 0.06
+Nodes (30): 1. The n8n model in 30 seconds, 2.1 Settings tab (left), 2.2 Output tabs (right), 2.3 Why this matters for debugging, 2. n8n's Node Details View (NDV), 3.10 Merge (`n8n-nodes-base.merge`), 3.11 Wait (`n8n-nodes-base.wait`), 3.12 Loop / Split In Batches (`splitInBatches`) (+22 more)
 
 ### Community 161 - "Migrate from n8n to m9m"
 Cohesion: 0.08
@@ -1444,24 +1422,24 @@ Cohesion: 0.07
 Nodes (30): Access in Workflow, API Execution, Asynchronous, Best Practices, Cancel Running Execution, CLI Execution, Executing Workflows, Execution Methods (+22 more)
 
 ### Community 165 - "SecureGojaRuntime"
-Cohesion: 0.13
-Nodes (8): RuntimeConfig, RuntimePool, SecureGojaRuntime, DefaultRuntimeConfig(), NewRuntimePool(), NewSecureGojaRuntime(), TestToJsonStringPolyfill(), getStringProperty()
+Cohesion: 0.12
+Nodes (9): RuntimeConfig, RuntimePool, SecureGojaRuntime, NewWorkflowDataProxy(), DefaultRuntimeConfig(), NewRuntimePool(), NewSecureGojaRuntime(), TestToJsonStringPolyfill() (+1 more)
 
 ### Community 166 - "modern-screenshot.umd.js"
 Cohesion: 0.09
 Nodes (53): ae(), be(), bt(), Ce(), Ct(), de(), dt(), _e() (+45 more)
 
 ### Community 167 - "DeadLetterQueue"
-Cohesion: 0.13
-Nodes (7): DefaultDLQConfig(), TestDLQ_DefaultConfig(), DeadLetterItem, DeadLetterQueue, DLQConfig, DLQFilter, DLQStatus
+Cohesion: 0.14
+Nodes (4): DeadLetterItem, DeadLetterQueue, DLQFilter, DLQStatus
 
 ### Community 168 - "document_drift"
 Cohesion: 0.07
 Nodes (14): evaluate_drift(), _default_results_path(), _document_case_ids(), document_drift(), drift_check(), _live_index(), _load_results(), main() (+6 more)
 
-### Community 171 - "credentials_kafka_test.go"
-Cohesion: 0.12
-Nodes (34): Ai(), Ar(), at(), bn(), e(), re(), Y(), Z() (+26 more)
+### Community 171 - "Snapshot"
+Cohesion: 0.16
+Nodes (5): NewDisabled(), Sink, Disabled, LocalFS, Snapshot
 
 ### Community 172 - "Deployment Overview"
 Cohesion: 0.09
@@ -1476,12 +1454,12 @@ Cohesion: 0.25
 Nodes (8): default_value, description, group, name, options, required, type, output_formats
 
 ### Community 175 - "go.opentelemetry.io/otel/trace.Span"
-Cohesion: 0.03
-Nodes (43): AnthropicNode, OpenAINode, 7. Reference: the implementation, TestMergeChooseBranch_PassesOnlyPayloadKey(), spanFromContext(), WithContinuationSpan(), WithExecutionID(), WithExecutionMode() (+35 more)
+Cohesion: 0.04
+Nodes (35): AnthropicNode, OpenAINode, spanFromContext(), withWorkflowSpan(), workflowSpanFromContext(), NewTracingManager(), endAgentSpan(), appendCustomAttrs() (+27 more)
 
 ### Community 176 - "l"
-Cohesion: 0.13
-Nodes (52): an(), Ce(), cn(), Cr(), dn(), ei(), fa(), Ge() (+44 more)
+Cohesion: 0.10
+Nodes (59): an(), B(), ba(), bn(), Bo(), da(), dn(), ei() (+51 more)
 
 ### Community 177 - "compilerOptions"
 Cohesion: 0.11
@@ -1493,7 +1471,7 @@ Nodes (48): mysql-db, postgres-db, interval, retries, test, timeout, container_n
 
 ### Community 179 - "StreamingExecution"
 Cohesion: 0.07
-Nodes (10): StreamingExecution, ExecutionResult, StreamingExecution, registerDaemonSignals(), setDaemonSysProcAttr(), registerDaemonSignals(), setDaemonSysProcAttr(), noSandboxStreaming (+2 more)
+Nodes (9): StreamingExecution, identityCharsetReader(), ExecutionResult, StreamingExecution, setDaemonSysProcAttr(), setDaemonSysProcAttr(), noSandboxStreaming, pipeReader (+1 more)
 
 ### Community 180 - "audit_test.go"
 Cohesion: 0.11
@@ -1512,16 +1490,16 @@ Cohesion: 0.07
 Nodes (27): 1:1 Transformation (Set), Accessing Data, Aggregation (Combine), All Input Items, Binary Data, Branching, Check Execution, Conditional (Switch) (+19 more)
 
 ### Community 184 - "N8nNodeExecutor"
-Cohesion: 0.14
-Nodes (10): CredentialsManager, N8nCredentialType, N8nExecutionContext, N8nExecutionHelpers, N8nNodeDefinition, N8nNodeExecutor, N8nNodeProperty, N8nPropertyOption (+2 more)
+Cohesion: 0.10
+Nodes (13): CredentialsManager, N8nExecutionContext, N8nExecutionHelpers, N8nNodeExecutor, CreateN8nCompatibleNode(), LoadN8nNodesFromDirectory(), NewN8nNodeExecutor(), ExecutionContext (+5 more)
 
-### Community 186 - "Workspace"
-Cohesion: 0.29
-Nodes (4): Daemon, Request, Response, workspaceContext
+### Community 186 - "Daemon"
+Cohesion: 0.14
+Nodes (7): Manager, Workspace, Daemon, Request, Response, workspaceContext, WorkspaceConfig
 
 ### Community 187 - "bundle.4e0fa4ba.min.js"
-Cohesion: 0.08
-Nodes (42): B(), ba(), Bi(), Bo(), co(), Ct(), da(), di() (+34 more)
+Cohesion: 0.06
+Nodes (95): Aa(), Ae(), Ai(), Ao(), Ar(), Be(), Bi(), Bt() (+87 more)
 
 ### Community 188 - "with"
 Cohesion: 0.05
@@ -1547,17 +1525,17 @@ Nodes (9): braceExpand(), filter(), globUnescape(), make(), match(), minimatch()
 Cohesion: 0.19
 Nodes (15): TestApplyKafkaCredentialAuth_BridgesSASLToUsername(), TestApplyKafkaCredentialAuth_BridgesUsernameToSASL(), TestApplyKafkaCredentialAuth_CarriesCAMaterial(), TestApplyKafkaCredentialAuth_ExplicitSASLUsernameWins(), ApplyKafkaCredentialAuth(), TestApplyKafkaCredentialAuth_HandlesNonStringTypes(), TestApplyKafkaCredentialAuth_NativeMode_FillsAllFields(), TestApplyKafkaCredentialAuth_NilAndEmptyMap() (+7 more)
 
-### Community 195 - "test-parity-negative.py"
-Cohesion: 0.23
-Nodes (7): _classify(), main(), _now_tag(), _run_curl(), _scrub(), _semantic_equal(), _swap_host()
+### Community 195 - "scaling.go"
+Cohesion: 0.16
+Nodes (7): Enqueuer, Executor, inProcessBus, Job, JobResult, Runner, Worker
 
 ### Community 196 - "PythonRuntime"
-Cohesion: 0.17
+Cohesion: 0.15
 Nodes (3): PythonCodeNode, PythonRuntime, PythonExecutionResult
 
-### Community 197 - "GojaExpressionEvaluator"
-Cohesion: 0.04
-Nodes (25): EmailAttachment, EmailMessage, SMTPConfig, SMTPNode, EnhancedWorkflowEngine, ExpressionValidationError, ReadBinaryFileNode, WriteBinaryFileNode (+17 more)
+### Community 197 - "EnhancedWorkflowEngine"
+Cohesion: 0.16
+Nodes (4): EnhancedWorkflowEngine, ExpressionValidationError, AdditionalKeys, WorkflowExecuteMode
 
 ### Community 198 - "m9m-cli"
 Cohesion: 0.09
@@ -1572,7 +1550,7 @@ Cohesion: 0.16
 Nodes (3): nullableStringMySQL(), nullableString(), Workspace
 
 ### Community 201 - "Refactor Plan"
-Cohesion: 0.10
+Cohesion: 0.11
 Nodes (19): Backup Artifact Removal, Cross-Cutting Reuse Rules, First Execution Batch, Implementation Order, Phase 0: Safety Rails, Phase 10: Frontend Feature Decomposition, Phase 1: Source Cleanup, Phase 2: API Server Decomposition (+11 more)
 
 ### Community 202 - "Workflows API"
@@ -1588,32 +1566,32 @@ Cohesion: 0.10
 Nodes (20): API Keys, Basic Authentication, Best Practices, CORS Configuration, CORS Errors, Credential Encryption, Development Mode, Encryption Errors (+12 more)
 
 ### Community 205 - "S3OperationsNode"
-Cohesion: 0.20
-Nodes (6): S3Config, S3CopySource, S3Encryption, S3Operation, S3OperationResult, S3OperationsNode
+Cohesion: 0.19
+Nodes (7): S3Config, S3CopySource, S3Encryption, S3Object, S3Operation, S3OperationResult, S3OperationsNode
 
 ### Community 206 - "m9m-cli"
 Cohesion: 0.10
 Nodes (20): 30-second quickstart, API at a glance, Can I use this offline / air-gapped?, Credits, Does it run n8n workflows unchanged?, Does this package bundle a Node.js runtime?, FAQ, How do I pin a specific binary version? (+12 more)
 
-### Community 207 - "VersionManager"
-Cohesion: 0.12
-Nodes (4): compareParameters(), generateID(), VersionManager, NewVersionManager()
+### Community 207 - "queue_test.go"
+Cohesion: 0.24
+Nodes (14): NewMemoryJobQueue(), createTestJob(), TestMain(), TestMemoryQueue_AckNack(), TestMemoryQueue_DequeueTimeout(), TestMemoryQueue_EnqueueDequeue(), TestMemoryQueue_ListJobs(), TestMemoryQueue_Nack() (+6 more)
 
 ### Community 208 - "evaluator.ts"
-Cohesion: 0.10
-Nodes (32): CHAIN_ABORT, ChainValue, createEnvProxy(), createInputProxy(), createNodeLookup(), createNodeProxy(), createNodeRegistry(), createNowProxy() (+24 more)
+Cohesion: 0.05
+Nodes (63): applyBinary(), CHAIN_ABORT, ChainValue, compare(), createEnvProxy(), createInputProxy(), createNodeLookup(), createNodeProxy() (+55 more)
 
 ### Community 209 - "workflows_import_export_test.go"
 Cohesion: 0.10
 Nodes (34): catalogEngine, setupImportExportServer(), TestExportImport_ReimportsExportedFile(), TestExportWorkflow_ContainsAllN8nFields(), TestExportWorkflow_FallbackFileName(), TestExportWorkflow_NotFound(), TestExportWorkflow_SingleObject(), TestExportWorkflows_BulkAlwaysReturnsArray() (+26 more)
 
 ### Community 210 - "useKeyboardShortcuts.ts"
-Cohesion: 0.13
-Nodes (21): 4.1 Files to create, 4.2 Files to modify, 4.3 npm dependencies to add, 4. Frontend gaps (concrete file list under `web/src/`), cleanupGlobalListener(), createShortcutKey(), formatShortcut(), globalShortcuts (+13 more)
+Cohesion: 0.12
+Nodes (23): 4.1 Files to create, 4.2 Files to modify, 4.3 npm dependencies to add, 4. Frontend gaps (concrete file list under `web/src/`), cleanupGlobalListener(), createShortcutKey(), formatShortcut(), globalShortcuts (+15 more)
 
 ### Community 211 - "web/package.json"
 Cohesion: 0.04
-Nodes (67): autoprefixer, eslint, eslint-plugin-vue, @headlessui/vue, postcss, prettier, tailwindcss, @typescript-eslint/eslint-plugin (+59 more)
+Nodes (60): autoprefixer, axios, @dagrejs/dagre, eslint, eslint-plugin-vue, @headlessui/vue, postcss, prettier (+52 more)
 
 ### Community 212 - "API Reference"
 Cohesion: 0.11
@@ -1628,28 +1606,28 @@ Cohesion: 0.20
 Nodes (10): default_value, description, group, name, required, type, amount, date (+2 more)
 
 ### Community 215 - "ExpressionParser"
-Cohesion: 0.23
-Nodes (4): ExpressionChunkType, ExpressionChunkTypeType, ExpressionParser, ParsedExpression
+Cohesion: 0.11
+Nodes (12): OptionProvider, optionProviderKey, OptionProviderRegistry, ExecutionMetrics, ExpressionChunkType, ExpressionChunkTypeType, ExpressionParser, ParsedExpression (+4 more)
 
 ### Community 216 - "WorkflowDataProxy"
 Cohesion: 0.15
 Nodes (8): ExecuteData, WorkflowDataProxy, luxonToGoFormat(), n8nItemWrapper(), TestNowProxyUsesWorkflowTimezone(), TestWorkflowDataProxy_NowProxyFormat(), TestWorkflowDataProxy_NowProxyToISOString(), TestWorkflowDataProxy_NowProxyToMillis()
 
 ### Community 217 - "oidc_test.go"
-Cohesion: 0.21
-Nodes (15): oidcFixture, mintIDTokenFromFixture(), setupOIDC(), TestOIDC_GroupsClaim_Configurable(), TestOIDC_Refresh_ClearsCache(), TestOIDC_Verify_AudienceArray(), TestOIDC_Verify_HappyPath(), TestOIDC_Verify_RejectsAlgNone() (+7 more)
+Cohesion: 0.18
+Nodes (17): oidcFixture, audienceMatches(), mintIDTokenFromFixture(), setupOIDC(), TestOIDC_AudienceMatches(), TestOIDC_GroupsClaim_Configurable(), TestOIDC_Refresh_ClearsCache(), TestOIDC_Verify_AudienceArray() (+9 more)
 
 ### Community 218 - "mongodb_pool_test.go"
 Cohesion: 0.18
 Nodes (16): mongoClientPool, mongoPoolError, mongoClientKey(), mongoClientOptions(), mongoServerSelectionTimeout(), newMongoClientPool(), errorsAs(), newTestClient() (+8 more)
 
 ### Community 219 - "Workflow import / export"
-Cohesion: 0.11
-Nodes (18): Accepted payloads, Bulk export, `docs/N8N_WORKFLOW_PARITY_REFERENCE.md` (the source of truth), Endpoints, Export, Import, Import rules, n8n parity (+10 more)
+Cohesion: 0.10
+Nodes (19): Accepted payloads, Bulk export, `docs/N8N_WORKFLOW_PARITY_REFERENCE.md` (the source of truth), Endpoints, Export, Import, Import rules, n8n parity (+11 more)
 
-### Community 220 - "AuthManager"
-Cohesion: 0.05
-Nodes (28): APIKey, AuthContext, AuthManager, AuthOptions, authTestHarness, contextKey, Session, AuthFromContext() (+20 more)
+### Community 220 - "WebhookManager"
+Cohesion: 0.06
+Nodes (33): newTestStore(), seedCredential(), TestLiveAuthData_HonoursCredentialUpdate(), TestResolveCredentialAuthData_BasicAuth(), TestResolveCredentialAuthData_EmptyCredData(), TestResolveCredentialAuthData_HeaderAuth(), TestResolveCredentialAuthData_MissingFromStore(), TestResolveCredentialAuthData_NoAuth() (+25 more)
 
 ### Community 221 - "WorkflowEngine"
 Cohesion: 0.04
@@ -1657,27 +1635,27 @@ Nodes (17): download_binary(), get_binary_path(), _get_platform(), _latest_relea
 
 ### Community 222 - "9. Resolved archive (kept for traceability)"
 Cohesion: 0.06
-Nodes (32): 9.10 BUG-2026-10-12-002 — Kafka nodes did not read injected SASL credentials, 9.11 BUG-2026-10-12-001..005 — Repo hygiene, 9.12 BUG-UI-2026-09-09-001 / -002 — NDV per-node Properties + Settings tab, 9.13 BUG-SEC-2026-10-12-001 — JWT webhook auth fuzzing, 9.14 BUG-DOC-2026-09-11-001..008 — Docs drift batch (closed on 2026-09-11), 9.15 BUG-UI-2026-09-09-001 — `INodeTypeDescription.properties` migration (closed), 9.16 BUG-UI-2026-09-09-002 — NDV per-node Settings + Retry button wiring (closed), 9.17 BUG-SEC-2026-10-12-001 — JWT webhook auth fuzzing (closed) (+24 more)
+Nodes (34): 9.10 BUG-2026-10-12-002 — Kafka nodes did not read injected SASL credentials, 9.11 BUG-2026-10-12-001..005 — Repo hygiene, 9.12 BUG-UI-2026-09-09-001 / -002 — NDV per-node Properties + Settings tab, 9.13 BUG-SEC-2026-10-12-001 — JWT webhook auth fuzzing, 9.14 BUG-DOC-2026-09-11-001..008 — Docs drift batch (closed on 2026-09-11), 9.15 BUG-UI-2026-09-09-001 — `INodeTypeDescription.properties` migration (closed), 9.16 BUG-UI-2026-09-09-002 — NDV per-node Settings + Retry button wiring (closed), 9.17 BUG-SEC-2026-10-12-001 — JWT webhook auth fuzzing (closed) (+26 more)
 
-### Community 224 - "api/ai.ts"
-Cohesion: 0.13
-Nodes (16): clearAIConfig(), getAIConfig(), sendAITestChat(), updateAIConfig(), AIConfig, AIConfigView, AIOverride, AIProviderId (+8 more)
+### Community 224 - "test_extended.py"
+Cohesion: 0.10
+Nodes (6): main(), _probe(), probe_host(), load_env(), _parse(), EnvironmentAndAuth
 
 ### Community 225 - "initPageChat"
 Cohesion: 0.07
 Nodes (56): armPageChatForTyping(), attachSteerFocusDebug(), attachSteerFocusGuard(), buildSteerProcessingDots(), buildSteerQueueHint(), clearSteerAwaitTimer(), clearSteerFocusRecoverTimer(), collapsePageChat() (+48 more)
 
-### Community 226 - "ExecutionOutput.vue"
-Cohesion: 0.12
-Nodes (9): copiedNodes, copyToClipboard(), expandedNodes, formatJSON(), getItemJson(), getTableColumns(), nodeResults, props (+1 more)
+### Community 226 - "vue"
+Cohesion: 0.04
+Nodes (47): vue, emit, handleKeydown(), panelRef, props, requestClose(), SIZE_CLASSES, activeValue (+39 more)
 
 ### Community 227 - "lunr.ro.min.js"
-Cohesion: 0.18
-Nodes (17): a(), b(), c(), d(), e(), f(), l(), m() (+9 more)
+Cohesion: 0.19
+Nodes (16): a(), b(), c(), d(), e(), f(), l(), m() (+8 more)
 
-### Community 228 - "credential_conn.go"
-Cohesion: 0.14
-Nodes (17): kafkaAuthMode, Credentials — live connection verification, kafkaBrokerList(), kafkaCredentialUserPass(), kafkaExactString(), kafkaMetadata(), kafkaRESTAuthMode(), kafkaSASLMechanism() (+9 more)
+### Community 228 - "go_pkg_encoding_json"
+Cohesion: 0.04
+Nodes (31): NodeTypeInfo, contextKey, getAvailableNodeTypes(), TestGetAvailableNodeTypes(), Connection, applyHeaderParameters(), flattenHeaderSpec(), mustParseCIDR() (+23 more)
 
 ### Community 229 - "SKILL.md"
 Cohesion: 0.05
@@ -1695,9 +1673,9 @@ Nodes (10): DATA_INPUT_DIR, DATA_OUTPUT_DIR, SMTP_HOST, requirements, credential
 Cohesion: 0.18
 Nodes (11): metadata, documentation, downloads, industry, keywords, license, rating, repository (+3 more)
 
-### Community 233 - "handler_test.go"
-Cohesion: 0.25
-Nodes (16): newHandlerRouter(), TestHandleWebhook_Async_HandlerReturnsBeforeEngine(), TestHandleWebhook_AsyncDefaultResponseMode(), TestHandleWebhook_AsyncViaOnReceivedResponseMode(), TestHandleWebhook_BlockingResponseMode_StillWaitsForEngine(), NewHandler(), TestHandler_BadRequest_MalformedForm_ReturnsJSON(), TestHandler_BadRequest_MalformedJSON_ReturnsJSON() (+8 more)
+### Community 233 - "AgentAI.vue"
+Cohesion: 0.10
+Nodes (24): chatWithAI(), generateAIWorkflow(), suggestAINodes(), activeTab, addSuggestedNode(), applyGeneratedWorkflow(), chatInput, ChatMessage (+16 more)
 
 ### Community 234 - "NewConnectionRouter"
 Cohesion: 0.12
@@ -1711,7 +1689,7 @@ Nodes (47): abandonForeignSession(), abandonSupersededGo(), applySavedSessionMet
 Cohesion: 0.06
 Nodes (34): Async / queue response, Authentication, Authentication for webhook URLs (separate from API key), Default HTTP methods supported, DELETE `/workflows/{workflowId}` — Delete a workflow, ⚠️ Deprecated, Discrepancies vs. user's framing, Execution history API (separate sub-resource) (+26 more)
 
-### Community 237 - "evaluateCondition"
+### Community 237 - "transform/conditions.go"
 Cohesion: 0.10
 Nodes (21): condBetween(), condCompare(), condContains(), condEquals(), condIsEmpty(), condIsTruthy(), condToFloat64(), evaluateCondition() (+13 more)
 
@@ -1720,12 +1698,12 @@ Cohesion: 0.07
 Nodes (45): addManualContextText(), applyEditing(), buildLocatorForLeaf(), canRestoreManualEditElement(), collectEditableTextRows(), visit(), collectManualContextPieces(), walk() (+37 more)
 
 ### Community 240 - "github.com/gorilla/mux.Router"
-Cohesion: 0.13
-Nodes (7): registerVersionRoutes(), NewVersionHandler(), writeAPIError(), NewHandler(), AuthorResolver, VersionHandler, Handler
+Cohesion: 0.21
+Nodes (5): registerVersionRoutes(), NewVersionHandler(), writeAPIError(), AuthorResolver, VersionHandler
 
 ### Community 241 - "trigger_test.go"
-Cohesion: 0.16
-Nodes (21): TestNewWebhookNode(), TestWebhookNode_Description(), TestWebhookNode_Execute_BasicAuthInvalidFormat(), TestWebhookNode_Execute_BasicAuthMissingHeader(), TestWebhookNode_Execute_BasicAuthNoHeaders(), TestWebhookNode_Execute_BasicAuthValid(), TestWebhookNode_Execute_BasicRequest(), TestWebhookNode_Execute_DefaultMethod() (+13 more)
+Cohesion: 0.06
+Nodes (62): TestNewWebhookNode(), TestWebhookNode_Description(), TestWebhookNode_Execute_BasicAuthInvalidFormat(), TestWebhookNode_Execute_BasicAuthMissingHeader(), TestWebhookNode_Execute_BasicAuthNoHeaders(), TestWebhookNode_Execute_BasicAuthValid(), TestWebhookNode_Execute_BasicRequest(), TestWebhookNode_Execute_DefaultMethod() (+54 more)
 
 ### Community 242 - "m9m API Compatibility Layer"
 Cohesion: 0.12
@@ -1752,8 +1730,8 @@ Cohesion: 0.21
 Nodes (14): a(), c(), d(), e(), f(), i(), l(), m() (+6 more)
 
 ### Community 248 - "lunr.es.min.js"
-Cohesion: 0.24
-Nodes (14): a(), b(), c(), d(), e(), h(), i(), l() (+6 more)
+Cohesion: 0.23
+Nodes (13): a(), b(), c(), d(), e(), h(), i(), l() (+5 more)
 
 ### Community 249 - "lunr.pt.min.js"
 Cohesion: 0.22
@@ -1763,45 +1741,45 @@ Nodes (14): a(), c(), d(), i(), l(), m(), n(), o() (+6 more)
 Cohesion: 0.10
 Nodes (6): ExtensionProvider, FunctionRegistry, ParameterInfo, UtilityExtensions, FunctionHelp, NewFunctionRegistry()
 
-### Community 251 - "credentials_kafka_test.go"
-Cohesion: 0.16
-Nodes (23): kafkaProbeStub, isKafkaAuthError(), testKafkaConnection(), newKafkaRESTProxy(), TestKafkaCredentialSchema_DeclaresExactlyOneUsernameAndOnePassword(), TestKafkaCredentialSchema_KeepsAuthSelectors(), TestTestKafkaConnection_AnonymousProbeOnlyWithoutCredentials(), TestTestKafkaConnection_CanonicalUsernamePasswordAuthenticate() (+15 more)
+### Community 251 - "credential_conn.go"
+Cohesion: 0.23
+Nodes (24): testCredentialResult, credentialFieldValue(), dataInt(), dataString(), doCredentialHTTP(), isAMQPAuthError(), kafkaBrokerList(), mongoTarget() (+16 more)
 
 ### Community 252 - "NodeProperty"
-Cohesion: 0.08
-Nodes (91): Option, 1. Verdict, 2.1 Live-verified facts (read-only probes against the deployed server `187.77.113.218:8080`), 2. Capability matrix, 3.1 Register the handlers that already exist (cheapest wins), 3.2 Extend node-type metadata (`/node-types`), 3.4 Packaging / serving (no change needed, but relevant), 3. Backend gaps (Go) (+83 more)
+Cohesion: 0.06
+Nodes (107): NodeMetadata, Option, OptionValue, 3.2 Extend node-type metadata (`/node-types`), findNodeProperty(), propertyAction(), anthropicProperties(), openAIProperties() (+99 more)
 
 ### Community 253 - "resolveProduceValue"
 Cohesion: 0.15
 Nodes (17): materialiseValue(), resolveProduceValue(), TestMaterialiseValue_LiteralTopic(), TestMaterialiseValue_TopicExpression(), upstreamValue(), TestResolveProduceValue_EmptyStringValueReturnsUpstreamJSON(), TestResolveProduceValue_ExpressionEvaluatesAgainstItem(), TestResolveProduceValue_LiteralStringPassesThrough() (+9 more)
 
 ### Community 254 - "NodeDescription"
-Cohesion: 0.03
-Nodes (47): metadataCatalogNode, optionsTestNode, SendEmailNode, metadataNode, mockNodeExecutor, NodeDescription, NewGRPCNodeWrapper(), NewJavaScriptNodeWrapper() (+39 more)
+Cohesion: 0.04
+Nodes (20): metadataCatalogNode, optionsTestNode, nodeType, SendEmailNode, countingSetNode, metadataNode, mockNodeExecutor, NodeDescription (+12 more)
 
-### Community 255 - "s3_operations.go"
-Cohesion: 0.26
-Nodes (6): S3AbortIncompleteMultipartUpload, S3LifecycleConfig, S3LifecycleExpiration, S3LifecycleFilter, S3LifecycleRule, S3LifecycleTransition
+### Community 255 - "PerformanceOptimizer"
+Cohesion: 0.12
+Nodes (4): findString(), OptimizationAction, PerformanceOptimizer, PerformanceTuning
 
-### Community 256 - "test_extended.py"
-Cohesion: 0.13
-Nodes (6): result(), body_signature(), canonical_body_text(), case_signature(), curl_body_signature(), BodySignatures
+### Community 256 - "signatures.py"
+Cohesion: 0.18
+Nodes (5): body_signature(), canonical_body_text(), case_signature(), curl_body_signature(), BodySignatures
 
-### Community 257 - "resolveCredentialAuthData"
-Cohesion: 0.29
-Nodes (10): newTestStore(), seedCredential(), TestResolveCredentialAuthData_BasicAuth(), TestResolveCredentialAuthData_EmptyCredData(), TestResolveCredentialAuthData_HeaderAuth(), TestResolveCredentialAuthData_MissingFromStore(), TestResolveCredentialAuthData_NoAuth(), getStringParam() (+2 more)
+### Community 257 - "Engine and execution"
+Cohesion: 0.09
+Nodes (22): Engine and execution, execFrame, TestChooseBranchInput_DefaultsToInput1(), TestIncomingInputIndex(), chooseBranchInput(), edgeKey(), incomingInputIndex(), recordEdgesTaken() (+14 more)
 
 ### Community 258 - "ExpressionField.vue"
-Cohesion: 0.08
-Nodes (34): createPreviewContext(), formatPreview(), applySuggestion(), suggestionPrefix(), activeSuggestion, applyActiveSuggestion(), AvailableNode, caret (+26 more)
+Cohesion: 0.05
+Nodes (35): activeSuggestion, applyActiveSuggestion(), caret, context, displayError, emit, error, errorSnippet (+27 more)
 
 ### Community 259 - "Documentation Structure"
 Cohesion: 0.12
 Nodes (16): API, Architecture, Claude Code Integration (MCP), Deployment, Documentation Structure, Enterprise Features, Features, Getting Started (+8 more)
 
 ### Community 260 - "AI"
-Cohesion: 0.15
-Nodes (11): AI, ExplainWorkflowRequest, ExplainWorkflowResponse, GenerateWorkflowRequest, GenerateWorkflowResponse, NodeExplanation, NodeSuggestion, SuggestNodesRequest (+3 more)
+Cohesion: 0.09
+Nodes (18): AI, ChatAction, ChatMessage, ChatRequest, ChatResponse, ErrorFix, ExplainWorkflowRequest, ExplainWorkflowResponse (+10 more)
 
 ### Community 261 - "Agent Usage Guide"
 Cohesion: 0.12
@@ -1816,28 +1794,28 @@ Cohesion: 0.21
 Nodes (12): a(), c(), e(), f(), i(), k(), l(), m() (+4 more)
 
 ### Community 264 - "NewSandboxConfig"
-Cohesion: 0.13
-Nodes (23): NewNoSandbox(), DefaultMounts(), DefaultResourceLimits(), DefaultSeccompProfile(), Mount, ResourceLimits, IsolationLevelFromString(), NetworkModeFromString() (+15 more)
+Cohesion: 0.12
+Nodes (19): NewNoSandbox(), DefaultMounts(), DefaultResourceLimits(), DefaultSeccompProfile(), Mount, IsolationLevelFromString(), NewSandboxConfig(), TestDefaultMounts() (+11 more)
 
 ### Community 265 - "metadata"
 Cohesion: 0.18
 Nodes (11): metadata, documentation, downloads, industry, keywords, license, rating, repository (+3 more)
 
 ### Community 266 - "parity_orchestrator.py"
-Cohesion: 0.10
-Nodes (21): classify(), cmd_all(), cmd_compare(), cmd_deploy_m9m(), cmd_sync(), cmd_update_md(), cmd_update_sheet(), cmd_validate() (+13 more)
+Cohesion: 0.11
+Nodes (19): classify(), cmd_all(), cmd_compare(), cmd_deploy_m9m(), cmd_sync(), cmd_update_md(), cmd_update_sheet(), cmd_validate() (+11 more)
 
-### Community 268 - "3. Per-node-type parameter surfaces (the part the user wants)"
-Cohesion: 0.18
-Nodes (21): a(), c(), d(), e(), l(), m(), n(), o() (+13 more)
+### Community 268 - "Credentials — live connection verification"
+Cohesion: 0.15
+Nodes (16): kafkaAuthMode, Credentials — live connection verification, kafkaCredentialUserPass(), kafkaExactString(), kafkaMetadata(), kafkaRESTAuthMode(), kafkaSASLMechanism(), kafkaSASLMechanisms() (+8 more)
 
 ### Community 269 - "localenv.py"
 Cohesion: 0.11
-Nodes (9): _esbuild_binary(), free_port(), local_binary(), LocalInstance, _newest_source_mtime(), run_command(), run_go_test(), run_self_contained_expression_test() (+1 more)
+Nodes (8): _esbuild_binary(), free_port(), local_binary(), LocalInstance, _newest_source_mtime(), run_command(), run_self_contained_expression_test(), run_web_unit_tests()
 
 ### Community 270 - "HealthChecker"
-Cohesion: 0.13
-Nodes (10): NewHealthChecker(), TestHealthChecker_ConsecutiveResetOnSuccess(), TestHealthChecker_IsHealthy(), TestHealthChecker_MultipleChecks(), TestHealthChecker_RegisterAndCheck(), TestHealthChecker_UnhealthyCheck(), TestHealthChecker_Unregister(), HealthCheck (+2 more)
+Cohesion: 0.21
+Nodes (3): HealthCheck, HealthChecker, HealthStatus
 
 ### Community 271 - "WorkQueue"
 Cohesion: 0.18
@@ -1855,9 +1833,9 @@ Nodes (15): CLI, Connections, HTTP Request node, Next steps, Prerequisites, REST
 Cohesion: 0.13
 Nodes (15): Available Node Categories, By Use Case, Credential Injection, Data Flow, Error Handling, Expression Support, Input Data, Most Used Nodes (+7 more)
 
-### Community 275 - "Creating Workflows"
-Cohesion: 0.12
-Nodes (15): Adding Nodes, Comments, Complete Example, Connection Format, Creating via API, Creating via CLI, Creating Workflows, Defining Connections (+7 more)
+### Community 275 - "Workflow Examples"
+Cohesion: 0.05
+Nodes (29): Adding Nodes, Comments, Complete Example, Connection Format, Creating via API, Creating via CLI, Creating Workflows, Defining Connections (+21 more)
 
 ### Community 276 - "7. Components"
 Cohesion: 0.05
@@ -1883,13 +1861,13 @@ Nodes (15): Best Practices, Connections, Data Items, Expressions, Key Concepts, 
 Cohesion: 0.38
 Nodes (14): build_from_source(), check_go(), detect_arch(), detect_os(), error(), get_latest_version(), info(), install_binary() (+6 more)
 
-### Community 284 - "debug_test.go"
-Cohesion: 0.25
-Nodes (17): ApplyDebugToAll(), countWorkflowsWithDebug(), listAllWorkflows(), setAllWorkflowsDebug(), assertWorkflowDebug(), newSQLiteDebugTestStore(), seedDebugWorkflows(), TestApplyDebugToAll_DryRunChangesNothing() (+9 more)
+### Community 284 - "credentialSchema.ts"
+Cohesion: 0.14
+Nodes (19): credentialSlots, BACKEND_CREDENTIAL_TYPE_SET, BACKEND_CREDENTIAL_TYPES, BackendCredentialType, CREDENTIAL_TYPE_LABELS, credentialTypeLabel(), fieldFor(), isBackendCredentialType() (+11 more)
 
 ### Community 285 - ".executeWithContext"
-Cohesion: 0.17
-Nodes (6): ExecuteNode, shellEscapeString(), validateCommandSafety(), Sandbox, SandboxFactory, defaultFactory
+Cohesion: 0.22
+Nodes (6): ExecuteNode, shellEscapeString(), validateCommandSafety(), NetworkModeFromString(), TestNetworkModeFromString(), NetworkMode
 
 ### Community 286 - "RBACStore"
 Cohesion: 0.16
@@ -1912,36 +1890,36 @@ Cohesion: 0.29
 Nodes (7): default_value, avg_amount, count, total_amount, aggregations, enabled, group_by
 
 ### Community 291 - "sso_test.go"
-Cohesion: 0.20
-Nodes (6): FakeSSOProvider, SessionIssuer, sessionIssuerFake, SSOIdentity, SSOProvider, SSORouter
+Cohesion: 0.16
+Nodes (7): FakeSSOProvider, SessionIssuer, sessionIssuerFake, SSOError, SSOIdentity, SSOProvider, SSORouter
 
 ### Community 293 - "jwt_fuzz_test.go"
-Cohesion: 0.07
-Nodes (51): newJWTAlgorithmRouter(), newJWTRouter(), TestHandler_JWT_ExpiredToken_MatchesN8n(), TestHandler_JWT_InvalidAlgorithm_MatchesN8n(), TestHandler_JWT_InvalidToken_MatchesN8n(), TestHandler_JWT_MalformedToken_MatchesN8n(), TestHandler_JWT_MissingToken_MatchesN8n(), TestHandler_JWT_SignatureRequired_MatchesN8n() (+43 more)
+Cohesion: 0.09
+Nodes (42): getAuthData(), makeHS256(), makeRSAPublicKeyPEM(), TestVerifyJWT_Fuzz_AlgCaseSensitivity(), TestVerifyJWT_Fuzz_AlgNone_Passive(), TestVerifyJWT_Fuzz_AlgNone_WithBogusSignature(), TestVerifyJWT_Fuzz_AlgorithmConfusion(), TestVerifyJWT_Fuzz_BadBase64() (+34 more)
 
-### Community 294 - "go_pkg_os"
+### Community 294 - "go_pkg_fmt"
 Cohesion: 0.02
-Nodes (146): runCompare(), redactDSN(), runConfigValidate(), runCreate(), runExecutionGet(), runExecutionList(), runExecutionWatch(), formatDate() (+138 more)
+Nodes (141): runCompare(), redactDSN(), runConfigValidate(), runCreate(), runExecutionGet(), runExecutionList(), runExecutionWatch(), formatDate() (+133 more)
 
 ### Community 295 - "mongodb_test.go"
-Cohesion: 0.18
-Nodes (9): MongoDBNode, mongoRunContext, TestResolveQuery_RejectsNilResolution(), convertBSONToJSON(), convertMapToBSON(), hasNonEmptyQueryParam(), lookupRunDataKey(), objectIDToString() (+1 more)
+Cohesion: 0.16
+Nodes (11): MongoDBNode, mongoRunContext, convertBSONToJSON(), convertMapToBSON(), lookupRunDataKey(), objectIDToString(), TestConvertMapToBSON(), TestToBSON() (+3 more)
 
 ### Community 297 - "WebhookNode"
-Cohesion: 0.08
-Nodes (21): MetadataAwareNodeExecutor, 1.1 Environment variables, 1.2 Agent-specific settings, 1.3 UI / DB override, 1. Configuration, 2.2 Node spans, 2.3 Agent spans, 2.4 Links (+13 more)
+Cohesion: 0.11
+Nodes (16): MetadataAwareNodeExecutor, 1.1 Environment variables, 1.2 Agent-specific settings, 1.3 UI / DB override, 1. Configuration, 2.2 Node spans, 2.3 Agent spans, 2.4 Links (+8 more)
 
-### Community 298 - "api/otel.ts"
+### Community 298 - "SMTPNode"
+Cohesion: 0.21
+Nodes (6): EmailAttachment, EmailMessage, SMTPConfig, SMTPNode, generateRandomString(), TestGenerateRandomString()
+
+### Community 299 - "flusherRecorder"
+Cohesion: 0.13
+Nodes (5): readAmqpFrame(), headerToMap(), flusherRecorder, hijackableRecorder, nonFlusherWriter
+
+### Community 300 - "api/otel.ts"
 Cohesion: 0.15
 Nodes (15): clearOtelConfig(), getOtelConfig(), sendOtelTestSpan(), updateOtelConfig(), OtelConfig, OtelConfigView, OtelOverride, OtelProtocol (+7 more)
-
-### Community 299 - "CLI Reference"
-Cohesion: 0.15
-Nodes (13): CLI Reference, Commands Overview, Configuration File, Environment Variables, Exit Codes, Getting Help, Global Flags, Installation (+5 more)
-
-### Community 300 - "observability.go"
-Cohesion: 0.17
-Nodes (8): Counter, Event, Gauge, Histogram, NullEmitter, Severity, NewNullEmitter(), Emitter
 
 ### Community 301 - "Why m9m?"
 Cohesion: 0.15
@@ -1952,8 +1930,8 @@ Cohesion: 0.18
 Nodes (11): SMTP_HOST, SMTP_PASS, SMTP_PORT, SMTP_USER, requirements, credentials, environment, min_version (+3 more)
 
 ### Community 303 - "m9m — Product Requirements Document (PRD)"
-Cohesion: 0.08
-Nodes (23): 10. Compatibility contract (formal), 11.1 Distribution, 11.2 Distribution channels, 11.3 Adjacent projects (same maintainer), 11. Ecosystem & integrations, 13. Success metrics, 14. Risks & mitigations, 15. Out of scope (definitively) (+15 more)
+Cohesion: 0.06
+Nodes (32): 0.4.0 exit criteria (this PRD's named release), 10. Compatibility contract (formal), 11.1 Distribution, 11.2 Distribution channels, 11.3 Adjacent projects (same maintainer), 11. Ecosystem & integrations, 12. Milestones & release plan, 13. Success metrics (+24 more)
 
 ### Community 304 - "aws_s3_region"
 Cohesion: 0.25
@@ -1963,9 +1941,9 @@ Nodes (8): default_value, description, group, name, options, required, type, aws
 Cohesion: 0.07
 Nodes (29): author, bugs, url, description, devDependencies, @types/node@^20.0.0, typescript@^5.0.0, engines (+21 more)
 
-### Community 307 - "queue_test.go"
-Cohesion: 0.06
-Nodes (22): JobQueue, NewMemoryJobQueue(), createTestJob(), TestMain(), TestMemoryQueue_AckNack(), TestMemoryQueue_DequeueTimeout(), TestMemoryQueue_EnqueueDequeue(), TestMemoryQueue_ListJobs() (+14 more)
+### Community 307 - "JobQueue"
+Cohesion: 0.10
+Nodes (5): JobQueue, NewWorkerPool(), JobResult, MemoryJobQueue, WorkerPool
 
 ### Community 308 - "sentimentAnalysis.grpc.yaml"
 Cohesion: 0.07
@@ -1975,13 +1953,13 @@ Nodes (26): address, category, description, default, description, required, type
 Cohesion: 0.25
 Nodes (8): 7. P5 — Documentation & repo hygiene, BUG-2026-10-12-001 — `,env` accidentally-named env file committed, BUG-2026-10-12-002 — `Unconfirmed 467040.crdownload` 112 MB file in repo root, BUG-2026-10-12-003 — Pre-built Windows `.exe` binaries committed to repo, BUG-2026-10-12-004 — `pyvenv.cfg` committed at repo root, BUG-2026-10-12-005 — `supervisord.conf` in repo root, BUG-DOC-2026-09-11-001 through 008 — Docs drift (per `gap-current-vs-doc.MD`), BUG-RFC-2026-09-11-001/002/003 — Resolved (kept for traceability)
 
-### Community 310 - "TagHandler"
-Cohesion: 0.14
-Nodes (23): Aa(), De(), Er(), fr(), jr(), jt(), li(), Lr() (+15 more)
+### Community 310 - "Parser"
+Cohesion: 0.39
+Nodes (4): describeToken(), Parser, ExpressionNode, ExpressionSyntaxError
 
 ### Community 311 - "PluginRegistry"
-Cohesion: 0.08
-Nodes (34): DefaultGRPCPluginConfig(), LoadGRPCPlugin(), DefaultJavaScriptPluginConfig(), LoadJavaScriptPlugin(), setupConsole(), newMockPlugin(), TestNewPluginRegistry(), TestNormalizePluginName() (+26 more)
+Cohesion: 0.07
+Nodes (35): 1. Plugin Registry (`registry.go`), 3. gRPC Plugin System, 4. REST API Plugin System, 5. Wrapper Pattern, Component Details, DefaultGRPCPluginConfig(), LoadGRPCPlugin(), DefaultJavaScriptPluginConfig() (+27 more)
 
 ### Community 312 - "deploy"
 Cohesion: 0.17
@@ -1999,9 +1977,9 @@ Nodes (8): default_value, description, group, name, options, required, type, bac
 Cohesion: 0.25
 Nodes (8): default_value, description, group, name, options, required, type, compression_level
 
-### Community 317 - "WebSocketConnection"
-Cohesion: 0.20
-Nodes (3): WebSocketConnection, WebSocketMessage, WebSocketMessageType
+### Community 317 - "node.ts"
+Cohesion: 0.04
+Nodes (69): getNodeType(), getNodeTypes(), getNodeType(), getNodeTypeOptions(), getNodeTypes(), NodeTypeOption, unwrapOptions(), addRow() (+61 more)
 
 ### Community 318 - "OpenTelemetry tracing"
 Cohesion: 0.09
@@ -2011,17 +1989,17 @@ Nodes (22): Agents (GenAI) tracing, Common dashboard queries, Configuration laye
 Cohesion: 0.28
 Nodes (3): SpreadsheetID(), TestSpreadsheetID_AcceptsLocatorAndPlainString(), GoogleSheetsNode
 
-### Community 320 - "audit_logger.go"
-Cohesion: 0.23
-Nodes (11): AuditEvent, AuditLoggerConfig, AuditQuery, AuditStorage, contextKey, EventSeverity, EventType, DefaultAuditLoggerConfig() (+3 more)
+### Community 320 - "sso_test.go"
+Cohesion: 0.30
+Nodes (12): IsSSOError(), NewFakeSSOProvider(), NewSSORouter(), TestSSO_FakeProvider_RejectsNonFakeAssertion(), TestSSO_HandleCallback_IssuesSession(), TestSSO_HandleCallback_RejectsEmptySubject(), TestSSO_HandleCallback_RejectsInvalidAssertion(), TestSSO_HandleCallback_UnknownProvider() (+4 more)
 
 ### Community 321 - "SandboxConfig"
-Cohesion: 0.22
+Cohesion: 0.26
 Nodes (4): CommandBuilder, itoa(), newNoSandboxStreaming(), SandboxConfig
 
-### Community 322 - "dataString"
-Cohesion: 0.24
-Nodes (23): testCredentialResult, credentialFieldValue(), dataInt(), dataString(), doCredentialHTTP(), isAMQPAuthError(), mongoTarget(), postgresResult() (+15 more)
+### Community 322 - "SQLiteJobQueue"
+Cohesion: 0.22
+Nodes (3): Job, JobStatus, SQLiteJobQueue
 
 ### Community 324 - "setupCredentialExportServer"
 Cohesion: 0.17
@@ -2031,25 +2009,29 @@ Nodes (19): mustJSON(), setupCredentialExportServer(), TestExportCredentials_IdF
 Cohesion: 0.08
 Nodes (25): AI Assistant API, Clear DB override, Example, Explain a failed execution, Generate a workflow from a prompt, Generation endpoints, Get the effective provider config, Legacy aliases (+17 more)
 
+### Community 326 - "NewCredentialManager"
+Cohesion: 0.07
+Nodes (39): TestCredentialExport_BodyIsEncrypted(), TestGetNodeTypeOptions_ProviderReceivesCredentialResolver(), RegisterOptionProvider(), decodeNodeTypeOptionsResponse(), newNodeTypeOptionsTestServer(), TestGetNodeTypeOptionsEmptyBody(), TestGetNodeTypeOptionsMalformedBody(), TestGetNodeTypeOptionsMissingProperty() (+31 more)
+
 ### Community 327 - "PerformanceDashboard.vue"
 Cohesion: 0.08
 Nodes (28): AUTH_TOKEN_STORAGE_KEY, authFetch(), getAuthToken(), activeWorkflowsDisplay, avgExecutionDisplay, failedExecutionsDisplay, fetchPerformance(), fetchScheduler() (+20 more)
 
-### Community 328 - ".RegisterWebhook"
-Cohesion: 0.14
-Nodes (8): generateWebhookID(), makeWebhookKey(), normalizePath(), TestMakeWebhookKey(), TestNormalizePath(), `fix-raw-data-mysql.sql`, `fix-raw-data-postgres.sql`, m9m scripts
+### Community 328 - "audit_logger.go"
+Cohesion: 0.21
+Nodes (10): AuditLoggerConfig, AuditQuery, AuditStorage, contextKey, EventSeverity, EventType, DefaultAuditLoggerConfig(), isSensitiveKey() (+2 more)
 
-### Community 329 - "Manager"
-Cohesion: 0.20
-Nodes (3): Manager, Workspace, WorkspaceConfig
+### Community 329 - "scaling_test.go"
+Cohesion: 0.21
+Nodes (8): NewInProcessBus(), TestInProcessBus_CloseRejectsEnqueue(), TestInProcessBus_CloseUnblocksWait(), TestInProcessBus_EnqueueAndWait(), TestInProcessBus_ResultRoundTrip(), TestRunner_StartStop(), TestRunner_StartValidates(), noopExecutor
 
 ### Community 330 - "Code Standards"
 Cohesion: 0.18
 Nodes (11): Code Standards, Development Guidelines, Documentation, Error Handling, File Organization, Import Organization, Mock Usage, Naming Conventions (+3 more)
 
 ### Community 331 - "engine.ts"
-Cohesion: 0.16
-Nodes (13): downloadBinary(), downloadFile(), getBinaryPath(), getCacheDir(), getPlatform(), latestReleaseVersion(), runBinary(), WorkflowEngine (+5 more)
+Cohesion: 0.22
+Nodes (9): downloadBinary(), downloadFile(), getBinaryPath(), getCacheDir(), getPlatform(), latestReleaseVersion(), runBinary(), version() (+1 more)
 
 ### Community 332 - "API Endpoints"
 Cohesion: 0.17
@@ -2067,9 +2049,9 @@ Nodes (10): Deployment, Frequently Asked Questions, General, How do I backup m9m
 Cohesion: 0.24
 Nodes (6): i(), l(), n(), s(), t(), u()
 
-### Community 336 - "flusherRecorder"
-Cohesion: 0.13
-Nodes (5): readAmqpFrame(), headerToMap(), flusherRecorder, hijackableRecorder, nonFlusherWriter
+### Community 336 - "streaming_test.go"
+Cohesion: 0.20
+Nodes (15): ExampleStreamingHandler(), ExampleStreamResponse(), newFlusherRecorder(), NewStreamResponse(), splitLines(), TestStreamResponse_Hijack(), TestStreamResponse_Hijack_Unsupported(), TestStreamResponse_NilWriter() (+7 more)
 
 ### Community 337 - "FilterField.vue"
 Cohesion: 0.14
@@ -2127,9 +2109,9 @@ Nodes (10): default_value, description, group, name, required, type, customer_na
 Cohesion: 0.25
 Nodes (8): default_value, description, group, name, options, required, type, delimiter
 
-### Community 352 - "WorkflowEditorToolbar.vue"
-Cohesion: 0.17
-Nodes (10): displayName, editingName, emit, hiddenTagCount, localShowAgentAi, localShowNodePalette, props, saveWorkflowName() (+2 more)
+### Community 352 - "PropertyEditor.vue"
+Cohesion: 0.18
+Nodes (11): boolValue, collectionRows, displayString(), inferDefaultString(), isTextarea, KVRow, numberValue, Props (+3 more)
 
 ### Community 353 - "hash.ts"
 Cohesion: 0.16
@@ -2141,11 +2123,11 @@ Nodes (35): applyParamDefaults(), applyParamValue(), applyPlaceholderDimensions(
 
 ### Community 355 - "ai/config_test.go"
 Cohesion: 0.13
-Nodes (22): ProviderInfo, MergeConfig(), ptrInt(), TestConfigOverride_ValidateAcceptsKnownProviders(), TestConfigOverride_ValidateRejectsOutOfRangeMaxTokens(), TestConfigOverride_ValidateRejectsOutOfRangeTemperature(), TestConfigOverride_ValidateRejectsOutOfRangeTimeout(), TestConfigOverride_ValidateRejectsUnknownProvider() (+14 more)
+Nodes (21): ProviderInfo, ptrInt(), TestConfigOverride_ValidateAcceptsKnownProviders(), TestConfigOverride_ValidateRejectsOutOfRangeMaxTokens(), TestConfigOverride_ValidateRejectsOutOfRangeTemperature(), TestConfigOverride_ValidateRejectsOutOfRangeTimeout(), TestConfigOverride_ValidateRejectsUnknownProvider(), TestDefaultBaseURLFor() (+13 more)
 
 ### Community 356 - "doJSON"
-Cohesion: 0.09
-Nodes (23): APIServerConfig, pushTicket, pushTicketStore, Environment contract, doJSON(), newTestServer(), TestCreateAndGetCredential(), TestCredentialPatchMergesDataFields() (+15 more)
+Cohesion: 0.10
+Nodes (24): APIServerConfig, pushTicket, pushTicketStore, Environment contract, doJSON(), newTestServer(), TestCreateAndGetCredential(), TestCredentialPatchMergesDataFields() (+16 more)
 
 ### Community 358 - "globSync"
 Cohesion: 0.16
@@ -2163,9 +2145,9 @@ Nodes (31): acceptedDomAlreadyClean(), applyOriginalAttrsToSvelteAnchor(), clear
 Cohesion: 0.22
 Nodes (9): DELETE /api/v1/workflows/{id}, GET /api/v1/workflows, GET /api/v1/workflows/{id}, POST /api/v1/workflows, POST /api/v1/workflows/{id}/activate, POST /api/v1/workflows/{id}/deactivate, POST /api/v1/workflows/{id}/execute, PUT /api/v1/workflows/{id} (+1 more)
 
-### Community 362 - "Workflow Examples"
-Cohesion: 0.14
-Nodes (14): AI Content Generation, Child (`wf-child-render`), Conditional routing with IF, Data Transformation Pipeline, Error workflow, GitHub Issue Monitor, HTTP API Integration, Loop and batch (+6 more)
+### Community 362 - "CLI Reference"
+Cohesion: 0.15
+Nodes (13): CLI Reference, Commands Overview, Configuration File, Environment Variables, Exit Codes, Getting Help, Global Flags, Installation (+5 more)
 
 ### Community 363 - "Production Deployment Guide"
 Cohesion: 0.22
@@ -2183,9 +2165,9 @@ Nodes (9): Build from Source, Download Pre-built Binary, Step 2: Install m9m, St
 Cohesion: 0.22
 Nodes (9): API Reference, Create Environment, Delete Environment, Environments API, Get Workflow Variables, List Environments, Save Workflow Variables, Update Environment (+1 more)
 
-### Community 367 - "Execution edges and `EdgesTaken`"
-Cohesion: 0.22
-Nodes (9): Curl — get an execution with its edges, Edge colours, Edge state when an upstream node errors, Execution edges and `EdgesTaken`, Parallel branches, See also, Skipped nodes and empty input, Sub-workflow edge preservation (+1 more)
+### Community 367 - ".execute"
+Cohesion: 0.13
+Nodes (9): pollMongo, recordingMongo, coerceAssignmentValue(), extractAssignments(), isRawMode(), parseRawJSON(), writeDotPath(), SetNode (+1 more)
 
 ### Community 368 - "lunr.de.min.js"
 Cohesion: 0.33
@@ -2207,9 +2189,9 @@ Nodes (10): TestKafkaTriggerValidate_AutoDetectNativeFromBrokers(), TestKafkaTri
 Cohesion: 0.58
 Nodes (8): AllDemos(), buildBatchProcessingDemo(), buildCustomerSegmentationDemo(), buildDataValidationDemo(), buildExpressionShowcaseDemo(), buildMultiBranchRoutingDemo(), buildOrderProcessingDemo(), DemoWorkflow
 
-### Community 374 - "newNodeTypeOptionsTestServer"
-Cohesion: 0.11
-Nodes (30): registerLoadOptionProviders(), Dynamic options (`loadOptions`) resolve credentials server-side, TestCredentialExport_BodyIsEncrypted(), TestCredentialWriteThroughToEngine(), TestGetNodeTypeOptions_ProviderReceivesCredentialResolver(), RegisterOptionProvider(), decodeNodeTypeOptionsResponse(), newNodeTypeOptionsTestServer() (+22 more)
+### Community 374 - "WorkflowEditorToolbar.vue"
+Cohesion: 0.17
+Nodes (10): displayName, editingName, emit, hiddenTagCount, localShowAgentAi, localShowNodePalette, props, saveWorkflowName() (+2 more)
 
 ### Community 375 - "github_node_test.go"
 Cohesion: 0.15
@@ -2227,13 +2209,13 @@ Nodes (8): GET /api/v1/metrics, GET /api/v1/settings, GET /api/v1/version, GET /
 Cohesion: 0.25
 Nodes (8): M1: Expression Engine Complete (End of Week 2), M2: Credential Management (End of Week 4), M3: Webhook Support (End of Week 6), M4: Maximal Node Coverage (End of Week 10), M5: Workflow Orchestration (End of Week 12), M6: Production Ready (End of Week 14), M7: Validation Complete (End of Week 16), Milestones
 
-### Community 379 - "ListSpreadsheets"
-Cohesion: 0.15
-Nodes (11): CredentialResolver, nodeTypeOptionResponse, googleSheetsSpreadsheetOptions(), NodeTypeOption, NodeTypeOptionRequest, accessTokenFromData(), ListSpreadsheets(), TestListSpreadsheets_ReportsUpstreamError() (+3 more)
+### Community 379 - "go_pkg_fmt"
+Cohesion: 0.06
+Nodes (38): DataTableBulkInsertRequest, DataTableBulkInsertResponse, DataTableRow, JWTClaims, S3AbortIncompleteMultipartUpload, S3LifecycleConfig, S3LifecycleExpiration, S3LifecycleFilter (+30 more)
 
-### Community 380 - "LiveContractFixtures"
-Cohesion: 0.14
-Nodes (5): API authentication hardening — 2026-11-12 (working tree, not deployed), _contract_auth_probe(), LiveContractFixtures, fake_http(), fake_request()
+### Community 380 - "TagHandler"
+Cohesion: 0.21
+Nodes (5): 3.1 Register the handlers that already exist (cheapest wins), 3.3 New / changed endpoints for the editor, 3.4 Packaging / serving (no change needed, but relevant), 3. Backend gaps (Go), TagHandler
 
 ### Community 381 - "parameters"
 Cohesion: 0.25
@@ -2275,13 +2257,13 @@ Nodes (8): retention_days, default_value, description, group, name, required, ty
 Cohesion: 0.10
 Nodes (14): fakeHTTPClient, httpBackend, nativeBackend, redisBackend, RedisHTTPClient, RedisNode, intParam(), newHTTPBackend() (+6 more)
 
-### Community 391 - "NewRetryPolicy"
-Cohesion: 0.14
-Nodes (20): TestExecuteWithResult_AllRetriesExhausted(), TestExecuteWithResult_ContextCancellation(), TestExecuteWithResult_NonRetryableError(), TestExecuteWithResult_SuccessAfterRetries(), TestExecuteWithResult_SuccessOnFirstAttempt(), TestRetryPolicy_AllRetriesExhausted(), TestRetryPolicy_ContextCancellation(), TestRetryPolicy_DefaultConfig() (+12 more)
+### Community 391 - "Execution edges and `EdgesTaken`"
+Cohesion: 0.17
+Nodes (11): Curl — get an execution with its edges, Edge colours, Edge state when an upstream node errors, Execution edges and `EdgesTaken`, Parallel branches, See also, Skipped nodes and empty input, Sub-workflow edge preservation (+3 more)
 
 ### Community 392 - "7. Functional requirements"
-Cohesion: 0.20
-Nodes (10): 7. Functional requirements, FR-10. Plugin extension, FR-2. Webhook surface, FR-3. Credentials, FR-4. Sync bridge, FR-5. API surface, FR-6. Editor & UX, FR-7. AI assistant (+2 more)
+Cohesion: 0.08
+Nodes (26): RunAwareNodeExecutor, 5.1 Goals (in priority order), 5.2 Non-goals (explicit), 5. Goals & non-goals, 6.1 Runtime, 6.2 Node catalogue — 42 registered executors (`cmd/m9m/commands/exec.go::RegisterAllNodes`), 6.3 HTTP / API surface (n8n-compatible), 6.4 Integrations (current) (+18 more)
 
 ### Community 393 - "Responsive Design"
 Cohesion: 0.08
@@ -2315,9 +2297,9 @@ Nodes (7): Common Issues and Solutions, Getting Help, Issue: Expressions not wor
 Cohesion: 0.08
 Nodes (23): Component translation rules, Narrative mapping, Pitfalls, Scan mode (approach C: auto-extract, then confirm descriptive language), Schema, Seed mode, Step 1: Find the design assets, Step 1: Route through new-work's workshop (+15 more)
 
-### Community 402 - ".execute"
-Cohesion: 0.25
-Nodes (7): coerceAssignmentValue(), extractAssignments(), isRawMode(), parseRawJSON(), writeDotPath(), SetNode, setRunContext
+### Community 402 - "WebhookNode"
+Cohesion: 0.23
+Nodes (5): authHeadersLookup(), normalizeHeaderLikeMap(), TestAuthHeadersLookup_AllShapes(), TestNormalizeHeaderLikeMap(), WebhookNode
 
 ### Community 403 - "Deployment"
 Cohesion: 0.29
@@ -2388,8 +2370,8 @@ Cohesion: 0.17
 Nodes (12): API flow, Debug mode, Debug mode and per-node retry, NDV tabs, Per-node retry, See also, Sticky notes, Toggle in the UI (+4 more)
 
 ### Community 420 - "mongodb_test.go"
-Cohesion: 0.14
-Nodes (19): TestResolveQuery_KeyPresent(), NewMongoDBNode(), normalizeBSONValue(), parsePipeline(), TestConvertMapToBSON(), TestMongoDBNode_BadConnectionString(), TestMongoDBNode_Description(), TestMongoDBNode_FirstDocument() (+11 more)
+Cohesion: 0.18
+Nodes (15): TestResolveQuery_KeyPresent(), NewMongoDBNode(), normalizeBSONValue(), parsePipeline(), TestMongoDBNode_BadConnectionString(), TestMongoDBNode_Description(), TestMongoDBNode_FirstDocument(), TestMongoDBNode_ManyDocuments() (+7 more)
 
 ### Community 421 - "notification_emails"
 Cohesion: 0.29
@@ -2419,9 +2401,9 @@ Nodes (7): description, group, name, placeholder, required, type, filter_conditi
 Cohesion: 0.29
 Nodes (7): default_value, description, group, name, required, type, has_header
 
-### Community 428 - ".ExecuteWithContext"
-Cohesion: 0.17
-Nodes (7): ContextAwareNodeExecutor, ExecuteWorkflowNode, WaitNode, WorkflowExecutor, SubWorkflowDepth(), extractWorkflowID(), readWorkflowFile()
+### Community 428 - "ExpressionCache"
+Cohesion: 0.22
+Nodes (4): CachedResult, CacheStats, ExpressionCache, NewExpressionCache()
 
 ### Community 429 - "notification_email"
 Cohesion: 0.29
@@ -2440,32 +2422,32 @@ Cohesion: 0.11
 Nodes (19): Dead-Letter Queue (DLQ) API, Discard a DLQ Item, DLQ Stats, Example Request, Example Request, Example Request, Example Request, Get a Single DLQ Item (+11 more)
 
 ### Community 433 - "e"
-Cohesion: 0.18
-Nodes (19): A(), Ao(), c(), a(), b(), c(), d(), f() (+11 more)
+Cohesion: 0.09
+Nodes (40): A(), at(), c(), Ct(), e(), a(), b(), c() (+32 more)
 
 ### Community 434 - "onboard.md"
 Cohesion: 0.09
 Nodes (22): Assess Onboarding Needs, Context Over Ceremony, Contextual Help, Design Onboarding Experiences, Documentation & Help, Empty State Design, Feature Discovery & Adoption, Guided Tours & Walkthroughs (+14 more)
 
 ### Community 436 - "serve.go"
-Cohesion: 0.04
-Nodes (44): NodeTypeInfo, credentialCreateRequest, credentialImportError, credentialImportResult, credentialImportSummary, credentialTestPayload, CredentialTypeSchema, credentialTypeSummary (+36 more)
+Cohesion: 0.07
+Nodes (38): credentialCreateRequest, credentialImportError, credentialImportResult, credentialImportSummary, credentialTestPayload, CredentialTypeSchema, credentialTypeSummary, SchemaProperty (+30 more)
 
-### Community 437 - "IconField.vue"
-Cohesion: 0.23
-Nodes (11): emit, ICON_COMPONENTS, icons, IconValue, isPlainObject(), normalize(), onCustomInput(), props (+3 more)
+### Community 437 - "newVersionRoutesTestServer"
+Cohesion: 0.24
+Nodes (12): TestTagCollectionRouteBeforeTagIDRoute(), newVersionRoutesTestServer(), routeIndex(), saveVersionTestWorkflow(), TestVersionCompareRouteNotShadowedByVersionIDRoute(), TestVersionCreateListAndGet(), TestVersionGetUnknownVersion(), TestVersionListNotShadowedByWorkflowRoute() (+4 more)
 
-### Community 438 - "FileField.vue"
-Cohesion: 0.29
-Nodes (10): defaultMode(), emit, FileValue, isPlainObject(), modes, normalize(), onModeChange(), onValueInput() (+2 more)
+### Community 438 - "ParameterField.vue"
+Cohesion: 0.05
+Nodes (49): emit, ICON_COMPONENTS, icons, IconValue, isPlainObject(), normalize(), onCustomInput(), props (+41 more)
 
 ### Community 439 - "Security Policy"
 Cohesion: 0.29
 Nodes (6): Coordinated disclosure, Out-of-scope research, Reporting a vulnerability, Scope, Security Policy, Supported versions
 
-### Community 440 - "n8n ↔ m9m sync bridge"
-Cohesion: 0.15
-Nodes (13): Background polling, Credential decryption, Disabling the bridge, Endpoints, Environment variables, `GET /`, `GET /health`, `GET /status` (+5 more)
+### Community 440 - "NewRatingSystem"
+Cohesion: 0.20
+Nodes (7): NewRatingSystem(), TestRatingSystem_AddRating_InvalidScore(), TestRatingSystem_AddRating_Success(), TestRatingSystem_GetAverageRating(), TestRatingSystem_GetAverageRating_NoRatings(), Rating, RatingSystem
 
 ### Community 442 - "Key Interfaces and Patterns"
 Cohesion: 0.33
@@ -2499,9 +2481,9 @@ Nodes (6): Database Backup, Database Configuration, Database Schema, Installatio
 Cohesion: 0.33
 Nodes (6): Deployment, Migration, Migration Checklist, Post-Migration, Pre-Migration, Testing
 
-### Community 450 - "Current Implementation Status"
-Cohesion: 0.33
-Nodes (6): Connection System ✅, Core Data Models ✅, Current Implementation Status, Implemented Node Types ✅, Node Interface ✅, Workflow Engine ✅
+### Community 450 - "m9m Technical Specification - Updated"
+Cohesion: 0.04
+Nodes (51): 1. Expression Engine (High Priority), 2. Credential Management (High Priority), 3. Multi-Node Workflow Execution (High Priority), 4. Error Handling and Recovery (Medium Priority), Advanced Workflow Patterns, AI/ML Services, Caching Strategy, Cloud Service Integrations (+43 more)
 
 ### Community 451 - "Best Practices"
 Cohesion: 0.33
@@ -2528,24 +2510,24 @@ Cohesion: 0.17
 Nodes (10): _classify(), main(), _run_curl(), _scrub(), _scrub_with_prefix(), _semantic_json_equal(), _write_case(), _write_summary() (+2 more)
 
 ### Community 457 - "ExpressionEvaluator"
-Cohesion: 0.13
-Nodes (10): Function, ExecutionContext, ExpressionEvaluator, 8.1 Performance (target, vs n8n), 8.2 Reliability, 8.3 Security, 8.4 Operability, 8.5 Portability (+2 more)
+Cohesion: 0.08
+Nodes (19): Security Features, Function, HTTPRequestNode, ExecutionContext, ExpressionEvaluator, IsExpression(), NewExpressionEvaluator(), TestExpressionEvaluatorCallFunction() (+11 more)
 
 ### Community 458 - "ConfigStore"
-Cohesion: 0.24
+Cohesion: 0.28
 Nodes (4): MarshalOverride(), UnmarshalOverride(), ConfigStore, isMissingKeyError()
 
 ### Community 459 - "staticdata_test.go"
-Cohesion: 0.27
-Nodes (11): New(), newTestStore(), TestStaticData_Delete(), TestStaticData_GetEmpty(), TestStaticData_NewEmptyDataDirRejected(), TestStaticData_NodeScoped(), TestStaticData_PathIsUnderDataDir(), TestStaticData_SetGet() (+3 more)
+Cohesion: 0.33
+Nodes (9): newTestStore(), TestStaticData_Delete(), TestStaticData_GetEmpty(), TestStaticData_NodeScoped(), TestStaticData_PathIsUnderDataDir(), TestStaticData_SetGet(), TestStaticData_Update(), TestStaticData_UpdateCreatesIfMissing() (+1 more)
 
 ### Community 460 - "SendGridNode"
 Cohesion: 0.31
 Nodes (5): SendGridHTTPClient, SendGridNode, NewSendGridNodeWithClient(), TestSendGridNode_Send(), TestSendGridNode_SendTemplate()
 
-### Community 461 - "2026-10-12 cycle — 0.4.0 progress"
-Cohesion: 0.12
-Nodes (16): 2026-10-12 cycle — 0.4.0 progress, 2026-11-11 cycle — credentials hardening + workflow parity fixes, Added, AI assistant, Changed, Database nodes, Deployment, Deprecated (+8 more)
+### Community 461 - "OAuth2Client"
+Cohesion: 0.29
+Nodes (5): fakeExchanger, HTTPClient, OAuth2Client, RefreshTokenResponse, TokenExchanger
 
 ### Community 462 - "Workflow"
 Cohesion: 0.11
@@ -2555,9 +2537,9 @@ Nodes (17): Archive a workflow, Create a workflow, Deactivate a workflow, Delete
 Cohesion: 0.20
 Nodes (10): 10. Implementation plan (sequenced, no code changes until execution phase), Phase 0 — preparation (≤ 1 day), Phase 1 — fill the node catalogue (~3 days), Phase 2 — fill the API surface (~3 days), Phase 3 — sync service (~1 day), Phase 4 — observability (~1 day), Phase 5 — engine / recent work (~1 day), Phase 6 — environment / config matrix (~0.5 day) (+2 more)
 
-### Community 465 - "PluginType"
-Cohesion: 0.16
-Nodes (19): Ae(), Be(), D(), Dt(), Ee(), Ii(), Ir(), jo() (+11 more)
+### Community 465 - "NewTemplateNode"
+Cohesion: 0.18
+Nodes (11): NewTemplateNode(), TestFilterTemplatesByTags(), TestNewTemplateNode(), TestTemplateNode_Execute_DefaultOperation(), TestTemplateNode_Execute_EmptyInput(), TestTemplateNode_Execute_GetMissingID(), TestTemplateNode_Execute_InstallMissingID(), TestTemplateNode_Execute_ListOperation() (+3 more)
 
 ### Community 467 - "cors"
 Cohesion: 0.10
@@ -2583,9 +2565,9 @@ Nodes (15): ae(), ce(), constructor(), he(), ie(), ke(), le(), ne() (+7 more)
 Cohesion: 0.40
 Nodes (5): CORS errors from frontend, Database connection fails, Server won't start, Slow API responses, Troubleshooting
 
-### Community 473 - "PerformanceOptimizer"
-Cohesion: 0.12
-Nodes (4): findString(), OptimizationAction, PerformanceOptimizer, PerformanceTuning
+### Community 473 - "rbac_test.go"
+Cohesion: 0.22
+Nodes (9): IsRBACError(), RoleFromStringList(), equalStringSlices(), TestRBAC_AddCustomRole(), TestRBAC_AdminWildcardShortCircuits(), TestRBAC_BuiltInRoles(), TestRBAC_MultipleRolesInherit(), TestRBAC_ReservedRoleRejected() (+1 more)
 
 ### Community 474 - "Security Setup"
 Cohesion: 0.40
@@ -2596,12 +2578,12 @@ Cohesion: 0.40
 Nodes (5): Common Migration Scenarios, Scenario 1: Simple Workflow Migration, Scenario 2: Webhook-based Workflows, Scenario 3: Scheduled Workflows, Scenario 4: API Integration Workflows
 
 ### Community 476 - "LoadConfigFromEnv"
-Cohesion: 0.08
-Nodes (23): NewAPIHandler(), writeError(), writeJSON(), EffectiveConfig(), MarshalOverride(), MergeConfig(), UnmarshalOverride(), envBool() (+15 more)
+Cohesion: 0.12
+Nodes (12): NewAPIHandler(), writeError(), writeJSON(), EffectiveConfig(), MarshalOverride(), MergeConfig(), UnmarshalOverride(), ConfigStore (+4 more)
 
-### Community 478 - "Parser"
-Cohesion: 0.46
-Nodes (3): describeToken(), Parser, ExpressionNode
+### Community 478 - "api/ai.ts"
+Cohesion: 0.22
+Nodes (8): sendAITestChat(), AIConfig, AIConfigView, AIOverride, AIProviderId, AIProviderInfo, AITriProvider, testAI()
 
 ### Community 479 - "manager_content_type_test.go"
 Cohesion: 0.20
@@ -2637,19 +2619,19 @@ Nodes (5): Best Practices, High Availability, Job Timeout, Queue Sizing, Scaling
 
 ### Community 487 - "sync.Mutex"
 Cohesion: 0.06
-Nodes (18): safeBuffer, TestNativeProduce_TopicTravelsWithMessage(), backendCacheKey(), boolParam(), KafkaNativeClient, KafkaNativeConfig, NewKafkaNativeClient(), normalizePEM() (+10 more)
+Nodes (31): safeBuffer, 2026-10-12 cycle — 0.4.0 progress, 2026-11-11 cycle — credentials hardening + workflow parity fixes, Added, AI assistant, Changed, Database nodes, Deployment (+23 more)
 
-### Community 488 - "ExtractSwitchRules"
-Cohesion: 0.27
-Nodes (9): extractNestedSwitchRules(), ExtractSwitchRules(), normalizeSwitchRule(), normalizeSwitchRuleMaps(), normalizeSwitchRuleSlice(), switchOperation(), TestExtractSwitchRules_HappyPath(), TestExtractSwitchRules_InvalidShape() (+1 more)
+### Community 488 - "FileField.vue"
+Cohesion: 0.29
+Nodes (10): defaultMode(), emit, FileValue, isPlainObject(), modes, normalize(), onModeChange(), onValueInput() (+2 more)
 
 ### Community 489 - "Handler"
 Cohesion: 0.27
 Nodes (6): newAuthFailure(), writeAuthFailure(), stripJSONErrorPrefix(), writeJSONError(), authFailure, webhookErrorBody
 
-### Community 490 - "[0.1.0-beta.1] - 2024-01-22"
-Cohesion: 0.14
-Nodes (14): [0.1.0-beta.1] - 2024-01-22, Added, Changed, Compatibility, Core Features, Development & Operations, Documentation, Known Limitations (+6 more)
+### Community 490 - "versions/version.go"
+Cohesion: 0.25
+Nodes (7): versionListEnvelope, WorkflowVersion, VersionChanges, VersionComparison, VersionCreateRequest, VersionListFilters, VersionRestoreRequest
 
 ### Community 491 - "Operate mode depth (and Read notes)"
 Cohesion: 0.10
@@ -2684,8 +2666,8 @@ Cohesion: 0.12
 Nodes (16): Description, Description, ErrorTrigger Node, Example, Example — JSON response, Example — pass-through, Example workflow, ExecuteWorkflowTrigger Node (+8 more)
 
 ### Community 502 - "oo"
-Cohesion: 0.20
-Nodes (16): Bt(), go(), oo(), a(), c(), f(), m(), p() (+8 more)
+Cohesion: 0.67
+Nodes (7): oo(), a(), c(), f(), m(), p(), s()
 
 ### Community 504 - "tag_manager_test.go"
 Cohesion: 0.26
@@ -2740,8 +2722,8 @@ Cohesion: 0.16
 Nodes (19): buildSvelteExpressionTextMap(), buildSveltePropValuesFromLiveElement(), buildSveltePropValuesV2(), cloneWithoutElements(), collectTextNodes(), collectVisibleTexts(), cssEscapeIdent(), elementMatchesOriginalMarkup() (+11 more)
 
 ### Community 517 - "OIDCProvider"
-Cohesion: 0.12
-Nodes (14): jwkKey, jwksDoc, jwtHeader, OIDCConfig, oidcDiscovery, OIDCProvider, audienceMatches(), decodeJWTHeader() (+6 more)
+Cohesion: 0.14
+Nodes (12): jwkKey, jwksDoc, jwtHeader, OIDCConfig, oidcDiscovery, OIDCProvider, decodeJWTHeader(), extractGroups() (+4 more)
 
 ### Community 518 - "Extract Flow"
 Cohesion: 0.10
@@ -2775,9 +2757,9 @@ Nodes (4): Option A: Export via n8n UI, Option B: Export via n8n CLI, Option C: 
 Cohesion: 0.22
 Nodes (9): 3.1 Executions — big gap, 3.2 Workflows — minor gap, 3.3 Schedules — partial gap, 3.4 Dead-letter queue — entirely missing, 3.5 Telemetry (`/api/v1/otel`) — entirely missing, 3.6 AI assistant (`/api/v1/ai/*`) — entirely missing, 3.7 Settings (`/api/v1/settings`) — partial, 3.8 Cross-cutting — health, performance, push (+1 more)
 
-### Community 526 - "sso_test.go"
-Cohesion: 0.22
-Nodes (13): SSOError, IsSSOError(), NewFakeSSOProvider(), NewSSORouter(), TestSSO_FakeProvider_RejectsNonFakeAssertion(), TestSSO_HandleCallback_IssuesSession(), TestSSO_HandleCallback_RejectsEmptySubject(), TestSSO_HandleCallback_RejectsInvalidAssertion() (+5 more)
+### Community 526 - "Config"
+Cohesion: 0.31
+Nodes (7): Config, ConfigOverride, ConfigView, Provider, TestProviderConstants(), EffectiveConfig(), MergeConfig()
 
 ### Community 527 - "runner.py"
 Cohesion: 0.05
@@ -2791,9 +2773,9 @@ Nodes (15): apiVersion, data, kind, metadata, M9M_DB_TYPE, M9M_DEV_MODE, M9M_HOS
 Cohesion: 0.15
 Nodes (15): ports, to, namespaceSelector, podSelector, from, ports, spec, port (+7 more)
 
-### Community 530 - "cloud_storage.go"
-Cohesion: 0.31
-Nodes (5): StorageACL, StorageLifecycleAction, StorageLifecycleCondition, StorageLifecycleRule, StoragePermission
+### Community 530 - "newWorkflowDebugTestServer"
+Cohesion: 0.29
+Nodes (10): newWorkflowDebugTestServer(), postWorkflow(), putWorkflow(), TestCreateWorkflow_DebugDefaultsToOff(), TestCreateWorkflow_ExistingWorkflowKeepsDebugWhenOmitted(), TestCreateWorkflow_ExplicitDebugOptIn(), TestCreateWorkflow_NeverInheritsDebugFromPayload(), TestDuplicateWorkflow_DebugDefaultsToOff() (+2 more)
 
 ### Community 531 - "actOnAgentTarget"
 Cohesion: 0.26
@@ -2807,9 +2789,9 @@ Nodes (14): Common Patterns, Cron Expression Format, Cron Node, Daily at Midnigh
 Cohesion: 0.27
 Nodes (10): newTestVersionManager(), TestNewVersionManager(), TestVersionManager_CompareVersions(), TestVersionManager_GetVersion(), TestVersionManager_ListVersions(), TestVersionManager_ListVersions_Empty(), TestVersionManager_SaveAndGetVersion(), TestVersionManager_SaveMultipleVersions() (+2 more)
 
-### Community 534 - "Snapshot"
-Cohesion: 0.16
-Nodes (5): NewDisabled(), Sink, Disabled, LocalFS, Snapshot
+### Community 534 - "ObjectInfo"
+Cohesion: 0.13
+Nodes (6): Disabled, LocalFS, ObjectInfo, PutOptions, Store, NewDisabled()
 
 ### Community 535 - "Encryption"
 Cohesion: 0.50
@@ -2822,6 +2804,10 @@ Nodes (14): Accessibility and control, Choose material by meaning, Find the job,
 ### Community 537 - ".Refresh"
 Cohesion: 0.10
 Nodes (19): OAuth2Credentials, IsOAuth2HTTPError(), NewOAuth2Client(), TestOAuth2Client_EmptyAccessTokenRejected(), TestOAuth2Client_ExchangeRefreshToken_Success(), TestOAuth2Client_InputValidation(), TestOAuth2Client_NetworkErrorReturnsWrapped(), TestOAuth2Client_NoRetryOn4xx() (+11 more)
+
+### Community 538 - "Store"
+Cohesion: 0.22
+Nodes (3): New(), TestStaticData_NewEmptyDataDirRejected(), Store
 
 ### Community 539 - "Error Handling"
 Cohesion: 0.50
@@ -2891,17 +2877,21 @@ Nodes (4): High Memory Usage, Performance Issues, Queue Backing Up, Slow Executi
 Cohesion: 0.15
 Nodes (13): cert-manager.io/cluster-issuer, kubernetes.io/ingress.class, security.m9m.io/warning, Secret m9m-secrets, annotations, apiVersion, kind, metadata (+5 more)
 
+### Community 558 - "NewXmlNode"
+Cohesion: 0.28
+Nodes (9): TestXmlNode_WebhookRoundTrip(), NewXmlNode(), newXmlInput(), TestXmlNode_Description(), TestXmlNode_JSONToXML_RoundTrip(), TestXmlNode_ValidateParameters(), TestXmlNode_XMLToJSON_Attributes(), TestXmlNode_XMLToJSON_Malformed() (+1 more)
+
 ### Community 559 - "FSM"
 Cohesion: 0.17
 Nodes (3): FSM, fsmSnapshot, NewRaftNode()
 
-### Community 560 - "m9m"
-Cohesion: 0.25
-Nodes (8): 30-second quickstart, Community, Documentation, Key features, License, m9m, Run your first workflow, Why m9m? (vs n8n)
+### Community 560 - ".Produce"
+Cohesion: 0.31
+Nodes (3): kafkaAuth, kafkaProduceResult, kafkaRESTProxy
 
 ### Community 561 - "basic.test.js"
-Cohesion: 0.12
-Nodes (10): findNativeAddon(), getNativeBinding(), isNativeAvailable(), NativeBinding, NativeCredentialManager, NativeEngine, NativeWorkflow, assert (+2 more)
+Cohesion: 0.20
+Nodes (3): assert, { describe, it, before }, path
 
 ### Community 562 - "Secret rotation checklist"
 Cohesion: 0.25
@@ -2939,9 +2929,9 @@ Nodes (3): Quick Start, Start the API Server, Verify Server is Running
 Cohesion: 0.26
 Nodes (7): NewNodeServiceClient(), DescribeRequest, DescribeResponse, ExecuteRequest, ExecuteResponse, NodeServiceClient, nodeServiceClient
 
-### Community 571 - "PythonCode Node"
-Cohesion: 0.25
-Nodes (8): Description, Example, Parameters, PythonCode Node, Related, Security model, Stdlib and packages, Type
+### Community 571 - "Architectural / Capability"
+Cohesion: 0.50
+Nodes (6): Architectural / Capability, getSubWorkflowPaletteEntries(), isSubWorkflowType(), nodeTypeForSubWorkflow(), SubWorkflowPaletteEntry, validateSubWorkflowRef()
 
 ### Community 572 - "New visual work"
 Cohesion: 0.14
@@ -2983,9 +2973,9 @@ Nodes (3): Integration with Workflows, Using Variables in Node Parameters, Varia
 Cohesion: 0.18
 Nodes (10): Editor-side import rules (reference §3), Exact divergence points, HTTP API (service mode), Import CLI, m9m n8n Sync Bridge (`sync-service/sync.py`), n8n parity, Normalization rules (mirrored from n8n), Push target (+2 more)
 
-### Community 587 - "newWorkflowDebugTestServer"
-Cohesion: 0.29
-Nodes (10): newWorkflowDebugTestServer(), postWorkflow(), putWorkflow(), TestCreateWorkflow_DebugDefaultsToOff(), TestCreateWorkflow_ExistingWorkflowKeepsDebugWhenOmitted(), TestCreateWorkflow_ExplicitDebugOptIn(), TestCreateWorkflow_NeverInheritsDebugFromPayload(), TestDuplicateWorkflow_DebugDefaultsToOff() (+2 more)
+### Community 587 - "Configuration Overview"
+Cohesion: 0.25
+Nodes (8): Configuration File Location, Configuration Methods, Configuration Overview, Configuration Sections, Full Configuration Example, Next Steps, Quick Start Configuration, Validating Configuration
 
 ### Community 588 - "Redis Queue"
 Cohesion: 0.67
@@ -3003,17 +2993,17 @@ Nodes (5): 5. P3 — Observability & DX, BUG-2026-10-12-002 — Kafka nodes do n
 Cohesion: 0.67
 Nodes (3): Community Resources, Gather Information, Getting Help
 
-### Community 593 - "OptionProviderRegistry"
-Cohesion: 0.33
-Nodes (5): OptionProvider, optionProviderKey, OptionProviderRegistry, NewOptionProviderRegistry(), RegisterActionOptionProvider()
+### Community 593 - "MarketplaceAnalytics"
+Cohesion: 0.25
+Nodes (5): NewMarketplaceAnalytics(), TestMarketplaceAnalytics_RecordDownload(), TestMarketplaceAnalytics_RecordSearch(), MarketplaceAnalytics, TrendAnalysis
 
 ### Community 594 - "critique.md"
 Cohesion: 0.17
 Nodes (11): Action Summary, Ask the User, Assessment A: Design Review, Assessment B: Detector + Browser Evidence, Assessment Orchestration, Deliver the Report, Hard Invariants, Persist the Snapshot (+3 more)
 
-### Community 599 - "blob/localfs_test.go"
-Cohesion: 0.43
-Nodes (7): NewLocalFS(), TestLocalFS_ChecksumMismatch(), TestLocalFS_DeleteWorkspace(), TestLocalFS_List(), TestLocalFS_NotFound(), TestLocalFS_PathTraversal(), TestLocalFS_PutGet()
+### Community 599 - "NewSecurityScanner"
+Cohesion: 0.32
+Nodes (5): NewSecurityScanner(), TestSecurityScanner_DefaultRules(), TestSecurityScanner_ScanTemplate_Safe(), SecurityRule, SecurityScanner
 
 ### Community 600 - "file"
 Cohesion: 0.20
@@ -3064,8 +3054,8 @@ Cohesion: 0.15
 Nodes (12): 404 — unknown type, Example Request, Example Request, Filtered example — only AI nodes, Get a Single Node Type, List Node Types, Node Types API, Notes (+4 more)
 
 ### Community 630 - "CodeNode"
-Cohesion: 0.19
-Nodes (7): extractCodeParam(), inferLanguageFromCodeKeys(), languageCodeKey(), normalizeCodeItemJSON(), wrapCodeAsIIFE(), CodeNode, codeRunContext
+Cohesion: 0.14
+Nodes (9): ContextAwareNodeExecutor, WaitNode, extractCodeParam(), inferLanguageFromCodeKeys(), languageCodeKey(), normalizeCodeItemJSON(), wrapCodeAsIIFE(), CodeNode (+1 more)
 
 ### Community 631 - "Ie"
 Cohesion: 0.40
@@ -3095,17 +3085,13 @@ Nodes (7): Aiven Kafka samples, Broker details (from `aivan-sample.txt`), Notes,
 Cohesion: 0.25
 Nodes (8): description, group, name, placeholder, required, type, validation, input_file_path
 
-### Community 638 - ".Chat"
-Cohesion: 0.38
-Nodes (4): ChatAction, ChatMessage, ChatRequest, ChatResponse
-
 ### Community 639 - "clarify.md"
 Cohesion: 0.18
 Nodes (10): Actions and navigation, Audit the language, Errors and permissions, Forms, Help and instructional text, Loading, empty, and success states, Rewrite by function, Set the message hierarchy (+2 more)
 
 ### Community 640 - "APIHandler"
-Cohesion: 0.62
-Nodes (3): APIHandler, writeAPIError(), writeAPIJSON()
+Cohesion: 0.29
+Nodes (4): APIHandler, writeAPIError(), writeAPIJSON(), Runtime
 
 ### Community 641 - "development"
 Cohesion: 0.29
@@ -3151,9 +3137,9 @@ Nodes (10): 1. Establish the system, 2. Gather the evidence, 3. Triage, 4. Polis
 Cohesion: 0.18
 Nodes (10): Assess Current State, Color Refinement, Composition Refinement, Motion Reduction, Plan Refinement, Refine the Design, Simplification, Verify Quality (+2 more)
 
-### Community 659 - "API Compatibility Layer - Implementation Summary"
-Cohesion: 0.29
-Nodes (7): ✅ Achieved, API Compatibility Layer - Implementation Summary, Conclusion, 🎯 Next Milestones, Session Overview, Success Criteria, Technical Architecture
+### Community 659 - "src/native.ts"
+Cohesion: 0.32
+Nodes (7): findNativeAddon(), getNativeBinding(), isNativeAvailable(), NativeBinding, NativeCredentialManager, NativeEngine, NativeWorkflow
 
 ### Community 660 - "Function Node"
 Cohesion: 0.50
@@ -3175,9 +3161,9 @@ Nodes (4): Example, Parameters, Split In Batches Node, Type
 Cohesion: 0.50
 Nodes (4): Example - Combine Items, Item Lists Node, Parameters, Type
 
-### Community 665 - "versions/version.go"
-Cohesion: 0.22
-Nodes (8): versionListEnvelope, 3.3 New / changed endpoints for the editor, WorkflowVersion, VersionChanges, VersionComparison, VersionCreateRequest, VersionListFilters, VersionRestoreRequest
+### Community 665 - "blob/localfs_test.go"
+Cohesion: 0.43
+Nodes (7): NewLocalFS(), TestLocalFS_ChecksumMismatch(), TestLocalFS_DeleteWorkspace(), TestLocalFS_List(), TestLocalFS_NotFound(), TestLocalFS_PathTraversal(), TestLocalFS_PutGet()
 
 ### Community 666 - "JSON Node"
 Cohesion: 0.50
@@ -3191,17 +3177,17 @@ Nodes (10): Design Health Score, Design Specificity Verdict, Generate Combined C
 Cohesion: 0.20
 Nodes (10): Completion gate, Init flow, Step 1: Load current state, Step 2: Explore the project, Step 3: Interview for product truth, Step 4: Write PRODUCT.md, Step 5: Record workflow defaults, Step 6: Wrap up or resume (+2 more)
 
-### Community 669 - "model/workflow.go"
-Cohesion: 0.14
-Nodes (17): getJSONKeys(), main(), runWorkflowTest(), healthCheck, ctxKey, execFrameKey, Connection, containsKey() (+9 more)
+### Community 669 - "googleSheetsSpreadsheetOptions"
+Cohesion: 0.25
+Nodes (6): CredentialResolver, nodeTypeOptionResponse, googleSheetsSpreadsheetOptions(), NodeTypeOption, NodeTypeOptionRequest, accessTokenFromData()
 
 ### Community 670 - "FromContext"
 Cohesion: 0.36
 Nodes (8): FromContext(), RequireID(), TestContext_EmptyStringFallsBackToDefault(), TestContext_FallsBackToDefault(), TestContext_NilContextSafe(), TestContext_RoundTrip(), TestRequireID(), WithID()
 
-### Community 671 - "m9m Implementation Roadmap - Updated"
-Cohesion: 0.29
-Nodes (6): Current Status: Core Node Types Complete ✅, m9m Implementation Roadmap - Updated, Next Focus: Maximal Compatibility and Advanced Features, Phase 7: Validation and Testing (Weeks 15-16), Week 15: Compatibility Testing, Week 16: Performance Testing
+### Community 671 - "applyAIViewToForm"
+Cohesion: 0.25
+Nodes (8): clearAIConfig(), getAIConfig(), updateAIConfig(), applyAIViewToForm(), buildAIOverride(), loadAI(), resetAIToEnv(), saveAI()
 
 ### Community 672 - "Common Cognitive Load Violations"
 Cohesion: 0.22
@@ -3223,17 +3209,9 @@ Nodes (9): Color & materials, Components & controls, iOS platform, Layout & stru
 Cohesion: 0.22
 Nodes (8): Cadence, Confirm and stop, Phase 1: Discovery interview, Phase 2: Resolve the design direction, Phase 3: Write the brief, Round 1: purpose, people, and outcome, Round 2: material, behavior, and boundaries, Shape
 
-### Community 677 - "RunAwareNodeExecutor"
-Cohesion: 0.12
-Nodes (16): RunAwareNodeExecutor, 5.1 Goals (in priority order), 5.2 Non-goals (explicit), 5. Goals & non-goals, 6.1 Runtime, 6.2 Node catalogue — 42 registered executors (`cmd/m9m/commands/exec.go::RegisterAllNodes`), 6.3 HTTP / API surface (n8n-compatible), 6.4 Integrations (current) (+8 more)
-
-### Community 678 - "Input.vue"
-Cohesion: 0.20
-Nodes (10): baseControlClass, controlClass, controlId, describedBy, emit, handleInput(), InputType, nativeType (+2 more)
-
-### Community 679 - "vue"
-Cohesion: 0.05
-Nodes (49): vue, emit, handleKeydown(), panelRef, props, requestClose(), SIZE_CLASSES, activeValue (+41 more)
+### Community 677 - "edgesTakenRenderer.ts"
+Cohesion: 0.46
+Nodes (6): applyEdgesTaken(), buildEdgeStateMap(), EdgeState, ExecutionEdgesTaken, styleForEdgeState(), summaryForExecution()
 
 ### Community 680 - "check_repo_hygiene.sh script"
 Cohesion: 0.70
@@ -3256,8 +3234,8 @@ Cohesion: 0.50
 Nodes (4): Asynchronous, Execution Modes, Synchronous, Webhook Mode
 
 ### Community 685 - "ai/config.go"
-Cohesion: 0.16
-Nodes (17): Config, ConfigOverride, ConfigView, Provider, Ticket 3 — retire legacy `M9M_COPILOT_*` env vars, TestProviderConstants(), EffectiveConfig(), envBool() (+9 more)
+Cohesion: 0.32
+Nodes (11): Ticket 3 — retire legacy `M9M_COPILOT_*` env vars, envBool(), envFloat(), envInt(), LoadConfigFromEnv(), pickEnv(), resetCopilotDeprecationWarning(), TestLoadConfigFromEnv_HonoursLegacyCopilotEnv() (+3 more)
 
 ### Community 686 - "useFormValidation"
 Cohesion: 0.24
@@ -3267,13 +3245,13 @@ Nodes (5): useFormValidation(), setFieldValue(), touchField(), validate(), valid
 Cohesion: 0.25
 Nodes (8): 1. Impatient Power User: "Alex", 2. Confused First-Timer: "Jordan", 3. Accessibility-Dependent User: "Sam", 4. Deliberate Stress Tester: "Riley", 5. Distracted Mobile User: "Casey", Persona-Based Design Testing, Project-Specific Personas, Selecting Personas
 
-### Community 688 - ".FixError"
-Cohesion: 0.47
-Nodes (3): ErrorFix, FixErrorRequest, FixErrorResponse
+### Community 688 - "decrypt_n8n_credential_data"
+Cohesion: 0.18
+Nodes (5): decrypt_n8n_credential_data(), test_decrypt_empty(), test_decrypt_known_vector(), test_decrypt_no_key_raises(), test_decrypt_wrong_key_returns_garbage()
 
-### Community 689 - "credentials.N8NCipher"
-Cohesion: 0.40
-Nodes (3): evpBytesToKey(), pkcs7Pad(), pkcs7Unpad()
+### Community 689 - "API Compatibility Layer - Implementation Summary"
+Cohesion: 0.29
+Nodes (7): ✅ Achieved, API Compatibility Layer - Implementation Summary, Conclusion, 🎯 Next Milestones, Session Overview, Success Criteria, Technical Architecture
 
 ### Community 692 - "Contributing Guidelines"
 Cohesion: 0.67
@@ -3287,17 +3265,13 @@ Nodes (3): Contributing, Future Enhancements, Planned Features
 Cohesion: 0.67
 Nodes (3): Automated Testing, Performance Validation, Testing and Validation
 
-### Community 698 - "NewBulkhead"
-Cohesion: 0.20
-Nodes (8): TestBulkhead_AllowsConcurrent(), TestBulkhead_ContextCancellation(), TestBulkhead_NilConfigUsesDefault(), TestBulkhead_RejectsOverCapacity(), TestBulkhead_Stats(), Bulkhead, BulkheadConfig, NewBulkhead()
+### Community 698 - "m9m Implementation Roadmap - Updated"
+Cohesion: 0.29
+Nodes (6): Current Status: Core Node Types Complete ✅, m9m Implementation Roadmap - Updated, Next Focus: Maximal Compatibility and Advanced Features, Phase 7: Validation and Testing (Weeks 15-16), Week 15: Compatibility Testing, Week 16: Performance Testing
 
 ### Community 705 - "BaseNode"
 Cohesion: 0.03
-Nodes (41): StartNode, API authentication of the credential routes, Authentication rejection wire format (implemented), Current m9m routes, Latest evidence and remaining verification, n8n / m9m Credential API Contract, Secret handling, Sources and scope (+33 more)
-
-### Community 743 - "rbac_test.go"
-Cohesion: 0.22
-Nodes (9): IsRBACError(), RoleFromStringList(), equalStringSlices(), TestRBAC_AddCustomRole(), TestRBAC_AdminWildcardShortCircuits(), TestRBAC_BuiltInRoles(), TestRBAC_MultipleRolesInherit(), TestRBAC_ReservedRoleRejected() (+1 more)
+Nodes (35): NoOpNode, StartNode, API authentication of the credential routes, Authentication rejection wire format (implemented), Current m9m routes, Latest evidence and remaining verification, n8n / m9m Credential API Contract, Secret handling (+27 more)
 
 ### Community 744 - "features"
 Cohesion: 0.29
@@ -3307,13 +3281,13 @@ Nodes (7): features, enable_audit_log, enable_collaboration, enable_javascript_r
 Cohesion: 0.22
 Nodes (9): Access Points, Getting Started, Next Steps, Option 1: Binary Installation, Option 2: Docker, Option 3: From Source, Quick Start, Verify Installation (+1 more)
 
-### Community 746 - "Performance Metrics"
+### Community 746 - "log.Logger"
 Cohesion: 0.33
-Nodes (6): API Response Times (Development Mode), Binary Sizes, Comparison with n8n, Memory Usage, Performance Metrics, Startup Performance
+Nodes (5): startMetricsServer(), WithLogger(), WithName(), WithVersion(), ServerOption
 
-### Community 747 - "ReliableEngineConfig"
-Cohesion: 0.47
-Nodes (6): ReliableEngineConfig, DefaultReliableEngineConfig(), NewReliableWorkflowEngine(), TestCircuitBreaker_DefaultConfig(), DefaultCircuitBreakerConfig(), CircuitBreakerConfig
+### Community 747 - "credentials.N8NCipher"
+Cohesion: 0.40
+Nodes (3): evpBytesToKey(), pkcs7Pad(), pkcs7Unpad()
 
 ### Community 749 - "Impeccable Finish Reviewer"
 Cohesion: 0.29
@@ -3355,49 +3329,49 @@ Nodes (6): Appendix B — engineering follow-up tickets (Phase 8), Execution sum
 Cohesion: 0.22
 Nodes (12): canonicalXMLMode(), emitChild(), extractOptions(), extractXMLString(), jsonToXML(), sortedKeys(), sortedStringKeys(), writeXMLElement() (+4 more)
 
+### Community 759 - "Performance Metrics"
+Cohesion: 0.33
+Nodes (6): API Response Times (Development Mode), Binary Sizes, Comparison with n8n, Memory Usage, Performance Metrics, Startup Performance
+
 ### Community 760 - "m9m — Bug-fix Tracker & Triage Playbook"
-Cohesion: 0.22
-Nodes (8): 11. Anti-patterns (do not do these), 12. References, 1. Bug register (executive summary), 3. P1 — Engine correctness, 4. P2 — Performance & reliability, 8. P6 — Architectural & n8n feature gaps (informational), BUG-UI-2026-11-13-001 — Node creator overlay blocked adding nodes to the canvas, m9m — Bug-fix Tracker & Triage Playbook
+Cohesion: 0.18
+Nodes (10): 11. Anti-patterns (do not do these), 12. References, 1. Bug register (executive summary), 2. P0 — Parity & wire-compat (open), 4. P2 — Performance & reliability, 8. P6 — Architectural & n8n feature gaps (informational), BUG-2026-09-09-002 — Credential envelope does not sync from n8n to m9m per workflow node, BUG-DATATABLE-2026-10-12-001 — `n8n-nodes-base.dataTable` node type not implemented in m9m (+2 more)
 
 ### Community 761 - "Create Schedule"
 Cohesion: 0.25
 Nodes (8): Create Schedule, Cron Expression Format, Example Request, Request Body, Response, Parameters, Schedule Configuration, cronExpression()
 
-### Community 762 - "Testing Checklist"
-Cohesion: 0.40
-Nodes (5): Basic API Testing ✅, Integration Testing (Todo), Performance Testing (Todo), Storage Testing (Todo), Testing Checklist
+### Community 762 - "UpdateScheduler"
+Cohesion: 0.33
+Nodes (3): NewUpdateScheduler(), TestUpdateScheduler_New(), UpdateScheduler
 
-### Community 764 - "Critical Missing Features for Maximal Compatibility"
-Cohesion: 0.40
-Nodes (5): Credential Management, Critical Missing Features for Maximal Compatibility, Error Handling and Retries, Expression Engine, Multi-Node Workflow Execution
-
-### Community 765 - "Phase 4: Missing Node Types for Maximal Compatibility (Weeks 7-10)"
-Cohesion: 0.40
-Nodes (5): Phase 4: Missing Node Types for Maximal Compatibility (Weeks 7-10), Week 10: Advanced Communication Nodes, Week 7: Function Node Implementation, Week 8: HTTP Response and Webhook Nodes, Week 9: Data Transformation Nodes
+### Community 764 - "NewMarketplaceCache"
+Cohesion: 0.33
+Nodes (5): NewMarketplaceCache(), TestMarketplaceCache_AddAndGetTemplate(), TestMarketplaceCache_CacheQuery(), TestMarketplaceCache_CacheQueryExpired(), TestMarketplaceCache_CacheQueryMiss()
 
 ### Community 768 - "Diagnostic Scan"
 Cohesion: 0.33
 Nodes (6): 1. Accessibility (VoiceOver / TalkBack), 2. Performance, 3. Appearance & Theming, 4. Platform Conformance (CRITICAL), 5. Adaptivity, Diagnostic Scan
 
-### Community 769 - "Critical Missing Components for Maximal Compatibility"
-Cohesion: 0.40
-Nodes (5): 1. Expression Engine (High Priority), 2. Credential Management (High Priority), 3. Multi-Node Workflow Execution (High Priority), 4. Error Handling and Recovery (Medium Priority), Critical Missing Components for Maximal Compatibility
+### Community 769 - "m9m ↔ n8n UI Parity — Feasibility, Gap Analysis & Implementation Plan"
+Cohesion: 0.14
+Nodes (13): 1. Verdict, 2.1 Live-verified facts (read-only probes against the deployed server `187.77.113.218:8080`), 2. Capability matrix, 5. Phased implementation plan, 6. Risks & constraints, 7. Recommendation, API authentication hardening — 2026-11-12 (working tree, not deployed), Appendix — verification log (+5 more)
 
-### Community 770 - "Compatibility Requirements"
-Cohesion: 0.40
-Nodes (5): Compatibility Requirements, Data Flow Compatibility, Expression Compatibility, JSON Structure Compatibility, Node Parameter Compatibility
+### Community 770 - "runExec"
+Cohesion: 0.50
+Nodes (5): outputExecError(), outputExecResult(), outputJSON(), parseExecInput(), runExec()
 
-### Community 771 - "Testing Strategy"
+### Community 771 - "Testing Checklist"
 Cohesion: 0.40
-Nodes (5): Compatibility Tests, Integration Tests, Security Tests, Testing Strategy, Unit Tests
+Nodes (5): Basic API Testing ✅, Integration Testing (Todo), Performance Testing (Todo), Storage Testing (Todo), Testing Checklist
 
 ### Community 772 - "10. Filing & triage"
 Cohesion: 0.33
 Nodes (6): 10.1 How to file a new bug, 10.2 Triage SLA, 10.3 Definition of done (every bug), 10.4 Verification rig, 10.5 Escalation path, 10. Filing & triage
 
-### Community 773 - "NewXmlNode"
-Cohesion: 0.28
-Nodes (9): TestXmlNode_WebhookRoundTrip(), NewXmlNode(), newXmlInput(), TestXmlNode_Description(), TestXmlNode_JSONToXML_RoundTrip(), TestXmlNode_ValidateParameters(), TestXmlNode_XMLToJSON_Attributes(), TestXmlNode_XMLToJSON_Malformed() (+1 more)
+### Community 773 - "Critical Missing Features for Maximal Compatibility"
+Cohesion: 0.40
+Nodes (5): Credential Management, Critical Missing Features for Maximal Compatibility, Error Handling and Retries, Expression Engine, Multi-Node Workflow Execution
 
 ### Community 774 - "Implementation Details"
 Cohesion: 0.33
@@ -3423,9 +3397,9 @@ Nodes (4): Impeccable Documenter, Input Contract, Output Contract, Workflow
 Cohesion: 0.40
 Nodes (4): Containment, Painted material, Region map, What varies independently
 
-### Community 781 - "NewTwilioNodeWithClient"
+### Community 781 - "Phase 4: Missing Node Types for Maximal Compatibility (Weeks 7-10)"
 Cohesion: 0.40
-Nodes (5): NewTwilioNodeWithClient(), TestTwilioNode_GetMessages(), TestTwilioNode_SendSms(), TestTwilioNode_SendSmsMissingFields(), TwilioHTTPClient
+Nodes (5): Phase 4: Missing Node Types for Maximal Compatibility (Weeks 7-10), Week 10: Advanced Communication Nodes, Week 7: Function Node Implementation, Week 8: HTTP Response and Webhook Nodes, Week 9: Data Transformation Nodes
 
 ### Community 782 - "6. P4 — Security"
 Cohesion: 0.40
@@ -3451,9 +3425,9 @@ Nodes (6): General, Is m9m a drop-in replacement for n8n?, Is m9m free and open 
 Cohesion: 0.33
 Nodes (6): How do I see what m9m is doing?, My workflow fails with "node type not registered" — what do I do?, Troubleshooting, Where do I ask questions?, Where do I report bugs?, Where's the data stored?
 
-### Community 788 - "SandboxType"
-Cohesion: 0.19
-Nodes (5): init(), RegisterSandbox(), SandboxType, NoSandbox, SandboxCreator
+### Community 788 - "Sandbox"
+Cohesion: 0.13
+Nodes (9): NewFactory(), Sandbox, SandboxFactory, SandboxType, TestFactory_Create(), TestFactory_DetectBest(), TestFactory_ListAvailable(), defaultFactory (+1 more)
 
 ### Community 789 - "Heuristics Scoring Guide"
 Cohesion: 0.50
@@ -3471,9 +3445,9 @@ Nodes (4): ✅ Complete, 📋 Future Enhancements, Integration Status, ⚠️ Re
 Cohesion: 0.50
 Nodes (4): Configuration, Documentation, Examples, Support & Resources
 
-### Community 794 - "2. P0 — Parity & wire-compat (open)"
+### Community 794 - "File Summary"
 Cohesion: 0.50
-Nodes (4): 2. P0 — Parity & wire-compat (open), BUG-2026-09-09-002 — Credential envelope does not sync from n8n to m9m per workflow node, BUG-DATATABLE-2026-10-12-001 — `n8n-nodes-base.dataTable` node type not implemented in m9m, BUG-MONGO-2026-10-12-001 — MongoDB node only speaks Atlas Data API; no support for `mongodb://` or `mongodb+srv://`
+Nodes (4): Disabled Files (1), File Summary, Modified Files (5), New Files Created (7)
 
 ### Community 795 - "How It All Works Together"
 Cohesion: 0.50
@@ -3483,45 +3457,41 @@ Nodes (4): How It All Works Together, Scenario 1: Workflow Execution, Scenario 2
 Cohesion: 0.50
 Nodes (4): Performance Characteristics, Reads (Local), Scalability, Writes (Replicated)
 
-### Community 797 - "File Summary"
-Cohesion: 0.50
-Nodes (4): Disabled Files (1), File Summary, Modified Files (5), New Files Created (7)
-
-### Community 798 - "Long-term Enhancements"
+### Community 797 - "Long-term Enhancements"
 Cohesion: 0.50
 Nodes (4): Advanced Features, Enterprise Features, Extended Node Types, Long-term Enhancements
 
-### Community 799 - "Success Metrics"
+### Community 798 - "Success Metrics"
 Cohesion: 0.50
 Nodes (4): Code Quality, Compatibility, Performance Improvements, Success Metrics
 
-### Community 800 - "Risk Mitigation"
+### Community 799 - "Risk Mitigation"
 Cohesion: 0.50
 Nodes (4): Resource Risks, Risk Mitigation, Technical Risks, Timeline Risks
 
 ### Community 801 - ".ExecuteWorkflowWithContext"
-Cohesion: 0.04
-Nodes (73): Engine and execution, mockExecutor, WorkflowResult, ContextWorkflowEngine, execFrame, ExecutionMetricsSnapshot, NodeRegistry, paramAlias (+65 more)
+Cohesion: 0.05
+Nodes (50): ExecutionMetricsSnapshot, NodeRegistry, paramAlias, ReliableWorkflowEngine, workflowEngineImpl, ExecutionData, WorkflowUsesSplitInBatches(), copyRoutingTags() (+42 more)
 
-### Community 802 - "Future Expansion Areas"
-Cohesion: 0.50
-Nodes (4): Advanced Workflow Patterns, AI/ML Services, Cloud Service Integrations, Future Expansion Areas
-
-### Community 803 - "Performance Considerations for Scaling"
-Cohesion: 0.50
-Nodes (4): Caching Strategy, Concurrency Model, Memory Management, Performance Considerations for Scaling
-
-### Community 804 - "Security Requirements"
-Cohesion: 0.50
-Nodes (4): Code Execution Security, Credential Security, Network Security, Security Requirements
-
-### Community 805 - "NodeJSGlobals"
+### Community 802 - "Developer Notes"
 Cohesion: 0.67
-Nodes (3): BufferObject, NodeJSGlobals, ProcessObject
+Nodes (3): Adding New API Endpoints, Code Organization, Developer Notes
 
-### Community 809 - "Deployment Considerations"
-Cohesion: 0.50
-Nodes (4): Containerization, Deployment Considerations, High Availability, Scaling
+### Community 803 - "Migration Guide"
+Cohesion: 0.67
+Nodes (3): Configuration Migration, From Original n8n to m9m, Migration Guide
+
+### Community 804 - "Known Limitations"
+Cohesion: 0.67
+Nodes (3): Current Constraints, Known Limitations, Not Implemented (Out of Scope)
+
+### Community 805 - "How to Use Right Now"
+Cohesion: 0.67
+Nodes (3): How to Use Right Now, Production Deployment, Quick Start
+
+### Community 809 - "Phase 1: Expression Engine (Weeks 1-2)"
+Cohesion: 0.67
+Nodes (3): Phase 1: Expression Engine (Weeks 1-2), Week 1: Core Expression Parsing, Week 2: Advanced Expressions
 
 ### Community 810 - "Frequently asked questions"
 Cohesion: 0.40
@@ -3531,9 +3501,9 @@ Nodes (5): AI agents and MCP, Can I run AI agents *inside* a workflow?, Does m9m
 Cohesion: 0.40
 Nodes (5): Can I modify the source?, Can I use m9m commercially?, Is there a paid tier with extra features?, Is there commercial support?, Licensing and commercial use
 
-### Community 812 - "Data Model Enhancements Needed"
+### Community 812 - "Ie"
 Cohesion: 0.50
-Nodes (4): Data Model Enhancements Needed, Enhanced Error Types, Execution Context, Expression Support in Parameters
+Nodes (3): di(), Ie(), ui()
 
 ### Community 813 - "Comparisons"
 Cohesion: 0.40
@@ -3543,17 +3513,17 @@ Nodes (5): Comparisons, How does m9m compare to Apache Airflow?, How does m9m co
 Cohesion: 0.40
 Nodes (5): Do the SDKs bundle a Node.js or Python runtime?, How do I embed m9m in a Go app?, How do I embed m9m in a Node.js app?, How do I embed m9m in a Python app?, SDKs
 
-### Community 815 - "Integration Requirements"
-Cohesion: 0.50
-Nodes (4): Database Integration, File System Integration, HTTP Integration, Integration Requirements
+### Community 815 - "Phase 2: Credential Management (Weeks 3-4)"
+Cohesion: 0.67
+Nodes (3): Phase 2: Credential Management (Weeks 3-4), Week 3: Core Credential System, Week 4: Advanced Credential Features
 
 ### Community 816 - "validateURLForSSRF"
 Cohesion: 0.40
 Nodes (4): TestValidateURLForSSRF_AllowsPublicURL(), TestValidateURLForSSRF_ExplainsProblem(), isBlockedIP(), validateURLForSSRF()
 
-### Community 817 - "Monitoring and Observability"
-Cohesion: 0.50
-Nodes (4): Logging, Metrics, Monitoring and Observability, Tracing
+### Community 817 - "Phase 3: Webhook Support (Weeks 5-6)"
+Cohesion: 0.67
+Nodes (3): Phase 3: Webhook Support (Weeks 5-6), Week 5: Webhook Server Implementation, Week 6: Advanced Webhook Features
 
 ### Community 818 - "Reliability"
 Cohesion: 0.50
@@ -3563,69 +3533,41 @@ Nodes (4): Does m9m have automated tests?, Is m9m production-ready?, Reliability
 Cohesion: 0.50
 Nodes (4): How is "5–10× faster" measured?, How much faster is m9m than n8n?, Performance, Why is m9m faster than n8n?
 
-### Community 821 - "Developer Notes"
-Cohesion: 0.67
-Nodes (3): Adding New API Endpoints, Code Organization, Developer Notes
-
-### Community 822 - "Migration Guide"
-Cohesion: 0.67
-Nodes (3): Configuration Migration, From Original n8n to m9m, Migration Guide
-
-### Community 823 - "Known Limitations"
-Cohesion: 0.67
-Nodes (3): Current Constraints, Known Limitations, Not Implemented (Out of Scope)
-
-### Community 824 - "How to Use Right Now"
-Cohesion: 0.67
-Nodes (3): How to Use Right Now, Production Deployment, Quick Start
-
-### Community 825 - "Phase 1: Expression Engine (Weeks 1-2)"
-Cohesion: 0.67
-Nodes (3): Phase 1: Expression Engine (Weeks 1-2), Week 1: Core Expression Parsing, Week 2: Advanced Expressions
-
-### Community 826 - "Phase 2: Credential Management (Weeks 3-4)"
-Cohesion: 0.67
-Nodes (3): Phase 2: Credential Management (Weeks 3-4), Week 3: Core Credential System, Week 4: Advanced Credential Features
-
-### Community 827 - "Phase 3: Webhook Support (Weeks 5-6)"
-Cohesion: 0.67
-Nodes (3): Phase 3: Webhook Support (Weeks 5-6), Week 5: Webhook Server Implementation, Week 6: Advanced Webhook Features
-
-### Community 828 - "Phase 5: Workflow Orchestration (Weeks 11-12)"
+### Community 820 - "Phase 5: Workflow Orchestration (Weeks 11-12)"
 Cohesion: 0.67
 Nodes (3): Phase 5: Workflow Orchestration (Weeks 11-12), Week 11: Multi-Node Workflow Execution, Week 12: Advanced Workflow Features
 
-### Community 829 - "Phase 6: Performance and Production Readiness (Weeks 13-14)"
+### Community 821 - "Phase 6: Performance and Production Readiness (Weeks 13-14)"
 Cohesion: 0.67
 Nodes (3): Phase 6: Performance and Production Readiness (Weeks 13-14), Week 13: Performance Optimization, Week 14: Production Features
 
-### Community 831 - "go_pkg_context"
-Cohesion: 0.12
-Nodes (9): applyHeaderParameters(), flattenHeaderSpec(), mustParseCIDR(), errorTypeName(), trimPtr(), TestIsAsyncResponseMode(), IsAsyncResponseMode(), isWebhookNode() (+1 more)
-
-### Community 833 - "normalizeWebhookHeaders"
+### Community 822 - "NodeJSGlobals"
 Cohesion: 0.67
-Nodes (3): normalizeWebhookHeaders(), TestNormalizeWebhookHeaders(), TestNormalizeWebhookHeaders_Nil()
+Nodes (3): BufferObject, NodeJSGlobals, ProcessObject
+
+### Community 825 - "3. P1 — Engine correctness"
+Cohesion: 0.40
+Nodes (5): 3. P1 — Engine correctness, BUG-BE-2026-11-13-001 — `/webhook-test/<path>` always 404'd — no test URL to capture input/output while designing a flow, BUG-UI-2026-11-13-001 — Node creator overlay blocked adding nodes to the canvas, BUG-UI-2026-11-13-003 — Node creator closed itself on the opening click; clicks never added a node, BUG-UI-2026-11-13-004 — "New workflow" kept the previous canvas (nodes, selection and viewport)
 
 ## Knowledge Gaps
 - **13 isolated node(s):** `RFC-1321`, `constructor`, `handle_`, `constructor`, `handle_` (+8 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 6365 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **134 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 6413 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **137 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `RegisterAllNodes()` connect `NewBaseNode` to `data_table_test.go`, `NewXmlNode`, `NewMemoryStorage`, `Documentation gap analysis — current implementation vs `documentation/docs/``, `NewSetNode`, `Nodes Overview`, `lambda_operations_test.go`, `gitlab_node_test.go`, `cloud_storage_test.go`, `mongodb_test.go`, `RunAwareNodeExecutor`, `go_pkg_os`, `s3_operations_test.go`, `ConnectionRouter`, `NewAnthropicNode`, `blob_storage_test.go`, `github_node_test.go`, `testing.T`, `trigger_test.go`, `kafka_trigger_consumer_test.go`, `elasticsearch_test.go`, `model/workflow.go`, `m9m`, `RunDemos`?**
-  _High betweenness centrality (0.117) - this node is a cross-community bridge._
+- **Why does `RegisterAllNodes()` connect `NewBaseNode` to `data_table_test.go`, `runExec`, `NewMemoryStorage`, `7. Functional requirements`, `Documentation gap analysis — current implementation vs `documentation/docs/``, `Nodes Overview`, `lambda_operations_test.go`, `NewHTTPRequestNode`, `gitlab_node_test.go`, `cloud_storage_test.go`, `mongodb_test.go`, `go_pkg_fmt`, `s3_operations_test.go`, `NewXmlNode`, `NewSetNode`, `NewAnthropicNode`, `blob_storage_test.go`, `github_node_test.go`, `testing.T`, `trigger_test.go`, `kafka_trigger_consumer_test.go`, `model/workflow.go`, `m9m`, `RunDemos`?**
+  _High betweenness centrality (0.112) - this node is a cross-community bridge._
 - **What connects `RFC-1321`, `constructor`, `handle_` to the rest of the system?**
   _13 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `net/http.Request` be split into smaller, more focused modules?**
-  _Cohesion score 0.06226053639846743 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06281661600810537 - nodes in this community are weakly interconnected._
 - **Why does `Nodes Overview` connect `Nodes Overview` to `nodes/index.md`?**
-  _High betweenness centrality (0.081) - this node is a cross-community bridge._
+  _High betweenness centrality (0.089) - this node is a cross-community bridge._
 - **Should `if_conditions.go` be split into smaller, more focused modules?**
   _Cohesion score 0.11522048364153627 - nodes in this community are weakly interconnected._
 - **Why does `Available Node Categories` connect `Nodes Overview` to `NewBaseNode`?**
-  _High betweenness centrality (0.081) - this node is a cross-community bridge._
-- **Should `server_test.go` be split into smaller, more focused modules?**
-  _Cohesion score 0.062146892655367235 - nodes in this community are weakly interconnected._
+  _High betweenness centrality (0.089) - this node is a cross-community bridge._
+- **Should `ExecutionHistory.vue` be split into smaller, more focused modules?**
+  _Cohesion score 0.027170868347338936 - nodes in this community are weakly interconnected._

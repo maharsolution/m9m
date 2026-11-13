@@ -120,14 +120,24 @@ func (h *Handler) handleWebhookRequest(w http.ResponseWriter, r *http.Request, i
 	webhook, err := h.manager.GetWebhookByPath(path, r.Method, isTest)
 	if err != nil {
 		log.Printf("⚠️  Webhook not found: %s %s (test=%v)", r.Method, path, isTest)
+		// The wire shape (status + {code,message,hint}) is identical for
+		// both URLs — only the hint differs, because the reason a URL
+		// does not resolve is different: a production URL needs an
+		// ACTIVE workflow, a test URL only needs the workflow to exist.
+		hint := "The workflow must be active for a production URL to run successfully. " +
+			"You can activate the workflow using the toggle in the top-right of the editor. " +
+			"Note that unlike test URL calls, production URL calls aren't shown on the canvas " +
+			"(only in the executions list)"
+		if isTest {
+			hint = "The test URL only works while the workflow exists and carries a Webhook node " +
+				"with this path. Save the workflow after changing the Webhook node's path, " +
+				"then use the Test URL shown in the node's parameters."
+		}
 		writeJSONError(w, http.StatusNotFound, webhookErrorBody{
 			Code: http.StatusNotFound,
 			Message: fmt.Sprintf("The requested webhook \"%s %s\" is not registered.",
 				r.Method, strings.TrimPrefix(path, "/")),
-			Hint: "The workflow must be active for a production URL to run successfully. " +
-				"You can activate the workflow using the toggle in the top-right of the editor. " +
-				"Note that unlike test URL calls, production URL calls aren't shown on the canvas " +
-				"(only in the executions list)",
+			Hint: hint,
 		})
 		return
 	}

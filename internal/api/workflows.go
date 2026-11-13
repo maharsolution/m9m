@@ -117,10 +117,16 @@ func (s *APIServer) CreateWorkflow(w http.ResponseWriter, r *http.Request) {
 
 	// If the workflow was created already active, register its webhooks so
 	// /webhook/{path} works without a separate activate step.
-	if s.webhookManager != nil && workflow.Active {
-		if regErr := s.webhookManager.RegisterWorkflowWebhooks(&workflow, false); regErr != nil {
-			fmt.Printf("[m9m] warning: failed to register webhooks for new workflow %s: %v\n", workflow.ID, regErr)
+	if s.webhookManager != nil {
+		if workflow.Active {
+			if regErr := s.webhookManager.RegisterWorkflowWebhooks(&workflow, false); regErr != nil {
+				fmt.Printf("[m9m] warning: failed to register webhooks for new workflow %s: %v\n", workflow.ID, regErr)
+			}
 		}
+		// The test URL (/webhook-test/{path}) has to resolve even while the
+		// workflow is still inactive — it is what "Test workflow" hits while
+		// the flow is being designed.
+		s.webhookManager.SyncWorkflowTestHooks(&workflow)
 	}
 
 	s.sendJSON(w, http.StatusCreated, workflow)
@@ -248,6 +254,9 @@ func (s *APIServer) UpdateWorkflow(w http.ResponseWriter, r *http.Request) {
 				fmt.Printf("[m9m] warning: failed to register webhooks for updated workflow %s: %v\n", id, regErr)
 			}
 		}
+		// Re-index the test webhooks so /webhook-test/{path} follows the
+		// edited path / HTTP method immediately.
+		s.webhookManager.SyncWorkflowTestHooks(&workflow)
 	}
 
 	s.sendJSON(w, http.StatusOK, workflow)
@@ -259,6 +268,12 @@ func (s *APIServer) DeleteWorkflow(w http.ResponseWriter, r *http.Request) {
 	if err := s.storage.DeleteWorkflow(id); err != nil {
 		s.sendError(w, http.StatusNotFound, "Workflow not found", err)
 		return
+	}
+
+	// Drop the workflow's test webhooks so /webhook-test/{path} stops
+	// resolving once the workflow is gone.
+	if s.webhookManager != nil {
+		s.webhookManager.RemoveWorkflowTestHooks(id)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -281,6 +296,9 @@ func (s *APIServer) ActivateWorkflow(w http.ResponseWriter, r *http.Request) {
 				// in storage; webhook cache will reconcile on next restart.
 				fmt.Printf("[m9m] warning: failed to register webhooks for workflow %s: %v\n", id, regErr)
 			}
+			// The test index mirrors the workflow's active state (an active
+			// workflow wins over an inactive one on a path collision).
+			s.webhookManager.SyncWorkflowTestHooks(wf)
 		}
 	}
 
@@ -302,6 +320,12 @@ func (s *APIServer) DeactivateWorkflow(w http.ResponseWriter, r *http.Request) {
 	if s.webhookManager != nil {
 		if err := s.webhookManager.UnregisterWorkflowWebhooks(id); err != nil {
 			fmt.Printf("[m9m] warning: failed to unregister webhooks for workflow %s: %v\n", id, err)
+		}
+		// The test URL keeps working while the workflow is inactive, but the
+		// index has to learn that the workflow is no longer active (an
+		// active workflow wins a path collision).
+		if wf, getErr := s.storage.GetWorkflow(id); getErr == nil {
+			s.webhookManager.SyncWorkflowTestHooks(wf)
 		}
 	}
 
@@ -363,6 +387,12 @@ func (s *APIServer) DuplicateWorkflow(w http.ResponseWriter, r *http.Request) {
 	if err := s.storage.SaveWorkflow(duplicate); err != nil {
 		s.sendError(w, http.StatusInternalServerError, "Failed to save duplicate workflow", err)
 		return
+	}
+
+	// The copy is inactive, but its test URL (/webhook-test/{path}) has to
+	// resolve so the duplicate can be exercised while designing.
+	if s.webhookManager != nil {
+		s.webhookManager.SyncWorkflowTestHooks(duplicate)
 	}
 
 	s.sendJSON(w, http.StatusCreated, duplicate)

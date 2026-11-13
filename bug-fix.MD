@@ -3,9 +3,9 @@
 | Field | Value |
 | --- | --- |
 | Document | `bug-fix.MD` — canonical bug register and triage rules |
-| Version | `0.5.0-draft+2` |
+| Version | `0.5.0-draft+4` |
 | Status | **Living document** — updated as bugs are opened, triaged, and closed |
-| Last updated | 2026-11-13 (node-creator self-close + n8n click-to-add — BUG-UI-2026-11-13-003; "new workflow" stale canvas — BUG-UI-2026-11-13-004; node-add canvas fix — BUG-UI-2026-11-13-001; execution-detail canvas auto-fit — BUG-UI-2026-11-13-002; auth env contract documented in `.env.example`) |
+| Last updated | 2026-11-13 (connection/linkage deletion — BUG-UI-2026-11-13-005; expression autocomplete / placeholder suggestions — BUG-UI-2026-11-13-006; webhook test vs production URL parity — BUG-BE-2026-11-13-001; node-creator self-close + n8n click-to-add — BUG-UI-2026-11-13-003; "new workflow" stale canvas — BUG-UI-2026-11-13-004; node-add canvas fix — BUG-UI-2026-11-13-001; execution-detail canvas auto-fit — BUG-UI-2026-11-13-002; auth env contract documented in `.env.example`) |
 | Owner | Mahar Solution (current maintainer) |
 | Repository | <https://github.com/maharsolution/m9m> |
 | Companion docs | `m9m.MD` (PRD), `parity/parity_gaps.json` (machine-readable parity backlog), `workflow-test.MD` (live parity report), `gap-current-vs-doc.MD` (docs drift), `n8n-nodes.MD` (node parity reference) |
@@ -49,6 +49,9 @@ Legend: **P0** = wire-compat / correctness blocker · **P1** = engine correctnes
 | BUG-UI-2026-11-13-002 | Execution-detail graph canvas collapsed to a 61 px strip instead of filling the panel | P3 | **RESOLVED** (2026-11-13, definite height chain + auto-fit on init/resize in `web/src/views/ExecutionDetail.vue`; `web/src/lib/executionCanvasFit.ts` + unit tests; deployed `7928eae`, live-verified on `187.77.113.218:8080` — see §9.30) | TBD | user-reported | 2026-11-13 |
 | BUG-UI-2026-11-13-003 | Node creator closed itself on the opening click; clicking a node never added it | **P1** | **RESOLVED** (2026-11-13, clock-correct outside-click guard `shouldCloseCreator` + n8n click-to-add; `web/src/lib/nodeCreator.ts`, `web/src/lib/nodePlacement.ts`, `web/src/lib/nodeId.ts` + unit tests; verified with trusted mouse input — see §9.32) | TBD | user-reported | 2026-11-13 |
 | BUG-UI-2026-11-13-004 | "New workflow" kept the previous canvas (nodes, selection, viewport) | **P1** | **RESOLVED** (2026-11-13, explicit new-workflow request + clean-draft reset + viewport reset in `web/src/stores/workflowEditor.ts` and `web/src/views/WorkflowEditor.vue`; `Ctrl+N` wired; unit tests in `web/src/stores/workflowEditor.test.ts` — see §9.32) | TBD | user-reported | 2026-11-13 |
+| BUG-BE-2026-11-13-001 | `/webhook-test/<path>` always 404'd — no test URL to capture input/output during flow design | **P1** | **RESOLVED** (2026-11-13, derived test-webhook index covering inactive workflows in `internal/webhooks/manager.go`; Webhook node panel now shows Production URL + Test URL; 14 Go tests + 6 Vitest cases — see §9.33) | TBD | user-reported | 2026-11-13 |
+| BUG-UI-2026-11-13-005 | A connection between two joined nodes cannot be deleted — click, Delete/Backspace and hover X were all inert | **P1** | **RESOLVED** (2026-11-13, connections promoted to a first-class selection in `web/src/stores/workflowEditor.ts` (`selectedEdgeIds`, `removeSelectedEdges`); new `web/src/components/workflow/WorkflowEdge.vue` hover X; `web/src/lib/edgeSelection.ts` + 9 unit tests; 181 Vitest tests green — see §9.34) | TBD | user-reported | 2026-11-13 |
+| BUG-UI-2026-11-13-006 | Expression fields have no autocomplete / placeholder suggestions (`{{json.webho` showed a red error and no list) | **P1** | **RESOLVED** (2026-11-13, context-aware autocomplete in `expression/suggestions.ts` — variables, `$node["Name"]`, item fields; `ExpressionField.vue` listbox with ↑/↓/Enter/Esc; `NodePanel.vue` provides the context; 21 new unit tests + 181 Vitest tests green — see §9.35) | TBD | user-reported | 2026-11-13 |
 | BUG-CAP-2026-09-09-001 | Capability gap: tracking flow / debugger visualisation | P6 | **RESOLVED** (2026-10-12, `web/src/lib/edgesTakenRenderer.ts` + 12 tests; `EdgesTaken` data → per-edge style transform for the Vue Flow graph) | TBD | Sheet row 1 | 2026-09-09 |
 | BUG-CAP-2026-09-09-002 | Capability gap: UI designer — node-to-node connectivity not visible in editor | P6 | **RESOLVED** (2026-10-12, edges-taken renderer is the line-renderer for the editor canvas; same data shape drives the debugger and the canvas — see §9.22) | TBD | Sheet row 2 | 2026-09-09 |
 | BUG-CAP-2026-09-09-003 | Capability gap: credential store UI cannot register credential data | P6 | **RESOLVED** (2026-10-12, `web/src/types/credentials.ts` + `web/src/lib/credentialSchema.ts` (validate/toPayload/fieldFor) + 13 tests; "New" form now has a structured per-type view backed by the `OAuth2Schema`) | TBD | Sheet row 3 | 2026-09-09 |
@@ -459,6 +462,97 @@ No open P1 bugs at the time of this writing. The most recent P1 issues were the 
 **Verification.** Trusted CDP input, HEAD build on `:3100`: on `/workflows/new` with 1 node, "New Workflow" left the URL at `/workflows/new` and the node on the canvas (stale). Fixed build on `:3000`: the same action → 0 nodes with the empty-state overlay; `Ctrl+N` → 2 → 0 nodes. `npm run build` clean (vue-tsc); `npm run test` 112 tests / 12 files passed. Screenshots: `tmp/shots/repro-3100-2-after-new-workflow.png` (before) vs `tmp/shots/repro-3000-2-after-new-workflow.png` (after), `tmp/shots/04-ctrl-n-empty-canvas.png`, `tmp/shots/05-new-workflow-empty-canvas.png`.
 
 **Remaining risk.** The Duplicate action still seeds a draft that keeps the source workflow's nodes (intended); the clean reset only runs for a plain "New workflow" request.
+
+### BUG-BE-2026-11-13-001 — `/webhook-test/<path>` always 404'd — no test URL to capture input/output while designing a flow
+
+| Field | Value |
+| --- | --- |
+| Severity | **P1** (n8n-parity gap — the design-time input/output capture path did not exist) |
+| Status | **RESOLVED** (2026-11-13 — derived test-webhook index + both URLs in the node panel; see §9.33) |
+| Source | User report 2026-11-13 ("untuk webhook bisa ada 2, test dan production biasanya dibedakan dengan ada kata -test (webhook-test dan webhook)") |
+| Discovered | 2026-11-13 |
+| Owner | TBD |
+| Target milestone | 0.5.0 |
+
+**Observed.** Hitting `http://<host>:8080/webhook-test/webhook_xml` returned `404 {"code":404,"message":"The requested webhook \"POST webhook_xml\" is not registered."}` — for active **and** inactive workflows. The Webhook node panel showed no URL at all, so there was no way to capture a webhook's input/output while the flow was still being designed.
+
+**Expected.** n8n parity: one Webhook node exposes a **Production URL** (`/webhook/<path>`, runs only while the workflow is active) and a **Test URL** (`/webhook-test/<path>`, runs during design even when the workflow is inactive). Both hit the same node.
+
+**Root cause.** The route existed (`internal/webhooks/handler.go:35`) but the lookup could never satisfy it. `WebhookManager.GetWebhookByPath` (HEAD `internal/webhooks/manager.go:124-135`) only consulted `activeHooks`, which is filled exclusively from webhooks with `Active == true` (`manager.go:85-87`, `LoadActiveWebhooks` `manager.go:365-383`); `createWebhookFromNode` sets `Active: workflow.Active && !isTest` (`manager.go:433`) and every caller passed `isTest=false` (`internal/api/workflows.go:121,247,279`, `internal/api/workflow_import_export.go:333`) — so no `…:test` entry could ever exist.
+
+**Fix (applied).**
+1. `internal/webhooks/manager.go` — derived in-memory test index (`testHooks` + `testHookCandidates`, key `METHOD:/path:test`) built from the workflow store: `RefreshTestHooks` (paged scan, `Limit 200` because the SQL backends apply `LIMIT ?` verbatim), `SyncWorkflowTestHooks`, `RemoveWorkflowTestHooks`, `lookupTestHook` (cache hit + rate-limited lazy rebuild, 2 s, so workflows created outside the REST API are picked up). Collision tie-break: active → newer `UpdatedAt` → workflow ID. The index is never persisted, so `/api/v1/webhooks` keeps its shape.
+2. `internal/api/workflows.go`, `internal/api/templates.go`, `internal/api/workflow_import_export.go`, `cmd/m9m/commands/serve.go` — sync/refresh the index on every workflow mutation and at startup.
+3. `internal/webhooks/handler.go` — the 404 hint now differs for test vs production URLs; status, body, headers and `respondWith` are unchanged.
+4. Frontend: `web/src/components/workflow/parameters/webhookUrls.ts` (new), `WebhookUrlField.vue` (new), `ParameterField.vue` — read-only **Production URL** and **Test URL** under the `path` field, base from `window.location.origin`, placeholder `your-path` when unset.
+
+**Verification.** `go build ./...` exit 0; `go vet` on the touched packages exit 0; 14 new Go tests in `internal/webhooks/test_routing_test.go` green (inactive resolution, production stays 404, both URLs hit the same workflow+node, the three tie-breaks, path rename, method change, deletion, non-webhook workflows ignored, nothing persisted, lazy refresh, HTTP-level 200/404, n8n-shaped 404); `internal/api` green; `npm run build` clean; `npm run test` 177 tests / 17 files passed. Local curl: inactive `POST /webhook/webhook_xml` → 404, inactive `POST /webhook-test/webhook_xml` → 200 `"executionMode":"test"`; after rename old path → 404, new path → 200; after activation `POST /webhook/<path>` → 200 `"executionMode":"production"` and `POST /webhook-test/<path>` → 200 `"executionMode":"test"`.
+
+**Remaining risk.** (1) The trigger output's `webhookUrl` still omits the endpoint prefix (`http://host:port/<path>` instead of n8n's `http://host:port/webhook/<path>`) — pre-existing in `internal/nodes/trigger/webhook.go`, left untouched because the production wire shape must stay byte-identical for the parity sheet. (2) The test index is process-local; a restart re-scans the store. (3) Workflows created outside the REST API are picked up within ≤2 s, not instantly.
+
+### BUG-UI-2026-11-13-005 — A connection between two joined nodes cannot be deleted
+
+| Field | Value |
+| --- | --- |
+| Severity | **P1** (the editor's core edit path — a wrong linkage could not be undone) |
+| Status | **RESOLVED** (2026-11-13 — connections are a first-class selection with Delete/Backspace and an n8n-style hover X; see §9.34) |
+| Source | User report 2026-11-13 ("tidak bisa menghapus linkage antar nodes yang sudah joined, kalau di n8n bisa") |
+| Discovered | 2026-11-13 |
+| Owner | TBD |
+| Target milestone | 0.5.0 |
+
+**Observed.** Once two nodes were joined, the linkage could not be removed: clicking the connection did nothing, Delete/Backspace did nothing, and no hover affordance appeared.
+
+**Expected.** n8n parity: a connection is a first-class selection — click to select, `Delete`/`Backspace` removes it, a small X appears on the hovered connection, and the removal is undoable.
+
+**Root cause.** The data layer existed, the UI layer never reached it.
+1. `web/src/components/workflow/WorkflowCanvas.vue` (HEAD:648) — `:delete-key-code="null"` deliberately disabled Vue Flow's own edge removal so deletions would flow through the editor store.
+2. `web/src/stores/workflowEditor.ts` (HEAD:86) — the only selection state was `selectedNodeIds`; there was no `selectedEdgeIds`, no `selectEdge`, no `clearEdgeSelection`.
+3. `web/src/stores/workflowEditor.ts` (HEAD:335) — `removeSelectedNodes()` deleted nodes only; a connection disappeared just as a side effect of deleting its endpoint nodes.
+4. `web/src/components/workflow/WorkflowCanvas.vue` (HEAD:114, 651) — `flowEdges` produced plain edges without a `selected` flag or a custom edge type, and the template bound only `@node-click` — no `@edge-click`, no `@pane-click`.
+
+**Fix (applied).**
+1. `web/src/lib/edgeSelection.ts` (new, 9 unit tests) — pure helpers: modifier detection, edge-id toggling, edge-id → connection resolution, deletion plan.
+2. `web/src/stores/workflowEditor.ts` — `selectedEdgeIds` / `selectedEdgeCount`, `selectEdge`, `clearEdgeSelection`, `removeSelectedEdges()` (history entry `Disconnect node(s)` + `isDirty`); `removeSelectedNodes()` falls through to it when only connections are selected; `clearSelection()` clears both.
+3. `web/src/components/workflow/WorkflowCanvas.vue` — edges carry `selected` and use the new edge type `m9m`; `@edge-click` / `@pane-click` wired.
+4. `web/src/components/workflow/WorkflowEdge.vue` (new) — bezier edge with an `EdgeLabelRenderer` X button shown while the connection is hovered or selected (`pointer-events: auto` to defeat Vue Flow's `pointer-events: none` label layer); removal is one undo step.
+5. `web/src/stores/workflowEditor.test.ts` — 7 new tests (edge selection, multi-select, deletion, undo restore, cascading delete).
+
+**Verification.** `cd web; npm run test` → 181 tests / 18 files passed; `npm run build` → vue-tsc clean. Manual with real mouse + keyboard on `http://localhost:3000/workflows/new`: click connection → it highlights as selected → **Delete** → the connection disappears and **Undo** restores it; hover → the X appears → click → removed → **Undo** restores it.
+
+**Remaining risk.** Marquee selection still only selects nodes — a marquee drawn over a connection does not add it to the connection selection (shift/ctrl-click does).
+
+### BUG-UI-2026-11-13-006 — Expression fields have no autocomplete / placeholder suggestions
+
+| Field | Value |
+| --- | --- |
+| Severity | **P1** (n8n-parity gap in the expression editor — the reported workflow could not be authored) |
+| Status | **RESOLVED** (2026-11-13 — context-aware autocomplete; see §9.35) |
+| Source | User report 2026-11-13 ("completness untuk dapetin placeholder belum bisa") with a screenshot of the Set node's assignment value (`{{json.webho` + a red error and no dropdown) |
+| Discovered | 2026-11-13 |
+| Owner | TBD |
+| Target milestone | 0.5.0 |
+
+**Observed.** Typing `{{` or a partial path (`{{json.webho`, `{{$node["X"].`) in a parameter field showed a red validation error and **no** suggestion list.
+
+**Expected.** n8n parity: typing `{{` opens a list of the real placeholders — the current item's fields, the other nodes' outputs, `$json` / `$now` / `$workflow` — filtered while typing; ↑/↓ + Enter or a mouse click inserts a complete expression; Esc closes the list only.
+
+**Root cause.** Three gaps.
+1. `web/src/components/workflow/parameters/expression/variables.ts` (HEAD:210) — `suggestionPrefix()` matched only a trailing identifier run (`/[$A-Za-z_][$A-Za-z0-9_]*$/`). For `{{json.webho` the prefix is `webho`, which matches no catalogue entry → zero suggestions → the dropdown never opened. The same happened after every dot.
+2. `web/src/components/workflow/parameters/ExpressionField.vue` (HEAD:385) — the error banner was rendered from `v-if="error"` independently of the dropdown, so a half-typed expression always showed the red banner while offering nothing.
+3. No expression-position detection and no data plumbing: the item fields (`$json.<field>`) and the other nodes' output fields (`$node["X"].json.<field>`) that the node details view already knows were never handed to the editor, so field-level completion was impossible.
+
+**Fix (applied).**
+1. `web/src/components/workflow/parameters/expression/suggestions.ts` (new, 21 unit tests) — `detectExpressionPosition` (is the caret inside `{{ … }}`? which token is typed? behind a dot? inside `$node["…"]`?), `filterSuggestions`, `suggestForPosition` (context variables + `$node["Name"]` + item fields + per-node fields + functions), `applySuggestionAt` (inserts a complete expression and returns the new caret).
+2. `web/src/lib/expressionContext.ts` (new) — injection key; `web/src/lib/expressionFields.ts` (new, 3 tests) — item fields and per-node output fields from the last execution payload; `web/src/lib/suggestionList.ts` (new, 4 tests) — lets the details view know the autocomplete owns the keyboard.
+3. `web/src/components/workflow/NodePanel.vue` — provides the expression context (the node's input payload + sibling node outputs); its capture-phase Escape now yields to an open suggestion list instead of closing the panel.
+4. `web/src/components/workflow/parameters/ParameterField.vue` — forwards `availableNodes` / `itemFields` / `nodeFields`.
+5. `web/src/components/workflow/parameters/ExpressionField.vue` — renders the listbox, handles ↑/↓/Enter/Tab/Esc (with `stopPropagation`), inserts on mouse click, re-syncs the caret after insertion, and hides the error banner while the dropdown is open.
+6. `web/src/components/workflow/parameters/expression/types.ts` + `evaluator.ts` — `ExpressionError.kind: 'syntax' | 'runtime'`, so a half-typed expression is not reported as broken; `expression/expression.test.ts` rewritten as a real suite (19 tests — the known pre-existing "No test suite found" failure is gone).
+
+**Verification.** `cd web; npm run test` → 181 tests / 18 files passed; `npm run build` → vue-tsc clean. Manual (Set node → Assignments → value): `{{` → 8 suggestions and **no** red error; `$js` → the list narrows to `$json`; **Enter** inserts `{{$json` with the caret following; `{{$nod` → narrows to `$node` / `$node["Set"]`; a mouse click inserts `{{$node["Set"].json`; closing with `}}` clears the error; a complete `{{$json.foo}}` without sample data shows no false red banner; **Esc** closes only the dropdown (the node details view stays open).
+
+**Remaining risk.** Field-level completion needs one completed execution — until the workflow has run, only the context variables and the node names are offered. `NodePanel`'s capture-phase Escape yields to any expanded `role="combobox"`, so a future native select could swallow one Escape too early.
 
 ---
 
@@ -1201,6 +1295,59 @@ These are not bugs in m9m — m9m makes a deliberate product choice not to ship 
 **Verification.** Trusted CDP mouse (`Input.dispatchMouseEvent`, `isTrusted: true`): HEAD build on `:3100` — toolbar click self-closed the creator (`stillOpen: false`), drag added 0 nodes, "New Workflow" left 1 stale node on the canvas. Fixed build on `:3000` — creator stays open (`stillOpen: true`), trusted drag adds a node (0 → 1), trusted click adds another (1 → 2), "New Workflow" → 0 nodes with the empty-state overlay, `Ctrl+N` → 2 → 0. `npm run build` clean (vue-tsc); `npm run test` 112 tests / 12 files passed (known pre-existing `expression.test.ts` "No test suite found" ignored). Screenshots: `tmp/shots/00-before-palette-self-closes.png`, `tmp/shots/02-node-added-by-drag.png`, `tmp/shots/03-node-added-by-click.png`, `tmp/shots/repro-3100-2-after-new-workflow.png` (before) vs `tmp/shots/repro-3000-2-after-new-workflow.png` (after). `graphify update .` re-run.
 
 **Live verification (2026-11-13, after deploy of commit `898522d`).** Harbor build → `harbor.solutiontech.id/m9m/m9m-core:latest`; server `m9m-backend` recreated and healthy; `GET /healthz` → 200. On `http://187.77.113.218:8080/workflows/new` with trusted mouse input: clicking the toolbar **Nodes** button leaves the creator **open** (the new help text "Click a node to add it, or drag it onto the canvas" is served), clicking **Webhook** adds the node (`nodeCount 0 → 1`, node label `Webhook`, empty state cleared) and the creator stays open; clicking **New Workflow** while already on `/workflows/new` now yields `nodeCount 0` with the empty-state overlay (previously the previous draft stayed on the canvas).
+
+---
+
+### 9.33 BUG-BE-2026-11-13-001 — `/webhook-test/<path>` always 404'd; no test URL for inactive workflows (closed)
+
+| Field | Value |
+| --- | --- |
+| Severity | **P1** (n8n-parity gap — the flow-design input/output capture path was unavailable) |
+| Closed | 2026-11-13 |
+| Fixed in | `internal/webhooks/manager.go`, `internal/webhooks/handler.go`, `internal/api/workflows.go`, `internal/api/templates.go`, `internal/api/workflow_import_export.go`, `cmd/m9m/commands/serve.go`, `internal/webhooks/test_routing_test.go` (new), `web/src/components/workflow/parameters/webhookUrls.ts` (new), `web/src/components/workflow/parameters/WebhookUrlField.vue` (new), `web/src/components/workflow/parameters/ParameterField.vue`, `web/src/components/workflow/parameters/webhookUrls.test.ts` (new) |
+| Closed by | Derived in-memory test-webhook index (active + inactive workflows) + both URLs rendered in the Webhook node panel |
+
+**Root cause.** The route existed (`internal/webhooks/handler.go:35`) but the lookup could never satisfy it. `WebhookManager.GetWebhookByPath` (HEAD `internal/webhooks/manager.go:124-135`) only consulted `activeHooks`, populated exclusively from webhooks with `Active == true` (`manager.go:85-87`, `LoadActiveWebhooks` `manager.go:365-383`); `createWebhookFromNode` sets `Active: workflow.Active && !isTest` (`manager.go:433`) and every `RegisterWorkflowWebhooks` caller passed `isTest=false` (`internal/api/workflows.go:121,247,279`, `internal/api/workflow_import_export.go:333`) — so no `…:test` entry could ever exist and every test URL 404'd. The Webhook node panel rendered only the raw `path` input, so the two n8n URLs were invisible.
+
+**Fix.** `internal/webhooks/manager.go` — derived test index (`testHooks`, `testHookCandidates`, keyed `METHOD:/path:test`) built from the workflow store: `RefreshTestHooks` (full, paged scan — `Limit 200` because the SQL backends apply `LIMIT ?` verbatim), `SyncWorkflowTestHooks` (single workflow, called from every workflow mutation), `RemoveWorkflowTestHooks` (deletion), `lookupTestHook` (cache lookup + rate-limited lazy rebuild, 2 s). Tie-break on path collisions: active workflow → newer `UpdatedAt` → workflow ID. Never persisted, so `/api/v1/webhooks` keeps its shape. `internal/api/*` + `cmd/m9m/commands/serve.go` wire the sync/refresh points. `internal/webhooks/handler.go` differentiates the 404 hint for test vs production URLs (status/body/headers/`respondWith` unchanged). Frontend: `WebhookUrlField.vue` + `webhookUrls.ts` render read-only **Production URL** (`<origin>/webhook/<path>`) and **Test URL** (`<origin>/webhook-test/<path>`) under the `path` field, `<origin>` from `window.location.origin`, placeholder path `your-path` when unset; path/method/response-mode editing unchanged.
+
+**Verification.** `go build ./...` exit 0; `go vet` on the touched packages exit 0; `go test ./internal/webhooks/...` — 14 new tests green (inactive resolution, production-stays-404, same workflow+node for both URLs, active/updatedAt/workflow-ID tie-breaks, path rename, method change, deletion, non-webhook workflows ignored, nothing persisted, lazy refresh, HTTP-level 200 vs 404, both paths on an active workflow, n8n-shaped 404); `internal/api` green; `npm run build` clean; `npm run test` 177 tests / 17 files passed; `graphify update .` re-run. Local curl: inactive `POST /webhook/webhook_xml` → 404; inactive `POST /webhook-test/webhook_xml` → 200 with `"executionMode":"test"`; after rename old path → 404, new path → 200; after activate `POST /webhook/webhook_xml_v2` → 200 with `"executionMode":"production"` and `POST /webhook-test/webhook_xml_v2` → 200 with `"executionMode":"test"`. Pre-existing failures in `internal/{blobstore,monitoring,nodes/cli,nodes/data,nodes/database,queue,sandbox,showcase,variables}` and `internal/webhooks/TestStreamResponse_Hijack` reproduce identically on a pristine `git archive HEAD` checkout.
+
+**Remaining risk.** (1) The trigger output's `webhookUrl` still omits the endpoint prefix (`http://host:port/<path>` instead of n8n's `http://host:port/webhook/<path>`) — pre-existing in `internal/nodes/trigger/webhook.go`, deliberately left untouched because the production wire shape must stay byte-identical for the parity sheet; fix separately with a parity-sheet re-run. (2) The parity sheet targets the deployed host and needs a post-deploy `--phase post` run. (3) Workflows created outside the REST API (MCP) are picked up by the lazy rebuild within ≤2 s, not instantly. (4) The test index is process-local; a restart re-scans the store at startup (`serve.go:404`).
+
+### 9.34 BUG-UI-2026-11-13-005 — a connection between two joined nodes could not be deleted (closed)
+
+| Field | Value |
+| --- | --- |
+| Severity | **P1** (the editor's core edit path — a wrong linkage could not be undone) |
+| Closed | 2026-11-13 |
+| Fixed in | `web/src/lib/edgeSelection.ts` (new), `web/src/lib/edgeSelection.test.ts` (new), `web/src/components/workflow/WorkflowEdge.vue` (new), `web/src/components/workflow/WorkflowCanvas.vue`, `web/src/stores/workflowEditor.ts`, `web/src/stores/workflowEditor.test.ts` |
+| Closed by | Connections promoted to a first-class selection: click to select, `Delete`/`Backspace` removes, n8n-style hover X, undoable |
+
+**Root cause.** The store had no connection selection state and the canvas bound no edge events. `WorkflowCanvas.vue` (HEAD:648) set `:delete-key-code="null"` so Vue Flow's own edge removal was disabled in favour of the editor store — but `workflowEditor.ts` (HEAD:86) tracked only `selectedNodeIds`, and `removeSelectedNodes()` (HEAD:335) deleted nodes only. `flowEdges` (HEAD:114) produced plain edges with no `selected` flag and no custom edge type, and the template bound only `@node-click` (HEAD:651) — no `@edge-click`, no `@pane-click`. Clicking a connection therefore did nothing, the Delete key always saw an empty node selection, and no hover affordance existed.
+
+**Fix.** `web/src/lib/edgeSelection.ts` (new) — pure helpers for modifier detection, edge-id toggling, edge-id → connection resolution and the deletion plan (9 unit tests). `web/src/stores/workflowEditor.ts` — `selectedEdgeIds` / `selectedEdgeCount`, `selectEdge`, `clearEdgeSelection`, `removeSelectedEdges()` (history entry `Disconnect node(s)` + `isDirty`), `removeSelectedNodes()` falls through to it when only connections are selected, `clearSelection()` clears both. `WorkflowCanvas.vue` — edges carry `selected`, use the new edge type `m9m`, and handle `@edge-click` / `@pane-click`. `web/src/components/workflow/WorkflowEdge.vue` (new) — bezier edge with an `EdgeLabelRenderer` X button shown while hovered or selected (`pointer-events: auto` defeats Vue Flow's `pointer-events: none` label layer); removal is one undo step. `workflowEditor.test.ts` — 7 new tests (selection, multi-select, deletion, undo restore, cascading delete).
+
+**Verification.** `cd web; npm run test` → 181 tests / 18 files passed; `npm run build` → vue-tsc clean. Manual on `http://localhost:3000/workflows/new` with a real mouse + keyboard: click connection → it highlights as selected → **Delete** → the connection disappears → **Undo** restores it; hover → the X appears → click → removed → **Undo** restores it.
+
+**Remaining risk.** Vue Flow's marquee selection still only selects nodes — a marquee drawn over a connection does not add it to the connection selection (shift/ctrl-click does).
+
+### 9.35 BUG-UI-2026-11-13-006 — expression fields had no autocomplete / placeholder suggestions (closed)
+
+| Field | Value |
+| --- | --- |
+| Severity | **P1** (n8n-parity gap in the expression editor) |
+| Closed | 2026-11-13 |
+| Fixed in | `web/src/components/workflow/parameters/expression/suggestions.ts` (new), `web/src/components/workflow/parameters/expression/suggestions.test.ts` (new), `web/src/components/workflow/parameters/expression/variables.ts`, `web/src/components/workflow/parameters/expression/types.ts`, `web/src/components/workflow/parameters/expression/evaluator.ts`, `web/src/components/workflow/parameters/expression/index.ts`, `web/src/components/workflow/parameters/expression/expression.test.ts`, `web/src/lib/expressionContext.ts` (new), `web/src/lib/expressionFields.ts` (new), `web/src/lib/suggestionList.ts` (new), `web/src/components/workflow/NodePanel.vue`, `web/src/components/workflow/parameters/ParameterField.vue`, `web/src/components/workflow/parameters/ExpressionField.vue` |
+| Closed by | Context-aware autocomplete: position detection + real context (variables, upstream nodes, item fields) + keyboard/mouse insertion |
+
+**Root cause.** Three gaps. (1) `expression/variables.ts` (HEAD:210) — `suggestionPrefix()` matched only a trailing identifier run (`/[$A-Za-z_][$A-Za-z0-9_]*$/`); for `{{json.webho` the prefix is `webho`, which matches no catalogue entry → zero suggestions → the dropdown never opened, and the same happened after every dot. (2) `ExpressionField.vue` (HEAD:385) — the error banner came from `v-if="error"` independently of the dropdown, so a half-typed expression always showed the red banner while offering nothing. (3) No expression-position detection and no data plumbing — the item fields (`$json.<field>`) and the other nodes' output fields (`$node["X"].json.<field>`) that the node details view already knows were never handed to the editor, so field-level completion was impossible.
+
+**Fix.** `expression/suggestions.ts` (new, 21 unit tests) — `detectExpressionPosition` (caret inside `{{ … }}`? which token? behind a dot? inside `$node["…"]`?), `filterSuggestions`, `suggestForPosition` (context variables + `$node["Name"]` + item fields + per-node fields + functions), `applySuggestionAt` (inserts a complete expression, returns the new caret). `web/src/lib/expressionContext.ts` (injection key), `expressionFields.ts` (3 tests — item fields and per-node output fields from the last execution payload), `suggestionList.ts` (4 tests — tells the details view the autocomplete owns the keyboard). `NodePanel.vue` provides the expression context (node input payload + sibling node outputs) and yields the capture-phase Escape to an open suggestion list instead of closing the panel. `ParameterField.vue` forwards `availableNodes` / `itemFields` / `nodeFields`. `ExpressionField.vue` renders the listbox, handles ↑/↓/Enter/Tab/Esc with `stopPropagation`, inserts on mouse click, re-syncs the caret after insertion, and suppresses the error banner while the dropdown is open. `expression/types.ts` + `evaluator.ts` — `ExpressionError.kind: 'syntax' | 'runtime'` so a half-typed expression is not reported as broken; `expression/expression.test.ts` rewritten as a real suite (19 tests — the known pre-existing "No test suite found" failure is gone).
+
+**Verification.** `cd web; npm run test` → 181 tests / 18 files passed; `npm run build` → vue-tsc clean. Manual (Set node → Assignments → value): `{{` → 8 suggestions and **no** red error; `$js` → the list narrows to `$json`; **Enter** inserts `{{$json` with the caret following; `{{$nod` → narrows to `$node` / `$node["Set"]`; a mouse click inserts `{{$node["Set"].json`; closing with `}}` clears the error; a complete `{{$json.foo}}` without sample data shows no false red banner; **Esc** closes only the dropdown (the node details view stays open).
+
+**Remaining risk.** Field-level completion needs one completed execution — until the workflow has run, only the context variables and the node names are offered. `NodePanel`'s capture-phase Escape yields to any expanded `role="combobox"`, so a future native select could swallow one Escape too early.
 
 ---
 

@@ -18,6 +18,7 @@ import { useHistoryStore, type WorkflowSnapshot } from './history'
 import { computeAutoLayout } from '@/lib/autoLayout'
 import { uniqueNodeName } from '@/lib/nodePlacement'
 import { generateNodeId } from '@/lib/nodeId'
+import { planDeletion, toggleEdgeSelection } from '@/lib/edgeSelection'
 import {
   addConnectionByNodeId,
   addConnectionToWorkflow,
@@ -153,6 +154,7 @@ export const useWorkflowEditorStore = defineStore('workflowEditor', () => {
     selectedNodeIds.value = selectedNodeIds.value.filter((id) =>
       workflow.nodes.some((node) => node.id === id)
     )
+    selectedEdgeIds.value = []
     isDirty.value = true
   }
 
@@ -190,6 +192,7 @@ export const useWorkflowEditorStore = defineStore('workflowEditor', () => {
 
   function resetEditorState() {
     selectedNodeIds.value = []
+    selectedEdgeIds.value = []
     ndvNodeId.value = null
     isDirty.value = false
     historyStore.reset()
@@ -335,16 +338,72 @@ export const useWorkflowEditorStore = defineStore('workflowEditor', () => {
   function removeSelectedNodes(): number {
     const workflow = workflowStore.currentWorkflow
     if (!workflow || selectedNodeIds.value.length === 0) {
+      // A connection can be selected on its own — the delete request
+      // removes it as well (n8n parity).
+      return removeSelectedEdges()
+    }
+
+    const plan = planDeletion(selectedNodeIds.value, selectedEdgeIds.value)
+
+    recordHistory(
+      plan.nodeIds.length > 1 ? 'Delete nodes' : 'Delete node',
+    )
+
+    // The connections are removed first: a node that is removed takes
+    // its connections with it, so removing them first keeps the undo
+    // step honest.
+    plan.connections.forEach((connection) => {
+      removeConnectionByNodeId(
+        workflow,
+        connection.sourceNodeId,
+        connection.targetNodeId,
+        connection.sourceOutput,
+        connection.targetInput,
+      )
+    })
+
+    plan.nodeIds.forEach((id) => removeNodeFromWorkflow(workflow, id))
+    selectedNodeIds.value = []
+    selectedEdgeIds.value = []
+    isDirty.value = true
+    return plan.nodeIds.length
+  }
+
+  /**
+   * Removes the selected connections.
+   *
+   * The removal is one undo step and it marks the workflow as
+   * changed — exactly like the removal of a node.
+   */
+  function removeSelectedEdges(): number {
+    const workflow = workflowStore.currentWorkflow
+    if (!workflow || selectedEdgeIds.value.length === 0) {
       return 0
     }
 
-    const ids = [...selectedNodeIds.value]
-    recordHistory(ids.length > 1 ? 'Delete nodes' : 'Delete node')
+    const plan = planDeletion([], selectedEdgeIds.value)
 
-    ids.forEach((id) => removeNodeFromWorkflow(workflow, id))
-    selectedNodeIds.value = []
-    isDirty.value = true
-    return ids.length
+    recordHistory(plan.connections.length > 1 ? 'Disconnect nodes' : 'Disconnect node')
+
+    let removed = 0
+    plan.connections.forEach((connection) => {
+      const removedConnection = removeConnectionByNodeId(
+        workflow,
+        connection.sourceNodeId,
+        connection.targetNodeId,
+        connection.sourceOutput,
+        connection.targetInput,
+      )
+      if (removedConnection) {
+        removed += 1
+      }
+    })
+
+    selectedEdgeIds.value = []
+    if (removed > 0) {
+      isDirty.value = true
+    }
+    return removed
   }
 
   /** Moves the selected nodes by the given offset (arrow-key nudge). */
@@ -497,6 +556,40 @@ export const useWorkflowEditorStore = defineStore('workflowEditor', () => {
 
   function clearSelection() {
     selectedNodeIds.value = []
+    // Escape drops the whole selection — the nodes *and* the
+    // connections (n8n parity).
+    selectedEdgeIds.value = []
+  }
+
+  // ------------------------------------------------------------------
+  // Connection selection
+  //
+  // n8n parity: a connection is a first class selection. It is picked
+  // with a click, removed with the Delete key and — with the button
+  // that appears while the pointer hovers it — with a single click.
+  // ------------------------------------------------------------------
+
+  /** Ids of the selected connections (the Vue Flow edge ids). */
+  const selectedEdgeIds = ref<string[]>([])
+
+  /** Number of currently selected connections. */
+  const selectedEdgeCount = computed(() => selectedEdgeIds.value.length)
+
+  /**
+   * Selects a connection. A modified click adds it to the selection
+   * (or removes it when it was already selected).
+   */
+  function selectEdge(edgeId: string, addToSelection = false) {
+    selectedEdgeIds.value = toggleEdgeSelection(
+      selectedEdgeIds.value,
+      edgeId,
+      addToSelection,
+    )
+  }
+
+  /** Drops the connection selection. */
+  function clearEdgeSelection() {
+    selectedEdgeIds.value = []
   }
 
   // ------------------------------------------------------------------
@@ -705,6 +798,8 @@ export const useWorkflowEditorStore = defineStore('workflowEditor', () => {
     selectedNodes,
     selectedNode,
     selectedNodeCount,
+    selectedEdgeIds,
+    selectedEdgeCount,
     ndvNodeId,
     ndvNode,
     isNodeDetailsOpen,
@@ -733,6 +828,8 @@ export const useWorkflowEditorStore = defineStore('workflowEditor', () => {
     toggleNodeSelection,
     selectAll,
     clearSelection,
+    selectEdge,
+    clearEdgeSelection,
     copySelected,
     paste,
     duplicateSelected,
@@ -743,5 +840,6 @@ export const useWorkflowEditorStore = defineStore('workflowEditor', () => {
     redo,
     beginNodeDrag,
     setWorkflowName,
+    removeSelectedEdges,
   }
 })

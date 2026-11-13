@@ -399,6 +399,11 @@ func runServe(cmd *cobra.Command, args []string) {
 	if err := webhookManager.LoadActiveWebhooks(); err != nil {
 		logger.Printf("Warning: failed to load active webhooks: %v", err)
 	}
+	// Index the test webhooks (/webhook-test/{path}) so a workflow that is
+	// not active yet is still reachable while the flow is being designed.
+	if err := webhookManager.RefreshTestHooks(); err != nil {
+		logger.Printf("Warning: failed to index test webhooks: %v", err)
+	}
 	// Wire webhook manager into API server so activate/deactivate keeps
 	// the activeHooks cache in sync. Without this, POST /webhook/{path}
 	// returns "Webhook not found" until server restart.

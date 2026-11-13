@@ -32,6 +32,7 @@ export {
   type ConditionalNode,
   type ExpressionChunk,
   type ExpressionError,
+  type ExpressionErrorKind,
   type ExpressionNode,
   type IdentifierNode,
   type LiteralNode,
@@ -78,3 +79,14 @@ export {
   type SuggestionKind,
   type VariableDefinition,
 } from './variables'
+
+export {
+  applySuggestionAt,
+  detectExpressionPosition,
+  filterSuggestions,
+  matchesLabel,
+  suggestForPosition,
+  MAX_SUGGESTIONS,
+  type ExpressionPosition,
+  type SuggestionSources,
+} from './suggestions'

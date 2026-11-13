@@ -238,5 +238,12 @@ func (s *APIServer) ApplyTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The new workflow starts inactive, but its test URL
+	// (/webhook-test/{path}) must resolve so the flow can be exercised
+	// while it is being designed.
+	if s.webhookManager != nil {
+		s.webhookManager.SyncWorkflowTestHooks(workflow)
+	}
+
 	s.sendJSON(w, http.StatusCreated, workflow)
 }
