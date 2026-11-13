@@ -213,12 +213,28 @@ func (s *APIServer) GetWorkflow(w http.ResponseWriter, r *http.Request) {
 	s.sendJSON(w, http.StatusOK, workflow)
 }
 
+// UpdateWorkflow serves PUT (full replace) and PATCH (partial update)
+// on /api/v1/workflows/{id}.
+//
+// The two verbs have different semantics on purpose:
+//
+//   - PUT replaces the stored record with the body. That is what the web
+//     UI does (web/src/api/workflows.ts sends PUT) and it must keep
+//     working exactly as before.
+//   - PATCH only changes the fields that are actually present in the
+//     body. Every field the body does not mention keeps its stored
+//     value.
 func (s *APIServer) UpdateWorkflow(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 
 	body, err := io.ReadAll(io.LimitReader(r.Body, maxWorkflowBodyBytes))
 	if err != nil {
 		s.sendError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	if r.Method == http.MethodPatch {
+		s.patchWorkflow(w, id, body)
 		return
 	}
 
@@ -247,19 +263,121 @@ func (s *APIServer) UpdateWorkflow(w http.ResponseWriter, r *http.Request) {
 	// Reconcile webhooks: drop any old ones for this workflow, then re-register
 	// only if the workflow is currently active. This keeps the cache consistent
 	// across path/method/auth edits.
-	if s.webhookManager != nil {
-		_ = s.webhookManager.UnregisterWorkflowWebhooks(id)
-		if workflow.Active {
-			if regErr := s.webhookManager.RegisterWorkflowWebhooks(&workflow, false); regErr != nil {
-				fmt.Printf("[m9m] warning: failed to register webhooks for updated workflow %s: %v\n", id, regErr)
-			}
-		}
-		// Re-index the test webhooks so /webhook-test/{path} follows the
-		// edited path / HTTP method immediately.
-		s.webhookManager.SyncWorkflowTestHooks(&workflow)
-	}
+	s.reconcileWorkflowWebhooks(id, &workflow)
 
 	s.sendJSON(w, http.StatusOK, workflow)
+}
+
+// patchWorkflow applies a partial update to a stored workflow.
+//
+// Only the fields that are present in the request body are changed; every
+// absent field keeps its stored value. The body is therefore decoded
+// twice: once into a presence map (which keys did the client actually
+// send?) and once into a model.Workflow (what are the typed values of
+// those keys?).
+//
+// The presence map is what makes an intentional empty value work: a body
+// of {"name":""} sets the name to the empty string, while a body of
+// {"active":true} leaves the name alone.
+func (s *APIServer) patchWorkflow(w http.ResponseWriter, id string, body []byte) {
+	existing, err := s.storage.GetWorkflow(id)
+	if err != nil {
+		s.sendError(w, http.StatusNotFound, "Workflow not found", err)
+		return
+	}
+
+	// Copy the stored record so a failed patch never leaves the store
+	// half-modified.
+	merged := *existing
+	if err := applyWorkflowPatch(&merged, body); err != nil {
+		s.sendError(w, http.StatusBadRequest, "Invalid JSON", err)
+		return
+	}
+
+	if err := s.storage.UpdateWorkflow(id, &merged); err != nil {
+		s.sendError(w, http.StatusInternalServerError, "Failed to update workflow", err)
+		return
+	}
+
+	s.reconcileWorkflowWebhooks(id, &merged)
+
+	s.sendJSON(w, http.StatusOK, merged)
+}
+
+// applyWorkflowPatch copies the fields the request body carries from the
+// decoded patch onto the stored workflow. Fields the body does not mention
+// are left untouched.
+//
+// The server-managed keys ("id", "createdAt", "updatedAt") are ignored on
+// purpose - the identity and the timestamps belong to the server.
+func applyWorkflowPatch(stored *model.Workflow, body []byte) error {
+	var present map[string]json.RawMessage
+	if err := json.Unmarshal(body, &present); err != nil {
+		return err
+	}
+
+	var patch model.Workflow
+	if err := json.Unmarshal(body, &patch); err != nil {
+		return err
+	}
+
+	for key := range present {
+		switch key {
+		case "name":
+			stored.Name = patch.Name
+		case "description":
+			stored.Description = patch.Description
+		case "active":
+			stored.Active = patch.Active
+		case "nodes":
+			stored.Nodes = patch.Nodes
+		case "connections":
+			stored.Connections = patch.Connections
+		case "settings":
+			stored.Settings = patch.Settings
+		case "staticData":
+			stored.StaticData = patch.StaticData
+		case "pinData":
+			stored.PinData = patch.PinData
+		case "tags":
+			stored.Tags = patch.Tags
+		case "versionId":
+			stored.VersionID = patch.VersionID
+		case "isArchived":
+			stored.IsArchived = patch.IsArchived
+		case "createdBy":
+			stored.CreatedBy = patch.CreatedBy
+		case "debug":
+			stored.Debug = patch.Debug
+		case "workspaceId":
+			stored.WorkspaceID = patch.WorkspaceID
+		case "projectId":
+			stored.ProjectID = patch.ProjectID
+		case "customSpanAttributes":
+			stored.CustomSpanAttributes = patch.CustomSpanAttributes
+		}
+	}
+
+	return nil
+}
+
+// reconcileWorkflowWebhooks drops the cached webhooks of a workflow and
+// re-registers them when it is active. It keeps the webhook cache
+// consistent across path / method / auth edits.
+func (s *APIServer) reconcileWorkflowWebhooks(id string, workflow *model.Workflow) {
+	if s.webhookManager == nil {
+		return
+	}
+
+	_ = s.webhookManager.UnregisterWorkflowWebhooks(id)
+	if workflow.Active {
+		if regErr := s.webhookManager.RegisterWorkflowWebhooks(workflow, false); regErr != nil {
+			fmt.Printf("[m9m] warning: failed to register webhooks for updated workflow %s: %v\n", id, regErr)
+		}
+	}
+	// Re-index the test webhooks so /webhook-test/{path} follows the
+	// edited path / HTTP method immediately.
+	s.webhookManager.SyncWorkflowTestHooks(workflow)
 }
 
 func (s *APIServer) DeleteWorkflow(w http.ResponseWriter, r *http.Request) {
