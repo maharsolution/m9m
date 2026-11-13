@@ -18,6 +18,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
 } from '@heroicons/vue/24/outline';
+import { chatWithAI, generateAIWorkflow, suggestAINodes } from '@/api/ai';
 
 const props = defineProps<{
   workflow?: object;
@@ -113,8 +114,9 @@ const nodeSuggestions = ref<Array<{
 const generatedWorkflow = ref<object | null>(null);
 const generationExplanation = ref('');
 
-// API base URL — all AI traffic goes through /api/v1/ai/*
-const apiBase = '/api/v1';
+// All AI traffic goes through /api/v1/ai/* via the shared API client,
+// which attaches the session's bearer token — the backend rejects
+// anonymous /api/v1 calls with 401 once auth is enabled.
 
 // Send chat message
 async function sendChatMessage() {
@@ -133,19 +135,13 @@ async function sendChatMessage() {
   isLoading.value = true;
 
   try {
-    const response = await fetch(`${apiBase}/ai/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: chatMessages.value.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
-        currentWorkflow: props.workflow,
-      }),
+    const data = await chatWithAI({
+      messages: chatMessages.value.map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+      currentWorkflow: props.workflow,
     });
-
-    const data = await response.json();
 
     chatMessages.value.push({
       role: 'assistant',
@@ -171,15 +167,7 @@ async function generateWorkflow() {
   isLoading.value = true;
 
   try {
-    const response = await fetch(`${apiBase}/ai/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        description: generateInput.value,
-      }),
-    });
-
-    const data = await response.json();
+    const data = await generateAIWorkflow(generateInput.value);
     generatedWorkflow.value = data.workflow;
     generationExplanation.value = data.explanation;
   } catch (error) {
@@ -194,16 +182,11 @@ async function getSuggestions() {
   isLoading.value = true;
 
   try {
-    const response = await fetch(`${apiBase}/ai/suggest`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        currentWorkflow: props.workflow,
-        userQuery: 'Suggest next nodes',
-      }),
+    const data = await suggestAINodes({
+      currentWorkflow: props.workflow,
+      userQuery: 'Suggest next nodes',
     });
 
-    const data = await response.json();
     nodeSuggestions.value = data.suggestions || [];
   } catch (error) {
     nodeSuggestions.value = [];

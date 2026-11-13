@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import TemplatesHub from '@/components/templates/TemplatesHub.vue';
+import apiClient from '@/api/client';
 
 const router = useRouter();
 const showHub = ref(true);
@@ -19,20 +20,19 @@ interface Template {
 }
 
 async function handleUseTemplate(template: Template) {
-  // Apply template via API and navigate to editor
+  // Apply template via API and navigate to editor. The shared client
+  // attaches the session's bearer token — the backend rejects
+  // anonymous /api/v1 calls with 401 once auth is enabled.
   try {
-    const response = await fetch(`/api/v1/templates/${template.id}/apply`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
+    const response = await apiClient.post<{ workflowId?: string }>(
+      `/templates/${template.id}/apply`
+    );
 
-    if (response.ok) {
-      const data = await response.json();
-      if (data.workflowId) {
-        router.push(`/workflows/${data.workflowId}`);
-      } else {
-        router.push('/workflows/new');
-      }
+    const data = response.data;
+    if (data?.workflowId) {
+      router.push(`/workflows/${data.workflowId}`);
+    } else {
+      router.push('/workflows/new');
     }
   } catch (error) {
     console.error('Failed to apply template:', error);

@@ -15,6 +15,7 @@ import {
   CircleStackIcon,
   RocketLaunchIcon,
 } from '@heroicons/vue/24/outline';
+import { authFetch } from '@/api/authFetch';
 
 // --- API response shapes ----------------------------------------------------
 
@@ -47,10 +48,30 @@ const processStartedAt = ref<number>(Date.now());
 
 const isLoading = ref(true);
 const lastUpdated = ref<Date | null>(null);
-const hasError = ref(false);
+
+/**
+ * Why the last refresh failed:
+ *  - 'auth'        → the backend rejected the session (401/403)
+ *  - 'unreachable' → the request never reached the backend
+ *  - 'server'      → the backend answered with an error status
+ */
+type RefreshError = 'auth' | 'unreachable' | 'server' | null;
+const refreshError = ref<RefreshError>(null);
+/** HTTP status of the last /api/v1/performance answer (for the banner). */
+const lastStatus = ref<number | null>(null);
 let refreshInterval: number | null = null;
 
 // --- Display values ---------------------------------------------------------
+
+/**
+ * The banner only appears while there is nothing to show yet — except
+ * for an auth failure, which must always be visible because the
+ * session is broken no matter how old the metrics on screen are.
+ */
+const showErrorBanner = computed(() => {
+  if (!refreshError.value) return false;
+  return refreshError.value === 'auth' || metrics.value === null;
+});
 
 const avgExecutionDisplay = computed(() => {
   const v = metrics.value?.avgExecutionTime;
@@ -128,20 +149,40 @@ function formatDuration(seconds: number): string {
 
 async function fetchPerformance(): Promise<void> {
   try {
-    const res = await fetch('/api/v1/performance');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    // The bearer token is attached by authFetch — the backend rejects
+    // anonymous /api/v1 calls with 401 as soon as auth is enabled.
+    const res = await authFetch('/api/v1/performance');
+    lastStatus.value = res.status;
+    if (res.status === 401 || res.status === 403) {
+      console.error('/api/v1/performance rejected the session (HTTP %d)', res.status);
+      refreshError.value = 'auth';
+      return;
+    }
+    if (!res.ok) {
+      console.error('/api/v1/performance returned HTTP %d', res.status);
+      refreshError.value = 'server';
+      return;
+    }
     const data = (await res.json()) as PerformanceResponse;
     metrics.value = data.metrics;
-    hasError.value = false;
+    refreshError.value = null;
   } catch (err) {
     console.error('Failed to fetch /api/v1/performance:', err);
-    hasError.value = true;
+    refreshError.value = 'unreachable';
   }
 }
 
 async function fetchScheduler(): Promise<void> {
   try {
-    const res = await fetch('/api/v1/metrics');
+    const res = await authFetch('/api/v1/metrics');
+    lastStatus.value = res.status;
+    if (res.status === 401 || res.status === 403) {
+      // Same broken session as the performance call — let the banner
+      // say so instead of silently hiding the card.
+      console.warn('/api/v1/metrics rejected the session (HTTP %d)', res.status);
+      refreshError.value = 'auth';
+      return;
+    }
     if (!res.ok) return;
     schedulerMetrics.value = (await res.json()) as SchedulerMetrics;
   } catch (err) {
@@ -195,13 +236,41 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Error banner (only shown if both endpoints fail) -->
+    <!-- Error banner -->
     <div
-      v-if="hasError && !metrics"
+      v-if="showErrorBanner"
       class="rounded-lg border border-yellow-200 bg-yellow-100 p-4 text-sm text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950/50 dark:text-yellow-300"
     >
-      Could not reach <code class="font-mono">/api/v1/performance</code>. Make sure
-      the m9m backend is running. The page will keep retrying every 10 seconds.
+      <template v-if="refreshError === 'auth'">
+        <p>
+          Your session is no longer valid — the m9m backend answered
+          <code class="font-mono">HTTP {{ lastStatus }}</code> for
+          <code class="font-mono">/api/v1/performance</code>. This is not a
+          backend outage; the request was rejected before it ran.
+        </p>
+        <p class="mt-1">Sign in again to load the performance metrics.</p>
+        <RouterLink
+          to="/login"
+          class="mt-3 inline-flex items-center rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 active:bg-brand-700"
+        >
+          Sign in
+        </RouterLink>
+      </template>
+      <template v-else-if="refreshError === 'server'">
+        <p>
+          The m9m backend answered
+          <code class="font-mono">HTTP {{ lastStatus }}</code> for
+          <code class="font-mono">/api/v1/performance</code>. The page will
+          keep retrying every 10 seconds.
+        </p>
+      </template>
+      <template v-else>
+        <p>
+          Could not reach <code class="font-mono">/api/v1/performance</code> —
+          the m9m backend did not answer. The page will keep retrying every
+          10 seconds.
+        </p>
+      </template>
     </div>
 
     <!-- Real-time metric tiles -->
