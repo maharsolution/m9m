@@ -78,6 +78,20 @@ func (s *APIServer) RegisterRoutes(router *mux.Router) {
 	router.HandleFunc("/healthz", s.HealthCheck).Methods("GET")
 	router.HandleFunc("/ready", s.ReadyCheck).Methods("GET")
 
+	// The push WebSocket is mounted on the ROOT router, BEFORE the
+	// /api/v1 subrouter.
+	//
+	// The browser WebSocket API cannot send an Authorization header,
+	// so the handshake authenticates with a one-time ticket that the
+	// client fetched from POST /api/v1/push/ticket (an ordinary,
+	// authenticated API call). Mounting the route on the subrouter
+	// would put it behind the bearer-token middleware, which rejects
+	// every handshake with a 401 before the handler can validate the
+	// ticket - so the route lives here and the ticket check lives in
+	// the handler (HandlePushWebSocket). The endpoint is NOT public:
+	// without a valid ticket the handshake is refused with a 401.
+	router.HandleFunc("/api/v1/push", s.HandlePushWebSocket).Methods("GET")
+
 	api := router.PathPrefix("/api/v1").Subrouter()
 
 	// The auth routes live on the SAME /api/v1 subrouter, so they sit
@@ -234,7 +248,10 @@ func (s *APIServer) RegisterRoutes(router *mux.Router) {
 
 	api.HandleFunc("/health/detailed", s.DetailedHealth).Methods("GET", "OPTIONS")
 	api.HandleFunc("/performance", s.GetPerformanceStats).Methods("GET", "OPTIONS")
-	api.HandleFunc("/push", s.HandleWebSocket).Methods("GET")
+	// The push ticket endpoint lives on the authenticated subrouter:
+	// the client trades its bearer token for a one-time ticket here,
+	// and the ticket then authenticates the WebSocket handshake.
+	api.HandleFunc("/push/ticket", s.HandlePushTicket).Methods("POST", "OPTIONS")
 
 	// OpenTelemetry config — read and write the OTLP pipeline settings
 	// from the UI. The handler is created lazily so routes can be

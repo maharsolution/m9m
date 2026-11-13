@@ -6,7 +6,7 @@
  * title (Headline role), the global search, the live connection chip,
  * the theme toggle, the notification bell and the user menu.
  */
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   SunIcon,
@@ -19,7 +19,7 @@ import {
 } from '@heroicons/vue/24/outline'
 import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/vue'
 import { useThemeStore, useAuthStore, useExecutionStore } from '@/stores'
-import { wsConnection } from '@/api/websocket'
+import { wsConnection, type ConnectionStatus } from '@/api/websocket'
 
 const route = useRoute()
 const router = useRouter()
@@ -46,14 +46,20 @@ function submitSearch() {
   }
 }
 
-// WebSocket connection state
-const wsConnected = ref(false)
-const wsReconnecting = ref(false)
+// WebSocket connection state.
+//
+// The badge mirrors the state of the push channel:
+//   connected        the stream is live
+//   connecting       a handshake is running (or a retry is pending)
+//   unauthenticated  nobody signed in
+//   expired          the session token was rejected
+//   disconnected     the backend or the stream is unreachable
+const wsStatus = ref<ConnectionStatus>(wsConnection.connectionState)
 let connectionCheckInterval: ReturnType<typeof setInterval> | null = null
+let unsubscribeStatus: (() => void) | null = null
 
 function updateConnectionState() {
-  wsConnected.value = wsConnection.isConnected
-  wsReconnecting.value = wsConnection.connectionState === 'connecting'
+  wsStatus.value = wsConnection.connectionState
 }
 
 onMounted(() => {
@@ -61,15 +67,9 @@ onMounted(() => {
   // Check connection state periodically
   connectionCheckInterval = setInterval(updateConnectionState, 1000)
 
-  // Listen for connection events
-  wsConnection.on('connected', () => {
-    wsConnected.value = true
-    wsReconnecting.value = false
-  })
-
-  wsConnection.on('error', () => {
-    wsConnected.value = false
-    wsReconnecting.value = true
+  // Listen for connection state changes
+  unsubscribeStatus = wsConnection.onStatus((status) => {
+    wsStatus.value = status
   })
 })
 
@@ -77,19 +77,78 @@ onUnmounted(() => {
   if (connectionCheckInterval) {
     clearInterval(connectionCheckInterval)
   }
+  unsubscribeStatus?.()
 })
+
+// The push channel follows the session: it is opened with the session
+// and closed with it.
+watch(
+  () => authStore.isAuthenticated,
+  (authenticated) => {
+    if (authenticated) {
+      wsConnection.connect()
+    } else {
+      wsConnection.disconnect('unauthenticated')
+    }
+  }
+)
 
 // Connection status text
 const connectionStatus = computed(() => {
-  if (wsConnected.value) return 'Connected'
-  if (wsReconnecting.value) return 'Reconnecting...'
-  return 'Disconnected'
+  switch (wsStatus.value) {
+    case 'connected':
+      return 'Connected'
+    case 'connecting':
+      return 'Reconnecting...'
+    case 'unauthenticated':
+      return 'Not signed in'
+    case 'expired':
+      return 'Session expired'
+    default:
+      return 'Disconnected'
+  }
+})
+
+const connectionStatusTitle = computed(() => {
+  switch (wsStatus.value) {
+    case 'connected':
+      return 'Live updates connected'
+    case 'connecting':
+      return 'Reconnecting to the server...'
+    case 'unauthenticated':
+      return 'Sign in to receive live updates'
+    case 'expired':
+      return 'Your session expired - sign in again'
+    default:
+      return 'The server is unreachable'
+  }
 })
 
 const connectionStatusColor = computed(() => {
-  if (wsConnected.value) return 'text-green-600 dark:text-green-400'
-  if (wsReconnecting.value) return 'text-yellow-700 dark:text-yellow-400'
-  return 'text-red-600 dark:text-red-400'
+  switch (wsStatus.value) {
+    case 'connected':
+      return 'text-green-600 dark:text-green-400'
+    case 'connecting':
+      return 'text-yellow-700 dark:text-yellow-400'
+    default:
+      return 'text-red-600 dark:text-red-400'
+  }
+})
+
+// The chip keeps the look it had: green while the stream is live,
+// yellow while it is being re-established. An auth problem gets its
+// own red treatment, so a stale session is never mistaken for a
+// disconnected server.
+const connectionStatusChip = computed(() => {
+  switch (wsStatus.value) {
+    case 'connected':
+      return 'bg-green-50 dark:bg-green-950/40'
+    case 'unauthenticated':
+    case 'expired':
+      return 'bg-red-50 dark:bg-red-950/40'
+    default:
+      return 'bg-yellow-100 dark:bg-yellow-950/40'
+  }
 })
 </script>
 
@@ -127,14 +186,13 @@ const connectionStatusColor = computed(() => {
       <!-- WebSocket Connection Status -->
       <div
         class="flex items-center gap-1.5 rounded-lg border border-neutral-200 px-2 py-1.5 dark:border-neutral-800"
-        :class="wsConnected
-          ? 'bg-green-50 dark:bg-green-950/40'
-          : 'bg-yellow-100 dark:bg-yellow-950/40'"
+        :class="connectionStatusChip"
         :title="connectionStatus"
+        :aria-label="connectionStatusTitle"
       >
         <span class="relative flex h-2 w-2">
           <span
-            v-if="wsReconnecting"
+            v-if="wsStatus === 'connecting'"
             class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
             :class="connectionStatusColor.replace('text-', 'bg-')"
           />
@@ -144,7 +202,7 @@ const connectionStatusColor = computed(() => {
           />
         </span>
         <component
-          :is="wsConnected ? SignalIcon : SignalSlashIcon"
+          :is="wsStatus === 'connected' ? SignalIcon : SignalSlashIcon"
           class="h-4 w-4"
           :class="connectionStatusColor"
         />

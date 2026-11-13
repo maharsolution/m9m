@@ -136,6 +136,13 @@ type APIServer struct {
 	config         *APIServerConfig
 	webhookManager *webhooks.WebhookManager
 
+	// pushTickets holds the one-time tickets that authenticate the
+	// push WebSocket handshake (the browser cannot send an
+	// Authorization header on a WebSocket, so the client exchanges
+	// its bearer token for a ticket first).
+	pushTicketsMu sync.Mutex
+	pushTickets   *pushTicketStore
+
 	// credMgr is the in-memory credential store the workflow
 	// engine reads from at execution time. The API handlers
 	// write through both `storage` (DB) and this manager so
@@ -205,29 +212,21 @@ func NewAPIServerWithConfig(eng engine.WorkflowEngine, scheduler *scheduler.Work
 		wsClients: make(map[string]*websocket.Conn),
 		config:    config,
 
+		pushTickets: newPushTicketStore(pushTicketTTL),
+
 		executionCancels: make(map[string]context.CancelFunc),
 	}
 
-	// Configure WebSocket upgrader with proper CORS
+	// Configure WebSocket upgrader with proper CORS.
+	//
+	// The origin check accepts the same origin as the request and the
+	// origins listed in M9M_ALLOWED_ORIGINS - nothing else. The
+	// dev-mode flag no longer opens the socket up to every origin: an
+	// operator that wants a permissive setup passes "*" in
+	// M9M_ALLOWED_ORIGINS (which is what --dev does).
 	server.upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
-			// In dev mode, allow all origins
-			if config.DevMode {
-				return true
-			}
-
-			// Check if origin is in allowed list
-			origin := r.Header.Get("Origin")
-			if origin == "" {
-				return true // Same-origin requests have no Origin header
-			}
-
-			for _, allowed := range config.AllowedOrigins {
-				if origin == allowed {
-					return true
-				}
-			}
-			return false
+			return originAllowed(r, config.AllowedOrigins)
 		},
 	}
 

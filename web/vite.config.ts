@@ -15,6 +15,10 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,
+        // The push channel is a WebSocket: the proxy must upgrade it.
+        // The backend checks the Origin: run the backend with --dev, or
+        // set M9M_ALLOWED_ORIGINS=http://localhost:3000.
+        ws: true,
       },
       '/health': {
         target: 'http://localhost:8080',
