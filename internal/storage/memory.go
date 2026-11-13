@@ -200,6 +200,53 @@ func (s *MemoryStorage) DeactivateWorkflow(id string) error {
 	return nil
 }
 
+// SetAllWorkflowsDebug sets the debug flag on every workflow.
+//
+// The in-memory backend keeps the flag on the Go struct, so the bulk
+// update is a map sweep. Only the workflows that do not carry the target
+// value yet are written, which makes the operation idempotent: a second
+// run reports 0 changed workflows.
+//
+// workspaceID scopes the update to a single workspace; the empty string
+// means "every workspace".
+func (s *MemoryStorage) SetAllWorkflowsDebug(workspaceID string, enabled bool) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	changed := 0
+	now := time.Now()
+	for _, workflow := range s.workflows {
+		if workspaceID != "" && workflow.WorkspaceID != workspaceID {
+			continue
+		}
+		if workflow.Debug == enabled {
+			continue
+		}
+		workflow.Debug = enabled
+		workflow.UpdatedAt = now
+		changed++
+	}
+	return changed, nil
+}
+
+// CountWorkflowsWithDebug counts the workflows whose debug flag equals
+// enabled.
+func (s *MemoryStorage) CountWorkflowsWithDebug(workspaceID string, enabled bool) (int, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	count := 0
+	for _, workflow := range s.workflows {
+		if workspaceID != "" && workflow.WorkspaceID != workspaceID {
+			continue
+		}
+		if workflow.Debug == enabled {
+			count++
+		}
+	}
+	return count, nil
+}
+
 // Execution operations
 
 func (s *MemoryStorage) SaveExecution(execution *model.WorkflowExecution) error {

@@ -91,6 +91,7 @@ func init() {
 	rootCmd.AddCommand(createCmd)
 	rootCmd.AddCommand(getCmd)
 	rootCmd.AddCommand(execCmd) // Agent-friendly direct execution
+	rootCmd.AddCommand(workflowsCmd)
 
 	// Execution commands
 	rootCmd.AddCommand(executionCmd)

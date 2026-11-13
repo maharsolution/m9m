@@ -27,11 +27,9 @@ import (
 	"github.com/neul-labs/m9m/internal/plugins"
 	"github.com/neul-labs/m9m/internal/queue"
 	"github.com/neul-labs/m9m/internal/scheduler"
-	"github.com/neul-labs/m9m/internal/storage"
 	"github.com/neul-labs/m9m/internal/versions"
 	"github.com/neul-labs/m9m/internal/web"
 	"github.com/neul-labs/m9m/internal/webhooks"
-	"github.com/neul-labs/m9m/internal/workspace"
 )
 
 var (
@@ -90,62 +88,25 @@ func runServe(cmd *cobra.Command, args []string) {
 
 	logger.Printf("Starting m9m server v%s", version)
 
-	// Initialize storage. Resolution order:
+	// Initialize storage. The resolution order lives in openStorage so
+	// the operator commands (e.g. `m9m workflows debug`) talk to exactly
+	// the same database as the server:
 	//   1. Explicit --db-type flag (forces a backend; required DSN via other flags)
 	//   2. M9M_DB_TYPE env var (same semantics as --db-type)
 	//   3. Heuristic: --mysql / M9M_MYSQL_DSN → --postgres / M9M_POSTGRES_URL → --memory → SQLite (default)
-	dbType := strings.ToLower(strings.TrimSpace(firstNonEmpty(serveDBType, os.Getenv("M9M_DB_TYPE"))))
-	mysqlDSN := firstNonEmpty(serveMySQL, os.Getenv("M9M_MYSQL_DSN"))
-	postgresURL := firstNonEmpty(servePostgres, os.Getenv("M9M_POSTGRES_URL"), os.Getenv("M9M_POSTGRES_DSN"))
-
-	var store storage.WorkflowStorage
-	var err error
-
-	switch {
-	case dbType == "mysql" || (dbType == "" && mysqlDSN != ""):
-		if mysqlDSN == "" {
-			logger.Fatalf("MySQL storage requested but no DSN provided. Set --mysql or M9M_MYSQL_DSN.")
-		}
-		logger.Printf("Using MySQL storage")
-		store, err = storage.NewMySQLStorage(mysqlDSN)
-	case dbType == "postgres" || dbType == "postgresql" || (dbType == "" && postgresURL != ""):
-		if postgresURL == "" {
-			logger.Fatalf("PostgreSQL storage requested but no URL provided. Set --postgres, M9M_POSTGRES_URL, or M9M_POSTGRES_DSN.")
-		}
-		logger.Printf("Using PostgreSQL storage")
-		store, err = storage.NewPostgresStorage(postgresURL)
-	case dbType == "memory" || serveMemory:
-		logger.Printf("Using in-memory storage (data will be lost on restart)")
-		store = storage.NewMemoryStorage()
-	case dbType == "" || dbType == "sqlite":
-		// Use SQLite
-		dbPath := serveDB
-		if dbPath == "" {
-			// Check workspace first
-			if workspaceFlag != "" {
-				mgr, _ := workspace.NewManager()
-				if mgr != nil {
-					dbPath, _ = mgr.GetStoragePath(workspaceFlag)
-				}
-			}
-			// Default to data directory
-			if dbPath == "" {
-				homeDir, _ := os.UserHomeDir()
-				dataDir := filepath.Join(homeDir, ".m9m", "data")
-				_ = os.MkdirAll(dataDir, 0755)
-				dbPath = filepath.Join(dataDir, "m9m.db")
-			}
-		}
-		logger.Printf("Using SQLite storage: %s", dbPath)
-		store, err = storage.NewSQLiteStorage(dbPath)
-	default:
-		logger.Fatalf("Unknown --db-type %q (supported: sqlite, memory, postgres, mysql)", dbType)
-	}
-
+	store, backend, err := openStorage(storageOptions{
+		DBType:      serveDBType,
+		DBPath:      serveDB,
+		PostgresURL: servePostgres,
+		MySQLDSN:    serveMySQL,
+		Memory:      serveMemory,
+		Workspace:   workspaceFlag,
+	})
 	if err != nil {
 		logger.Fatalf("Failed to initialize storage: %v", err)
 	}
 	defer store.Close()
+	logger.Printf("Using %s storage", backend)
 
 	// Initialize engine
 	eng := engine.NewWorkflowEngine()

@@ -113,6 +113,10 @@ export function createEmptyWorkflow(): Workflow {
     name: 'New Workflow',
     description: '',
     active: false,
+    // A new workflow starts with Debug OFF. The flag gates how much
+    // per-node data the engine captures on every run, so it is never
+    // inherited - not from a copy, not from an import.
+    debug: false,
     nodes: [],
     connections: {},
     settings: {},
@@ -130,7 +134,7 @@ export function createWorkflowDraft(workflow?: Workflow, overrides: Partial<Work
     }
   }
 
-  return {
+  const draft: Workflow = {
     ...workflow,
     ...overrides,
     nodes: workflow.nodes.map(cloneWorkflowNode),
@@ -140,6 +144,15 @@ export function createWorkflowDraft(workflow?: Workflow, overrides: Partial<Work
     pinData: workflow.pinData ? cloneValue(workflow.pinData) : undefined,
     tags: workflow.tags ? [...workflow.tags] : [],
   }
+
+  // A draft is a NEW workflow (the editor only calls this for the New
+  // and the Duplicate action), so it starts with Debug OFF. The
+  // original's flag is never inherited - an explicit override wins.
+  if (!draft.id) {
+    draft.debug = overrides.debug ?? false
+  }
+
+  return draft
 }
 
 export function addNodeToWorkflow(workflow: Workflow, node: WorkflowNode) {

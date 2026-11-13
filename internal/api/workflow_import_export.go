@@ -305,6 +305,9 @@ func (s *APIServer) ImportWorkflows(w http.ResponseWriter, r *http.Request) {
 		}
 
 		workflow := result.Workflow
+		// An imported workflow has no Debug flag of its own - n8n does
+		// not know the concept. It always lands with Debug OFF.
+		workflow.Debug = false
 		if err := validateWorkflow(workflow); err != nil {
 			summary.Errors = append(summary.Errors, WorkflowImportError{
 				Index:   index,

@@ -408,6 +408,56 @@ func (s *MySQLStorage) DeactivateWorkflow(id string) error {
 	return nil
 }
 
+// SetAllWorkflowsDebug sets the debug flag on every workflow.
+//
+// The flag lives in the dedicated `workflows.debug` column (TINYINT(1),
+// see initSchema), so the whole operation is a single UPDATE statement.
+// The WHERE clause only touches the rows that do not carry the target
+// value yet, which makes the operation idempotent: a second run reports
+// 0 changed rows.
+//
+// workspaceID scopes the update to a single workspace; the empty string
+// means "every workspace".
+func (s *MySQLStorage) SetAllWorkflowsDebug(workspaceID string, enabled bool) (int, error) {
+	target := boolToInt(enabled)
+
+	query := "UPDATE workflows SET debug = ?, updated_at = ? WHERE (debug IS NULL OR debug <> ?)"
+	args := []interface{}{target, time.Now(), target}
+	if workspaceID != "" {
+		query += " AND workspace_id = ?"
+		args = append(args, workspaceID)
+	}
+
+	result, err := s.db.Exec(query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("failed to update workflows.debug: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to read the affected row count: %w", err)
+	}
+	return int(rows), nil
+}
+
+// CountWorkflowsWithDebug counts the workflows whose debug flag equals
+// enabled. A NULL column (rows written before the column existed) counts
+// as "debug off".
+func (s *MySQLStorage) CountWorkflowsWithDebug(workspaceID string, enabled bool) (int, error) {
+	query := "SELECT COUNT(*) FROM workflows WHERE COALESCE(debug, 0) = ?"
+	args := []interface{}{boolToInt(enabled)}
+	if workspaceID != "" {
+		query += " AND workspace_id = ?"
+		args = append(args, workspaceID)
+	}
+
+	var count int
+	if err := s.db.QueryRow(query, args...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("failed to count workflows with debug=%t: %w", enabled, err)
+	}
+	return count, nil
+}
+
 // --- Execution operations ---
 
 func (s *MySQLStorage) SaveExecution(execution *model.WorkflowExecution) error {

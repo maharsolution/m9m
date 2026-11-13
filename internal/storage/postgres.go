@@ -370,6 +370,54 @@ func (s *PostgresStorage) DeactivateWorkflow(id string) error {
 	return nil
 }
 
+// SetAllWorkflowsDebug sets the debug flag on every workflow.
+//
+// The flag lives in the dedicated `workflows.debug` column (BOOLEAN, see
+// initSchema), so the whole operation is a single UPDATE statement. The
+// WHERE clause only touches the rows that do not carry the target value
+// yet, which makes the operation idempotent: a second run reports 0
+// changed rows.
+//
+// workspaceID scopes the update to a single workspace; the empty string
+// means "every workspace".
+func (s *PostgresStorage) SetAllWorkflowsDebug(workspaceID string, enabled bool) (int, error) {
+	query := "UPDATE workflows SET debug = $1, updated_at = $2 WHERE (debug IS NULL OR debug <> $3)"
+	args := []interface{}{enabled, time.Now(), enabled}
+	if workspaceID != "" {
+		query += " AND workspace_id = $4"
+		args = append(args, workspaceID)
+	}
+
+	result, err := s.db.Exec(query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("failed to update workflows.debug: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to read the affected row count: %w", err)
+	}
+	return int(rows), nil
+}
+
+// CountWorkflowsWithDebug counts the workflows whose debug flag equals
+// enabled. A NULL column (rows written before the column existed) counts
+// as "debug off".
+func (s *PostgresStorage) CountWorkflowsWithDebug(workspaceID string, enabled bool) (int, error) {
+	query := "SELECT COUNT(*) FROM workflows WHERE COALESCE(debug, FALSE) = $1"
+	args := []interface{}{enabled}
+	if workspaceID != "" {
+		query += " AND workspace_id = $2"
+		args = append(args, workspaceID)
+	}
+
+	var count int
+	if err := s.db.QueryRow(query, args...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("failed to count workflows with debug=%t: %w", enabled, err)
+	}
+	return count, nil
+}
+
 // Execution operations (simplified implementations)
 
 func (s *PostgresStorage) SaveExecution(execution *model.WorkflowExecution) error {

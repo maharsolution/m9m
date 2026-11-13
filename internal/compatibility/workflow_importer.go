@@ -355,6 +355,9 @@ func (importer *N8nWorkflowImporter) ImportWorkflowWithOptions(n8nJson []byte, o
 		Name:        name,
 		Description: importer.extractDescription(n8nWorkflow),
 		Active:      active,
+		// n8n has no notion of the m9m Debug flag, so an imported
+		// workflow always lands with Debug OFF.
+		Debug:       false,
 		Nodes:       []model.Node{},
 		Connections: make(map[string]model.Connections),
 		CreatedAt:   time.Now(),

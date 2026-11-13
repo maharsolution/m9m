@@ -234,6 +234,14 @@ export const useWorkflowEditorStore = defineStore('workflowEditor', () => {
     isDirty.value = false
   }
 
+  /**
+   * Opens a NEW workflow in the editor.
+   *
+   * `sourceWorkflow` is only used by the Duplicate action - the draft is
+   * always a new workflow, so it starts with Debug OFF (createWorkflowDraft
+   * enforces that). The per-workflow Debug toggle is untouched: it flips
+   * the flag of the workflow that is already saved.
+   */
   function createNewWorkflow(sourceWorkflow?: Workflow, overrides: Partial<Workflow> = {}) {
     workflowStore.setCurrentWorkflow(createWorkflowDraft(sourceWorkflow, overrides))
     selectedNodeIds.value = []

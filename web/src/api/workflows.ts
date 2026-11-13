@@ -63,6 +63,9 @@ export async function duplicateWorkflow(id: string): Promise<Workflow> {
     id: undefined,
     name: `${original.name} (copy)`,
     active: false,
+    // A duplicate is a new workflow: Debug starts OFF, even when the
+    // original had it turned on.
+    debug: false,
     createdAt: undefined,
     updatedAt: undefined,
   }

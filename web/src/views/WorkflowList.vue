@@ -207,6 +207,8 @@ const duplicateWorkflow = async (workflow: Workflow) => {
       id: '',
       name: `${workflow.name} (copy)`,
       active: false,
+      // A duplicate is a new workflow: Debug starts OFF.
+      debug: false,
     })
     router.push('/workflows/new')
   } catch (e) {

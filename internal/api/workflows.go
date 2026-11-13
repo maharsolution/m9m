@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -11,6 +12,12 @@ import (
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/storage"
 )
+
+// maxWorkflowBodyBytes caps the request body the workflow create /
+// update handlers read. A workflow document is a JSON graph of nodes and
+// connections - a few hundred kilobytes at most - so 8 MiB is generous
+// while still refusing an unbounded upload.
+const maxWorkflowBodyBytes = 8 << 20
 
 func (s *APIServer) ListWorkflows(w http.ResponseWriter, r *http.Request) {
 	active := r.URL.Query().Get("active")
@@ -71,11 +78,32 @@ func (s *APIServer) ListWorkflows(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *APIServer) CreateWorkflow(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxWorkflowBodyBytes))
+	if err != nil {
+		s.sendError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
 	var workflow model.Workflow
-	if err := json.NewDecoder(r.Body).Decode(&workflow); err != nil {
+	if err := json.Unmarshal(body, &workflow); err != nil {
 		s.sendError(w, http.StatusBadRequest, "Invalid JSON", err)
 		return
 	}
+
+	// Resolve the Debug flag of the incoming workflow.
+	//
+	//   - `?debug=true` is the explicit opt-in for API clients that want
+	//     a debug-enabled workflow from the start.
+	//   - A payload that carries "debug" states the caller's choice
+	//     explicitly - that choice wins.
+	//   - A payload WITHOUT "debug" keeps the stored value when the id
+	//     already exists (POST is an upsert - SaveWorkflow overwrites an
+	//     existing row). The n8n sync bridge POSTs the workflows it
+	//     syncs and never mentions "debug", so without this the bulk
+	//     enable would be wiped on every sync cycle.
+	//   - A payload WITHOUT "debug" for a brand new workflow means OFF:
+	//     the production default.
+	workflow.Debug = s.resolveCreatedWorkflowDebug(r, body, &workflow)
 
 	if err := validateWorkflow(&workflow); err != nil {
 		s.sendError(w, http.StatusBadRequest, "Invalid workflow", err)
@@ -96,6 +124,52 @@ func (s *APIServer) CreateWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.sendJSON(w, http.StatusCreated, workflow)
+}
+
+// resolveCreatedWorkflowDebug decides the Debug flag of a workflow that
+// POST /api/v1/workflows is about to store.
+//
+// The rule has two halves:
+//
+//   - A BRAND NEW workflow starts with Debug OFF. The flag is never
+//     inherited from a payload - a copy of an existing workflow, an
+//     import envelope or a template would otherwise carry a debug=true
+//     flag into the new row. `?debug=true` is the explicit opt-in.
+//   - An EXISTING workflow (POST is an upsert) keeps its flag when the
+//     payload does not mention "debug" and changes it when the payload
+//     does. The n8n sync bridge POSTs the workflows it syncs and never
+//     mentions the flag, so without this the bulk enable would be wiped
+//     on every sync cycle.
+//
+// The query parameter wins over everything - it is the explicit request.
+func (s *APIServer) resolveCreatedWorkflowDebug(r *http.Request, body []byte, workflow *model.Workflow) bool {
+	if raw := strings.TrimSpace(r.URL.Query().Get("debug")); raw != "" {
+		return strings.EqualFold(raw, "true") || raw == "1"
+	}
+
+	// Only an existing row can keep or change its flag.
+	existing, err := s.storage.GetWorkflow(workflow.ID)
+	if err != nil {
+		// No such workflow yet -> a brand new one -> Debug OFF.
+		return false
+	}
+
+	if jsonObjectHasKey(body, "debug") {
+		return workflow.Debug
+	}
+	return existing.Debug
+}
+
+// jsonObjectHasKey reports whether the raw JSON object carries the given
+// top-level key. It tells an explicit "debug": false apart from a payload
+// that does not mention the flag at all.
+func jsonObjectHasKey(body []byte, key string) bool {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return false
+	}
+	_, ok := fields[key]
+	return ok
 }
 
 func validateWorkflow(workflow *model.Workflow) error {
@@ -136,10 +210,27 @@ func (s *APIServer) GetWorkflow(w http.ResponseWriter, r *http.Request) {
 func (s *APIServer) UpdateWorkflow(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxWorkflowBodyBytes))
+	if err != nil {
+		s.sendError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
 	var workflow model.Workflow
-	if err := json.NewDecoder(r.Body).Decode(&workflow); err != nil {
+	if err := json.Unmarshal(body, &workflow); err != nil {
 		s.sendError(w, http.StatusBadRequest, "Invalid JSON", err)
 		return
+	}
+
+	// The Debug flag is an m9m extension that n8n knows nothing about.
+	// A client that PUTs a workflow WITHOUT a "debug" key (the n8n sync
+	// bridge does exactly that on every sync cycle) must not silently
+	// switch the flag OFF - otherwise the bulk enable would be undone
+	// within seconds. When the key is absent the stored value wins.
+	if !jsonObjectHasKey(body, "debug") {
+		if existing, getErr := s.storage.GetWorkflow(id); getErr == nil {
+			workflow.Debug = existing.Debug
+		}
 	}
 
 	if err := s.storage.UpdateWorkflow(id, &workflow); err != nil {
@@ -237,8 +328,11 @@ func (s *APIServer) DuplicateWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	duplicate := &model.Workflow{
-		Name:        original.Name + " (Copy)",
-		Active:      false,
+		Name:   original.Name + " (Copy)",
+		Active: false,
+		// A duplicate is a NEW workflow: it starts with Debug OFF even
+		// when the original had it turned on.
+		Debug:       false,
 		Nodes:       make([]model.Node, len(original.Nodes)),
 		Connections: make(map[string]model.Connections),
 		Settings:    original.Settings,

@@ -203,8 +203,11 @@ func (s *APIServer) ApplyTemplate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	workflow := &model.Workflow{
-		Name:        template.Workflow.Name,
-		Active:      false,
+		Name:   template.Workflow.Name,
+		Active: false,
+		// A workflow created from a template is a NEW workflow: it
+		// starts with Debug OFF. The template never carries the flag.
+		Debug:       false,
 		Nodes:       make([]model.Node, len(template.Workflow.Nodes)),
 		Connections: make(map[string]model.Connections),
 		Settings:    template.Workflow.Settings,

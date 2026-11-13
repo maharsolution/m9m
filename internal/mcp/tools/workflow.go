@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/neul-labs/m9m/internal/mcp"
 	"github.com/neul-labs/m9m/internal/model"
 	"github.com/neul-labs/m9m/internal/storage"
-	"github.com/google/uuid"
 )
 
 // WorkflowTools provides workflow management tools
@@ -252,6 +252,9 @@ func (t *WorkflowCreateTool) Execute(ctx context.Context, args map[string]interf
 		Name:        name,
 		Description: description,
 		Active:      active,
+		// A workflow created through MCP is a NEW workflow: it starts
+		// with Debug OFF. The flag is flipped per workflow afterwards.
+		Debug:       false,
 		Nodes:       nodes,
 		Connections: connections,
 		Tags:        tags,
@@ -504,6 +507,9 @@ func (t *WorkflowDuplicateTool) Execute(ctx context.Context, args map[string]int
 		Name:        newName,
 		Description: original.Description,
 		Active:      false, // New workflows start inactive
+		// A copy is a NEW workflow: it starts with Debug OFF even when
+		// the original had it turned on.
+		Debug:       false,
 		Nodes:       original.Nodes,
 		Connections: original.Connections,
 		Settings:    original.Settings,
