@@ -262,15 +262,47 @@ and only as a small indicator dot or icon, never as a large filled surface.
 | Canvas dot | `oklch(68.3% 0 89.88)` | `oklch(38.67% 0 89.88)` |
 | Node surface | `oklch(100% 0 89.88)` | `hsl(0, 0%, 17%)` |
 | Node border | `oklch(0% 0 0 / 0.1)` | `oklch(100% 0 89.88 / 0.15)` |
+| Sticky note body text | `oklch(20.46% 0 89.88)` | `oklch(97.02% 0 89.88)` |
 
-Sticky-note variants (background / border): yellow `oklch(97.27% 0.0706 103.29)` /
-`oklch(94.53% 0.1293 101.4)` · gold `oklch(92.41% 0.0463 78.84)` /
-`oklch(84.14% 0.0975 76.95)` · red `oklch(93.65% 0.032 17.74)` /
-`oklch(84.85% 0.0827 18.93)` · green `oklch(96.24% 0.0434 156.74)` /
-`oklch(87.04% 0.149 154.62)` · blue `oklch(93.19% 0.0316 255.59)` /
-`oklch(88.2% 0.0588 253.97)` · purple `oklch(89.46% 0.0562 293.06)` /
-`oklch(81.01% 0.1055 293.7)` · neutral `oklch(97.02% 0 89.88)` /
-`oklch(92.19% 0 89.88)`.
+Sticky notes use n8n's seven-colour palette and n8n's theme swap: the light
+theme paints the pale fills with Graphite body text, the dark theme paints
+the deep fills with Neutral body text. The note body always clears WCAG AA
+(4.5:1) against its own fill — 12.92:1 … 16.68:1 light, 7.95:1 … 14.93:1 dark.
+
+Light (fill / border): yellow `oklch(97.27% 0.0706 103.29)` /
+`oklch(62% 0.1293 101.4)` · gold `oklch(92.41% 0.0463 78.84)` /
+`oklch(63% 0.0975 76.95)` · red `oklch(93.65% 0.032 17.74)` /
+`oklch(64% 0.0827 18.93)` · green `oklch(96.24% 0.0434 156.74)` /
+`oklch(61% 0.149 154.62)` · blue `oklch(93.19% 0.0316 255.59)` /
+`oklch(63% 0.0588 253.97)` · purple `oklch(89.46% 0.0562 293.06)` /
+`oklch(64% 0.1055 293.7)` · neutral `oklch(97.02% 0 89.88)` /
+`oklch(63% 0 89.88)`.
+
+Dark (fill / border): yellow `oklch(42.15% 0.0952 57.94)` /
+`oklch(52% 0.1115 57.94)` · gold `oklch(24.57% 0.0436 73.41)` /
+`oklch(52% 0.0793 73.41)` · red `oklch(25.75% 0.0918 25.84)` /
+`oklch(53% 0.1408 25.84)` · green `oklch(26.54% 0.0651 152.77)` /
+`oklch(51% 0.0957 152.28)` · blue `oklch(37.96% 0.1453 265.47)` /
+`oklch(53% 0.1982 265.47)` · purple `oklch(28.4% 0.1414 291.29)` /
+`oklch(54% 0.232 292.71)` · neutral `oklch(26.86% 0 89.88)` /
+`oklch(52% 0 89.88)`.
+
+The borders are one step deeper (light) / lighter (dark) than n8n's own tint:
+n8n's hairline only reaches 1.06–1.70:1 against the canvas, m9m's clears
+3:1 (WCAG 1.4.11) so the note edge stays visible. A free-form hex note keeps
+its colour in both themes and picks Graphite or Neutral text from its own
+relative luminance, the way n8n's `getContrastTextColor` does.
+
+Tokens: `--sticky--color--text`, `--sticky--color--text--on-light`,
+`--sticky--color--text--on-dark`, `--sticky--color--background--variant-1…7`,
+`--sticky--border-color--variant-1…7`.
+
+Node card text uses the node surface, not the canvas: title
+`--text-color` (17.93:1 light / 12.93:1 dark), subtitle and parameter text
+`--text-color--subtle` (9.74:1 / 9.98:1), icon `--text-color` at 85% opacity
+(11.41:1 / 9.77:1). A node's own note ("notes in flow") is painted on the
+canvas directly below the card, in `--text-color--subtle` (8.92:1 light /
+12.70:1 dark against the canvas).
 
 ### 2.6 AI accent
 

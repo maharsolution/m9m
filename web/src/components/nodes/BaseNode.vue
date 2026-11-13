@@ -222,6 +222,7 @@ import {
   STICKY_NOTE_TYPE,
   stickyNoteBorder,
   stickyNoteColor,
+  stickyNoteTextColor,
 } from '@/types'
 import type { NodeCategory } from '@/types'
 
@@ -288,6 +289,30 @@ const credentialCount = computed(() => {
     : 0
 })
 
+/**
+ * "Notes in flow" — the node's own note, rendered on the canvas under
+ * the card.
+ *
+ * The backend publishes two node parameters for this (see
+ * `internal/nodes/nodeprops/nodeprops.go` → `Settings()`):
+ * `notes` ("Optional notes shown next to the node on the canvas") and
+ * `notesInFlow` ("If enabled, the node's notes render on the canvas
+ * directly below the node"). n8n does the same — its
+ * `getNodeSubtitle()` returns `data.notes` when `notesInFlow` is set.
+ *
+ * The note sits BELOW the card, on the canvas (n8n's `.description`
+ * block is `position: absolute; top: 100%`), so its colour has to
+ * clear 4.5:1 against the canvas background. `--text-color--subtle`
+ * does, in both themes, and it clears the node surface too.
+ */
+const notesInFlow = computed(() => {
+  const notes = props.data.parameters?.notes
+  const enabled = props.data.parameters?.notesInFlow
+  if (typeof notes !== 'string' || !notes.trim()) return ''
+  if (enabled !== true && enabled !== 'true') return ''
+  return notes
+})
+
 const deleteNode = (event: MouseEvent) => {
   event.stopPropagation()
   event.preventDefault()
@@ -309,6 +334,16 @@ const stickyBackground = computed(() =>
 
 const stickyBorder = computed(() =>
   stickyNoteBorder(props.data.parameters?.color)
+)
+
+/**
+ * The note body colour. Palette notes follow the theme (Graphite text
+ * on the pale light palette, Neutral text on the deep dark palette);
+ * a free-form hex note picks its text colour from its own luminance,
+ * the way n8n's `getContrastTextColor` does.
+ */
+const stickyText = computed(() =>
+  stickyNoteTextColor(props.data.parameters?.color)
 )
 
 const stickyWidth = computed(() => {
@@ -376,6 +411,7 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
     :style="{
       backgroundColor: stickyBackground,
       borderColor: stickyBorder,
+      color: stickyText,
       width: `${stickyWidth}px`,
       height: `${stickyHeight}px`,
     }"
@@ -410,7 +446,7 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
         type="button"
         class="sticky-note__swatch"
         :class="props.data.parameters?.color === color.index ? 'selected' : ''"
-        :style="{ backgroundColor: color.hex, borderColor: color.border }"
+        :style="{ backgroundColor: color.background, borderColor: color.borderColor }"
         :title="color.name"
         @click.stop="setStickyColor(color.index)"
       />
@@ -538,6 +574,16 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
     >
       <span class="handle-dot" aria-hidden="true" />
     </Handle>
+
+    <!-- "Notes in flow" — the node's own note, painted on the canvas
+         directly below the card (n8n parity). -->
+    <p
+      v-if="notesInFlow"
+      class="node-notes"
+      :title="notesInFlow"
+    >
+      {{ notesInFlow }}
+    </p>
   </div>
 </template>
 
@@ -704,6 +750,35 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
 }
 
 /*
+ * "Notes in flow" — the node's own note, painted on the canvas
+ * directly below the card (n8n's `.description` block sits at
+ * `top: 100%`). The note lives on the canvas, not on the card, so it
+ * uses the canvas-facing body-text token: `--text-color--subtle`
+ * clears 4.5:1 against the canvas (8.92:1 light / 12.70:1 dark) and
+ * against the node surface as well.
+ *
+ * `pointer-events: none` keeps the note out of the drag / selection
+ * hit-testing, so no existing canvas interaction changes.
+ */
+.node-notes {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 0 2px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-color--subtle, oklch(38.67% 0 89.88));
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/*
  * Selection is a ring, not a border change — one cue per state.
  * The ring scales with the canvas zoom so it stays 6 screen pixels.
  */
@@ -790,6 +865,11 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
  * is sized from `parameters.width` / `parameters.height` (n8n keeps the
  * geometry in the node parameters) — so dragging the resize handle
  * updates the document and the card follows.
+ *
+ * The note body inherits `--sticky--color--text`, which the theme
+ * layer flips together with the palette: Graphite text on the pale
+ * light palette, Neutral text on the deep dark palette. The note body
+ * therefore always clears 4.5:1 against its OWN fill, in both themes.
  */
 .sticky-note {
   width: 100%;
@@ -802,6 +882,7 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
   overflow: hidden;
   position: relative;
   cursor: default;
+  color: var(--sticky--color--text, var(--text-color, oklch(20.46% 0 89.88)));
 }
 
 .sticky-note.selected {
@@ -817,7 +898,7 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
   word-break: break-word;
   font-size: 13px;
   line-height: 1.45;
-  color: var(--text-color, oklch(20.46% 0 89.88));
+  color: inherit;
   cursor: text;
 }
 
@@ -830,7 +911,7 @@ const onStickyResize = (payload: { params: { width: number; height: number } }) 
   background: transparent;
   font-size: 13px;
   line-height: 1.45;
-  color: var(--text-color, oklch(20.46% 0 89.88));
+  color: inherit;
   font-family: inherit;
 }
 

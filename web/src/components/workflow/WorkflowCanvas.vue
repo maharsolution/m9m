@@ -618,7 +618,7 @@ defineExpose({ zoomIn: zoomInCanvas, zoomOut: zoomOutCanvas, resetZoom: resetZoo
         <h3 class="text-lg font-semibold tracking-tight text-primary">
           Drag nodes here to build your workflow
         </h3>
-        <p class="mt-2 text-sm text-tertiary">
+        <p class="mt-2 text-sm text-secondary">
           Open the node creator to pick a node
         </p>
       </div>

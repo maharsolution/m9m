@@ -1048,7 +1048,7 @@ function downloadData() {
                 {{ selectedNodeState }}
               </span>
             </div>
-            <div v-if="selectedNode.notes" class="mt-2 text-xs text-slate-500 dark:text-slate-400 italic">
+            <div v-if="selectedNode.notes" class="mt-2 text-xs text-secondary italic">
               {{ selectedNode.notes }}
             </div>
           </div>

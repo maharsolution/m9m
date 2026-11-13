@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "name": "m9m Design System — The Control Room",
   "version": "1.0.0",
-  "updated": "2026-11-12",
+  "updated": "2026-11-13",
   "source": "DESIGN.md",
   "narrative": {
     "creativeNorthStar": "The Control Room",
@@ -165,6 +165,32 @@
       "role": "Canvas field and dots",
       "light": { "background": "hsl(0, 0%, 96%)", "dot": "oklch(68.3% 0 89.88)" },
       "dark": { "background": "oklch(20.46% 0 89.88)", "dot": "oklch(38.67% 0 89.88)" }
+    },
+    "sticky": {
+      "name": "Note Palette",
+      "role": "Sticky-note fills and hairlines — n8n's seven hues, swapped whole with the theme",
+      "tokens": "--sticky--color--text, --sticky--color--text--on-light, --sticky--color--text--on-dark, --sticky--color--background--variant-1..7, --sticky--border-color--variant-1..7",
+      "note": "Note body clears WCAG AA (4.5:1) against its own fill in both themes; the hairline clears 3:1 against the canvas (WCAG 1.4.11).",
+      "light": {
+        "text": "oklch(20.46% 0 89.88)",
+        "yellow": { "fill": "oklch(97.27% 0.0706 103.29)", "border": "oklch(62% 0.1293 101.4)" },
+        "gold": { "fill": "oklch(92.41% 0.0463 78.84)", "border": "oklch(63% 0.0975 76.95)" },
+        "red": { "fill": "oklch(93.65% 0.032 17.74)", "border": "oklch(64% 0.0827 18.93)" },
+        "green": { "fill": "oklch(96.24% 0.0434 156.74)", "border": "oklch(61% 0.149 154.62)" },
+        "blue": { "fill": "oklch(93.19% 0.0316 255.59)", "border": "oklch(63% 0.0588 253.97)" },
+        "purple": { "fill": "oklch(89.46% 0.0562 293.06)", "border": "oklch(64% 0.1055 293.7)" },
+        "grey": { "fill": "oklch(97.02% 0 89.88)", "border": "oklch(63% 0 89.88)" }
+      },
+      "dark": {
+        "text": "oklch(97.02% 0 89.88)",
+        "yellow": { "fill": "oklch(42.15% 0.0952 57.94)", "border": "oklch(52% 0.1115 57.94)" },
+        "gold": { "fill": "oklch(24.57% 0.0436 73.41)", "border": "oklch(52% 0.0793 73.41)" },
+        "red": { "fill": "oklch(25.75% 0.0918 25.84)", "border": "oklch(53% 0.1408 25.84)" },
+        "green": { "fill": "oklch(26.54% 0.0651 152.77)", "border": "oklch(51% 0.0957 152.28)" },
+        "blue": { "fill": "oklch(37.96% 0.1453 265.47)", "border": "oklch(53% 0.1982 265.47)" },
+        "purple": { "fill": "oklch(28.4% 0.1414 291.29)", "border": "oklch(54% 0.232 292.71)" },
+        "grey": { "fill": "oklch(26.86% 0 89.88)", "border": "oklch(52% 0 89.88)" }
+      }
     }
   },
   "typographyMeta": {

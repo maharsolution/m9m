@@ -16,6 +16,8 @@
  *   --text-color, --text-color--subtle, --text-color--subtler, --text-color--disabled,
  *   --border-color, --border-color--subtle, --border-color--strong, --border-color--stronger,
  *   --canvas--color--background, --canvas--dot--color, --node--color--background,
+ *   --sticky--color--text, --sticky--color--text--on-light/--on-dark,
+ *   --sticky--color--background--variant-1..7, --sticky--border-color--variant-1..7,
  *   --focus--border-width, --focus--outline-color, --focus--border-color,
  *   --background--success/--warning/--danger/--info + matching
  *   --border-color--* and --text-color--* triples,
@@ -120,6 +122,35 @@
     --node--color--border: var(--border-color);
     --handle--color: oklch(79.21% 0 89.88);
 
+    /* --------------------------------------------- sticky notes (n8n) -- */
+    /* The seven-colour sticky palette. n8n swaps the WHOLE palette with
+       the theme — pale fills + Graphite text in light, deep fills +
+       Neutral text in dark — so the note body always clears WCAG AA.
+       See n8n `N8nSticky/Sticky.vue` + `css/_tokens.scss`.
+       The borders sit one step deeper (light) / lighter (dark) than
+       n8n's own tint so the note edge clears 3:1 against the canvas
+       (WCAG 1.4.11); n8n's own borders only reach 1.06–1.70:1. */
+    --sticky--color--text: oklch(20.46% 0 89.88);
+    /* Custom (free-form hex) sticky notes pick their text colour from the
+       note's own luminance, exactly like n8n's `getContrastTextColor`. */
+    --sticky--color--text--on-light: oklch(20.46% 0 89.88);
+    --sticky--color--text--on-dark: oklch(97.02% 0 89.88);
+
+    --sticky--color--background--variant-1: oklch(97.27% 0.0706 103.29);
+    --sticky--border-color--variant-1: oklch(62% 0.1293 101.4);
+    --sticky--color--background--variant-2: oklch(92.41% 0.0463 78.84);
+    --sticky--border-color--variant-2: oklch(63% 0.0975 76.95);
+    --sticky--color--background--variant-3: oklch(93.65% 0.032 17.74);
+    --sticky--border-color--variant-3: oklch(64% 0.0827 18.93);
+    --sticky--color--background--variant-4: oklch(96.24% 0.0434 156.74);
+    --sticky--border-color--variant-4: oklch(61% 0.149 154.62);
+    --sticky--color--background--variant-5: oklch(93.19% 0.0316 255.59);
+    --sticky--border-color--variant-5: oklch(63% 0.0588 253.97);
+    --sticky--color--background--variant-6: oklch(89.46% 0.0562 293.06);
+    --sticky--border-color--variant-6: oklch(64% 0.1055 293.7);
+    --sticky--color--background--variant-7: oklch(97.02% 0 89.88);
+    --sticky--border-color--variant-7: oklch(63% 0 89.88);
+
     /* ---------------------------------------------------------- focus -- */
     --focus--border-width: 2px;
     --focus--outline-color: oklch(0% 0 0 / 0.2);
@@ -219,6 +250,28 @@
     --node--color--background: hsl(0, 0%, 17%);
     --node--color--border: oklch(100% 0 89.88 / 0.15);
     --handle--color: oklch(55.55% 0 89.88);
+
+    /* --------------------------------------------- sticky notes (n8n) -- */
+    /* n8n's dark sticky palette: the deep fills of n8n's `-900` / `-950`
+       ramp with a light note body. Same seven hues, same order. */
+    --sticky--color--text: oklch(97.02% 0 89.88);
+    --sticky--color--text--on-light: oklch(20.46% 0 89.88);
+    --sticky--color--text--on-dark: oklch(97.02% 0 89.88);
+
+    --sticky--color--background--variant-1: oklch(42.15% 0.0952 57.94);
+    --sticky--border-color--variant-1: oklch(52% 0.1115 57.94);
+    --sticky--color--background--variant-2: oklch(24.57% 0.0436 73.41);
+    --sticky--border-color--variant-2: oklch(52% 0.0793 73.41);
+    --sticky--color--background--variant-3: oklch(25.75% 0.0918 25.84);
+    --sticky--border-color--variant-3: oklch(53% 0.1408 25.84);
+    --sticky--color--background--variant-4: oklch(26.54% 0.0651 152.77);
+    --sticky--border-color--variant-4: oklch(51% 0.0957 152.28);
+    --sticky--color--background--variant-5: oklch(37.96% 0.1453 265.47);
+    --sticky--border-color--variant-5: oklch(53% 0.1982 265.47);
+    --sticky--color--background--variant-6: oklch(28.4% 0.1414 291.29);
+    --sticky--border-color--variant-6: oklch(54% 0.232 292.71);
+    --sticky--color--background--variant-7: oklch(26.86% 0 89.88);
+    --sticky--border-color--variant-7: oklch(52% 0 89.88);
 
     /* ---------------------------------------------------------- focus -- */
     --focus--outline-color: oklch(100% 0 89.88 / 0.3);
